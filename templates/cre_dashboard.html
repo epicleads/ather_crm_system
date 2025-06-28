@@ -1,0 +1,1105 @@
+{% extends "base.html" %}
+
+{% block title %}CRE Dashboard - Ather CRM{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2><i class="fas fa-headset text-success"></i> CRE Dashboard</h2>
+                <p class="text-muted">Welcome back, {{ session.cre_name }}!</p>
+            </div>
+            <div class="btn-group">
+                <a href="{{ url_for('change_cre_password') }}" class="btn btn-outline-warning">
+                    <i class="fas fa-key"></i> Change Password
+                </a>
+                <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-home"></i> Home
+                </a>
+                <a href="{{ url_for('logout') }}" class="btn btn-outline-danger">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Stats -->
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="stats-card bg-primary text-white p-3 rounded">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h4>{{ pending_leads|length }}</h4>
+                    <small class="text-white">Fresh Leads</small>
+                </div>
+                <i class="fas fa-clock fa-2x"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stats-card bg-warning text-dark p-3 rounded">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h4>{{ todays_followups|length }}</h4>
+                    <small class="text-white">Today's Follow-ups</small>
+                </div>
+                <i class="fas fa-calendar-check fa-2x"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stats-card bg-success text-white p-3 rounded">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    {% set pending_leads_list = [] %}
+                    {% for lead in attended_leads %}
+                        {% if lead.final_status != 'Won' and lead.final_status != 'Lost' %}
+                            {% if pending_leads_list.append(lead) %}{% endif %}
+                        {% endif %}
+                {% endfor %}
+                <h4>{{ pending_leads_list|length }}</h4>
+                <small class="text-white">Pending Leads</small>
+            </div>
+            <i class="fas fa-hourglass-half fa-2x"></i>
+        </div>
+    </div>
+</div>
+    <div class="col-md-3">
+        <div class="stats-card bg-info text-white p-3 rounded">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h4>{{ assigned_to_ps|length }}</h4>
+                    <small class="text-white">Assigned to PS</small>
+                </div>
+                <i class="fas fa-user-tie fa-2x"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs for different lead views -->
+<div class="card shadow">
+    <div class="card-header">
+        <ul class="nav nav-tabs card-header-tabs" id="creLeadTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="fresh-leads-tab" data-bs-toggle="tab" data-bs-target="#fresh-leads" type="button" role="tab" aria-controls="fresh-leads" aria-selected="true">
+                    <i class="fas fa-star"></i> Fresh Leads
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="followups-tab" data-bs-toggle="tab" data-bs-target="#followups" type="button" role="tab" aria-controls="followups" aria-selected="false">
+                    <i class="fas fa-calendar-check"></i> Today's Follow-ups
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending" type="button" role="tab" aria-controls="pending" aria-selected="false">
+                    <i class="fas fa-hourglass-half"></i> Pending Leads
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="ps-assigned-tab" data-bs-toggle="tab" data-bs-target="#ps-assigned" type="button" role="tab" aria-controls="ps-assigned" aria-selected="false">
+                    <i class="fas fa-user-tie"></i> PS Assigned
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="won-leads-tab" data-bs-toggle="tab" data-bs-target="#won-leads" type="button" role="tab" aria-controls="won-leads" aria-selected="false">
+                    <i class="fas fa-trophy"></i> Won Leads
+                </button>
+            </li>
+        </ul>
+    </div>
+    <div class="card-body">
+        <div class="tab-content" id="creLeadTabsContent">
+            <!-- Fresh Leads Tab -->
+            <div class="tab-pane fade show active" id="fresh-leads" role="tabpanel" aria-labelledby="fresh-leads-tab">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="mb-0">Fresh Leads (<span id="freshLeadsCount">{{ pending_leads|length }}</span>)</h5>
+                    <div class="d-flex gap-2">
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                                <span id="freshTimeFilterText">Today</span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item fresh-time-filter" href="#" data-filter="today">Today</a></li>
+                                <li><a class="dropdown-item fresh-time-filter" href="#" data-filter="all">All Time</a></li>
+                                <li><a class="dropdown-item fresh-time-filter" href="#" data-filter="range">Date Range</a></li>
+                            </ul>
+                        </div>
+                        <div id="freshDateRangeInputs" class="d-flex gap-2" style="display: none;">
+                            <input type="date" class="form-control" id="freshStartDate" style="max-width: 150px;">
+                            <input type="date" class="form-control" id="freshEndDate" style="max-width: 150px;">
+                            <button class="btn btn-outline-primary" type="button" id="applyFreshDateRange">
+                                <i class="fas fa-filter"></i> Apply
+                            </button>
+                        </div>
+                        <div class="input-group" style="max-width: 300px;">
+                            <input type="text" class="form-control" id="freshLeadSearchInput" placeholder="Search by UID, name, mobile...">
+                            <button class="btn btn-outline-secondary" type="button" id="freshLeadSearchButton">
+                                <i class="fas fa-search"></i>
+                            </button>
+                            <button class="btn btn-outline-warning" type="button" id="freshLeadClearButton">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {% if pending_leads %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover" id="freshLeadsTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>UID</th>
+                                <th>Customer Name</th>
+                                <th>Mobile</th>
+                                <th>Source</th>
+                                <th>Date</th>
+                                <th>Lead Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for lead in pending_leads %}
+                            <tr class="fresh-lead-row"
+                                data-assigned-date="{{ lead.cre_assigned_at[:10] if lead.cre_assigned_at else '' }}"
+                                data-has-first-call="{{ 'yes' if lead.first_call_date else 'no' }}"
+                                data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or ''))|lower }}">
+                                <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
+                                <td>{{ lead.customer_name }}</td>
+                                <td>{{ lead.customer_mobile_number }}</td>
+                                <td><span class="badge bg-secondary">{{ lead.source }}</span></td>
+                                <td>{{ lead.date }}</td>
+                                <td>
+                                    {% if lead.lead_status %}
+                                        <span class="badge bg-info">{{ lead.lead_status }}</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Not Set</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-edit"></i> Update
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5" id="freshLeadsEmptyState">
+                    <i class="fas fa-clock fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No fresh leads</h5>
+                    <p class="text-muted">All assigned leads have been contacted</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Today's Follow-ups Tab -->
+            <div class="tab-pane fade" id="followups" role="tabpanel" aria-labelledby="followups-tab">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="mb-0">Today's Follow-ups ({{ todays_followups|length }})</h5>
+                    <div class="input-group" style="max-width: 300px;">
+                        <input type="text" class="form-control" id="followupSearchInput" placeholder="Search by UID, name, mobile...">
+                        <button class="btn btn-outline-secondary" type="button" id="followupSearchButton">
+                            <i class="fas fa-search"></i>
+                        </button>
+                        <button class="btn btn-outline-warning" type="button" id="followupClearButton">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+
+                {% if todays_followups %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover" id="followupTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>UID</th>
+                                <th>Customer Name</th>
+                                <th>Mobile</th>
+                                <th>Category</th>
+                                <th>Lead Status</th>
+                                <th>Follow-up Date</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for lead in todays_followups %}
+                            <tr data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or ''))|lower }}">
+                                <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
+                                <td>{{ lead.customer_name }}</td>
+                                <td>{{ lead.customer_mobile_number }}</td>
+                                <td>
+                                    {% if lead.lead_category == 'Hot' %}
+                                        <span class="badge bg-danger">{{ lead.lead_category }}</span>
+                                    {% elif lead.lead_category == 'Warm' %}
+                                        <span class="badge bg-warning">{{ lead.lead_category }}</span>
+                                    {% elif lead.lead_category == 'Cold' %}
+                                        <span class="badge bg-info">{{ lead.lead_category }}</span>
+                                    {% else %}
+                                        <span class="badge bg-dark">{{ lead.lead_category or 'Not Set' }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ lead.lead_status or 'Pending' }}</td>
+                                <td>
+                                    <span class="badge bg-warning">{{ lead.follow_up_date }}</span>
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-edit"></i> Update
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-calendar-check fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No follow-ups scheduled for today</h5>
+                    <p class="text-muted">Set follow-up dates when updating leads</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Pending Leads Tab (formerly Attended Leads) -->
+            <div class="tab-pane fade" id="pending" role="tabpanel" aria-labelledby="pending-tab">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    {% set pending_count = 0 %}
+                    {% for lead in attended_leads %}
+                        {% if lead.final_status != 'Won' and lead.final_status != 'Lost' %}
+                            {% set pending_count = pending_count + 1 %}
+                        {% endif %}
+                    {% endfor %}
+                    <h5 class="mb-0">Pending Leads (<span id="pendingLeadsCount">{{ pending_count }}</span>)</h5>
+                    <div class="d-flex gap-2">
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-outline-warning dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                                <span id="pendingTimeFilterText">Today</span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item pending-time-filter" href="#" data-filter="today">Today</a></li>
+                                <li><a class="dropdown-item pending-time-filter" href="#" data-filter="all">All Time</a></li>
+                                <li><a class="dropdown-item pending-time-filter" href="#" data-filter="range">Date Range</a></li>
+                            </ul>
+                        </div>
+                        <div id="pendingDateRangeInputs" class="d-flex gap-2" style="display: none;">
+                            <input type="date" class="form-control" id="pendingStartDate" style="max-width: 150px;">
+                            <input type="date" class="form-control" id="pendingEndDate" style="max-width: 150px;">
+                            <button class="btn btn-outline-primary" type="button" id="applyPendingDateRange">
+                                <i class="fas fa-filter"></i> Apply
+                            </button>
+                        </div>
+                        <div class="input-group" style="max-width: 300px;">
+                            <input type="text" class="form-control" id="pendingSearchInput" placeholder="Search by UID, name, mobile...">
+                            <button class="btn btn-outline-secondary" type="button" id="pendingSearchButton">
+                                <i class="fas fa-search"></i>
+                            </button>
+                            <button class="btn btn-outline-warning" type="button" id="pendingClearButton">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Check if there are any pending leads -->
+                {% set pending_leads_exist = [] %}
+                {% for lead in attended_leads %}
+                    {% if lead.final_status != 'Won' and lead.final_status != 'Lost' %}
+                        {% if pending_leads_exist.append(1) %}{% endif %}
+                    {% endif %}
+                {% endfor %}
+
+                {% if pending_leads_exist %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover" id="pendingLeadsTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>UID</th>
+                                <th>Customer Name</th>
+                                <th>Mobile</th>
+                                <th>First Call Date</th>
+                                <th>Last Call Date</th>
+                                <th>Category</th>
+                                <th>Lead Status</th>
+                                <th>Final Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for lead in attended_leads %}
+                            {% if lead.final_status != 'Won' and lead.final_status != 'Lost' %}
+                            <tr class="pending-lead-row"
+                                data-first-call-date="{{ lead.first_call_date or '' }}"
+                                data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or ''))|lower }}">
+                                <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
+                                <td>{{ lead.customer_name }}</td>
+                                <td>{{ lead.customer_mobile_number }}</td>
+                                <td>{{ lead.first_call_date or 'N/A' }}</td>
+                                <td>{{ lead.seventh_call_date or lead.sixth_call_date or lead.fifth_call_date or lead.fourth_call_date or lead.third_call_date or lead.second_call_date or lead.first_call_date or 'N/A' }}</td>
+                                <td>
+                                    {% if lead.lead_category == 'Hot' %}
+                                        <span class="badge bg-danger">{{ lead.lead_category }}</span>
+                                    {% elif lead.lead_category == 'Warm' %}
+                                        <span class="badge bg-warning">{{ lead.lead_category }}</span>
+                                    {% elif lead.lead_category == 'Cold' %}
+                                        <span class="badge bg-info">{{ lead.lead_category }}</span>
+                                    {% else %}
+                                        <span class="badge bg-dark">{{ lead.lead_category or 'Not Set' }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ lead.lead_status or 'Pending' }}</td>
+                                <td>
+                                    {% if lead.final_status == 'Won' %}
+                                        <span class="badge bg-success">{{ lead.final_status }}</span>
+                                    {% elif lead.final_status == 'Lost' %}
+                                        <span class="badge bg-danger">{{ lead.final_status }}</span>
+                                    {% else %}
+                                        <span class="badge bg-warning">{{ lead.final_status or 'Pending' }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-edit"></i> Update
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endif %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-hourglass-half fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No pending leads</h5>
+                    <p class="text-muted">Leads will appear here after your first call and are still in progress</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- PS Assigned Tab -->
+            <div class="tab-pane fade" id="ps-assigned" role="tabpanel" aria-labelledby="ps-assigned-tab">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="mb-0">Leads Assigned to PS (<span id="psAssignedCount">{{ assigned_to_ps|length }}</span>)</h5>
+                    <div class="d-flex gap-2">
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-outline-info dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                                <span id="psTimeFilterText">Today</span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item ps-time-filter" href="#" data-filter="today">Today</a></li>
+                                <li><a class="dropdown-item ps-time-filter" href="#" data-filter="all">All Time</a></li>
+                                <li><a class="dropdown-item ps-time-filter" href="#" data-filter="range">Date Range</a></li>
+                            </ul>
+                        </div>
+                        <div id="psDateRangeInputs" class="d-flex gap-2" style="display: none;">
+                            <input type="date" class="form-control" id="psStartDate" style="max-width: 150px;">
+                            <input type="date" class="form-control" id="psEndDate" style="max-width: 150px;">
+                            <button class="btn btn-outline-primary" type="button" id="applyPsDateRange">
+                                <i class="fas fa-filter"></i> Apply
+                            </button>
+                        </div>
+                        <div class="input-group" style="max-width: 300px;">
+                            <input type="text" class="form-control" id="psSearchInput" placeholder="Search by UID, name, mobile...">
+                            <button class="btn btn-outline-secondary" type="button" id="psSearchButton">
+                                <i class="fas fa-search"></i>
+                            </button>
+                            <button class="btn btn-outline-warning" type="button" id="psClearButton">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {% if assigned_to_ps %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover" id="psAssignedTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>UID</th>
+                                <th>Customer Name</th>
+                                <th>Mobile</th>
+                                <th>PS Name</th>
+                                <th>Branch</th>
+                                <th>Category</th>
+                                <th>Model Interested</th>
+                                <th>PS Assigned Date</th>
+                                <th>Final Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for lead in assigned_to_ps %}
+                            <tr class="ps-lead-row"
+                                data-ps-assigned-date="{{ lead.ps_assigned_at[:10] if lead.ps_assigned_at else '' }}"
+                                data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.ps_name or '') + ' ' + (lead.branch or ''))|lower }}">
+                                <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
+                                <td>{{ lead.customer_name }}</td>
+                                <td>{{ lead.customer_mobile_number }}</td>
+                                <td>{{ lead.ps_name }}</td>
+                                <td>{{ lead.branch }}</td>
+                                <td>
+                                    {% if lead.lead_category == 'Hot' %}
+                                        <span class="badge bg-danger">{{ lead.lead_category }}</span>
+                                    {% elif lead.lead_category == 'Warm' %}
+                                        <span class="badge bg-warning">{{ lead.lead_category }}</span>
+                                    {% elif lead.lead_category == 'Cold' %}
+                                        <span class="badge bg-info">{{ lead.lead_category }}</span>
+                                    {% else %}
+                                        <span class="badge bg-dark">{{ lead.lead_category or 'Not Set' }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ lead.model_interested or 'Not specified' }}</td>
+                                <td>
+                                    {% if lead.ps_assigned_at %}
+                                        <span class="badge bg-info">{{ lead.ps_assigned_at[:10] }}</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">N/A</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if lead.final_status == 'Won' %}
+                                        <span class="badge bg-success">{{ lead.final_status }}</span>
+                                    {% elif lead.final_status == 'Lost' %}
+                                        <span class="badge bg-danger">{{ lead.final_status }}</span>
+                                    {% else %}
+                                        <span class="badge bg-warning">{{ lead.final_status }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-edit"></i> Update
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-user-tie fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No leads assigned to PS</h5>
+                    <p class="text-muted">Assign leads to PS when updating them</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Won Leads Tab -->
+            <div class="tab-pane fade" id="won-leads" role="tabpanel" aria-labelledby="won-leads-tab">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="mb-0">Won Leads (<span id="wonLeadsCount">{{ won_leads|length }}</span>)</h5>
+                    <div class="d-flex gap-2">
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-outline-success dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                                <span id="wonTimeFilterText">Today</span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item won-time-filter" href="#" data-filter="today">Today</a></li>
+                                <li><a class="dropdown-item won-time-filter" href="#" data-filter="all">All Time</a></li>
+                                <li><a class="dropdown-item won-time-filter" href="#" data-filter="range">Date Range</a></li>
+                            </ul>
+                        </div>
+                        <div id="dateRangeInputs" class="d-flex gap-2" style="display: none;">
+                            <input type="date" class="form-control" id="wonStartDate" style="max-width: 150px;">
+                            <input type="date" class="form-control" id="wonEndDate" style="max-width: 150px;">
+                            <button class="btn btn-outline-primary" type="button" id="applyDateRange">
+                                <i class="fas fa-filter"></i> Apply
+                            </button>
+                        </div>
+                        <div class="input-group" style="max-width: 300px;">
+                            <input type="text" class="form-control" id="wonSearchInput" placeholder="Search by UID, name, mobile...">
+                            <button class="btn btn-outline-secondary" type="button" id="wonSearchButton">
+                                <i class="fas fa-search"></i>
+                            </button>
+                            <button class="btn btn-outline-warning" type="button" id="wonClearButton">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {% if won_leads %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover" id="wonLeadsTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>UID</th>
+                                <th>Customer Name</th>
+                                <th>Mobile</th>
+                                <th>Model Interested</th>
+                                <th>PS Name</th>
+                                <th>Branch</th>
+                                <th>Won Date</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for lead in won_leads %}
+                            <tr class="won-lead-row"
+                                data-won-date="{{ lead.won_timestamp[:10] if lead.won_timestamp else '' }}"
+                                data-won-timestamp="{{ lead.won_timestamp or '' }}"
+                                data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.ps_name or '') + ' ' + (lead.model_interested or ''))|lower }}">
+                                <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
+                                <td>{{ lead.customer_name }}</td>
+                                <td>{{ lead.customer_mobile_number }}</td>
+                                <td>{{ lead.model_interested or 'Not specified' }}</td>
+                                <td>{{ lead.ps_name or 'N/A' }}</td>
+                                <td>{{ lead.branch or 'N/A' }}</td>
+                                <td>
+                                    {% if lead.won_timestamp %}
+                                        <span class="badge bg-success">{{ lead.won_timestamp[:10] }}</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">N/A</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-edit"></i> View
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-trophy fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No won leads yet</h5>
+                    <p class="text-muted">Leads will appear here when their final status is changed to "Won"</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.stats-card {
+    transition: all 0.3s ease;
+    border-radius: 10px;
+}
+
+.stats-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.nav-tabs .nav-link {
+    color: var(--ather-text);
+}
+
+.nav-tabs .nav-link.active {
+    color: var(--ather-primary);
+    background-color: var(--ather-card);
+    border-color: var(--ather-border) var(--ather-border) var(--ather-card);
+}
+
+.nav-tabs .nav-link:hover:not(.active) {
+    border-color: transparent;
+    color: var(--ather-primary);
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Get current date in YYYY-MM-DD format (this will always be the actual current date)
+    function getCurrentDate() {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    console.log('Current date for filtering:', getCurrentDate());
+
+    // Generic search function
+    function setupSearch(inputId, buttonId, clearId, tableId) {
+        const searchInput = document.getElementById(inputId);
+        const searchButton = document.getElementById(buttonId);
+        const clearButton = document.getElementById(clearId);
+
+        if (!searchInput || !searchButton || !clearButton) return;
+
+        function performSearch() {
+            const searchTerm = searchInput.value.toLowerCase().trim();
+            const tableRows = document.querySelectorAll(`#${tableId} tbody tr`);
+
+            tableRows.forEach(row => {
+                const searchData = row.getAttribute('data-search') || '';
+                if (searchData.includes(searchTerm) || searchTerm === '') {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+
+        function clearSearch() {
+            searchInput.value = '';
+            performSearch();
+        }
+
+        searchButton.addEventListener('click', performSearch);
+        clearButton.addEventListener('click', clearSearch);
+
+        searchInput.addEventListener('keyup', function(e) {
+            if (e.key === 'Enter') {
+                performSearch();
+            }
+        });
+
+        // Real-time search as user types
+        searchInput.addEventListener('input', performSearch);
+    }
+
+    // Setup search for all tabs (updated IDs)
+    setupSearch('freshLeadSearchInput', 'freshLeadSearchButton', 'freshLeadClearButton', 'freshLeadsTable');
+    setupSearch('followupSearchInput', 'followupSearchButton', 'followupClearButton', 'followupTable');
+    setupSearch('pendingSearchInput', 'pendingSearchButton', 'pendingClearButton', 'pendingLeadsTable');
+    setupSearch('psSearchInput', 'psSearchButton', 'psClearButton', 'psAssignedTable');
+    setupSearch('wonSearchInput', 'wonSearchButton', 'wonClearButton', 'wonLeadsTable');
+
+    // Fresh leads time filter functionality
+    const freshTimeFilters = document.querySelectorAll('.fresh-time-filter');
+    const freshTimeFilterText = document.getElementById('freshTimeFilterText');
+    const freshRows = document.querySelectorAll('.fresh-lead-row');
+    const freshDateRangeInputs = document.getElementById('freshDateRangeInputs');
+    const freshStartDate = document.getElementById('freshStartDate');
+    const freshEndDate = document.getElementById('freshEndDate');
+    const applyFreshDateRange = document.getElementById('applyFreshDateRange');
+    const freshLeadsCount = document.getElementById('freshLeadsCount');
+    const freshLeadsEmptyState = document.getElementById('freshLeadsEmptyState');
+
+    function updateFreshLeadsCount() {
+        const visibleRows = document.querySelectorAll('.fresh-lead-row[style=""], .fresh-lead-row:not([style*="display: none"])');
+        const count = visibleRows.length;
+        freshLeadsCount.textContent = count;
+
+        // Show/hide empty state based on visible rows
+        const tableContainer = document.querySelector('#freshLeadsTable').closest('.table-responsive');
+        if (count === 0) {
+            if (tableContainer) tableContainer.style.display = 'none';
+            if (freshLeadsEmptyState) freshLeadsEmptyState.style.display = 'block';
+        } else {
+            if (tableContainer) tableContainer.style.display = 'block';
+            if (freshLeadsEmptyState) freshLeadsEmptyState.style.display = 'none';
+        }
+    }
+
+    function filterFreshLeads(filterType, startDate = null, endDate = null) {
+        const today = getCurrentDate(); // Use the function to get current date
+        console.log('=== FRESH LEADS FILTER ===');
+        console.log('Filter Type:', filterType, 'Today:', today);
+        console.log('Start Date:', startDate, 'End Date:', endDate);
+
+        let visibleCount = 0;
+
+        freshRows.forEach(row => {
+            const assignedDate = row.getAttribute('data-assigned-date');
+            const hasFirstCall = row.getAttribute('data-has-first-call');
+
+            console.log('Lead - Assigned Date:', assignedDate, 'Has First Call:', hasFirstCall);
+
+            // Fresh leads should NEVER have a first call (that's the definition)
+            if (hasFirstCall === 'yes') {
+                console.log('Hiding lead - already has first call (not fresh anymore)');
+                row.style.display = 'none';
+                return;
+            }
+
+            let showRow = false;
+
+            switch(filterType) {
+                case 'today':
+                    // Show fresh leads assigned today
+                    showRow = assignedDate === today;
+                    console.log('Today filter - Match:', showRow, 'for date:', assignedDate);
+                    break;
+                case 'all':
+                    // Show ALL fresh leads (regardless of assignment date)
+                    showRow = true;
+                    console.log('All Time filter - Showing all fresh leads');
+                    break;
+                case 'range':
+                    // Show fresh leads assigned within date range
+                    if (startDate && endDate && assignedDate) {
+                        showRow = assignedDate >= startDate && assignedDate <= endDate;
+                        console.log('Range filter - Match:', showRow, 'for date:', assignedDate, 'in range:', startDate, 'to', endDate);
+                    } else if (!assignedDate) {
+                        // If no assigned date, don't show in range filter
+                        showRow = false;
+                        console.log('Range filter - No assigned date, hiding');
+                    } else {
+                        showRow = false;
+                        console.log('Range filter - Invalid range or date, hiding');
+                    }
+                    break;
+                default:
+                    showRow = true;
+            }
+
+            if (showRow) {
+                visibleCount++;
+            }
+
+            row.style.display = showRow ? '' : 'none';
+        });
+
+        console.log('Total visible fresh leads after filter:', visibleCount);
+        console.log('=== END FRESH LEADS FILTER ===');
+
+        updateFreshLeadsCount();
+    }
+
+    freshTimeFilters.forEach(filter => {
+        filter.addEventListener('click', function(e) {
+            e.preventDefault();
+            const filterType = this.getAttribute('data-filter');
+            freshTimeFilterText.textContent = this.textContent;
+
+            console.log('Fresh leads filter clicked:', filterType);
+
+            if (filterType === 'range') {
+                freshDateRangeInputs.style.display = 'flex';
+            } else {
+                freshDateRangeInputs.style.display = 'none';
+                filterFreshLeads(filterType);
+            }
+        });
+    });
+
+    if (applyFreshDateRange) {
+        applyFreshDateRange.addEventListener('click', function() {
+            const startDate = freshStartDate.value;
+            const endDate = freshEndDate.value;
+
+            if (!startDate || !endDate) {
+                alert('Please select both start and end dates');
+                return;
+            }
+
+            if (startDate > endDate) {
+                alert('Start date cannot be later than end date');
+                return;
+            }
+
+            console.log('Applying fresh leads date range filter:', startDate, 'to', endDate);
+            filterFreshLeads('range', startDate, endDate);
+        });
+    }
+
+    // Won leads time filter functionality
+    const wonTimeFilters = document.querySelectorAll('.won-time-filter');
+    const wonTimeFilterText = document.getElementById('wonTimeFilterText');
+    const wonRows = document.querySelectorAll('.won-lead-row');
+    const dateRangeInputs = document.getElementById('dateRangeInputs');
+    const wonStartDate = document.getElementById('wonStartDate');
+    const wonEndDate = document.getElementById('wonEndDate');
+    const applyDateRange = document.getElementById('applyDateRange');
+    const wonLeadsCount = document.getElementById('wonLeadsCount');
+
+    function updateWonLeadsCount() {
+        const visibleRows = document.querySelectorAll('.won-lead-row[style=""], .won-lead-row:not([style*="display: none"])');
+        wonLeadsCount.textContent = visibleRows.length;
+    }
+
+function filterWonLeads(filterType, startDate = null, endDate = null) {
+    const today = getCurrentDate(); // Use the function to get current date
+    console.log('Won Leads Filter - Type:', filterType, 'Today:', today);
+
+    wonRows.forEach(row => {
+        const wonTimestamp = row.getAttribute('data-won-timestamp');
+        const wonDate = row.getAttribute('data-won-date');
+
+        // Extract date from timestamp if available
+        let extractedDate = '';
+        if (wonTimestamp) {
+            try {
+                // Handle different timestamp formats
+                if (wonTimestamp.includes('T')) {
+                    // ISO format: 2025-01-15T10:30:00 or 2025-01-15T10:30:00.000Z
+                    extractedDate = wonTimestamp.split('T')[0];
+                } else if (wonTimestamp.includes(' ')) {
+                    // Format: 2025-01-15 10:30:00
+                    extractedDate = wonTimestamp.split(' ')[0];
+                } else if (wonTimestamp.length >= 10) {
+                    // Just date: 2025-01-15
+                    extractedDate = wonTimestamp.substring(0, 10);
+                }
+            } catch (e) {
+                console.log('Error parsing timestamp:', wonTimestamp, e);
+                extractedDate = wonDate; // Fallback to data-won-date
+            }
+        } else {
+            extractedDate = wonDate;
+        }
+
+        console.log('Won Lead - Timestamp:', wonTimestamp, 'Extracted date:', extractedDate, 'Today:', today);
+
+        if (!extractedDate && filterType !== 'all') {
+            row.style.display = 'none';
+            return;
+        }
+
+        let showRow = false;
+
+        switch(filterType) {
+            case 'today':
+                showRow = extractedDate === today;
+                console.log('Won Today filter - Match:', showRow, 'for date:', extractedDate);
+                break;
+            case 'all':
+                showRow = true;
+                break;
+            case 'range':
+                if (startDate && endDate && extractedDate) {
+                    showRow = extractedDate >= startDate && extractedDate <= endDate;
+                } else {
+                    showRow = false;
+                }
+                break;
+            default:
+                showRow = true;
+        }
+
+        row.style.display = showRow ? '' : 'none';
+    });
+
+    updateWonLeadsCount();
+}
+
+    wonTimeFilters.forEach(filter => {
+        filter.addEventListener('click', function(e) {
+            e.preventDefault();
+            const filterType = this.getAttribute('data-filter');
+            wonTimeFilterText.textContent = this.textContent;
+
+            if (filterType === 'range') {
+                dateRangeInputs.style.display = 'flex';
+            } else {
+                dateRangeInputs.style.display = 'none';
+                filterWonLeads(filterType);
+            }
+        });
+    });
+
+    if (applyDateRange) {
+        applyDateRange.addEventListener('click', function() {
+            const startDate = wonStartDate.value;
+            const endDate = wonEndDate.value;
+
+            if (!startDate || !endDate) {
+                alert('Please select both start and end dates');
+                return;
+            }
+
+            if (startDate > endDate) {
+                alert('Start date cannot be later than end date');
+                return;
+            }
+
+            filterWonLeads('range', startDate, endDate);
+        });
+    }
+
+    // Pending leads time filter functionality
+    const pendingTimeFilters = document.querySelectorAll('.pending-time-filter');
+    const pendingTimeFilterText = document.getElementById('pendingTimeFilterText');
+    const pendingRows = document.querySelectorAll('.pending-lead-row');
+    const pendingDateRangeInputs = document.getElementById('pendingDateRangeInputs');
+    const pendingStartDate = document.getElementById('pendingStartDate');
+    const pendingEndDate = document.getElementById('pendingEndDate');
+    const applyPendingDateRange = document.getElementById('applyPendingDateRange');
+    const pendingLeadsCount = document.getElementById('pendingLeadsCount');
+
+    function updatePendingLeadsCount() {
+        const visibleRows = document.querySelectorAll('.pending-lead-row[style=""], .pending-lead-row:not([style*="display: none"])');
+        pendingLeadsCount.textContent = visibleRows.length;
+    }
+
+    function filterPendingLeads(filterType, startDate = null, endDate = null) {
+        const today = getCurrentDate(); // Use the function to get current date
+        console.log('Pending Leads Filter - Type:', filterType, 'Today:', today);
+
+        pendingRows.forEach(row => {
+            const firstCallDate = row.getAttribute('data-first-call-date');
+            console.log('Pending Lead - First Call Date:', firstCallDate, 'Today:', today);
+
+            if (!firstCallDate && filterType !== 'all') {
+                row.style.display = 'none';
+                return;
+            }
+
+            let showRow = false;
+
+            switch(filterType) {
+                case 'today':
+                    showRow = firstCallDate === today;
+                    console.log('Pending Today filter - Match:', showRow, 'for date:', firstCallDate);
+                    break;
+                case 'all':
+                    showRow = true;
+                    break;
+                case 'range':
+                    if (startDate && endDate && firstCallDate) {
+                        showRow = firstCallDate >= startDate && firstCallDate <= endDate;
+                    } else {
+                        showRow = false;
+                    }
+                    break;
+                default:
+                    showRow = true;
+            }
+
+            row.style.display = showRow ? '' : 'none';
+        });
+
+        updatePendingLeadsCount();
+    }
+
+    pendingTimeFilters.forEach(filter => {
+        filter.addEventListener('click', function(e) {
+            e.preventDefault();
+            const filterType = this.getAttribute('data-filter');
+            pendingTimeFilterText.textContent = this.textContent;
+
+            if (filterType === 'range') {
+                pendingDateRangeInputs.style.display = 'flex';
+            } else {
+                pendingDateRangeInputs.style.display = 'none';
+                filterPendingLeads(filterType);
+            }
+        });
+    });
+
+    if (applyPendingDateRange) {
+        applyPendingDateRange.addEventListener('click', function() {
+            const startDate = pendingStartDate.value;
+            const endDate = pendingEndDate.value;
+
+            if (!startDate || !endDate) {
+                alert('Please select both start and end dates');
+                return;
+            }
+
+            if (startDate > endDate) {
+                alert('Start date cannot be later than end date');
+                return;
+            }
+
+            filterPendingLeads('range', startDate, endDate);
+        });
+    }
+
+    // PS Assigned leads time filter functionality
+    const psTimeFilters = document.querySelectorAll('.ps-time-filter');
+    const psTimeFilterText = document.getElementById('psTimeFilterText');
+    const psRows = document.querySelectorAll('.ps-lead-row');
+    const psDateRangeInputs = document.getElementById('psDateRangeInputs');
+    const psStartDate = document.getElementById('psStartDate');
+    const psEndDate = document.getElementById('psEndDate');
+    const applyPsDateRange = document.getElementById('applyPsDateRange');
+    const psAssignedCount = document.getElementById('psAssignedCount');
+
+    function updatePsAssignedCount() {
+        const visibleRows = document.querySelectorAll('.ps-lead-row[style=""], .ps-lead-row:not([style*="display: none"])');
+        psAssignedCount.textContent = visibleRows.length;
+    }
+
+    function filterPsAssignedLeads(filterType, startDate = null, endDate = null) {
+        const today = getCurrentDate(); // Use the function to get current date
+        console.log('PS Assigned Filter - Type:', filterType, 'Today:', today);
+
+        psRows.forEach(row => {
+            const psAssignedDate = row.getAttribute('data-ps-assigned-date');
+            console.log('PS Assigned Lead - PS Assigned Date:', psAssignedDate, 'Today:', today);
+
+            if (!psAssignedDate && filterType !== 'all') {
+                row.style.display = 'none';
+                return;
+            }
+
+            let showRow = false;
+
+            switch(filterType) {
+                case 'today':
+                    showRow = psAssignedDate === today;
+                    console.log('PS Assigned Today filter - Match:', showRow, 'for date:', psAssignedDate);
+                    break;
+                case 'all':
+                    showRow = true;
+                    break;
+                case 'range':
+                    if (startDate && endDate && psAssignedDate) {
+                        showRow = psAssignedDate >= startDate && psAssignedDate <= endDate;
+                    } else {
+                        showRow = false;
+                    }
+                    break;
+                default:
+                    showRow = true;
+            }
+
+            row.style.display = showRow ? '' : 'none';
+        });
+
+        updatePsAssignedCount();
+    }
+
+    psTimeFilters.forEach(filter => {
+        filter.addEventListener('click', function(e) {
+            e.preventDefault();
+            const filterType = this.getAttribute('data-filter');
+            psTimeFilterText.textContent = this.textContent;
+
+            if (filterType === 'range') {
+                psDateRangeInputs.style.display = 'flex';
+            } else {
+                psDateRangeInputs.style.display = 'none';
+                filterPsAssignedLeads(filterType);
+            }
+        });
+    });
+
+    if (applyPsDateRange) {
+        applyPsDateRange.addEventListener('click', function() {
+            const startDate = psStartDate.value;
+            const endDate = psEndDate.value;
+
+            if (!startDate || !endDate) {
+                alert('Please select both start and end dates');
+                return;
+            }
+
+            if (startDate > endDate) {
+                alert('Start date cannot be later than end date');
+                return;
+            }
+
+            filterPsAssignedLeads('range', startDate, endDate);
+        });
+    }
+
+    // Apply default "Today" filter on page load for all sections
+    console.log('Applying default Today filters on page load...');
+    filterFreshLeads('today');
+    filterPendingLeads('today');
+    filterPsAssignedLeads('today');
+    filterWonLeads('today');
+
+    // Initialize counts
+    updateFreshLeadsCount();
+    updatePendingLeadsCount();
+    updatePsAssignedCount();
+    updateWonLeadsCount();
+});
+</script>
+{% endblock %}

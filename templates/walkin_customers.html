@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Walk-in Customer Registration</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap');
+
+    * {
+        font-family: 'Lexend', sans-serif;
+    }
+
+    body {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px 0;
+    }
+
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 20px;
+    }
+
+    .form-container {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border-radius: 20px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        padding: 40px;
+        margin-bottom: 30px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .form-header {
+        text-align: center;
+        margin-bottom: 40px;
+        padding-bottom: 25px;
+        border-bottom: 2px solid #e9ecef;
+        position: relative;
+    }
+
+    .form-header::after {
+        content: '';
+        position: absolute;
+        bottom: -2px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 60px;
+        height: 4px;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        border-radius: 2px;
+    }
+
+    .form-header h1 {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-weight: 600;
+        font-size: 2.2rem;
+        margin-bottom: 10px;
+        letter-spacing: -0.5px;
+    }
+
+    .form-section {
+        margin-bottom: 35px;
+        padding: 25px;
+        background: rgba(248, 249, 250, 0.5);
+        border-radius: 15px;
+        border: 1px solid rgba(222, 226, 230, 0.3);
+    }
+
+    .section-title {
+        color: #2c3e50;
+        font-weight: 600;
+        font-size: 1.3rem;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #e9ecef;
+        position: relative;
+        letter-spacing: -0.3px;
+    }
+
+    .section-title::after {
+        content: '';
+        position: absolute;
+        bottom: -2px;
+        left: 0;
+        width: 40px;
+        height: 2px;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        border-radius: 1px;
+    }
+
+    .form-label {
+        font-weight: 500;
+        color: #495057;
+        margin-bottom: 8px;
+        font-size: 0.95rem;
+        letter-spacing: -0.1px;
+    }
+
+    .form-control, .form-select {
+        border: 2px solid #e9ecef;
+        border-radius: 12px;
+        padding: 12px 16px;
+        font-size: 14px;
+        font-weight: 400;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(5px);
+        position: relative;
+    }
+
+    /* Remove any pseudo-elements that might be causing zigzag lines */
+    .form-control::before,
+    .form-control::after,
+    .form-select::before,
+    .form-select::after {
+        display: none !important;
+        content: none !important;
+    }
+
+    .form-control:focus, .form-select:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.15);
+        background: rgba(255, 255, 255, 0.95);
+        transform: translateY(-1px);
+        outline: none;
+    }
+
+    .form-control:hover, .form-select:hover {
+        border-color: #b8c6f0;
+        background: rgba(255, 255, 255, 0.9);
+    }
+
+    .required {
+        color: #e74c3c;
+        font-weight: 600;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        border: none;
+        padding: 15px 35px;
+        font-weight: 600;
+        font-size: 1rem;
+        border-radius: 12px;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        letter-spacing: -0.2px;
+    }
+
+    .btn-primary:hover {
+        background: linear-gradient(135deg, #5a6fd8, #6a4190);
+        transform: translateY(-2px);
+        box-shadow: 0 12px 35px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-primary:active {
+        transform: translateY(0);
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+    }
+
+    .btn-secondary {
+        background: rgba(108, 117, 125, 0.1);
+        border: 2px solid #6c757d;
+        color: #6c757d;
+        padding: 15px 35px;
+        font-weight: 500;
+        font-size: 1rem;
+        border-radius: 12px;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        backdrop-filter: blur(5px);
+        letter-spacing: -0.2px;
+    }
+
+    .btn-secondary:hover {
+        background: #6c757d;
+        color: white;
+        transform: translateY(-1px);
+        box-shadow: 0 8px 25px rgba(108, 117, 125, 0.3);
+    }
+
+    .alert {
+        border-radius: 12px;
+        margin-bottom: 25px;
+        border: none;
+        padding: 15px 20px;
+        font-weight: 500;
+        backdrop-filter: blur(10px);
+        letter-spacing: -0.1px;
+    }
+
+    .alert-success {
+        background: rgba(40, 167, 69, 0.1);
+        color: #155724;
+        border-left: 4px solid #28a745;
+    }
+
+    .alert-danger {
+        background: rgba(220, 53, 69, 0.1);
+        color: #721c24;
+        border-left: 4px solid #dc3545;
+    }
+
+    .alert-warning {
+        background: rgba(255, 193, 7, 0.1);
+        color: #856404;
+        border-left: 4px solid #ffc107;
+    }
+
+    .row {
+        margin-bottom: 20px;
+    }
+
+    .executive-info {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 25px;
+        border: 1px solid rgba(102, 126, 234, 0.2);
+        backdrop-filter: blur(5px);
+    }
+
+    .executive-info h6 {
+        color: #495057;
+        margin-bottom: 15px;
+        font-weight: 600;
+        font-size: 1.1rem;
+        letter-spacing: -0.2px;
+    }
+
+    .executive-detail {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        padding: 5px 0;
+    }
+
+    .executive-detail span:first-child {
+        font-weight: 500;
+        color: #6c757d;
+    }
+
+    .executive-detail span:last-child {
+        color: #495057;
+        font-weight: 400;
+    }
+
+    /* Form validation styles */
+    .is-invalid {
+        border-color: #e74c3c !important;
+        box-shadow: 0 0 0 0.2rem rgba(231, 76, 60, 0.15) !important;
+    }
+
+    /* Textarea specific styling */
+    textarea.form-control {
+        resize: vertical;
+        min-height: 100px;
+    }
+
+    /* Select styling improvements - Remove any decorative elements */
+    .form-select {
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23667eea' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e");
+        background-repeat: no-repeat;
+        background-position: right 12px center;
+        background-size: 16px 12px;
+    }
+
+    /* Ensure no pseudo-elements are added to any form elements */
+    input::before, input::after,
+    select::before, select::after,
+    textarea::before, textarea::after {
+        display: none !important;
+        content: none !important;
+    }
+
+    /* Remove any potential decorative elements from Bootstrap or other sources */
+    .form-control:not(:placeholder-shown)::before,
+    .form-control:not(:placeholder-shown)::after,
+    .form-select:not([value=""])::before,
+    .form-select:not([value=""])::after {
+        display: none !important;
+        content: none !important;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .form-container {
+            padding: 25px;
+            margin: 10px;
+            border-radius: 15px;
+        }
+
+        .form-header h1 {
+            font-size: 1.8rem;
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+        }
+
+        .btn-primary, .btn-secondary {
+            padding: 12px 25px;
+            font-size: 0.95rem;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+    }
+
+    /* Loading animation for form submission */
+    .btn-primary:disabled {
+        background: linear-gradient(135deg, #a8b3e8, #b8a3c4);
+        cursor: not-allowed;
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: rgba(248, 249, 250, 0.5);
+        border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(135deg, #5a6fd8, #6a4190);
+    }
+</style>
+</head>
+<body>
+    <div class="container">
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="form-container">
+            <div class="form-header">
+                <h1><i class="fas fa-user-plus me-3"></i>Walk-in Customer Registration</h1>
+                <p class="text-muted mb-0" style="font-size: 1.1rem; font-weight: 400;">Create comprehensive customer profiles and generate professional quotations</p>
+            </div>
+
+            <form method="POST" id="walkinForm">
+                <!-- Executive Information -->
+                <div class="form-section">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label for="ps_name" class="form-label">Product Specialist</label>
+                            <input type="text" class="form-control" id="ps_name" name="ps_name"
+                                   value="{{ session.ps_name }}" readonly>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="executive_mobile" class="form-label">Executive Mobile Number</label>
+                            <input type="text" class="form-control" id="executive_mobile" name="executive_mobile"
+                                   value="{{ session.phone or '9022634725' }}" readonly>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="date" class="form-label">Date</label>
+                            <input type="date" class="form-control" id="date" name="date"
+                                   value="{{ today }}" readonly>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-12">
+                            <label for="branch" class="form-label">Branch Location</label>
+                            <select class="form-select" id="branch" name="branch" required>
+                                <option value="">Select Branch</option>
+                                <option value="Somajiguda" {{ 'selected' if session.branch == 'SOMAJIGUDA' else '' }}>Somajiguda</option>
+                                <option value="Attapur" {{ 'selected' if session.branch == 'ATTAPUR' else '' }}>Attapur</option>
+                                <option value="Begumpet" {{ 'selected' if session.branch == 'BEGUMPET' else '' }}>Begumpet</option>
+                                <option value="Kompally" {{ 'selected' if session.branch == 'KOMPALLY' else '' }}>Kompally</option>
+                                <option value="Malakpet" {{ 'selected' if session.branch == 'MALAKPET' else '' }}>Malakpet</option>
+                                <option value="Srinagar Colony" {{ 'selected' if session.branch == 'SRINAGAR COLONY' else '' }}>Srinagar Colony</option>
+                                <option value="Tolochowki" {{ 'selected' if session.branch == 'TOLOCHOWKI' else '' }}>Tolochowki</option>
+                                <option value="Vanasthalipuram" {{ 'selected' if session.branch == 'VANASTHALIPURAM' else '' }}>Vanasthalipuram</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Customer Details -->
+                <div class="form-section">
+                    <h5 class="section-title">Customer Details</h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label for="customer_name" class="form-label">Customer Full Name <span class="required">*</span></label>
+                            <input type="text" class="form-control" id="customer_name" name="customer_name" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="customer_mobile" class="form-label">Customer Mobile Number <span class="required">*</span></label>
+                            <input type="tel" class="form-control" id="customer_mobile" name="customer_mobile"
+                                   pattern="[0-9]{10}" maxlength="10" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="customer_email" class="form-label">Email Address</label>
+                            <input type="email" class="form-control" id="customer_email" name="customer_email">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-12">
+                            <label for="customer_address" class="form-label">Residential Address</label>
+                            <textarea class="form-control" id="customer_address" name="customer_address" rows="2"></textarea>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label for="customer_age" class="form-label">Customer Age</label>
+                            <input type="number" class="form-control" id="customer_age" name="customer_age" min="18" max="100">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="occupation" class="form-label">Occupation</label>
+                            <input type="text" class="form-control" id="occupation" name="occupation">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="vehicle_usage" class="form-label">Who will use the vehicle?</label>
+                            <select class="form-select" id="vehicle_usage" name="vehicle_usage">
+                                <option value="">Select Usage</option>
+                                <option value="Self">Self</option>
+                                <option value="Family Member">Family Member</option>
+                                <option value="Both">Both</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label for="daily_travel" class="form-label">Daily travel distance (in km)</label>
+                            <input type="number" class="form-control" id="daily_travel" name="daily_travel" min="1" max="500">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vehicle Details -->
+                <div class="form-section">
+                    <h5 class="section-title">Vehicle Details</h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label for="model_interested" class="form-label">Model Interested <span class="required">*</span></label>
+                            <select class="form-select" id="model_interested" name="model_interested" required>
+                                <option value="">Select Model</option>
+                                <optgroup label="Rizta Series">
+                                    <option value="Rizta S Mono (2.9 kWh)">Rizta S Mono (2.9 kWh)</option>
+                                    <option value="Rizta S Super Matte (2.9 kWh)">Rizta S Super Matte (2.9 kWh)</option>
+                                    <option value="Rizta Z Mono (2.9 kWh)">Rizta Z Mono (2.9 kWh)</option>
+                                    <option value="Rizta Z Duo (2.9 kWh)">Rizta Z Duo (2.9 kWh)</option>
+                                    <option value="Rizta Z Super Matte (2.9 kWh)">Rizta Z Super Matte (2.9 kWh)</option>
+                                    <option value="Rizta Z Mono (3.7 kWh)">Rizta Z Mono (3.7 kWh)</option>
+                                    <option value="Rizta Z Duo (3.7 kWh)">Rizta Z Duo (3.7 kWh)</option>
+                                    <option value="Rizta Z Super Matte (3.7 kWh)">Rizta Z Super Matte (3.7 kWh)</option>
+                                </optgroup>
+                                <optgroup label="450 Series">
+                                    <option value="450 X (2.9 kWh)">450 X (2.9 kWh)</option>
+                                    <option value="450 X (3.7 kWh)">450 X (3.7 kWh)</option>
+                                    <option value="450 X (2.9 kWh) Pro Pack">450 X (2.9 kWh) Pro Pack</option>
+                                    <option value="450 X (3.7 kWh) Pro Pack">450 X (3.7 kWh) Pro Pack</option>
+                                    <option value="450 Apex STD">450 Apex STD</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="color" class="form-label">Preferred Color</label>
+                            <select class="form-select" id="color" name="color">
+                                <option value="">Select Color</option>
+                                <option value="Stealth Blue (450s/x)">Stealth Blue (450s/x)</option>
+                                <option value="Space Grey (450s/x)">Space Grey (450s/x)</option>
+                                <option value="Still White (450s/x)">Still White (450s/x)</option>
+                                <option value="Cosmic Black (Rizta)">Cosmic Black (Rizta)</option>
+                                <option value="Magic White (Rizta)">Magic White (Rizta)</option>
+                                <option value="Indigo Blue (Rizta)">Indigo Blue (Rizta)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="lead_source" class="form-label">Lead Source <span class="required">*</span></label>
+                            <select class="form-select" id="lead_source" name="lead_source" required>
+                                <option value="">Select Source</option>
+                                <option value="Walk-in">Walk-in</option>
+                                <option value="Referral">Referral</option>
+                                <option value="Social Media">Social Media</option>
+                                <option value="Website">Website</option>
+                                <option value="Advertisement">Advertisement</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label for="lead_category" class="form-label">Lead Category</label>
+                            <select class="form-select" id="lead_category" name="lead_category">
+                                <option value="">Select Category</option>
+                                <option value="Hot">Hot</option>
+                                <option value="Warm">Warm</option>
+                                <option value="Cold">Cold</option>
+                                <option value="Not Interested">Not Interested</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="purchase_type" class="form-label">Purchase Type</label>
+                            <select class="form-select" id="purchase_type" name="purchase_type">
+                                <option value="">Select Type</option>
+                                <option value="Cash">Cash</option>
+                                <option value="Finance">Finance</option>
+                                <option value="Exchange">Exchange</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="pro_pack" class="form-label">Pro Pack (if opted)</label>
+                            <select class="form-select" id="pro_pack" name="pro_pack">
+                                <option value="No">No</option>
+                                <option value="Yes">Yes</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label for="expected_delivery" class="form-label">Expected Delivery Date</label>
+                            <input type="date" class="form-control" id="expected_delivery" name="expected_delivery">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="accessories" class="form-label">Preferred Accessories (if any)</label>
+                            <input type="number" class="form-control" id="accessories" name="accessories"
+                                   placeholder="Accessories cost in ₹" min="0">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Additional Information -->
+                <div class="form-section">
+                    <h5 class="section-title">Additional Information</h5>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="quotation_details" class="form-label">Quotation Details</label>
+                            <textarea class="form-control" id="quotation_details" name="quotation_details"
+                                      rows="3" placeholder="Additional quotation details or special offers"></textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="remarks" class="form-label">Remarks</label>
+                            <textarea class="form-control" id="remarks" name="remarks"
+                                      rows="3" placeholder="Any additional remarks or notes"></textarea>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="follow_up_date" class="form-label">Follow-up Date</label>
+                            <input type="date" class="form-control" id="follow_up_date" name="follow_up_date">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="status" class="form-label">Status</label>
+                            <select class="form-select" id="status" name="status">
+                                <option value="Pending">Pending</option>
+                                <option value="In Progress">In Progress</option>
+                                <option value="Quotation Sent">Quotation Sent</option>
+                                <option value="Follow-up Required">Follow-up Required</option>
+                                <option value="Converted">Converted</option>
+                                <option value="Lost">Lost</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit Buttons -->
+                <div class="text-center mt-4">
+                    <button type="submit" class="btn btn-primary me-3">
+                        <i class="fas fa-save me-2"></i>Save Customer & Generate Quotation
+                    </button>
+                    <a href="{{ url_for('ps_dashboard') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Auto-set minimum date for expected delivery (today + 7 days)
+        document.addEventListener('DOMContentLoaded', function() {
+            const today = new Date();
+            const minDate = new Date(today.getTime() + (7 * 24 * 60 * 60 * 1000));
+            const expectedDeliveryInput = document.getElementById('expected_delivery');
+            expectedDeliveryInput.min = minDate.toISOString().split('T')[0];
+
+            // Auto-set follow-up date (today + 3 days)
+            const followUpDate = new Date(today.getTime() + (3 * 24 * 60 * 60 * 1000));
+            const followUpInput = document.getElementById('follow_up_date');
+            followUpInput.value = followUpDate.toISOString().split('T')[0];
+        });
+
+        // Form validation
+        document.getElementById('walkinForm').addEventListener('submit', function(e) {
+            const requiredFields = ['customer_name', 'customer_mobile', 'model_interested', 'lead_source'];
+            let isValid = true;
+
+            requiredFields.forEach(function(fieldId) {
+                const field = document.getElementById(fieldId);
+                if (!field.value.trim()) {
+                    field.classList.add('is-invalid');
+                    isValid = false;
+                } else {
+                    field.classList.remove('is-invalid');
+                }
+            });
+
+            // Validate mobile number
+            const mobile = document.getElementById('customer_mobile').value;
+            if (mobile && !/^[0-9]{10}$/.test(mobile)) {
+                document.getElementById('customer_mobile').classList.add('is-invalid');
+                isValid = false;
+            }
+
+            if (!isValid) {
+                e.preventDefault();
+                alert('Please fill all required fields correctly.');
+            }
+        });
+    </script>
+</body>
+</html>

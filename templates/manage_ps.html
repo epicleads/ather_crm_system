@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+
+{% block title %}Manage PS - Ather CRM{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12 d-flex justify-content-between align-items-center">
+        <div>
+            <h2 class="mb-0" style="color: var(--airbnb-gray-700); font-weight: 700;">
+                <i class="fas fa-users" style="color: var(--airbnb-blue);"></i> Manage PS Users
+            </h2>
+            <p class="text-muted">View and manage Product Specialists</p>
+        </div>
+        <a href="{{ url_for('add_ps') }}" class="btn btn-info">
+            <i class="fas fa-plus"></i> Add New PS
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-list"></i> Product Specialists ({{ ps_users|length }})</h5>
+    </div>
+    <div class="card-body p-0">
+        {% if ps_users %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Username</th>
+                        <th>Branch</th>
+                        <th>Phone</th>
+                        <th>Email</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ps in ps_users %}
+                    <tr>
+                        <td><span class="badge bg-primary">#{{ ps.id }}</span></td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="avatar-sm bg-info rounded-circle d-flex align-items-center justify-content-center me-2">
+                                    <i class="fas fa-user-tie text-white"></i>
+                                </div>
+                                <strong>{{ ps.name }}</strong>
+                            </div>
+                        </td>
+                        <td><code>{{ ps.username }}</code></td>
+                        <td><span class="badge bg-success">{{ ps.branch }}</span></td>
+                        <td>
+                            <a href="tel:{{ ps.phone }}" class="text-decoration-none" style="color: var(--airbnb-blue);">
+                                <i class="fas fa-phone text-muted me-1"></i>{{ ps.phone }}
+                            </a>
+                        </td>
+                        <td>
+                            <a href="mailto:{{ ps.email }}" class="text-decoration-none" style="color: var(--airbnb-red);">
+                                <i class="fas fa-envelope text-muted me-1"></i>{{ ps.email }}
+                            </a>
+                        </td>
+                        <td>
+                            {% if ps.is_active %}
+                                <span class="badge bg-success">Active</span>
+                            {% else %}
+                                <span class="badge bg-danger">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ ps.created_at[:10] if ps.created_at else 'N/A' }}</td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                {% if ps.is_active %}
+                                <button type="button" class="btn btn-warning btn-sm" onclick="togglePSStatus({{ ps.id }}, false)">
+                                    <i class="fas fa-pause"></i> Deactivate
+                                </button>
+                                {% else %}
+                                <button type="button" class="btn btn-success btn-sm" onclick="togglePSStatus({{ ps.id }}, true)">
+                                    <i class="fas fa-play"></i> Activate
+                                </button>
+                                {% endif %}
+                                <a href="{{ url_for('delete_ps', ps_id=ps.id) }}"
+                                   class="btn btn-danger btn-sm"
+                                   onclick="return confirm('Are you sure you want to delete {{ ps.name }}? This will unassign all leads currently assigned to this PS.')">
+                                    <i class="fas fa-trash"></i> Delete
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-user-tie fa-3x text-muted mb-3"></i>
+            <h5 class="text-muted">No PS users found</h5>
+            <p class="text-muted">Add your first Product Specialist to get started</p>
+            <a href="{{ url_for('add_ps') }}" class="btn btn-info">
+                <i class="fas fa-plus"></i> Add PS User
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mt-4">
+    <div class="col-md-3">
+        <div class="card text-white" style="background: linear-gradient(135deg, var(--airbnb-red) 0%, var(--airbnb-red-dark) 100%);">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="mb-0">{{ ps_users|length }}</h4>
+                        <p class="mb-0">Total PS Users</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-users fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white" style="background: linear-gradient(135deg, var(--airbnb-green) 0%, #00B3A6 100%);">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="mb-0">{{ ps_users|selectattr('is_active')|list|length }}</h4>
+                        <p class="mb-0">Active PS Users</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-check-circle fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white" style="background: linear-gradient(135deg, var(--airbnb-yellow) 0%, #E6A200 100%);">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="mb-0">{{ (ps_users|map(attribute='branch')|unique|list)|length }}</h4>
+                        <p class="mb-0">Branches Covered</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-map-marker-alt fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white" style="background: linear-gradient(135deg, var(--airbnb-blue) 0%, #006B75 100%);">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="mb-0">{{ ps_users|rejectattr('is_active')|list|length }}</h4>
+                        <p class="mb-0">Inactive PS Users</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-pause-circle fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function togglePSStatus(psId, activate) {
+    const action = activate ? 'activate' : 'deactivate';
+    if (confirm(`Are you sure you want to ${action} this PS user?`)) {
+        fetch(`/toggle_ps_status/${psId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ active: activate })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while updating PS status');
+        });
+    }
+}
+</script>
+
+<style>
+.btn-group .btn {
+    margin-right: 2px;
+}
+
+.btn-group .btn:last-child {
+    margin-right: 0;
+}
+</style>
+{% endblock %}

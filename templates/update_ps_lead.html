@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block title %}Update Lead - PS Dashboard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2><i class="fas fa-edit text-primary"></i> Update Lead - {{ lead.lead_uid }}</h2>
+                <p class="text-muted">Customer: {{ lead.customer_name }} | Mobile: {{ lead.customer_mobile_number }}</p>
+            </div>
+            <div>
+                <a href="{{ url_for('ps_dashboard') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Call Progress Indicator -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h6><i class="fas fa-phone"></i> PS Call Progress (3 Calls Maximum)</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% set call_names = ['first', 'second', 'third'] %}
+                    {% for call in call_names %}
+                    <div class="col-md-4">
+                        <div class="text-center">
+                            {% if call in completed_calls %}
+                                <div class="badge bg-success mb-2 w-100">
+                                    <i class="fas fa-check"></i> {{ call.title() }} Call
+                                </div>
+                                <small class="text-muted d-block">{{ lead[call + '_call_date'] or 'No date' }}</small>
+                            {% elif call == next_call %}
+                                <div class="badge bg-warning mb-2 w-100">
+                                    <i class="fas fa-clock"></i> {{ call.title() }} Call
+                                </div>
+                                <small class="text-muted d-block">Next Call</small>
+                            {% else %}
+                                <div class="badge bg-secondary mb-2 w-100">
+                                    <i class="fas fa-minus"></i> {{ call.title() }} Call
+                                </div>
+                                <small class="text-muted d-block">Pending</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow">
+    <div class="card-header">
+        <h5>Lead Information & Follow-up</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="psLeadUpdateForm">
+            <!-- Lead Information Display -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Customer Name</label>
+                        <input type="text" class="form-control" value="{{ lead.customer_name }}" readonly>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Mobile Number</label>
+                        <input type="text" class="form-control" value="{{ lead.customer_mobile_number }}" readonly>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label">Source</label>
+                        <input type="text" class="form-control" value="{{ lead.source }}" readonly>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label">CRE Name</label>
+                        <input type="text" class="form-control" value="{{ lead.cre_name }}" readonly>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label">Lead Category</label>
+                        <input type="text" class="form-control" value="{{ lead.lead_category or 'Not set' }}" readonly>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Model Interested</label>
+                        <input type="text" class="form-control" value="{{ lead.model_interested or 'Not specified' }}" readonly>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">PS Branch</label>
+                        <input type="text" class="form-control" value="{{ lead.ps_branch }}" readonly>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PS Follow-up Section -->
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="follow_up_date" class="form-label">Follow-up Date</label>
+                        <input type="date" class="form-control" id="follow_up_date" name="follow_up_date"
+                               value="{{ lead.follow_up_date or '' }}" min="{{ today }}">
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="final_status" class="form-label">Final Status</label>
+                        <select class="form-select" id="final_status" name="final_status" required>
+                            <option value="{{ lead.final_status }}">{{ lead.final_status }}</option>
+                            <option value="Won">Won</option>
+                            <option value="Lost">Lost</option>
+                            <option value="Pending">Pending</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Current Call Section -->
+            {% if next_call and lead.final_status != 'Won' %}
+            <div class="card mt-4">
+                <div class="card-header bg-warning text-dark">
+                    <h6><i class="fas fa-phone"></i> {{ next_call.title() }} Call Details</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="call_date" class="form-label">{{ next_call.title() }} Call Date</label>
+                                <input type="date" class="form-control" id="call_date" name="call_date" value="{{ today }}">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="call_remark" class="form-label">{{ next_call.title() }} Call Remark</label>
+                                <textarea class="form-control" id="call_remark" name="call_remark" rows="2"
+                                          placeholder="Enter call details and customer response..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Previous Calls Summary -->
+            {% if completed_calls %}
+            <div class="card mt-4">
+                <div class="card-header bg-success text-white">
+                    <h6><i class="fas fa-history"></i> Previous Calls Summary</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for call in completed_calls %}
+                        <div class="col-md-6 mb-3">
+                            <div class="border rounded p-3">
+                                <h6 class="text-success">{{ call.title() }} Call</h6>
+                                <p class="mb-1"><strong>Date:</strong> {{ lead[call + '_call_date'] or 'Not recorded' }}</p>
+                                <p class="mb-0"><strong>Remark:</strong> {{ lead[call + '_call_remark'] or 'No remarks' }}</p>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                <a href="{{ url_for('ps_dashboard') }}" class="btn btn-secondary me-md-2">
+                    <i class="fas fa-arrow-left"></i> Back
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Update Lead
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Initialize form
+document.addEventListener('DOMContentLoaded', function() {
+    // Set minimum date for follow-up to today
+    const followUpDate = document.getElementById('follow_up_date');
+    const today = new Date().toISOString().split('T')[0];
+    followUpDate.min = today;
+
+    // Form validation
+    document.getElementById('psLeadUpdateForm').addEventListener('submit', function(e) {
+        // Show loading state
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Updating...';
+        submitBtn.disabled = true;
+
+        // Re-enable after 10 seconds as fallback
+        setTimeout(() => {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }, 10000);
+    });
+});
+</script>
+{% endblock %}

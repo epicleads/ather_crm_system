@@ -1,0 +1,691 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Leads - Ather CRM{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12 d-flex justify-content-between align-items-center">
+        <div>
+            <h2 class="mb-0"><i class="fas fa-database text-danger"></i> Manage Lead Data</h2>
+            <p class="text-muted">View, search, and delete lead records</p>
+        </div>
+        <div class="btn-group">
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Search and Filter Controls -->
+<div class="card mb-4">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0"><i class="fas fa-search"></i> Search & Filter Leads</h5>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label for="searchInput" class="form-label">Search</label>
+                <div class="input-group">
+                    <input type="text" class="form-control" id="searchInput" placeholder="Search by UID, name, mobile, source...">
+                    <button class="btn btn-outline-secondary" type="button" id="searchButton">
+                        <i class="fas fa-search"></i>
+                    </button>
+                    <button class="btn btn-outline-warning" type="button" id="clearButton">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <label for="sourceFilter" class="form-label">Source</label>
+                <select class="form-select" id="sourceFilter">
+                    <option value="">All Sources</option>
+                    <option value="Google">Google</option>
+                    <option value="Meta">Meta</option>
+                    <option value="Affiliate">Affiliate</option>
+                    <option value="Know">Know</option>
+                    <option value="Whatsapp">Whatsapp</option>
+                    <option value="Tele">Tele</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label for="statusFilter" class="form-label">Assignment</label>
+                <select class="form-select" id="
+                <select class="form-select" id="statusFilter">
+                    <option value="">All Status</option>
+                    <option value="Yes">Assigned</option>
+                    <option value="No">Unassigned</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label for="finalStatusFilter" class="form-label">Final Status</label>
+                <select class="form-select" id="finalStatusFilter">
+                    <option value="">All Status</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Won">Won</option>
+                    <option value="Lost">Lost</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label for="dateFilter" class="form-label">Date Range</label>
+                <select class="form-select" id="dateFilter">
+                    <option value="all">All Time</option>
+                    <option value="today">Today</option>
+                    <option value="week">This Week</option>
+                    <option value="month">This Month</option>
+                    <option value="quarter">Last Quarter</option>
+                    <option value="year">This Year</option>
+                </select>
+            </div>
+        </div>
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <button type="button" class="btn btn-primary" id="applyFilters">
+                            <i class="fas fa-filter"></i> Apply Filters
+                        </button>
+                        <button type="button" class="btn btn-secondary" id="resetFilters">
+                            <i class="fas fa-undo"></i> Reset
+                        </button>
+                    </div>
+                    <div>
+                        <span class="text-muted">Total Leads: <strong id="totalCount">{{ leads|length }}</strong></span>
+                        <span class="text-muted ms-3">Showing: <strong id="visibleCount">{{ leads|length }}</strong></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Actions -->
+<div class="card mb-4">
+    <div class="card-header bg-warning text-dark">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-tasks"></i> Bulk Actions</h5>
+            <div>
+                <button type="button" class="btn btn-sm btn-outline-dark" id="selectAllBtn">
+                    <i class="fas fa-check-square"></i> Select All
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-dark" id="deselectAllBtn">
+                    <i class="fas fa-square"></i> Deselect All
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-danger" id="bulkDeleteBtn" disabled>
+                <i class="fas fa-trash"></i> Delete Selected (<span id="selectedCount">0</span>)
+            </button>
+            <button type="button" class="btn btn-warning" id="bulkUnassignBtn" disabled>
+                <i class="fas fa-user-times"></i> Unassign Selected
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Leads Table -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-list"></i> All Leads ({{ leads|length }})</h5>
+    </div>
+    <div class="card-body p-0">
+        {% if leads %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" id="leadsTable">
+                <thead class="table-dark">
+                    <tr>
+                        <th width="50">
+                            <input type="checkbox" id="selectAllCheckbox" class="form-check-input">
+                        </th>
+                        <th>UID</th>
+                        <th>Customer Name</th>
+                        <th>Mobile</th>
+                        <th>Source</th>
+                        <th>CRE Name</th>
+                        <th>PS Name</th>
+                        <th>Assignment</th>
+                        <th>Final Status</th>
+                        <th>Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for lead in leads %}
+                    <tr class="lead-row"
+                        data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or '') + ' ' + (lead.cre_name or '') + ' ' + (lead.ps_name or ''))|lower }}"
+                        data-source="{{ lead.source or '' }}"
+                        data-assigned="{{ lead.assigned or 'No' }}"
+                        data-final-status="{{ lead.final_status or 'Pending' }}"
+                        data-date="{{ lead.date or '' }}">
+                        <td>
+                            <input type="checkbox" class="form-check-input lead-checkbox" value="{{ lead.uid }}">
+                        </td>
+                        <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
+                        <td>{{ lead.customer_name }}</td>
+                        <td>{{ lead.customer_mobile_number }}</td>
+                        <td><span class="badge bg-secondary">{{ lead.source }}</span></td>
+                        <td>{{ lead.cre_name or 'Unassigned' }}</td>
+                        <td>{{ lead.ps_name or 'Not Assigned' }}</td>
+                        <td>
+                            {% if lead.assigned == 'Yes' %}
+                                <span class="badge bg-success">Assigned</span>
+                            {% else %}
+                                <span class="badge bg-warning">Unassigned</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if lead.final_status == 'Won' %}
+                                <span class="badge bg-success">{{ lead.final_status }}</span>
+                            {% elif lead.final_status == 'Lost' %}
+                                <span class="badge bg-danger">{{ lead.final_status }}</span>
+                            {% else %}
+                                <span class="badge bg-warning">{{ lead.final_status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ lead.date }}</td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                {% if lead.assigned == 'Yes' and lead.cre_name %}
+                                    <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-outline-primary btn-sm">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                {% endif %}
+                                <button type="button" class="btn btn-outline-danger btn-sm delete-single-btn" data-uid="{{ lead.uid }}" data-name="{{ lead.customer_name }}">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-database fa-3x text-muted mb-3"></i>
+            <h5 class="text-muted">No leads found</h5>
+            <p class="text-muted">Upload lead data to get started</p>
+            <a href="{{ url_for('upload_data') }}" class="btn btn-primary">
+                <i class="fas fa-upload"></i> Upload Data
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteModalLabel">
+                    <i class="fas fa-exclamation-triangle"></i> Confirm Deletion
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p id="deleteMessage">Are you sure you want to delete the selected lead(s)?</p>
+                <div class="alert alert-warning">
+                    <i class="fas fa-warning"></i>
+                    <strong>Warning:</strong> This action cannot be undone. All related data including call records and PS followups will be permanently deleted.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.lead-row {
+    transition: all 0.2s ease;
+}
+
+.lead-row:hover {
+    background-color: var(--ather-dark) !important;
+}
+
+.lead-row.selected {
+    background-color: rgba(0, 212, 170, 0.1) !important;
+    border-left: 4px solid var(--ather-primary);
+}
+
+.table th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let selectedLeads = new Set();
+    let deleteType = 'single'; // 'single' or 'bulk'
+    let deleteTarget = null;
+
+    // Search functionality
+    function setupSearch() {
+        const searchInput = document.getElementById('searchInput');
+        const searchButton = document.getElementById('searchButton');
+        const clearButton = document.getElementById('clearButton');
+
+        function performSearch() {
+            const searchTerm = searchInput.value.toLowerCase().trim();
+            const rows = document.querySelectorAll('.lead-row');
+            let visibleCount = 0;
+
+            rows.forEach(row => {
+                const searchData = row.getAttribute('data-search') || '';
+                if (searchData.includes(searchTerm) || searchTerm === '') {
+                    row.style.display = '';
+                    visibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            updateCounts(visibleCount);
+        }
+
+        function clearSearch() {
+            searchInput.value = '';
+            performSearch();
+        }
+
+        searchButton.addEventListener('click', performSearch);
+        clearButton.addEventListener('click', clearSearch);
+        searchInput.addEventListener('input', performSearch);
+        searchInput.addEventListener('keyup', function(e) {
+            if (e.key === 'Enter') {
+                performSearch();
+            }
+        });
+    }
+
+    // Filter functionality
+    function setupFilters() {
+        const applyBtn = document.getElementById('applyFilters');
+        const resetBtn = document.getElementById('resetFilters');
+
+        function applyFilters() {
+            const sourceFilter = document.getElementById('sourceFilter').value;
+            const statusFilter = document.getElementById('statusFilter').value;
+            const finalStatusFilter = document.getElementById('finalStatusFilter').value;
+            const dateFilter = document.getElementById('dateFilter').value;
+
+            const rows = document.querySelectorAll('.lead-row');
+            let visibleCount = 0;
+
+            rows.forEach(row => {
+                let show = true;
+
+                // Source filter
+                if (sourceFilter && row.getAttribute('data-source') !== sourceFilter) {
+                    show = false;
+                }
+
+                // Assignment status filter
+                if (statusFilter && row.getAttribute('data-assigned') !== statusFilter) {
+                    show = false;
+                }
+
+                // Final status filter
+                if (finalStatusFilter && row.getAttribute('data-final-status') !== finalStatusFilter) {
+                    show = false;
+                }
+
+                // Date filter
+                if (dateFilter !== 'all') {
+                    const rowDate = new Date(row.getAttribute('data-date'));
+                    const today = new Date();
+                    let threshold = new Date();
+
+                    switch(dateFilter) {
+                        case 'today':
+                            threshold = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                            break;
+                        case 'week':
+                            threshold.setDate(today.getDate() - 7);
+                            break;
+                        case 'month':
+                            threshold.setMonth(today.getMonth() - 1);
+                            break;
+                        case 'quarter':
+                            threshold.setMonth(today.getMonth() - 3);
+                            break;
+                        case 'year':
+                            threshold.setFullYear(today.getFullYear() - 1);
+                            break;
+                    }
+
+                    if (rowDate < threshold) {
+                        show = false;
+                    }
+                }
+
+                if (show) {
+                    row.style.display = '';
+                    visibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            updateCounts(visibleCount);
+        }
+
+        function resetFilters() {
+            document.getElementById('sourceFilter').value = '';
+            document.getElementById('statusFilter').value = '';
+            document.getElementById('finalStatusFilter').value = '';
+            document.getElementById('dateFilter').value = 'all';
+            document.getElementById('searchInput').value = '';
+
+            const rows = document.querySelectorAll('.lead-row');
+            rows.forEach(row => {
+                row.style.display = '';
+            });
+
+            updateCounts(rows.length);
+        }
+
+        applyBtn.addEventListener('click', applyFilters);
+        resetBtn.addEventListener('click', resetFilters);
+    }
+
+    // Selection functionality
+    function setupSelection() {
+        const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+        const selectAllBtn = document.getElementById('selectAllBtn');
+        const deselectAllBtn = document.getElementById('deselectAllBtn');
+        const leadCheckboxes = document.querySelectorAll('.lead-checkbox');
+
+        function updateSelection() {
+            const selectedCount = selectedLeads.size;
+            document.getElementById('selectedCount').textContent = selectedCount;
+
+            const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+            const bulkUnassignBtn = document.getElementById('bulkUnassignBtn');
+
+            bulkDeleteBtn.disabled = selectedCount === 0;
+            bulkUnassignBtn.disabled = selectedCount === 0;
+
+            // Update select all checkbox state
+            const visibleCheckboxes = Array.from(leadCheckboxes).filter(cb =>
+                cb.closest('.lead-row').style.display !== 'none'
+            );
+            const visibleSelected = visibleCheckboxes.filter(cb => cb.checked);
+
+            if (visibleSelected.length === 0) {
+                selectAllCheckbox.indeterminate = false;
+                selectAllCheckbox.checked = false;
+            } else if (visibleSelected.length === visibleCheckboxes.length) {
+                selectAllCheckbox.indeterminate = false;
+                selectAllCheckbox.checked = true;
+            } else {
+                selectAllCheckbox.indeterminate = true;
+            }
+        }
+
+        leadCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const uid = this.value;
+                const row = this.closest('.lead-row');
+
+                if (this.checked) {
+                    selectedLeads.add(uid);
+                    row.classList.add('selected');
+                } else {
+                    selectedLeads.delete(uid);
+                    row.classList.remove('selected');
+                }
+
+                updateSelection();
+            });
+        });
+
+        selectAllCheckbox.addEventListener('change', function() {
+            const visibleCheckboxes = Array.from(leadCheckboxes).filter(cb =>
+                cb.closest('.lead-row').style.display !== 'none'
+            );
+
+            visibleCheckboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+                const uid = checkbox.value;
+                const row = checkbox.closest('.lead-row');
+
+                if (this.checked) {
+                    selectedLeads.add(uid);
+                    row.classList.add('selected');
+                } else {
+                    selectedLeads.delete(uid);
+                    row.classList.remove('selected');
+                }
+            });
+
+            updateSelection();
+        });
+
+        selectAllBtn.addEventListener('click', function() {
+            selectAllCheckbox.checked = true;
+            selectAllCheckbox.dispatchEvent(new Event('change'));
+        });
+
+        deselectAllBtn.addEventListener('click', function() {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.dispatchEvent(new Event('change'));
+        });
+
+        updateSelection();
+    }
+
+    // Delete functionality
+    function setupDelete() {
+        const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+        const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+        const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+        const deleteSingleBtns = document.querySelectorAll('.delete-single-btn');
+
+        // Single delete
+        deleteSingleBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const uid = this.getAttribute('data-uid');
+                const name = this.getAttribute('data-name');
+
+                deleteType = 'single';
+                deleteTarget = uid;
+
+                document.getElementById('deleteMessage').innerHTML =
+                    `Are you sure you want to delete the lead for <strong>${name}</strong> (${uid})?`;
+
+                deleteModal.show();
+            });
+        });
+
+        // Bulk delete
+        bulkDeleteBtn.addEventListener('click', function() {
+            if (selectedLeads.size === 0) return;
+
+            deleteType = 'bulk';
+            deleteTarget = Array.from(selectedLeads);
+
+            document.getElementById('deleteMessage').innerHTML =
+                `Are you sure you want to delete <strong>${selectedLeads.size}</strong> selected lead(s)?`;
+
+            deleteModal.show();
+        });
+
+        // Confirm delete
+        confirmDeleteBtn.addEventListener('click', function() {
+            const originalText = this.innerHTML;
+            this.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Deleting...';
+            this.disabled = true;
+
+            const formData = new FormData();
+            formData.append('delete_type', deleteType);
+
+            if (deleteType === 'single') {
+                formData.append('uid', deleteTarget);
+            } else {
+                deleteTarget.forEach(uid => {
+                    formData.append('uids', uid);
+                });
+            }
+
+            fetch('{{ url_for("delete_leads") }}', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Remove deleted rows from table
+                    if (deleteType === 'single') {
+                        const row = document.querySelector(`input[value="${deleteTarget}"]`).closest('.lead-row');
+                        row.remove();
+                    } else {
+                        deleteTarget.forEach(uid => {
+                            const row = document.querySelector(`input[value="${uid}"]`).closest('.lead-row');
+                            if (row) row.remove();
+                        });
+                    }
+
+                    // Clear selection
+                    selectedLeads.clear();
+                    document.querySelectorAll('.lead-checkbox').forEach(cb => {
+                        cb.checked = false;
+                        cb.closest('.lead-row').classList.remove('selected');
+                    });
+
+                    // Update counts
+                    const remainingRows = document.querySelectorAll('.lead-row').length;
+                    updateCounts(remainingRows);
+                    document.getElementById('totalCount').textContent = remainingRows;
+
+                    // Show success message
+                    showAlert('success', data.message);
+
+                    deleteModal.hide();
+                } else {
+                    showAlert('error', data.message || 'Failed to delete leads');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showAlert('error', 'An error occurred while deleting leads');
+            })
+            .finally(() => {
+                this.innerHTML = originalText;
+                this.disabled = false;
+            });
+        });
+    }
+
+    // Bulk unassign functionality
+    function setupBulkUnassign() {
+        const bulkUnassignBtn = document.getElementById('bulkUnassignBtn');
+
+        bulkUnassignBtn.addEventListener('click', function() {
+            if (selectedLeads.size === 0) return;
+
+            if (!confirm(`Are you sure you want to unassign ${selectedLeads.size} selected lead(s)?`)) {
+                return;
+            }
+
+            const originalText = this.innerHTML;
+            this.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Unassigning...';
+            this.disabled = true;
+
+            const formData = new FormData();
+            Array.from(selectedLeads).forEach(uid => {
+                formData.append('uids', uid);
+            });
+
+            fetch('{{ url_for("bulk_unassign_leads") }}', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update the affected rows
+                    selectedLeads.forEach(uid => {
+                        const row = document.querySelector(`input[value="${uid}"]`).closest('.lead-row');
+                        if (row) {
+                            // Update CRE name
+                            const creCell = row.cells[5]; // CRE Name column
+                            creCell.textContent = 'Unassigned';
+
+                            // Update assignment status
+                            const statusCell = row.cells[7]; // Assignment column
+                            statusCell.innerHTML = '<span class="badge bg-warning">Unassigned</span>';
+
+                            // Update data attributes
+                            row.setAttribute('data-assigned', 'No');
+                        }
+                    });
+
+                    // Clear selection
+                    selectedLeads.clear();
+                    document.querySelectorAll('.lead-checkbox').forEach(cb => {
+                        cb.checked = false;
+                        cb.closest('.lead-row').classList.remove('selected');
+                    });
+
+                    showAlert('success', data.message);
+                } else {
+                    showAlert('error', data.message || 'Failed to unassign leads');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showAlert('error', 'An error occurred while unassigning leads');
+            })
+            .finally(() => {
+                this.innerHTML = originalText;
+                this.disabled = false;
+            });
+        });
+    }
+
+    // Utility functions
+    function updateCounts(visibleCount) {
+        document.getElementById('visibleCount').textContent = visibleCount;
+    }
+
+    function showAlert(type, message) {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show`;
+        alertDiv.innerHTML = `
+            <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-triangle'}"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+
+        const container = document.querySelector('.container-main');
+        container.insertBefore(alertDiv, container.firstChild);
+
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, 5000);
+    }
+
+    // Initialize all functionality
+    setupSearch();
+    setupFilters();
+    setupSelection();
+    setupDelete();
+    setupBulkUnassign();
+});
+</script>
+{% endblock %}

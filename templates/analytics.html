@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics - Ather CRM</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --airbnb-red: #FF385C;
+            --airbnb-red-dark: #E31C5F;
+            --airbnb-gray-100: #F7F7F7;
+            --airbnb-gray-200: #EBEBEB;
+            --airbnb-gray-300: #DDDDDD;
+            --airbnb-gray-400: #B0B0B0;
+            --airbnb-gray-500: #717171;
+            --airbnb-gray-600: #484848;
+            --airbnb-gray-700: #222222;
+            --airbnb-white: #FFFFFF;
+            --airbnb-green: #00A699;
+            --airbnb-blue: #007A87;
+            --airbnb-yellow: #FFB400;
+            --airbnb-border-radius: 12px;
+            --airbnb-border-radius-lg: 16px;
+            --airbnb-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.05);
+            --airbnb-shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.08), 0 8px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            font-family: 'Lexend', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--airbnb-white);
+            color: var(--airbnb-gray-700);
+        }
+
+        .navbar {
+            background-color: var(--airbnb-white) !important;
+            border-bottom: 1px solid var(--airbnb-gray-200);
+            box-shadow: var(--airbnb-shadow);
+        }
+
+        .analytics-container {
+            background: var(--airbnb-white);
+            border-radius: var(--airbnb-border-radius-lg);
+            box-shadow: var(--airbnb-shadow);
+            margin: 2rem;
+            padding: 2rem;
+            border: 1px solid var(--airbnb-gray-200);
+        }
+
+        .kpi-card {
+            background: linear-gradient(135deg, var(--airbnb-red) 0%, var(--airbnb-red-dark) 100%);
+            color: var(--airbnb-white);
+            border-radius: var(--airbnb-border-radius);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: var(--airbnb-shadow);
+            transition: all 0.3s ease;
+            border: none;
+        }
+
+        .kpi-card:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--airbnb-shadow-hover);
+        }
+
+        .kpi-card.success {
+            background: linear-gradient(135deg, var(--airbnb-green) 0%, #00B3A6 100%);
+        }
+
+        .kpi-card.warning {
+            background: linear-gradient(135deg, var(--airbnb-yellow) 0%, #E6A200 100%);
+        }
+
+        .kpi-card.info {
+            background: linear-gradient(135deg, var(--airbnb-blue) 0%, #006B75 100%);
+        }
+
+        .kpi-value {
+            font-size: 2.25rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .kpi-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            font-weight: 500;
+        }
+
+        .chart-container {
+            background: var(--airbnb-white);
+            border-radius: var(--airbnb-border-radius);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: var(--airbnb-shadow);
+            border: 1px solid var(--airbnb-gray-200);
+            height: 350px;
+        }
+
+        .table-container {
+            background: var(--airbnb-white);
+            border-radius: var(--airbnb-border-radius);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: var(--airbnb-shadow);
+            border: 1px solid var(--airbnb-gray-200);
+        }
+
+        .table {
+            color: var(--airbnb-gray-700);
+        }
+
+        .table thead th {
+            background: var(--airbnb-gray-100);
+            color: var(--airbnb-gray-700);
+            border: none;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 0.5px;
+        }
+
+        .table tbody td {
+            background: var(--airbnb-white);
+            border-color: var(--airbnb-gray-200);
+            color: var(--airbnb-gray-700);
+        }
+
+        .table-hover tbody tr:hover {
+            background: var(--airbnb-gray-100);
+        }
+
+        .funnel-step {
+            background: linear-gradient(135deg, var(--airbnb-red) 0%, var(--airbnb-red-dark) 100%);
+            color: var(--airbnb-white);
+            padding: 1rem;
+            margin: 0.75rem 0;
+            border-radius: var(--airbnb-border-radius);
+            position: relative;
+            font-weight: 500;
+        }
+
+        .funnel-step:nth-child(2) {
+            background: linear-gradient(135deg, var(--airbnb-green) 0%, #00B3A6 100%);
+        }
+
+        .funnel-step:nth-child(3) {
+            background: linear-gradient(135deg, var(--airbnb-blue) 0%, #006B75 100%);
+        }
+
+        .funnel-step:nth-child(4) {
+            background: linear-gradient(135deg, var(--airbnb-yellow) 0%, #E6A200 100%);
+        }
+
+        .activity-item {
+            border-left: 4px solid var(--airbnb-red);
+            padding: 1rem;
+            margin-bottom: 1rem;
+            background: var(--airbnb-gray-100);
+            border-radius: 0 var(--airbnb-border-radius) var(--airbnb-border-radius) 0;
+            transition: all 0.2s ease;
+        }
+
+        .activity-item:hover {
+            background: var(--airbnb-gray-200);
+        }
+
+        .filter-buttons {
+            margin-bottom: 2rem;
+        }
+
+        .filter-btn {
+            margin-right: 0.75rem;
+            margin-bottom: 0.75rem;
+            border: 1px solid var(--airbnb-gray-300);
+            color: var(--airbnb-gray-700);
+            background: var(--airbnb-white);
+            border-radius: var(--airbnb-border-radius);
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .filter-btn:hover {
+            background: var(--airbnb-gray-100);
+            border-color: var(--airbnb-red);
+            color: var(--airbnb-red);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--airbnb-red) 0%, var(--airbnb-red-dark) 100%);
+            border: none;
+            border-radius: var(--airbnb-border-radius);
+            font-weight: 500;
+        }
+
+        .btn-outline-primary {
+            border: 1px solid var(--airbnb-gray-300);
+            color: var(--airbnb-gray-700);
+            background: var(--airbnb-white);
+            border-radius: var(--airbnb-border-radius);
+        }
+
+        .btn-outline-primary:hover {
+            background: var(--airbnb-gray-100);
+            border-color: var(--airbnb-red);
+            color: var(--airbnb-red);
+        }
+
+        .badge {
+            border-radius: 20px;
+            font-weight: 500;
+            padding: 0.4rem 0.8rem;
+        }
+
+        .progress {
+            background-color: var(--airbnb-gray-200);
+            border-radius: 10px;
+        }
+
+        .progress-bar {
+            border-radius: 10px;
+        }
+
+        .branch-link {
+            color: var(--airbnb-red) !important;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .branch-link:hover {
+            color: var(--airbnb-red-dark) !important;
+            text-decoration: underline;
+        }
+
+        .avatar-sm {
+            width: 35px;
+            height: 35px;
+            font-size: 0.875rem;
+            background: var(--airbnb-red);
+            color: var(--airbnb-white);
+        }
+
+        .modal-content {
+            background: var(--airbnb-white);
+            border: 1px solid var(--airbnb-gray-200);
+            border-radius: var(--airbnb-border-radius-lg);
+            color: var(--airbnb-gray-700);
+        }
+
+        .modal-header {
+            border-bottom: 1px solid var(--airbnb-gray-200);
+        }
+
+        .modal-footer {
+            border-top: 1px solid var(--airbnb-gray-200);
+        }
+
+        @media (max-width: 768px) {
+            .analytics-container {
+                margin: 1rem;
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('admin_dashboard') }}" style="color: var(--airbnb-red); font-weight: 700;">
+                <i class="fas fa-bolt" style="color: var(--airbnb-red);"></i> Ather CRM
+            </a>
+            <div class="navbar-nav ms-auto">
+                <span class="navbar-text me-3" style="color: var(--airbnb-gray-600);">
+                    <i class="fas fa-user"></i> Welcome, {{ session.username }}
+                </span>
+                <a class="btn btn-outline-primary btn-sm" href="{{ url_for('logout') }}">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="analytics-container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 style="color: var(--airbnb-gray-700); font-weight: 700;">
+                    <i class="fas fa-chart-line" style="color: var(--airbnb-red);"></i> Analytics Dashboard
+                </h1>
+                <p style="color: var(--airbnb-gray-500); margin-bottom: 0;">Comprehensive insights and performance metrics</p>
+            </div>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-primary">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+
+        <!-- Filter Buttons -->
+        <div class="filter-buttons">
+            <h5 style="color: var(--airbnb-gray-700); font-weight: 600; margin-bottom: 1rem;">Time Period:</h5>
+            <a href="{{ url_for('analytics', period='7') }}" class="btn filter-btn">Last 7 Days</a>
+            <a href="{{ url_for('analytics', period='30') }}" class="btn filter-btn">Last 30 Days</a>
+            <a href="{{ url_for('analytics', period='90') }}" class="btn filter-btn">Last 90 Days</a>
+            <a href="{{ url_for('analytics', period='365') }}" class="btn filter-btn">Last Year</a>
+            <a href="{{ url_for('analytics', period='all') }}" class="btn filter-btn">All Time</a>
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="row">
+            <div class="col-md-3">
+                <div class="kpi-card">
+                    <div class="kpi-value">{{ analytics.total_leads }}</div>
+                    <div class="kpi-label">
+                        <i class="fas fa-users"></i> Total Leads
+                        <span class="badge bg-light text-dark ms-2">+{{ analytics.leads_growth }}%</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="kpi-card success">
+                    <div class="kpi-value">{{ analytics.conversion_rate }}%</div>
+                    <div class="kpi-label">
+                        <i class="fas fa-trophy"></i> Conversion Rate
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="kpi-card warning">
+                    <div class="kpi-value">{{ analytics.avg_response_time }}</div>
+                    <div class="kpi-label">
+                        <i class="fas fa-clock"></i> Avg Response Time
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="kpi-card info">
+                    <div class="kpi-value">{{ analytics.active_cres }}/{{ analytics.total_cres }}</div>
+                    <div class="kpi-label">
+                        <i class="fas fa-user-tie"></i> Active CREs
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="chart-container">
+                    <h5 style="color: var(--airbnb-gray-700); font-weight: 600; margin-bottom: 1rem;">
+                        <i class="fas fa-pie-chart" style="color: var(--airbnb-red);"></i> Lead Sources
+                    </h5>
+                    <canvas id="sourceChart" width="400" height="250"></canvas>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="chart-container">
+                    <h5 style="color: var(--airbnb-gray-700); font-weight: 600; margin-bottom: 1rem;">
+                        <i class="fas fa-line-chart" style="color: var(--airbnb-red);"></i> Lead Trends
+                    </h5>
+                    <canvas id="trendChart" width="400" height="250"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Tables -->
+        <div class="row">
+            <div class="col-md-8">
+                <div class="table-container">
+                    <h5 style="color: var(--airbnb-gray-700); font-weight: 600; margin-bottom: 1rem;">
+                        <i class="fas fa-star" style="color: var(--airbnb-yellow);"></i> Top Performing CREs
+                    </h5>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>CRE Name</th>
+                                    <th>Total Leads</th>
+                                    <th>Won Leads</th>
+                                    <th>Conversion Rate</th>
+                                    <th>Avg Calls</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for cre in analytics.top_cres %}
+                                <tr>
+                                    <td><strong>{{ cre.name }}</strong></td>
+                                    <td>{{ cre.total_leads }}</td>
+                                    <td><span class="badge" style="background: var(--airbnb-green);">{{ cre.won_leads }}</span></td>
+                                    <td>
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar" style="width: {{ cre.conversion_rate }}%; background: var(--airbnb-red);">
+                                                {{ cre.conversion_rate }}%
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>{{ cre.avg_calls }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="table-container">
+                    <h5 style="color: var(--airbnb-gray-700); font-weight: 600; margin-bottom: 1rem;">
+                        <i class="fas fa-funnel-dollar" style="color: var(--airbnb-green);"></i> Lead Funnel
+                    </h5>
+                    <div class="funnel-step">
+                        <strong>Total Leads</strong>
+                        <div>{{ analytics.funnel.total }} (100%)</div>
+                    </div>
+                    <div class="funnel-step">
+                        <strong>Assigned to CRE</strong>
+                        <div>{{ analytics.funnel.assigned_cre }} ({{ analytics.funnel.assigned_cre_percent }}%)</div>
+                    </div>
+                    <div class="funnel-step">
+                        <strong>First Call Made</strong>
+                        <div>{{ analytics.funnel.first_call }} ({{ analytics.funnel.first_call_percent }}%)</div>
+                    </div>
+                    <div class="funnel-step">
+                        <strong>Assigned to PS</strong>
+                        <div>{{ analytics.funnel.assigned_ps }} ({{ analytics.funnel.assigned_ps_percent }}%)</div>
+                    </div>
+                    <div class="funnel-step">
+                        <strong>Won</strong>
+                        <div>{{ analytics.funnel.won }} ({{ analytics.funnel.won_percent }}%)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Branch Performance -->
+        <div class="table-container">
+            <h5 style="color: var(--airbnb-gray-700); font-weight: 600; margin-bottom: 1rem;">
+                <i class="fas fa-building" style="color: var(--airbnb-blue);"></i> Branch Performance
+            </h5>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Branch</th>
+                            <th>PS Count</th>
+                            <th>Assigned Leads</th>
+                            <th>Won Leads</th>
+                            <th>Success Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for branch in analytics.branch_performance %}
+                        <tr>
+                            <td>
+                                <a href="#" class="branch-link"
+                                   data-branch="{{ branch.name }}"
+                                   onclick="showBranchDetails('{{ branch.name }}')">
+                                    <i class="fas fa-building me-2"></i>{{ branch.name }}
+                                </a>
+                            </td>
+                            <td><span class="badge" style="background: var(--airbnb-red);">{{ branch.ps_count }}</span></td>
+                            <td>{{ branch.assigned_leads }}</td>
+                            <td><span class="badge" style="background: var(--airbnb-green);">{{ branch.won_leads }}</span></td>
+                            <td>
+                                <div class="progress" style="height: 20px;">
+                                    <div class="progress-bar" style="width: {{ branch.success_rate }}%; background: var(--airbnb-blue);">
+                                        {{ branch.success_rate }}%
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Additional Analytics -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="table-container">
+                    <h5 style="color: var(--airbnb-gray-700); font-weight: 600; margin-bottom: 1rem;">
+                        <i class="fas fa-tags" style="color: var(--airbnb-yellow);"></i> Lead Categories
+                    </h5>
+                    {% for category in analytics.lead_categories %}
+                    <div class="d-flex justify-content-between align-items-center mb-2 p-2" style="background: var(--airbnb-gray-100); border-radius: var(--airbnb-border-radius);">
+                        <span style="font-weight: 500;">{{ category.name }}</span>
+                        <div>
+                            <span class="badge" style="background: var(--airbnb-gray-500); margin-right: 0.5rem;">{{ category.count }}</span>
+                            <span style="color: var(--airbnb-gray-500);">{{ category.percentage }}%</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="table-container">
+                    <h5 style="color: var(--airbnb-gray-700); font-weight: 600; margin-bottom: 1rem;">
+                        <i class="fas fa-motorcycle" style="color: var(--airbnb-red);"></i> Model Interest
+                    </h5>
+                    {% for model in analytics.model_interest %}
+                    <div class="d-flex justify-content-between align-items-center mb-2 p-2" style="background: var(--airbnb-gray-100); border-radius: var(--airbnb-border-radius);">
+                        <span class="small" style="font-weight: 500;">{{ model.name }}</span>
+                        <div>
+                            <span class="badge" style="background: var(--airbnb-red); margin-right: 0.5rem;">{{ model.count }}</span>
+                            <span style="color: var(--airbnb-gray-500);">{{ model.percentage }}%</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Activities -->
+        <div class="table-container">
+            <h5 style="color: var(--airbnb-gray-700); font-weight: 600; margin-bottom: 1rem;">
+                <i class="fas fa-history" style="color: var(--airbnb-gray-500);"></i> Recent Activities
+            </h5>
+            {% for activity in analytics.recent_activities %}
+            <div class="activity-item">
+                <h6 class="mb-1" style="color: var(--airbnb-gray-700); font-weight: 600;">{{ activity.title }}</h6>
+                <p class="mb-1" style="color: var(--airbnb-gray-600);">{{ activity.description }}</p>
+                <small style="color: var(--airbnb-gray-500);">{{ activity.time }}</small>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Branch Details Modal -->
+    <div class="modal fade" id="branchDetailsModal" tabindex="-1" aria-labelledby="branchDetailsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header" style="background: var(--airbnb-blue); color: var(--airbnb-white);">
+                    <h5 class="modal-title" id="branchDetailsModalLabel">
+                        <i class="fas fa-building"></i> <span id="branchName"></span> - PS Performance
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="filter: invert(1);"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="branchDetailsContent">
+                        <div class="text-center py-4">
+                            <div class="spinner-border" style="color: var(--airbnb-red);" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2" style="color: var(--airbnb-gray-600);">Loading PS performance data...</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Source Distribution Pie Chart
+        const sourceCtx = document.getElementById('sourceChart').getContext('2d');
+        new Chart(sourceCtx, {
+            type: 'pie',
+            data: {
+                labels: {{ analytics.source_labels | tojsonfilter | safe }},
+                datasets: [{
+                    data: {{ analytics.source_data | tojsonfilter | safe }},
+                    backgroundColor: [
+                        '#FF385C', '#00A699', '#FFB400', '#007A87',
+                        '#8B5CF6', '#FF6B35', '#20C997', '#6C757D'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            boxWidth: 12,
+                            padding: 15,
+                            font: {
+                                family: 'Lexend',
+                                size: 12
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Lead Trends Line Chart
+        const trendCtx = document.getElementById('trendChart').getContext('2d');
+        new Chart(trendCtx, {
+            type: 'line',
+            data: {
+                labels: {{ analytics.trend_labels | tojsonfilter | safe }},
+                datasets: [{
+                    label: 'Daily Leads',
+                    data: {{ analytics.trend_data | tojsonfilter | safe }},
+                    borderColor: '#FF385C',
+                    backgroundColor: 'rgba(255, 56, 92, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                    pointBackgroundColor: '#FF385C',
+                    pointBorderColor: '#FFFFFF',
+                    pointBorderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(0,0,0,0.1)'
+                        },
+                        ticks: {
+                            font: {
+                                family: 'Lexend'
+                            }
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: 'rgba(0,0,0,0.1)'
+                        },
+                        ticks: {
+                            font: {
+                                family: 'Lexend'
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+
+        // Branch Details Functions
+        function showBranchDetails(branchName) {
+            document.getElementById('branchName').textContent = branchName;
+            const modal = new bootstrap.Modal(document.getElementById('branchDetailsModal'));
+            modal.show();
+
+            document.getElementById('branchDetailsContent').innerHTML = `
+                <div class="text-center py-4">
+                    <div class="spinner-border" style="color: var(--airbnb-red);" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2" style="color: var(--airbnb-gray-600);">Loading PS performance data...</p>
+                </div>
+            `;
+
+            fetch(`/branch_performance/${encodeURIComponent(branchName)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        displayBranchDetails(data.data);
+                    } else {
+                        displayError(data.message || 'Failed to load branch details');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    displayError('An error occurred while loading branch details');
+                });
+        }
+
+        function displayBranchDetails(data) {
+            const content = document.getElementById('branchDetailsContent');
+
+            if (!data.ps_performance || data.ps_performance.length === 0) {
+                content.innerHTML = `
+                    <div class="text-center py-4">
+                        <i class="fas fa-user-tie fa-3x mb-3" style="color: var(--airbnb-gray-400);"></i>
+                        <h5 style="color: var(--airbnb-gray-500);">No PS users found in this branch</h5>
+                        <p style="color: var(--airbnb-gray-500);">Add PS users to this branch to see performance data</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = `
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card text-white" style="background: var(--airbnb-red);">
+                            <div class="card-body text-center">
+                                <h4>${data.summary.total_ps}</h4>
+                                <small>Total PS</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-white" style="background: var(--airbnb-green);">
+                            <div class="card-body text-center">
+                                <h4>${data.summary.total_leads}</h4>
+                                <small>Total Leads</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-white" style="background: var(--airbnb-yellow);">
+                            <div class="card-body text-center">
+                                <h4>${data.summary.won_leads}</h4>
+                                <small>Won Leads</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-white" style="background: var(--airbnb-blue);">
+                            <div class="card-body text-center">
+                                <h4>${data.summary.success_rate}%</h4>
+                                <small>Success Rate</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>PS Name</th>
+                                <th>Contact</th>
+                                <th>Assigned Leads</th>
+                                <th>Pending</th>
+                                <th>In Progress</th>
+                                <th>Won</th>
+                                <th>Lost</th>
+                                <th>Success Rate</th>
+                                <th>Avg Calls</th>
+                                <th>Last Activity</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+            data.ps_performance.forEach(ps => {
+                html += `
+                    <tr>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="avatar-sm rounded-circle d-flex align-items-center justify-content-center me-3">
+                                    <i class="fas fa-user-tie text-white"></i>
+                                </div>
+                                <div>
+                                    <strong>${ps.name}</strong>
+                                    <br><small style="color: var(--airbnb-gray-500);">${ps.username}</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <small><i class="fas fa-phone" style="color: var(--airbnb-gray-500);"></i> ${ps.phone}</small><br>
+                            <small><i class="fas fa-envelope" style="color: var(--airbnb-gray-500);"></i> ${ps.email}</small>
+                        </td>
+                        <td><span class="badge" style="background: var(--airbnb-red);">${ps.total_leads}</span></td>
+                        <td><span class="badge" style="background: var(--airbnb-gray-500);">${ps.pending_leads}</span></td>
+                        <td><span class="badge" style="background: var(--airbnb-yellow);">${ps.in_progress_leads}</span></td>
+                        <td><span class="badge" style="background: var(--airbnb-green);">${ps.won_leads}</span></td>
+                        <td><span class="badge bg-danger">${ps.lost_leads}</span></td>
+                        <td>
+                            <div class="progress" style="height: 20px; min-width: 80px;">
+                                <div class="progress-bar"
+                                     style="width: ${ps.success_rate}%; background: ${ps.success_rate >= 50 ? 'var(--airbnb-green)' : ps.success_rate >= 25 ? 'var(--airbnb-yellow)' : '#dc3545'};">
+                                    ${ps.success_rate}%
+                                </div>
+                            </div>
+                        </td>
+                        <td>${ps.avg_calls}</td>
+                        <td>
+                            ${ps.last_activity ? `<small style="color: var(--airbnb-gray-500);">${ps.last_activity}</small>` : '<small style="color: var(--airbnb-gray-500);">No activity</small>'}
+                        </td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            content.innerHTML = html;
+        }
+
+        function displayError(message) {
+            document.getElementById('branchDetailsContent').innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-3x mb-3" style="color: var(--airbnb-yellow);"></i>
+                    <h5 style="color: var(--airbnb-yellow);">Error Loading Data</h5>
+                    <p style="color: var(--airbnb-gray-500);">${message}</p>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

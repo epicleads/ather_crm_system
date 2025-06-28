@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Walk-in Customers - Ather CRM</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        .header-section {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 0;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-title {
+            display: flex;
+            align-items: center;
+            margin: 0;
+        }
+
+        .header-title i {
+            font-size: 1.5rem;
+            margin-right: 0.75rem;
+        }
+
+        .header-title h1 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .header-subtitle {
+            margin: 0.25rem 0 0 0;
+            opacity: 0.9;
+            font-size: 1rem;
+        }
+
+        .header-buttons {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .btn-header {
+            background: white;
+            color: #28a745;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-weight: 500;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            transition: all 0.2s;
+        }
+
+        .btn-header:hover {
+            background: #f8f9fa;
+            color: #28a745;
+            transform: translateY(-1px);
+        }
+
+        .btn-header i {
+            margin-right: 0.5rem;
+        }
+
+        .main-content {
+            background: white;
+            margin: 0;
+            padding: 1.5rem;
+            min-height: calc(100vh - 140px);
+        }
+
+        .search-filter-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            gap: 1rem;
+        }
+
+        .search-box {
+            flex: 1;
+            max-width: 400px;
+            padding: 0.75rem 1rem;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            font-size: 0.95rem;
+        }
+
+        .search-box:focus {
+            outline: none;
+            border-color: #28a745;
+            box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.1);
+        }
+
+        .total-badge {
+            background: #007bff;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .table {
+            margin: 0;
+            font-size: 0.9rem;
+        }
+
+        .table thead th {
+            background: #f8f9fa;
+            border: none;
+            padding: 1rem 0.75rem;
+            font-weight: 600;
+            color: #495057;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .table tbody td {
+            padding: 1rem 0.75rem;
+            border: none;
+            border-bottom: 1px solid #f1f3f4;
+            vertical-align: middle;
+        }
+
+        .table tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .uid-cell {
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .amount-cell {
+            font-weight: 600;
+            color: #28a745;
+        }
+
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-transform: capitalize;
+        }
+
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-quotation-sent {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-in-progress {
+            background: #cce5ff;
+            color: #004085;
+        }
+
+        .status-won {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .status-lost {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 0.25rem;
+        }
+
+        .action-btn {
+            width: 32px;
+            height: 32px;
+            border: none;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .btn-view {
+            background: #17a2b8;
+            color: white;
+        }
+
+        .btn-pdf {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-email {
+            background: #ffc107;
+            color: #212529;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: #6c757d;
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .empty-state h5 {
+            margin-bottom: 0.5rem;
+            color: #495057;
+        }
+
+        .empty-state p {
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-content {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+        .modal-header {
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            border-radius: 12px 12px 0 0;
+        }
+
+        .customer-detail-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .customer-detail-section h6 {
+            color: #28a745;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .detail-item {
+            margin-bottom: 0.75rem;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: #495057;
+            margin-right: 0.5rem;
+        }
+
+        .detail-value {
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header Section -->
+    <div class="header-section">
+        <div class="container-fluid">
+            <div class="header-content">
+                <div>
+                    <div class="header-title">
+                        <i class="fas fa-users"></i>
+                        <div>
+                            <h1>Walk-in Customers</h1>
+                            <p class="header-subtitle">Manage your walk-in customer quotations</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="header-buttons">
+                    <a href="{{ url_for('walkin_customers') }}" class="btn-header">
+                        <i class="fas fa-plus"></i>Add New
+                    </a>
+                    <a href="{{ url_for('ps_dashboard') }}" class="btn-header">
+                        <i class="fas fa-arrow-left"></i>Back
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="container-fluid">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <!-- Search and Filter Section -->
+            <div class="search-filter-section">
+                <input type="text" id="searchInput" class="search-box" placeholder="Search customers...">
+                <div class="total-badge">
+                    Total: {{ walkin_customers|length }} customers
+                </div>
+            </div>
+
+            {% if walkin_customers %}
+                <div class="table-container">
+                    <table class="table" id="customersTable">
+                        <thead>
+                            <tr>
+                                <th>UID</th>
+                                <th>Customer Name</th>
+                                <th>Mobile</th>
+                                <th>Email</th>
+                                <th>Model</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th>Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for customer in walkin_customers %}
+                                <tr>
+                                    <td class="uid-cell">{{ customer.uid }}</td>
+                                    <td>{{ customer.customer_name }}</td>
+                                    <td>{{ customer.customer_mobile_number }}</td>
+                                    <td>{{ customer.customer_email or 'N/A' }}</td>
+                                    <td>{{ customer.model_interested }}</td>
+                                    <td class="amount-cell">
+                                        {% if customer.quotation_amount %}
+                                            ₹{{ "{:,}".format(customer.quotation_amount|int) }}
+                                        {% else %}
+                                            N/A
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="status-badge status-{{ customer.status.lower().replace(' ', '-') }}">
+                                            {{ customer.status }}
+                                        </span>
+                                    </td>
+                                    <td>{{ customer.created_at[:10] if customer.created_at else 'N/A' }}</td>
+                                    <td>
+                                        <div class="action-buttons">
+                                            <button type="button" class="action-btn btn-view" onclick="viewDetails('{{ customer.uid }}')" title="View Details">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                            <a href="{{ url_for('download_quotation_pdf', uid=customer.uid) }}" class="action-btn btn-pdf" title="Download PDF">
+                                                <i class="fas fa-file-pdf"></i>
+                                            </a>
+                                            {% if customer.customer_email %}
+                                                <button type="button" class="action-btn btn-email" onclick="resendEmail('{{ customer.uid }}')" title="Resend Email">
+                                                    <i class="fas fa-envelope"></i>
+                                                </button>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-users"></i>
+                    <h5>No walk-in customers found</h5>
+                    <p>Start by adding your first walk-in customer.</p>
+                    <a href="{{ url_for('walkin_customers') }}" class="btn btn-success">
+                        <i class="fas fa-plus me-2"></i>Add Walk-in Customer
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Customer Details Modal -->
+    <div class="modal fade" id="customerModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Customer Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="customerDetails">
+                    <!-- Customer details will be loaded here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Search functionality
+        document.getElementById('searchInput').addEventListener('keyup', function() {
+            const searchTerm = this.value.toLowerCase();
+            const tableRows = document.querySelectorAll('#customersTable tbody tr');
+
+            tableRows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(searchTerm) ? '' : 'none';
+            });
+        });
+
+        // View customer details
+        function viewDetails(uid) {
+            const customers = {{ walkin_customers|tojsonfilter|safe }};
+            const customer = customers.find(c => c.uid === uid);
+
+            if (customer) {
+                const detailsHtml = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="customer-detail-section">
+                                <h6>Customer Information</h6>
+                                <div class="detail-item">
+                                    <span class="detail-label">UID:</span>
+                                    <span class="detail-value">${customer.uid}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Name:</span>
+                                    <span class="detail-value">${customer.customer_name}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Mobile:</span>
+                                    <span class="detail-value">${customer.customer_mobile_number}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Email:</span>
+                                    <span class="detail-value">${customer.customer_email || 'N/A'}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Address:</span>
+                                    <span class="detail-value">${customer.customer_address || 'N/A'}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Occupation:</span>
+                                    <span class="detail-value">${customer.occupation || 'N/A'}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="customer-detail-section">
+                                <h6>Product Information</h6>
+                                <div class="detail-item">
+                                    <span class="detail-label">Lead Source:</span>
+                                    <span class="detail-value">${customer.lead_source}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Lead Category:</span>
+                                    <span class="detail-value">${customer.lead_category || 'N/A'}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Model:</span>
+                                    <span class="detail-value">${customer.model_interested}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Color:</span>
+                                    <span class="detail-value">${customer.color || 'N/A'}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Purchase Type:</span>
+                                    <span class="detail-value">${customer.purchase_type || 'N/A'}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Expected Delivery:</span>
+                                    <span class="detail-value">${customer.expected_delivery_date || 'N/A'}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="customer-detail-section">
+                                <h6>Additional Information</h6>
+                                <div class="detail-item">
+                                    <span class="detail-label">Quotation Amount:</span>
+                                    <span class="detail-value">${customer.quotation_amount ? '₹' + parseInt(customer.quotation_amount).toLocaleString() : 'N/A'}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Accessories:</span>
+                                    <span class="detail-value">₹${customer.accessories || 0}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Status:</span>
+                                    <span class="detail-value">${customer.status}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Follow-up Date:</span>
+                                    <span class="detail-value">${customer.follow_up_date || 'N/A'}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Quotation Details:</span>
+                                    <span class="detail-value">${customer.quotation_details || 'N/A'}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Remarks:</span>
+                                    <span class="detail-value">${customer.remarks || 'N/A'}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Created:</span>
+                                    <span class="detail-value">${customer.created_at ? customer.created_at.substring(0, 10) : 'N/A'}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                document.getElementById('customerDetails').innerHTML = detailsHtml;
+                new bootstrap.Modal(document.getElementById('customerModal')).show();
+            }
+        }
+
+        // Resend email functionality
+        function resendEmail(uid) {
+            if (confirm('Are you sure you want to resend the quotation email?')) {
+                // Show loading state
+                const emailBtn = document.querySelector(`button[onclick="resendEmail('${uid}')"]`);
+                const originalContent = emailBtn.innerHTML;
+                emailBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                emailBtn.disabled = true;
+
+                // Send request to resend email
+                fetch(`/resend_quotation_email/${uid}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Show success message
+                        showAlert('success', data.message);
+                    } else {
+                        // Show error message
+                        showAlert('danger', data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showAlert('danger', 'An error occurred while resending the email.');
+                })
+                .finally(() => {
+                    // Restore button state
+                    emailBtn.innerHTML = originalContent;
+                    emailBtn.disabled = false;
+                });
+            }
+        }
+
+        // Helper function to show alerts
+        function showAlert(type, message) {
+            // Remove existing alerts
+            const existingAlerts = document.querySelectorAll('.alert');
+            existingAlerts.forEach(alert => alert.remove());
+
+            // Create new alert
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+
+            // Insert alert at the top of main content
+            const mainContent = document.querySelector('.main-content .container-fluid');
+            mainContent.insertBefore(alertDiv, mainContent.firstChild);
+
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,527 @@
+{% extends "base.html" %}
+
+{% block title %}Smart Lead Assignment - Ather CRM{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.css" />
+<style>
+    :root {
+        --bg-light: #F7F9FA;
+        --surface: #FFFFFF;
+        --text-primary: #333333;
+        --text-secondary: #6B7280;
+        --accent-green: #3DC55E;
+        --accent-dark: #276749;
+        --border: #E5E7EB;
+    }
+    * {
+        box-sizing: border-box;
+    }
+    body {
+        font-family: 'Segoe UI', Arial, sans-serif;
+        background: var(--bg-light);
+        margin: 0;
+        padding: 24px;
+        min-height: 100vh;
+        color: var(--text-primary);
+    }
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        background: var(--surface);
+        border-radius: 18px;
+        padding: 32px 36px;
+        box-shadow: 0 4px 32px rgba(60,72,88,0.08);
+    }
+    .summary-box {
+        background: var(--bg-light);
+        border: 1.5px solid var(--border);
+        border-radius: 14px;
+        padding: 18px 28px;
+        margin-bottom: 32px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+        align-items: center;
+        justify-content: center;
+        box-shadow: none;
+    }
+    .summary-item {
+        font-size: 1.08rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        background: var(--surface);
+        border-radius: 10px;
+        padding: 10px 22px;
+        border: 1px solid var(--border);
+        margin: 0 8px 8px 0;
+        min-width: 160px;
+        text-align: center;
+        transition: box-shadow 0.2s, border 0.2s;
+    }
+    .summary-item:hover {
+        border-color: var(--accent-green);
+        box-shadow: 0 2px 8px rgba(61,197,94,0.08);
+    }
+    .floating-cre-container {
+        background: var(--bg-light);
+        border: 1.5px solid var(--border);
+        padding: 18px 18px 10px 18px;
+        border-radius: 14px;
+        margin-bottom: 28px;
+        min-height: 60px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        position: relative;
+    }
+    .floating-cre-container::before {
+        content: 'Available CREs';
+        position: absolute;
+        top: -14px;
+        left: 18px;
+        background: var(--surface);
+        color: var(--accent-dark);
+        padding: 2px 12px;
+        border-radius: 8px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        z-index: 2;
+        border: 1px solid var(--border);
+    }
+
+    .cre-tab {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-width: 120px;
+        padding: 7px 14px;
+        margin: 0 6px 6px 0;
+        background: var(--surface);
+        color: var(--text-primary);
+        border-radius: 10px;
+        cursor: grab;
+        font-weight: 600;
+        font-size: 0.97rem;
+        border: 1.5px solid var(--border);
+        box-shadow: none;
+        transition: background 0.2s, color 0.2s, box-shadow 0.2s, border 0.2s;
+    }
+    .cre-tab .lead-count-label {
+        font-size: 0.89rem;
+        color: var(--accent-dark);
+        font-weight: 500;
+        margin-right: 4px;
+        margin-left: 8px;
+    }
+    .cre-tab .lead-count {
+        background: var(--bg-light);
+        color: var(--accent-dark);
+        font-size: 0.98rem;
+        font-weight: 700;
+        border-radius: 6px;
+        padding: 2px 8px;
+        width: 60px;
+        min-width: 60px;
+        text-align: center;
+        outline: none;
+        border: 1.5px solid var(--border);
+        margin-left: 0;
+        margin-right: 0;
+        box-shadow: none;
+        transition: border 0.2s, background 0.2s;
+    }
+    .cre-tab .remove-cre {
+        background: none;
+        border: none;
+        color: var(--accent-green);
+        font-size: 1.1rem;
+        margin-left: 8px;
+        cursor: pointer;
+        transition: color 0.2s;
+    }
+    .cre-tab .remove-cre:hover {
+        color: var(--accent-dark);
+    }
+    .cre-tab:hover {
+        border-color: var(--accent-green);
+        background: #F0FFF5;
+        color: var(--accent-dark);
+        box-shadow: 0 2px 8px rgba(61,197,94,0.08);
+    }
+    .lead-column {
+        min-height: 80px;
+        background: var(--bg-light);
+        border: 1.5px dashed var(--border);
+        border-radius: 10px;
+        padding: 10px 6px;
+        margin-top: 0;
+        margin-bottom: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0;
+        position: relative;
+        overflow: visible;
+    }
+    .lead-column.highlight {
+        background: #E6F9ED;
+        border-color: var(--accent-green);
+        border-style: solid;
+        transform: scale(1.01);
+        box-shadow: 0 2px 8px rgba(61,197,94,0.07);
+    }
+    .lead-box {
+        margin-bottom: 18px;
+        border-radius: 12px;
+        overflow: visible;
+        box-shadow: none;
+        border: 1.5px solid var(--border);
+        background: var(--surface);
+        transition: box-shadow 0.2s, border 0.2s;
+    }
+    .lead-box:hover {
+        box-shadow: 0 4px 16px rgba(61,197,94,0.08);
+        border-color: var(--accent-green);
+    }
+    .source-header {
+        background: var(--bg-light);
+        color: var(--accent-dark);
+        padding: 12px 16px;
+        font-size: 1.05rem;
+        font-weight: 700;
+        border-radius: 12px 12px 0 0;
+        margin-bottom: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1.5px solid var(--border);
+    }
+    .assignment-summary {
+        margin-top: 24px;
+        background: var(--bg-light);
+        border-radius: 10px;
+        padding: 18px 24px;
+        box-shadow: none;
+        border: 1.5px solid var(--border);
+    }
+    .assignment-summary h5 {
+        color: var(--accent-dark);
+        font-weight: 700;
+        margin-bottom: 10px;
+    }
+    .assignment-summary ul {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    .assignment-summary li {
+        margin-bottom: 6px;
+        font-size: 1rem;
+        color: var(--text-secondary);
+    }
+    .tooltip {
+        position: absolute;
+        z-index: 10;
+        background: var(--accent-dark);
+        color: #fff;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        opacity: 0.95;
+        pointer-events: none;
+        white-space: nowrap;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.13);
+        display: none;
+    }
+    /* Smooth scrollbar */
+    ::-webkit-scrollbar {
+        width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+        background: var(--bg-light);
+        border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background: #cbd5e1;
+    }
+    /* Responsive design */
+    @media (max-width: 900px) {
+        .container {
+            padding: 16px 6px;
+        }
+        .summary-box {
+            flex-direction: column;
+            gap: 10px;
+            padding: 12px 8px;
+        }
+        .summary-item {
+            min-width: 120px;
+            font-size: 1rem;
+        }
+        .floating-cre-container {
+            padding: 10px;
+        }
+        .lead-box {
+            margin-bottom: 12px;
+        }
+    }
+    .navbar {
+        background: var(--surface) !important;
+        box-shadow: 0 2px 8px rgba(60,72,88,0.07) !important;
+        border-bottom: 1.5px solid var(--border) !important;
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+    }
+</style>
+<div class="container">
+  <h3 class="mb-3" style="font-weight:700;"><i class="fas fa-random text-success"></i> Smart Dynamic Lead Assignment</h3>
+
+  <!-- Summary Box -->
+  <div class="summary-box">
+    <div class="summary-item">Total Unassigned Leads: <span id="totalUnassigned">{{ actual_unassigned_count }}</span></div>
+    {% for source, leads in leads_by_source.items() %}
+      <div class="summary-item">{{ source }}: <span id="unassigned_{{ source|replace(' ', '_') }}">{{ source_unassigned_counts[source] }}</span></div>
+    {% endfor %}
+  </div>
+
+  <!-- CRE Tabs -->
+  <div class="floating-cre-container" id="creTabList">
+    {% for cre in cres %}
+      <div class="cre-tab" data-cre-id="{{ cre.id }}" data-cre-name="{{ cre.name }}" title="Drag to assign to a source">
+        {{ cre.name }}
+      </div>
+    {% endfor %}
+  </div>
+
+  <!-- Lead Buckets -->
+  <div class="row">
+    {% for source, leads in leads_by_source.items() %}
+    <div class="col-md-4">
+      <div class="lead-box" data-source="{{ source }}" data-total="{{ leads|length }}">
+        <div class="source-header">{{ source }} ({{ source_unassigned_counts[source] }})</div>
+        <div class="lead-column" id="column_{{ source|replace(' ', '_') }}"></div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="text-end mt-2">
+    <button id="assignButton" class="btn btn-primary btn-lg" style="font-weight:600;letter-spacing:0.5px;"><i class="fas fa-paper-plane"></i> Assign Leads</button>
+  </div>
+
+  <!-- Assignment Summary -->
+  <div class="assignment-summary" id="assignmentSummary" style="display:none;">
+    <h5>Assignment Preview</h5>
+    <ul id="assignmentList"></ul>
+  </div>
+
+  <div id="tooltip" class="tooltip"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    // Helper: get all CREs
+    const allCREs = Array.from(document.querySelectorAll('#creTabList .cre-tab')).map(tab => ({
+      id: tab.dataset.creId,
+      name: tab.dataset.creName
+    }));
+
+    // Track which CREs are assigned anywhere
+    function updateAvailableCREs() {
+      const assignedIds = new Set();
+      document.querySelectorAll('.lead-column .cre-tab').forEach(tab => {
+        assignedIds.add(tab.dataset.creId);
+      });
+      document.querySelectorAll('#creTabList .cre-tab').forEach(tab => {
+        if (assignedIds.has(tab.dataset.creId)) {
+          tab.style.display = 'none';
+        } else {
+          tab.style.display = '';
+        }
+      });
+    }
+
+    // Drag from available CREs
+    Sortable.create(document.getElementById('creTabList'), {
+      group: { name: 'shared', pull: 'clone', put: true },
+      sort: false,
+      animation: 150,
+      onClone: evt => { evt.clone.classList.add('dragging'); }
+    });
+
+    // For each lead column (source bucket)
+    document.querySelectorAll('.lead-column').forEach(column => {
+      Sortable.create(column, {
+        group: 'shared',
+        animation: 150,
+        sort: true,
+        // Allow drop anywhere in the column
+        swapThreshold: 0.65,
+        fallbackOnBody: true,
+        dragClass: 'dragging',
+        onAdd: evt => {
+          const item = evt.item;
+          item.classList.add('in-source');
+          item.innerHTML = `<span>${item.dataset.creName}</span> <span class='lead-count-label'>Leads:</span><input type='number' class='lead-count' min='0' value='0' title='Edit number of leads'> <button class='remove-cre' title='Remove CRE'>&times;</button>`;
+          item.setAttribute('title', 'Click × to remove CRE from this source');
+          // Remove duplicate CREs in this column
+          const creId = item.dataset.creId;
+          column.querySelectorAll(`.cre-tab[data-cre-id='${creId}']:not(:last-child)`).forEach(el => el.remove());
+          redistributeLeads(column);
+          updateAvailableCREs();
+          updateAssignments();
+        },
+        onRemove: evt => {
+          redistributeLeads(column);
+          updateAvailableCREs();
+          updateAssignments();
+        },
+        onSort: evt => {
+          updateAssignments();
+        }
+      });
+      column.addEventListener('dragenter', () => column.classList.add('highlight'));
+      column.addEventListener('dragleave', () => column.classList.remove('highlight'));
+      column.addEventListener('drop', () => column.classList.remove('highlight'));
+    });
+
+    // Remove CRE from source on × button click
+    document.addEventListener('click', function(e) {
+      if (e.target.classList.contains('remove-cre')) {
+        const creTab = e.target.closest('.cre-tab');
+        creTab.remove();
+        updateAvailableCREs();
+        const column = creTab.closest('.lead-column');
+        if (column) redistributeLeads(column);
+        updateAssignments();
+      }
+    });
+
+    // Redistribute leads equally among all CREs in a column
+    function redistributeLeads(column) {
+      const box = column.closest('.lead-box');
+      const total = parseInt(box.dataset.total);
+      const creTabs = Array.from(column.querySelectorAll('.cre-tab'));
+      if (creTabs.length > 0) {
+        let perCre = Math.floor(total / creTabs.length);
+        let remainder = total % creTabs.length;
+        creTabs.forEach((tab, idx) => {
+          let count = perCre + (idx < remainder ? 1 : 0);
+          tab.querySelector('.lead-count').value = count;
+        });
+      }
+    }
+
+    // Assignment logic: just update summary and preview
+    function updateAssignments() {
+      showAssignmentSummary();
+    }
+
+    // Listen for manual edits to lead counts
+    document.addEventListener('input', function(e) {
+      if (e.target.classList.contains('lead-count')) {
+        if (parseInt(e.target.value) < 0) e.target.value = 0;
+        showAssignmentSummary();
+      }
+    });
+
+    // Assignment summary preview
+    function showAssignmentSummary() {
+      const assignmentList = document.getElementById('assignmentList');
+      assignmentList.innerHTML = '';
+      let hasAssignment = false;
+      document.querySelectorAll('.lead-box').forEach(box => {
+        const source = box.dataset.source;
+        const column = box.querySelector('.lead-column');
+        column.querySelectorAll('.cre-tab').forEach(tab => {
+          const creName = tab.dataset.creName;
+          const creId = tab.dataset.creId;
+          const count = tab.querySelector('.lead-count').value;
+          if (parseInt(count) > 0) {
+            hasAssignment = true;
+            const li = document.createElement('li');
+            li.textContent = `${creName} will get ${count} leads from ${source}`;
+            assignmentList.appendChild(li);
+          }
+        });
+      });
+      document.getElementById('assignmentSummary').style.display = hasAssignment ? '' : 'none';
+    }
+
+    // Assignment logic: assign immediately on button click (no confirmation modal)
+    document.getElementById('assignButton').addEventListener('click', () => {
+      const data = [];
+      document.querySelectorAll('.lead-box').forEach(box => {
+        const src = box.dataset.source;
+        const column = box.querySelector('.lead-column');
+        column.querySelectorAll('.cre-tab').forEach(tab => {
+          const creId = tab.dataset.creId;
+          const creName = tab.dataset.creName;
+          const quantity = parseInt(tab.querySelector('.lead-count').value) || 0;
+          if (quantity > 0) {
+            data.push({ cre_id: creId, source: src, quantity });
+          }
+        });
+      });
+      if (!data.length) return alert('Please assign a CRE.');
+      const assignBtn = document.getElementById('assignButton');
+      assignBtn.disabled = true;
+      assignBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Assigning...';
+      fetch("{{ url_for('assign_leads_dynamic_action') }}", {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ assignments: data })
+      }).then(r => {
+        if (r.ok) {
+          alert('Assigned!');
+          location.reload();
+        } else {
+          alert('Error');
+          assignBtn.disabled = false;
+          assignBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Assign Leads';
+        }
+      }).catch(() => {
+        alert('Error');
+        assignBtn.disabled = false;
+        assignBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Assign Leads';
+      });
+    });
+
+    // Tooltip logic
+    const tooltip = document.getElementById('tooltip');
+    document.addEventListener('mouseover', function(e) {
+      if (e.target.hasAttribute('title')) {
+        tooltip.textContent = e.target.getAttribute('title');
+        tooltip.style.display = 'block';
+        const rect = e.target.getBoundingClientRect();
+        tooltip.style.left = (rect.left + window.scrollX + rect.width/2 - tooltip.offsetWidth/2) + 'px';
+        tooltip.style.top = (rect.top + window.scrollY - tooltip.offsetHeight - 8) + 'px';
+      }
+    });
+    document.addEventListener('mousemove', function(e) {
+      if (tooltip.style.display === 'block') {
+        tooltip.style.left = (e.pageX - tooltip.offsetWidth/2) + 'px';
+        tooltip.style.top = (e.pageY - tooltip.offsetHeight - 8) + 'px';
+      }
+    });
+    document.addEventListener('mouseout', function(e) {
+      if (e.target.hasAttribute('title')) {
+        tooltip.style.display = 'none';
+      }
+    });
+
+    // Initial state
+    updateAvailableCREs();
+    updateAssignments();
+  });
+</script>
+{% endblock %}
