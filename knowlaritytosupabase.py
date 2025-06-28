@@ -59,12 +59,21 @@ class KnowlarityAPI:
 
 def main():
     client = KnowlarityAPI(KNOW_SR_KEY, KNOW_X_API_KEY)
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    records = client.extract_records(client.get_call_logs(today_str, today_str))
+    
+    # Get past 24 hours instead of just today
+    from datetime import timedelta
+    now = datetime.now()
+    yesterday = now - timedelta(hours=24)
+    
+    start_date = yesterday.strftime("%Y-%m-%d")
+    end_date = now.strftime("%Y-%m-%d")
+    
+    print(f"🔍 Fetching call logs from {start_date} to {end_date}")
+    records = client.extract_records(client.get_call_logs(start_date, end_date))
     df = pd.DataFrame(records)
 
     if df.empty:
-        print(f"❌ No call logs for {today_str}")
+        print(f"❌ No call logs from {start_date} to {end_date}")
         return
 
     df = df[df['knowlarity_number'].isin(number_to_source)].copy()
@@ -86,10 +95,10 @@ def main():
     current_time = datetime.now().isoformat()
     df['created_at'] = df['updated_at'] = current_time
 
-    # Add default nulls
+    # Add default nulls - REMOVED mail_status as it doesn't exist in the table
     default_fields = {
         'cre_name': None, 'lead_category': None, 'model_interested': None, 'branch': None, 'ps_name': None,
-        'assigned': 'No', 'mail_status': None, 'lead_status': 'Pending', 'follow_up_date': None,
+        'assigned': 'No', 'lead_status': 'Pending', 'follow_up_date': None,
         'first_call_date': None, 'first_remark': None, 'second_call_date': None, 'second_remark': None,
         'third_call_date': None, 'third_remark': None, 'fourth_call_date': None, 'fourth_remark': None,
         'fifth_call_date': None, 'fifth_remark': None, 'sixth_call_date': None, 'sixth_remark': None,
@@ -98,9 +107,10 @@ def main():
     for col, val in default_fields.items():
         df[col] = val
 
+    # Removed mail_status from final_cols
     final_cols = ['uid', 'date', 'customer_name', 'customer_mobile_number', 'source',
                   'cre_name', 'lead_category', 'model_interested', 'branch', 'ps_name',
-                  'assigned', 'mail_status', 'lead_status', 'follow_up_date',
+                  'assigned', 'lead_status', 'follow_up_date',
                   'first_call_date', 'first_remark', 'second_call_date', 'second_remark',
                   'third_call_date', 'third_remark', 'fourth_call_date', 'fourth_remark',
                   'fifth_call_date', 'fifth_remark', 'sixth_call_date', 'sixth_remark',

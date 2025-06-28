@@ -1,7 +1,7 @@
-import os, requests, time
+import os, requests, time, json
 from dotenv import load_dotenv
 from supabase import create_client
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 # ─── ENV ─────────────────────────────────────────────
 load_dotenv()
@@ -79,12 +79,70 @@ def fb_get(endpoint: str, **params):
 def list_forms():
     return fb_get(f"{PAGE_ID}/leadgen_forms").get("data", [])
 
+def list_leads_past_24_hours(form_id):
+    """Get leads from the past 24 hours"""
+    now = datetime.now(timezone.utc)
+    past_24_hours = now - timedelta(hours=24)
+    
+    # Convert to Unix timestamp for Meta API filtering
+    since_timestamp = int(past_24_hours.timestamp())
+    until_timestamp = int(now.timestamp())
+    
+    print(f"   🕐 Looking for leads between {past_24_hours.strftime('%Y-%m-%d %H:%M:%S')} and {now.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+    
+    # Try with filtering first (Meta API filtering) - SIMPLIFIED APPROACH
+    try:
+        # First, try without filtering to see if basic API works
+        result = fb_get(f"{form_id}/leads")
+        all_leads = result.get("data", [])
+        
+        if all_leads:
+            print(f"   📅 Got {len(all_leads)} total leads, filtering manually for past 24 hours...")
+            filtered_leads = []
+            
+            for lead in all_leads:
+                if is_within_past_24_hours(lead.get("created_time", "")):
+                    filtered_leads.append(lead)
+            
+            print(f"   ✅ Manual filtering found {len(filtered_leads)} leads from past 24 hours")
+            return filtered_leads
+        else:
+            print(f"   📭 No leads found for this form")
+            return []
+            
+    except Exception as e:
+        print(f"   ⚠️  API call failed: {e}")
+        return []
+
+def is_within_past_24_hours(created_time_str):
+    """Check if the lead was created within the past 24 hours"""
+    try:
+        # Parse the Meta timestamp (format: 2024-01-15T10:30:45+0000)
+        created_time = datetime.strptime(created_time_str, "%Y-%m-%dT%H:%M:%S%z")
+        # Convert to UTC for comparison
+        created_time_utc = created_time.astimezone(timezone.utc).replace(tzinfo=None)
+        
+        # Check if within past 24 hours
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        past_24_hours = now - timedelta(hours=24)
+        
+        return past_24_hours <= created_time_utc <= now
+    except (ValueError, TypeError) as e:
+        print(f"   ⚠️  Error parsing timestamp '{created_time_str}': {e}")
+        return False
+
 def list_leads(form_id):
-    return fb_get(f"{form_id}/leads").get("data", [])
+    """Modified to get past 24 hours leads"""
+    return list_leads_past_24_hours(form_id)
 
 # ─── MAPPING ─────────────────────────────────────────
 def map_lead(raw: dict) -> dict | None:
     """Return dict ready for DB insert (or None if unusable)."""
+    # Additional check to ensure lead is within past 24 hours
+    created_time = raw.get("created_time", "")
+    if not is_within_past_24_hours(created_time):
+        return None  # Skip leads older than 24 hours
+    
     answers = {f["name"].lower(): f["values"][0] for f in raw.get("field_data", [])}
     name  = answers.get("full_name") or answers.get("full name")
     phone = answers.get("phone_number") or answers.get("contact_number")
@@ -95,7 +153,7 @@ def map_lead(raw: dict) -> dict | None:
     try:
         datetime.strptime(created, "%Y-%m-%d")
     except ValueError:
-        created = datetime.utcnow().date().isoformat()
+        created = datetime.now(timezone.utc).date().isoformat()
 
     # Get sequence and generate proper UID
     sequence = get_next_sequence_for_source("Meta")
@@ -114,25 +172,54 @@ def map_lead(raw: dict) -> dict | None:
 
 # ─── OPTIONAL PREVIEW ────────────────────────────────
 def preview_field_names():
-    """Print every form's unique field names (for verification)."""
-    print("\n📝 Field-name preview – use Ctrl-C to abort if wrong\n")
+    """Print every form's unique field names for PAST 24 HOURS leads."""
+    now = datetime.now(timezone.utc)
+    past_24_hours = now - timedelta(hours=24)
+    
+    print(f"\n📝 Field-name preview for PAST 24 HOURS – use Ctrl-C to abort if wrong")
+    print(f"🕐 Time range: {past_24_hours.strftime('%Y-%m-%d %H:%M:%S')} to {now.strftime('%Y-%m-%d %H:%M:%S')} UTC\n")
+    
     global_set = set()
+    total_leads_24h = 0
+    
     for f in list_forms():
         print(f"📄 {f['name']} ({f['id']})")
         local = set()
+        leads_count = 0
+        
         for lead in list_leads(f["id"]):
+            leads_count += 1
+            total_leads_24h += 1
             for fd in lead.get("field_data", []):
                 local.add(fd["name"])
                 global_set.add(fd["name"])
-        print("   • " + "  • ".join(sorted(local)) if local else "   ⚠️  No leads.")
-    print("\n🧾  ALL UNIQUE FIELDS:", ", ".join(sorted(global_set)), "\n")
+        
+        if local:
+            print(f"   • Past 24h leads: {leads_count}")
+            print("   • Fields: " + "  • ".join(sorted(local)))
+        else:
+            print("   ⚠️  No leads in past 24 hours.")
+    
+    print(f"\n📊 TOTAL LEADS (Past 24 Hours): {total_leads_24h}")
+    print("🧾  ALL UNIQUE FIELDS:", ", ".join(sorted(global_set)), "\n")
 
 # ─── DB SYNC ─────────────────────────────────────────
 def sync_to_db():
+    now = datetime.now(timezone.utc)
+    past_24_hours = now - timedelta(hours=24)
+    print(f"🔄 Syncing leads from PAST 24 HOURS to database...")
+    print(f"🕐 Time range: {past_24_hours.strftime('%Y-%m-%d %H:%M:%S')} to {now.strftime('%Y-%m-%d %H:%M:%S')} UTC\n")
+    
     inserted = skipped = 0
     for f in list_forms():
         print(f"Processing form: {f['name']}")
         leads = list_leads(f["id"])
+        
+        if not leads:
+            print("   📭 No leads in past 24 hours for this form.")
+            continue
+            
+        print(f"   📊 Found {len(leads)} leads in past 24 hours")
         
         for raw in leads:
             row = map_lead(raw)
@@ -165,16 +252,27 @@ def sync_to_db():
                 print(f"   ❌ DB insert error: {e}")
                 skipped += 1
                     
-    print(f"\n✅  Inserted {inserted}  |  Skipped {skipped}")
+    print(f"\n✅  Past 24 Hours Summary - Inserted {inserted}  |  Skipped {skipped}")
 
 # ─── ALTERNATIVE DB SYNC (with better error handling) ────
 def sync_to_db_alternative():
-    """Alternative approach with better duplicate handling."""
+    """Alternative approach with better duplicate handling for PAST 24 HOURS leads."""
+    now = datetime.now(timezone.utc)
+    past_24_hours = now - timedelta(hours=24)
+    print(f"🔄 Alternative sync for PAST 24 HOURS leads...")
+    print(f"🕐 Time range: {past_24_hours.strftime('%Y-%m-%d %H:%M:%S')} to {now.strftime('%Y-%m-%d %H:%M:%S')} UTC\n")
+    
     inserted = updated = skipped = 0
     
     for f in list_forms():
         print(f"Processing form: {f['name']}")
         leads = list_leads(f["id"])
+        
+        if not leads:
+            print("   📭 No leads in past 24 hours for this form.")
+            continue
+            
+        print(f"   📊 Found {len(leads)} leads in past 24 hours")
         
         for raw in leads:
             row = map_lead(raw)
@@ -206,16 +304,22 @@ def sync_to_db_alternative():
                 print(f"   ❌ DB operation error: {e}")
                 skipped += 1
                 
-    print(f"\n✅  Inserted {inserted}  |  Updated {updated}  |  Skipped {skipped}")
+    print(f"\n✅  Past 24 Hours Summary - Inserted {inserted}  |  Updated {updated}  |  Skipped {skipped}")
 
 # ─── RUN ─────────────────────────────────────────────
 if __name__ == "__main__":
     try:
-        # 1) Preview all field names
+        now = datetime.now(timezone.utc)
+        past_24_hours = now - timedelta(hours=24)
+        print(f"🚀 Starting Meta Lead Sync for PAST 24 HOURS")
+        print(f"🕐 Time range: {past_24_hours.strftime('%Y-%m-%d %H:%M:%S')} to {now.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+        print("=" * 70)
+        
+        # 1) Preview all field names for past 24 hours leads
         preview_field_names()
         
-        # 2) Sync to database
-        print("Starting database sync...")
+        # 2) Sync past 24 hours leads to database
+        print("Starting database sync for past 24 hours leads...")
         sync_to_db()
         
     except KeyboardInterrupt:

@@ -6,8 +6,8 @@ bcrypt==4.0.1
 Flask-Limiter==3.5.0
 pyotp==2.9.0
 qrcode==7.4.2
-Pillow==9.5.0
 gunicorn
+Pillow==11.2.1
 requests
 pandas
 simple-salesforce==1.12.6

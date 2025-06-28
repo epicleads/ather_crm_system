@@ -1,7 +1,7 @@
 import os
 from simple_salesforce import Salesforce
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 from supabase import create_client, Client
 
@@ -22,11 +22,21 @@ print("✅ Connected to Salesforce")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 print("✅ Connected to Supabase")
 
-# --- Define today's IST time window ---
+# --- Define past 24 hours time window ---
 IST = pytz.timezone('Asia/Kolkata')
-today = datetime.now(IST).date()
-today_start = today.strftime('%Y-%m-%dT00:00:00Z')
-today_end = today.strftime('%Y-%m-%dT23:59:59Z')
+now_ist = datetime.now(IST)
+past_24_hours = now_ist - timedelta(hours=24)
+
+# Convert to UTC for Salesforce query (Salesforce stores in UTC)
+past_24_hours_utc = past_24_hours.astimezone(pytz.UTC)
+now_utc = now_ist.astimezone(pytz.UTC)
+
+# Format for SOQL query
+start_time = past_24_hours_utc.strftime('%Y-%m-%dT%H:%M:%SZ')
+end_time = now_utc.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+print(f"📅 Fetching leads from: {past_24_hours_utc} UTC to {now_utc} UTC")
+print(f"📅 IST equivalent: {past_24_hours} IST to {now_ist} IST")
 
 # --- Map lead source to internal tags ---
 def map_source(raw_source):
@@ -82,14 +92,14 @@ def generate_uid(source, mobile_number, sequence):
 
     return f"{source_char}{sequence_char}-{mobile_last4}-{seq_num}"
 
-# --- Fetch today's leads from Salesforce ---
+# --- Fetch past 24 hours leads from Salesforce ---
 query = f"""
     SELECT Id, Name, Phone, LeadSource, CreatedDate
     FROM Lead
-    WHERE CreatedDate >= {today_start} AND CreatedDate <= {today_end}
+    WHERE CreatedDate >= {start_time} AND CreatedDate <= {end_time}
 """
 results = sf.query_all(query)['records']
-print(f"\n📦 Total leads fetched today: {len(results)}")
+print(f"\n📦 Total leads fetched (past 24 hours): {len(results)}")
 
 count = 0
 skipped = 0
