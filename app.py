@@ -1281,7 +1281,7 @@ def add_cre():
 @app.route('/add_ps', methods=['GET', 'POST'])
 @require_admin
 def add_ps():
-    branches = ['SOMAJIGUDA', 'ATTAPUR', 'BEGUMPET', 'KOMPALLY', 'MALAKPET', 'SRINAGAR COLONY', 'TOLOCHOWKI',
+    branches = ['SOMAJIGUDA', 'ATTAPUR', 'BEGUMPET', 'KOMPALLY', 'MALAKPET', 'SRINAGAR COLONY', 'TOLICHOWKI',
                 'VANASTHALIPURAM']
 
     if request.method == 'POST':
@@ -1668,7 +1668,7 @@ def update_lead(uid):
             '450 Apex STD'
         ]
 
-        branches = ['SOMAJIGUDA', 'ATTAPUR', 'TOLOCHOWKI', 'KOMPALLY', 'SRINAGAR COLONY', 'MALAKPET', 'VANASTHALIPURAM']
+        branches = ['SOMAJIGUDA', 'ATTAPUR', 'TOLICHOWKI', 'KOMPALLY', 'SRINAGAR COLONY', 'MALAKPET', 'VANASTHALIPURAM']
 
         lead_statuses = [
             'Busy on another Call', 'RNR', 'Call me Back', 'Interested',
