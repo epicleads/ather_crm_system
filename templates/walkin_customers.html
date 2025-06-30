@@ -559,7 +559,7 @@
                     <div class="row">
                         <div class="col-md-6">
                             <label for="follow_up_date" class="form-label">Follow-up Date</label>
-                            <input type="date" class="form-control" id="follow_up_date" name="follow_up_date">
+                            <input type="datetime-local" class="form-control" id="follow_up_date" name="follow_up_date">
                         </div>
                         <div class="col-md-6">
                             <label for="status" class="form-label">Status</label>
@@ -597,10 +597,12 @@
             const expectedDeliveryInput = document.getElementById('expected_delivery');
             expectedDeliveryInput.min = minDate.toISOString().split('T')[0];
 
-            // Auto-set follow-up date (today + 3 days)
+            // Auto-set follow-up date (today + 3 days) and time to a default (e.g., 10:00)
             const followUpDate = new Date(today.getTime() + (3 * 24 * 60 * 60 * 1000));
             const followUpInput = document.getElementById('follow_up_date');
-            followUpInput.value = followUpDate.toISOString().split('T')[0];
+            if(followUpInput) {
+                followUpInput.value = followUpDate.toISOString().slice(0, 16);
+            }
         });
 
         // Form validation

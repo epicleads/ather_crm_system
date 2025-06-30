@@ -1598,7 +1598,10 @@ def cre_dashboard():
         )
 
         # Get today's followups
-        todays_followups = [lead for lead in all_leads if lead.get('follow_up_date') == str(today)]
+        todays_followups = [
+            lead for lead in all_leads
+            if lead.get('follow_up_date') and lead.get('follow_up_date').startswith(str(today))
+        ]
 
         # Get attended leads (leads with at least one call)
         attended_leads = [lead for lead in all_leads if lead.get('first_call_date')]
@@ -1810,7 +1813,10 @@ def ps_dashboard():
         pending_leads = [lead for lead in assigned_leads if not lead.get('first_call_date')]
 
         # Get today's followups
-        todays_followups = [lead for lead in assigned_leads if lead.get('follow_up_date') == str(today)]
+        todays_followups = [
+            lead for lead in assigned_leads
+            if lead.get('follow_up_date') and lead.get('follow_up_date').startswith(str(today))
+        ]
 
         # Get attended leads (leads with at least one call)
         attended_leads = [lead for lead in assigned_leads if lead.get('first_call_date')]

@@ -139,7 +139,7 @@
         <div class="col-md-6">
             <div class="mb-3">
                 <label for="follow_up_date" class="form-label">Follow-up Date <span class="text-danger">*</span></label>
-                <input type="date" class="form-control" id="follow_up_date" name="follow_up_date" value="{{ lead.follow_up_date or '' }}">
+                <input type="datetime-local" class="form-control" id="follow_up_date" name="follow_up_date" value="{{ lead.follow_up_date[:16] if lead.follow_up_date else '' }}">
             </div>
         </div>
     </div>
@@ -327,7 +327,7 @@
                     <div class="col-md-6">
                         <div class="mb-3">
                             <label for="follow_up_date" class="form-label">Follow-up Date</label>
-                            <input type="date" class="form-control" id="follow_up_date" name="follow_up_date" value="{{ lead.follow_up_date or '' }}">
+                            <input type="datetime-local" class="form-control" id="follow_up_date" name="follow_up_date" value="{{ lead.follow_up_date[:16] if lead.follow_up_date else '' }}">
                         </div>
                     </div>
                 </div>
@@ -679,12 +679,12 @@ function updatePS() {
 
 document.addEventListener('DOMContentLoaded', function() {
     // Set minimum date for follow-up and call date to today
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString().slice(0, 16);
     const followUpDate = document.getElementById('follow_up_date');
     const callDate = document.getElementById('call_date');
 
     if (followUpDate) followUpDate.min = today;
-    if (callDate) callDate.min = today;
+    if (callDate) callDate.min = new Date().toISOString().split('T')[0];
 
     // Initialize model dropdown based on current selection
     const currentModel = "{{ lead.model_interested or '' }}";
