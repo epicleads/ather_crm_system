@@ -16,7 +16,7 @@ from supabase import Client
 class AuthManager:
     def __init__(self, supabase_client: Client):
         self.supabase = supabase_client
-        self.max_login_attempts = 5
+        self.max_login_attempts = 10
         self.lockout_duration = 30  # minutes
         self.session_timeout = 24 * 60  # 24 hours in minutes
 
