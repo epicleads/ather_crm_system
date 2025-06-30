@@ -120,8 +120,8 @@
                 <div class="col-md-6">
                     <div class="mb-3">
                         <label for="follow_up_date" class="form-label">Follow-up Date</label>
-                        <input type="date" class="form-control" id="follow_up_date" name="follow_up_date"
-                               value="{{ lead.follow_up_date or '' }}" min="{{ today }}">
+                        <input type="datetime-local" class="form-control" id="follow_up_date" name="follow_up_date"
+                               value="{{ lead.follow_up_date[:16] if lead.follow_up_date else '' }}" min="{{ today.strftime('%Y-%m-%dT%H:%M') }}">
                     </div>
                 </div>
                 <div class="col-md-6">
@@ -202,8 +202,10 @@
 document.addEventListener('DOMContentLoaded', function() {
     // Set minimum date for follow-up to today
     const followUpDate = document.getElementById('follow_up_date');
-    const today = new Date().toISOString().split('T')[0];
-    followUpDate.min = today;
+    const today = new Date().toISOString().slice(0, 16);
+    if (followUpDate) {
+        followUpDate.min = today;
+    }
 
     // Form validation
     document.getElementById('psLeadUpdateForm').addEventListener('submit', function(e) {
