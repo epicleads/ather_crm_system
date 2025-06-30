@@ -273,7 +273,9 @@
                                 </td>
                                 <td>{{ lead.model_interested or 'Not specified' }}</td>
                                 <td>
-                                    <span class="badge bg-warning">{{ lead.follow_up_date }}</span>
+                                    {% if lead.follow_up_date %}
+                                    <span class="badge bg-warning">{{ lead.follow_up_date.replace('T', ' ')[:16] }}</span>
+                                    {% endif %}
                                 </td>
                                 <td>
                                     <div class="call-progress">
