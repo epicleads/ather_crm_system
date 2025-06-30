@@ -12,3 +12,4 @@ requests
 pandas
 simple-salesforce==1.12.6
 reportlab
+aiohttp
