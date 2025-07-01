@@ -1766,6 +1766,12 @@ def update_lead(uid):
                 if update_data:
                     supabase.table('lead_master').update(update_data).eq('uid', uid).execute()
 
+                    # Keep ps_followup_master.final_status in sync if final_status is updated and PS followup exists
+                    if 'final_status' in update_data and lead_data.get('ps_name'):
+                        ps_result = supabase.table('ps_followup_master').select('lead_uid').eq('lead_uid', uid).execute()
+                        if ps_result.data:
+                            supabase.table('ps_followup_master').update({'final_status': update_data['final_status']}).eq('lead_uid', uid).execute()
+
                     # Log lead update
                     auth_manager.log_audit_event(
                         user_id=session.get('user_id'),
