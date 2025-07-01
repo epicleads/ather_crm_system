@@ -1612,12 +1612,20 @@ def cre_dashboard():
         # Get won leads (leads with final status "Won")
         won_leads = [lead for lead in all_leads if lead.get('final_status') == 'Won']
 
+        # --- Walk-in Follow-up Section ---
+        walkin_followups = []
+        try:
+            walkin_followups = [lead for lead in safe_get_data('walkin_data', {'walkin_cre_name': cre_name, 'walkin_followup_date': str(today)})]
+        except Exception as e:
+            walkin_followups = []
+
         return render_template('cre_dashboard.html',
                                pending_leads=pending_leads,
                                todays_followups=todays_followups,
                                attended_leads=attended_leads,
                                assigned_to_ps=assigned_to_ps,
-                               won_leads=won_leads)
+                               won_leads=won_leads,
+                               walkin_followups=walkin_followups)
     except Exception as e:
         flash(f'Error loading dashboard: {str(e)}', 'error')
         return render_template('cre_dashboard.html',
@@ -2531,6 +2539,21 @@ def walkin_customers():
                 'status': status,
                 'pdf_path': pdf_path
             }
+
+            # --- Walk-in Follow-up Assignment Logic ---
+                    # --- Walk-in Follow-up Assignment Logic ---
+            cres = safe_get_data('cre_users')
+            cre_names = [cre['name'] for cre in cres]
+            tomorrow = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+            cre_followup_counts = {cre: 0 for cre in cre_names}
+            existing_followups = safe_get_data('walkin_data', {'walkin_followup_date': tomorrow})
+            for lead in existing_followups:
+                cre = lead.get('walkin_cre_name')
+                if cre in cre_followup_counts:
+                    cre_followup_counts[cre] += 1
+            assigned_cre = min(cre_followup_counts, key=cre_followup_counts.get) if cre_followup_counts else None
+            walkin_data['walkin_cre_name'] = assigned_cre
+            walkin_data['walkin_followup_date'] = tomorrow
             # Insert walk-in data into the database
             result = supabase.table('walkin_data').insert(walkin_data).execute()
 
