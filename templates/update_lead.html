@@ -395,6 +395,30 @@
     </div>
     {% endif %}
 
+    <!-- PS Previous Call Summary (Read-only) -->
+    {% if ps_call_summary %}
+    <div class="card mt-4">
+        <div class="card-header bg-info text-white">
+            <h6><i class="fas fa-user"></i> PS Previous Call Summary</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                {% for call, summary in ps_call_summary.items() %}
+                    {% if summary.date or summary.remark %}
+                    <div class="col-md-6 mb-3">
+                        <div class="border rounded p-3">
+                            <h6 class="text-primary">{{ call.title() }} Call</h6>
+                            <p class="mb-1"><strong>Date:</strong> {{ summary.date or 'Not recorded' }}</p>
+                            <p class="mb-0"><strong>Remark:</strong> {{ summary.remark or 'No remarks' }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Hidden fields for call tracking -->
     <input type="hidden" id="should_record_call" name="should_record_call" value="false">
 
