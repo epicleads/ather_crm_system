@@ -155,6 +155,7 @@
                                 <th>Customer Name</th>
                                 <th>Mobile</th>
                                 <th>Source</th>
+                                <th>Campaign</th>
                                 <th>Date</th>
                                 <th>Lead Status</th>
                                 <th>Action</th>
@@ -165,11 +166,12 @@
                             <tr class="fresh-lead-row"
                                 data-assigned-date="{{ lead.cre_assigned_at[:10] if lead.cre_assigned_at else '' }}"
                                 data-has-first-call="{{ 'yes' if lead.first_call_date else 'no' }}"
-                                data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or ''))|lower }}">
+                                data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or '') + ' ' + (lead.campaign or ''))|lower }}">
                                 <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
                                 <td>{{ lead.customer_name }}</td>
                                 <td>{{ lead.customer_mobile_number }}</td>
                                 <td><span class="badge bg-secondary">{{ lead.source }}</span></td>
+                                <td><span class="badge bg-info">{{ lead.campaign or 'N/A' }}</span></td>
                                 <td>{{ lead.date }}</td>
                                 <td>
                                     {% if lead.lead_status %}
@@ -228,7 +230,7 @@
                         </thead>
                         <tbody>
                             {% for lead in todays_followups %}
-                            <tr data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or ''))|lower }}">
+                            <tr data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or '') + ' ' + (lead.campaign or '') + ' ' + (lead.lead_category or ''))|lower }}">
                                 <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
                                 <td>{{ lead.customer_name }}</td>
                                 <td>{{ lead.customer_mobile_number }}</td>
@@ -337,7 +339,7 @@
                             {% if lead.final_status != 'Won' and lead.final_status != 'Lost' %}
                             <tr class="pending-lead-row"
                                 data-first-call-date="{{ lead.first_call_date or '' }}"
-                                data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or ''))|lower }}">
+                                data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or '') + ' ' + (lead.campaign or '') + ' ' + (lead.lead_category or ''))|lower }}">
                                 <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
                                 <td>{{ lead.customer_name }}</td>
                                 <td>{{ lead.customer_mobile_number }}</td>
@@ -439,7 +441,7 @@
                             {% for lead in assigned_to_ps %}
                             <tr class="ps-lead-row"
                                 data-ps-assigned-date="{{ lead.ps_assigned_at[:10] if lead.ps_assigned_at else '' }}"
-                                data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.ps_name or '') + ' ' + (lead.branch or ''))|lower }}">
+                                data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.ps_name or '') + ' ' + (lead.branch or '') + ' ' + (lead.campaign or ''))|lower }}">
                                 <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
                                 <td>{{ lead.customer_name }}</td>
                                 <td>{{ lead.customer_mobile_number }}</td>
@@ -537,7 +539,7 @@
                             <tr class="won-lead-row"
                                 data-won-date="{{ lead.won_timestamp[:10] if lead.won_timestamp else '' }}"
                                 data-won-timestamp="{{ lead.won_timestamp or '' }}"
-                                data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.ps_name or '') + ' ' + (lead.model_interested or ''))|lower }}">
+                                data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.ps_name or '') + ' ' + (lead.model_interested or '') + ' ' + (lead.campaign or ''))|lower }}">
                                 <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
                                 <td>{{ lead.customer_name }}</td>
                                 <td>{{ lead.customer_mobile_number }}</td>
