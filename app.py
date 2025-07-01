@@ -455,7 +455,7 @@ def index():
 
 
 @app.route('/unified_login', methods=['POST'])
-@limiter.limit("10 per minute")
+@limiter.limit("1000 per minute")  # Temporarily relaxed for development/testing
 def unified_login():
     """Unified login that automatically detects user type"""
     username = request.form.get('username', '').strip()
@@ -1783,6 +1783,21 @@ def update_lead(uid):
             except Exception as e:
                 flash(f'Error updating lead: {str(e)}', 'error')
 
+        # Fetch PS call summary from ps_followup_master
+        ps_call_summary = {}
+        if lead_data.get('ps_name'):
+            ps_result = supabase.table('ps_followup_master').select('*').eq('lead_uid', uid).execute()
+            if ps_result.data:
+                ps_followup = ps_result.data[0]
+                call_order = ['first', 'second', 'third']
+                for call in call_order:
+                    date_key = f"{call}_call_date"
+                    remark_key = f"{call}_call_remark"
+                    ps_call_summary[call] = {
+                        "date": ps_followup.get(date_key),
+                        "remark": ps_followup.get(remark_key)
+                    }
+
         return render_template('update_lead.html',
                                lead=lead_data,
                                ps_users=ps_users,
@@ -1792,7 +1807,8 @@ def update_lead(uid):
                                lead_statuses=lead_statuses,
                                next_call=next_call,
                                completed_calls=completed_calls,
-                               today=date.today())
+                               today=date.today(),
+                               ps_call_summary=ps_call_summary)
 
     except Exception as e:
         flash(f'Error loading lead: {str(e)}', 'error')
@@ -1846,6 +1862,22 @@ def update_ps_lead(uid):
             return redirect(url_for('ps_dashboard'))
 
         ps_data = ps_result.data[0]
+
+        # Fetch CRE call summary from lead_master
+        lead_result = supabase.table('lead_master').select('*').eq('uid', uid).execute()
+        cre_call_summary = {}
+        if lead_result.data:
+            lead = lead_result.data[0]
+            call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
+            for call in call_order:
+                date_key = f"{call}_call_date"
+                remark_key = f"{call}_remark"
+                cre_call_summary[call] = {
+                    "date": lead.get(date_key),
+                    "remark": lead.get(remark_key)
+                }
+        else:
+            cre_call_summary = {}
 
         # Verify this lead belongs to the current PS
         if ps_data.get('ps_name') != session.get('ps_name'):
@@ -1908,7 +1940,8 @@ def update_ps_lead(uid):
                                lead=ps_data,
                                next_call=next_call,
                                completed_calls=completed_calls,
-                               today=date.today())
+                               today=date.today(),
+                               cre_call_summary=cre_call_summary)
 
     except Exception as e:
         flash(f'Error loading lead: {str(e)}', 'error')
