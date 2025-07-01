@@ -3628,5 +3628,65 @@ def view_event_leads():
     event_leads = safe_get_data('activity_leads')
     return render_template('view_event_leads.html', event_leads=event_leads)
 
+@app.route('/add_lead', methods=['GET', 'POST'])
+@require_cre
+def add_lead():
+    from datetime import datetime, date
+    branches = ['SOMAJIGUDA', 'ATTAPUR', 'TOLICHOWKI', 'KOMPALLY', 'SRINAGAR COLONY', 'MALAKPET', 'VANASTHALIPURAM']
+    ps_users = safe_get_data('ps_users')
+    if request.method == 'POST':
+        customer_name = request.form.get('customer_name', '').strip()
+        customer_mobile_number = request.form.get('customer_mobile_number', '').strip()
+        source = request.form.get('source', '').strip()
+        lead_status = request.form.get('lead_status', '').strip()
+        lead_category = request.form.get('lead_category', '').strip()
+        model_interested = request.form.get('model_interested', '').strip()
+        branch = request.form.get('branch', '').strip()
+        ps_name = request.form.get('ps_name', '').strip()
+        final_status = request.form.get('final_status', 'Pending').strip()
+        follow_up_date = request.form.get('follow_up_date', '').strip()
+        remark = request.form.get('remark', '').strip()
+        date_now = datetime.now().strftime('%Y-%m-%d')
+        # Validation
+        if not customer_name or not customer_mobile_number or not source:
+            flash('Please fill all required fields', 'error')
+            return render_template('add_lead.html', branches=branches, ps_users=ps_users)
+        # UID: Source initial (uppercase) + '-' + first 5 letters of name (no spaces, uppercase) + last 5 digits of phone
+        src_initial = source[0].upper() if source else 'X'
+        name_part = ''.join(customer_name.split()).upper()[:5]
+        phone_part = customer_mobile_number[-5:] if len(customer_mobile_number) >= 5 else customer_mobile_number
+        uid = f"{src_initial}-{name_part}{phone_part}"
+        # CRE name from session
+        cre_name = session.get('cre_name')
+        # Prepare lead data
+        lead_data = {
+            'uid': uid,
+            'date': date_now,
+            'customer_name': customer_name,
+            'customer_mobile_number': customer_mobile_number,
+            'source': source,
+            'lead_status': lead_status,
+            'lead_category': lead_category,
+            'model_interested': model_interested,
+            'branch': branch,
+            'ps_name': ps_name if ps_name else None,
+            'final_status': final_status,
+            'follow_up_date': follow_up_date if follow_up_date else None,
+            'assigned': 'No',
+            'created_at': datetime.now().isoformat(),
+            'updated_at': datetime.now().isoformat(),
+            'first_remark': remark,
+            'cre_name': cre_name,
+            'first_call_date': date_now
+        }
+        try:
+            supabase.table('lead_master').insert(lead_data).execute()
+            flash('Lead added successfully!', 'success')
+            return redirect(url_for('cre_dashboard'))
+        except Exception as e:
+            flash(f'Error adding lead: {str(e)}', 'error')
+            return render_template('add_lead.html', branches=branches, ps_users=ps_users)
+    return render_template('add_lead.html', branches=branches, ps_users=ps_users)
+
 if __name__ == '__main__':
     app.run(debug=True)
