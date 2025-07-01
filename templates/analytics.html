@@ -97,7 +97,10 @@
             margin-bottom: 1.5rem;
             box-shadow: var(--airbnb-shadow);
             border: 1px solid var(--airbnb-gray-200);
-            height: 350px;
+            height: 420px;
+            min-width: 520px;
+            max-width: 100%;
+            overflow-x: auto;
         }
 
         .table-container {
@@ -349,9 +352,9 @@
             <div class="col-md-6">
                 <div class="chart-container">
                     <h5 style="color: var(--airbnb-gray-700); font-weight: 600; margin-bottom: 1rem;">
-                        <i class="fas fa-pie-chart" style="color: var(--airbnb-red);"></i> Lead Sources
+                        <i class="fas fa-pie-chart" style="color: var(--airbnb-red);"></i> Lead Source
                     </h5>
-                    <canvas id="sourceChart" width="400" height="250"></canvas>
+                    <canvas id="sourceChart" width="600" height="350"></canvas>
                 </div>
             </div>
             <div class="col-md-6">
@@ -359,7 +362,7 @@
                     <h5 style="color: var(--airbnb-gray-700); font-weight: 600; margin-bottom: 1rem;">
                         <i class="fas fa-line-chart" style="color: var(--airbnb-red);"></i> Lead Trends
                     </h5>
-                    <canvas id="trendChart" width="400" height="250"></canvas>
+                    <canvas id="trendChart" width="600" height="350"></canvas>
                 </div>
             </div>
         </div>
@@ -368,16 +371,30 @@
         <div class="row">
             <div class="col-md-8">
                 <div class="table-container">
-                    <h5 style="color: var(--airbnb-gray-700); font-weight: 600; margin-bottom: 1rem;">
-                        <i class="fas fa-star" style="color: var(--airbnb-yellow);"></i> Top Performing CREs
-                    </h5>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 style="color: var(--airbnb-gray-700); font-weight: 600; margin-bottom: 0;">
+                            <i class="fas fa-star" style="color: var(--airbnb-yellow);"></i> Top Performing CREs
+                        </h5>
+                        <form class="d-flex align-items-center" method="get" action="{{ url_for('analytics') }}">
+                            <button type="button" class="btn btn-outline-secondary btn-sm me-2" onclick="window.location.href='{{ url_for('analytics', period='1') }}'">Reset</button>
+                            <label for="start_date" class="me-2 mb-0">From:</label>
+                            <input type="date" id="start_date" name="start_date" class="form-control form-control-sm me-2" value="{{ request.args.get('start_date', '') }}">
+                            <label for="end_date" class="me-2 mb-0">To:</label>
+                            <input type="date" id="end_date" name="end_date" class="form-control form-control-sm me-2" value="{{ request.args.get('end_date', '') }}">
+                            <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+                        </form>
+                    </div>
                     <div class="table-responsive">
                         <table class="table table-hover">
                             <thead>
                                 <tr>
                                     <th>CRE Name</th>
                                     <th>Total Leads</th>
-                                    <th>Won Leads</th>
+                                    <th>Hot</th>
+                                    <th>Warm</th>
+                                    <th>Cold</th>
+                                    <th>Won</th>
+                                    <th>Lost</th>
                                     <th>Conversion Rate</th>
                                     <th>Avg Calls</th>
                                 </tr>
@@ -387,7 +404,11 @@
                                 <tr>
                                     <td><strong>{{ cre.name }}</strong></td>
                                     <td>{{ cre.total_leads }}</td>
+                                    <td><span class="badge bg-danger">{{ cre.hot }}</span></td>
+                                    <td><span class="badge bg-warning text-dark">{{ cre.warm }}</span></td>
+                                    <td><span class="badge bg-info text-dark">{{ cre.cold }}</span></td>
                                     <td><span class="badge" style="background: var(--airbnb-green);">{{ cre.won_leads }}</span></td>
+                                    <td><span class="badge bg-secondary">{{ cre.lost_leads }}</span></td>
                                     <td>
                                         <div class="progress" style="height: 20px;">
                                             <div class="progress-bar" style="width: {{ cre.conversion_rate }}%; background: var(--airbnb-red);">
@@ -480,13 +501,19 @@
             <div class="col-md-6">
                 <div class="table-container">
                     <h5 style="color: var(--airbnb-gray-700); font-weight: 600; margin-bottom: 1rem;">
-                        <i class="fas fa-tags" style="color: var(--airbnb-yellow);"></i> Lead Categories
+                        <i class="fas fa-tags" style="color: var(--airbnb-yellow);"></i> Lead Analysis
                     </h5>
                     {% for category in analytics.lead_categories %}
                     <div class="d-flex justify-content-between align-items-center mb-2 p-2" style="background: var(--airbnb-gray-100); border-radius: var(--airbnb-border-radius);">
                         <span style="font-weight: 500;">{{ category.name }}</span>
                         <div>
-                            <span class="badge" style="background: var(--airbnb-gray-500); margin-right: 0.5rem;">{{ category.count }}</span>
+                            {% if category.name == 'Won' %}
+                                <span class="badge" style="background: var(--airbnb-green); margin-right: 0.5rem;">{{ category.count }}</span>
+                            {% elif category.name == 'Lost' %}
+                                <span class="badge" style="background: var(--airbnb-red); margin-right: 0.5rem;">{{ category.count }}</span>
+                            {% else %}
+                                <span class="badge" style="background: var(--airbnb-gray-500); margin-right: 0.5rem;">{{ category.count }}</span>
+                            {% endif %}
                             <span style="color: var(--airbnb-gray-500);">{{ category.percentage }}%</span>
                         </div>
                     </div>
@@ -555,13 +582,14 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Source Distribution Pie Chart
+        // Source Distribution Bar Chart
         const sourceCtx = document.getElementById('sourceChart').getContext('2d');
         new Chart(sourceCtx, {
-            type: 'pie',
+            type: 'bar',
             data: {
                 labels: {{ analytics.source_labels | tojsonfilter | safe }},
                 datasets: [{
+                    label: 'Leads',
                     data: {{ analytics.source_data | tojsonfilter | safe }},
                     backgroundColor: [
                         '#FF385C', '#00A699', '#FFB400', '#007A87',
@@ -574,13 +602,28 @@
                 maintainAspectRatio: false,
                 plugins: {
                     legend: {
-                        position: 'bottom',
-                        labels: {
-                            boxWidth: 12,
-                            padding: 15,
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(0,0,0,0.1)'
+                        },
+                        ticks: {
                             font: {
-                                family: 'Lexend',
-                                size: 12
+                                family: 'Lexend'
+                            }
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: 'rgba(0,0,0,0.1)'
+                        },
+                        ticks: {
+                            font: {
+                                family: 'Lexend'
                             }
                         }
                     }
