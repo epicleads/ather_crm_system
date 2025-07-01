@@ -13,3 +13,7 @@ pandas
 simple-salesforce==1.12.6
 reportlab
 aiohttp
+flask-socketio
+# For production use, eventlet is recommended for async workers
+# (if using gevent, you can add gevent instead)
+eventlet
