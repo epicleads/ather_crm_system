@@ -1611,6 +1611,8 @@ def cre_dashboard():
 
         # Get won leads (leads with final status "Won")
         won_leads = [lead for lead in all_leads if lead.get('final_status') == 'Won']
+        # Get lost leads (leads with final status "Lost")
+        lost_leads = [lead for lead in all_leads if lead.get('final_status') == 'Lost']
 
         # --- Walk-in Follow-up Section ---
         walkin_followups = []
@@ -1624,8 +1626,7 @@ def cre_dashboard():
                                todays_followups=todays_followups,
                                attended_leads=attended_leads,
                                assigned_to_ps=assigned_to_ps,
-                               won_leads=won_leads,
-                               walkin_followups=walkin_followups)
+                               won_leads=won_leads)
     except Exception as e:
         flash(f'Error loading dashboard: {str(e)}', 'error')
         return render_template('cre_dashboard.html',
@@ -1633,7 +1634,8 @@ def cre_dashboard():
                                todays_followups=[],
                                attended_leads=[],
                                assigned_to_ps=[],
-                               won_leads=[])
+                               won_leads=[],
+                               lost_leads=[])
 
 
 @app.route('/update_lead/<uid>', methods=['GET', 'POST'])
@@ -1755,8 +1757,9 @@ def update_lead(uid):
                 final_status = request.form['final_status']
                 update_data['final_status'] = final_status
                 if final_status == 'Won':
-                    # Use ISO format with date only for consistency
                     update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                elif final_status == 'Lost':
+                    update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
             # Handle call dates and remarks - only record for actual conversations
             if request.form.get('call_date') and request.form.get('call_remark'):
@@ -1773,6 +1776,12 @@ def update_lead(uid):
             try:
                 if update_data:
                     supabase.table('lead_master').update(update_data).eq('uid', uid).execute()
+
+                    # Keep ps_followup_master.final_status in sync if final_status is updated and PS followup exists
+                    if 'final_status' in update_data and lead_data.get('ps_name'):
+                        ps_result = supabase.table('ps_followup_master').select('lead_uid').eq('lead_uid', uid).execute()
+                        if ps_result.data:
+                            supabase.table('ps_followup_master').update({'final_status': update_data['final_status']}).eq('lead_uid', uid).execute()
 
                     # Log lead update
                     auth_manager.log_audit_event(
@@ -1845,11 +1854,14 @@ def ps_dashboard():
         # Get attended leads (leads with at least one call)
         attended_leads = [lead for lead in assigned_leads if lead.get('first_call_date')]
 
+        # Get lost leads (assigned leads with final status "Lost")
+        lost_leads = [lead for lead in assigned_leads if lead.get('final_status') == 'Lost']
         return render_template('ps_dashboard.html',
                                assigned_leads=assigned_leads,
                                pending_leads=pending_leads,
                                todays_followups=todays_followups,
-                               attended_leads=attended_leads)
+                               attended_leads=attended_leads,
+                               lost_leads=lost_leads)
     except Exception as e:
         flash(f'Error loading dashboard: {str(e)}', 'error')
         return render_template('ps_dashboard.html',
@@ -1906,6 +1918,8 @@ def update_ps_lead(uid):
                 update_data['final_status'] = final_status
                 if final_status == 'Won':
                     update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                elif final_status == 'Lost':
+                    update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
             # Handle call dates and remarks for the next available call
             if request.form.get('call_date'):
@@ -1924,6 +1938,8 @@ def update_ps_lead(uid):
                         main_update_data = {'final_status': final_status}
                         if final_status == 'Won':
                             main_update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        elif final_status == 'Lost':
+                            main_update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
                         supabase.table('lead_master').update(main_update_data).eq('uid', uid).execute()
 
@@ -3632,6 +3648,66 @@ def activity_event():
 def view_event_leads():
     event_leads = safe_get_data('activity_leads')
     return render_template('view_event_leads.html', event_leads=event_leads)
+
+@app.route('/add_lead', methods=['GET', 'POST'])
+@require_cre
+def add_lead():
+    from datetime import datetime, date
+    branches = ['SOMAJIGUDA', 'ATTAPUR', 'TOLICHOWKI', 'KOMPALLY', 'SRINAGAR COLONY', 'MALAKPET', 'VANASTHALIPURAM']
+    ps_users = safe_get_data('ps_users')
+    if request.method == 'POST':
+        customer_name = request.form.get('customer_name', '').strip()
+        customer_mobile_number = request.form.get('customer_mobile_number', '').strip()
+        source = request.form.get('source', '').strip()
+        lead_status = request.form.get('lead_status', '').strip()
+        lead_category = request.form.get('lead_category', '').strip()
+        model_interested = request.form.get('model_interested', '').strip()
+        branch = request.form.get('branch', '').strip()
+        ps_name = request.form.get('ps_name', '').strip()
+        final_status = request.form.get('final_status', 'Pending').strip()
+        follow_up_date = request.form.get('follow_up_date', '').strip()
+        remark = request.form.get('remark', '').strip()
+        date_now = datetime.now().strftime('%Y-%m-%d')
+        # Validation
+        if not customer_name or not customer_mobile_number or not source:
+            flash('Please fill all required fields', 'error')
+            return render_template('add_lead.html', branches=branches, ps_users=ps_users)
+        # UID: Source initial (uppercase) + '-' + first 5 letters of name (no spaces, uppercase) + last 5 digits of phone
+        src_initial = source[0].upper() if source else 'X'
+        name_part = ''.join(customer_name.split()).upper()[:5]
+        phone_part = customer_mobile_number[-5:] if len(customer_mobile_number) >= 5 else customer_mobile_number
+        uid = f"{src_initial}-{name_part}{phone_part}"
+        # CRE name from session
+        cre_name = session.get('cre_name')
+        # Prepare lead data
+        lead_data = {
+            'uid': uid,
+            'date': date_now,
+            'customer_name': customer_name,
+            'customer_mobile_number': customer_mobile_number,
+            'source': source,
+            'lead_status': lead_status,
+            'lead_category': lead_category,
+            'model_interested': model_interested,
+            'branch': branch,
+            'ps_name': ps_name if ps_name else None,
+            'final_status': final_status,
+            'follow_up_date': follow_up_date if follow_up_date else None,
+            'assigned': 'No',
+            'created_at': datetime.now().isoformat(),
+            'updated_at': datetime.now().isoformat(),
+            'first_remark': remark,
+            'cre_name': cre_name,
+            'first_call_date': date_now
+        }
+        try:
+            supabase.table('lead_master').insert(lead_data).execute()
+            flash('Lead added successfully!', 'success')
+            return redirect(url_for('cre_dashboard'))
+        except Exception as e:
+            flash(f'Error adding lead: {str(e)}', 'error')
+            return render_template('add_lead.html', branches=branches, ps_users=ps_users)
+    return render_template('add_lead.html', branches=branches, ps_users=ps_users)
 
 if __name__ == '__main__':
     app.run(debug=True)

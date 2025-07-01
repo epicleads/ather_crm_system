@@ -307,7 +307,7 @@
     {% for source, leads in leads_by_source.items() %}
     <div class="col-md-4">
       <div class="lead-box" data-source="{{ source }}" data-total="{{ leads|length }}">
-        <div class="source-header">{{ source }} ({{ source_unassigned_counts[source] }})</div>
+        <div class="source-header">{{ source }} (<span class="remaining-leads" data-source="{{ source|replace(' ', '_') }}">{{ source_unassigned_counts[source] }}</span>)</div>
         <div class="lead-column" id="column_{{ source|replace(' ', '_') }}"></div>
       </div>
     </div>
@@ -336,21 +336,6 @@
       name: tab.dataset.creName
     }));
 
-    // Track which CREs are assigned anywhere
-    function updateAvailableCREs() {
-      const assignedIds = new Set();
-      document.querySelectorAll('.lead-column .cre-tab').forEach(tab => {
-        assignedIds.add(tab.dataset.creId);
-      });
-      document.querySelectorAll('#creTabList .cre-tab').forEach(tab => {
-        if (assignedIds.has(tab.dataset.creId)) {
-          tab.style.display = 'none';
-        } else {
-          tab.style.display = '';
-        }
-      });
-    }
-
     // Drag from available CREs
     Sortable.create(document.getElementById('creTabList'), {
       group: { name: 'shared', pull: 'clone', put: true },
@@ -365,7 +350,6 @@
         group: 'shared',
         animation: 150,
         sort: true,
-        // Allow drop anywhere in the column
         swapThreshold: 0.65,
         fallbackOnBody: true,
         dragClass: 'dragging',
@@ -378,16 +362,17 @@
           const creId = item.dataset.creId;
           column.querySelectorAll(`.cre-tab[data-cre-id='${creId}']:not(:last-child)`).forEach(el => el.remove());
           redistributeLeads(column);
-          updateAvailableCREs();
           updateAssignments();
+          updateRemainingLeads();
         },
         onRemove: evt => {
           redistributeLeads(column);
-          updateAvailableCREs();
           updateAssignments();
+          updateRemainingLeads();
         },
         onSort: evt => {
           updateAssignments();
+          updateRemainingLeads();
         }
       });
       column.addEventListener('dragenter', () => column.classList.add('highlight'));
@@ -400,10 +385,10 @@
       if (e.target.classList.contains('remove-cre')) {
         const creTab = e.target.closest('.cre-tab');
         creTab.remove();
-        updateAvailableCREs();
         const column = creTab.closest('.lead-column');
         if (column) redistributeLeads(column);
         updateAssignments();
+        updateRemainingLeads();
       }
     });
 
@@ -420,11 +405,7 @@
           tab.querySelector('.lead-count').value = count;
         });
       }
-    }
-
-    // Assignment logic: just update summary and preview
-    function updateAssignments() {
-      showAssignmentSummary();
+      updateRemainingLeads();
     }
 
     // Listen for manual edits to lead counts
@@ -432,8 +413,32 @@
       if (e.target.classList.contains('lead-count')) {
         if (parseInt(e.target.value) < 0) e.target.value = 0;
         showAssignmentSummary();
+        updateRemainingLeads();
       }
     });
+
+    // Update remaining leads in each source header
+    function updateRemainingLeads() {
+      document.querySelectorAll('.lead-box').forEach(box => {
+        const source = box.dataset.source;
+        const total = parseInt(box.dataset.total);
+        const column = box.querySelector('.lead-column');
+        let assigned = 0;
+        column.querySelectorAll('.cre-tab').forEach(tab => {
+          const count = parseInt(tab.querySelector('.lead-count').value) || 0;
+          assigned += count;
+        });
+        const remaining = total - assigned;
+        const headerSpan = document.querySelector(`.remaining-leads[data-source='${source.replace(/ /g, '_')}']`);
+        if (headerSpan) headerSpan.textContent = remaining;
+      });
+    }
+
+    // Assignment logic: just update summary and preview
+    function updateAssignments() {
+      showAssignmentSummary();
+      updateRemainingLeads();
+    }
 
     // Assignment summary preview
     function showAssignmentSummary() {
@@ -520,8 +525,8 @@
     });
 
     // Initial state
-    updateAvailableCREs();
     updateAssignments();
+    updateRemainingLeads();
   });
 </script>
 {% endblock %}
