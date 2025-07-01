@@ -1611,13 +1611,16 @@ def cre_dashboard():
 
         # Get won leads (leads with final status "Won")
         won_leads = [lead for lead in all_leads if lead.get('final_status') == 'Won']
+        # Get lost leads (leads with final status "Lost")
+        lost_leads = [lead for lead in all_leads if lead.get('final_status') == 'Lost']
 
         return render_template('cre_dashboard.html',
                                pending_leads=pending_leads,
                                todays_followups=todays_followups,
                                attended_leads=attended_leads,
                                assigned_to_ps=assigned_to_ps,
-                               won_leads=won_leads)
+                               won_leads=won_leads,
+                               lost_leads=lost_leads)
     except Exception as e:
         flash(f'Error loading dashboard: {str(e)}', 'error')
         return render_template('cre_dashboard.html',
@@ -1625,7 +1628,8 @@ def cre_dashboard():
                                todays_followups=[],
                                attended_leads=[],
                                assigned_to_ps=[],
-                               won_leads=[])
+                               won_leads=[],
+                               lost_leads=[])
 
 
 @app.route('/update_lead/<uid>', methods=['GET', 'POST'])
@@ -1747,8 +1751,9 @@ def update_lead(uid):
                 final_status = request.form['final_status']
                 update_data['final_status'] = final_status
                 if final_status == 'Won':
-                    # Use ISO format with date only for consistency
                     update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                elif final_status == 'Lost':
+                    update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
             # Handle call dates and remarks - only record for actual conversations
             if request.form.get('call_date') and request.form.get('call_remark'):
@@ -1843,11 +1848,14 @@ def ps_dashboard():
         # Get attended leads (leads with at least one call)
         attended_leads = [lead for lead in assigned_leads if lead.get('first_call_date')]
 
+        # Get lost leads (assigned leads with final status "Lost")
+        lost_leads = [lead for lead in assigned_leads if lead.get('final_status') == 'Lost']
         return render_template('ps_dashboard.html',
                                assigned_leads=assigned_leads,
                                pending_leads=pending_leads,
                                todays_followups=todays_followups,
-                               attended_leads=attended_leads)
+                               attended_leads=attended_leads,
+                               lost_leads=lost_leads)
     except Exception as e:
         flash(f'Error loading dashboard: {str(e)}', 'error')
         return render_template('ps_dashboard.html',
@@ -1904,6 +1912,8 @@ def update_ps_lead(uid):
                 update_data['final_status'] = final_status
                 if final_status == 'Won':
                     update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                elif final_status == 'Lost':
+                    update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
             # Handle call dates and remarks for the next available call
             if request.form.get('call_date'):
@@ -1922,6 +1932,8 @@ def update_ps_lead(uid):
                         main_update_data = {'final_status': final_status}
                         if final_status == 'Won':
                             main_update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        elif final_status == 'Lost':
+                            main_update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
                         supabase.table('lead_master').update(main_update_data).eq('uid', uid).execute()
 
