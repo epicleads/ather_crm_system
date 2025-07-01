@@ -1783,6 +1783,21 @@ def update_lead(uid):
             except Exception as e:
                 flash(f'Error updating lead: {str(e)}', 'error')
 
+        # Fetch PS call summary from ps_followup_master
+        ps_call_summary = {}
+        if lead_data.get('ps_name'):
+            ps_result = supabase.table('ps_followup_master').select('*').eq('lead_uid', uid).execute()
+            if ps_result.data:
+                ps_followup = ps_result.data[0]
+                call_order = ['first', 'second', 'third']
+                for call in call_order:
+                    date_key = f"{call}_call_date"
+                    remark_key = f"{call}_call_remark"
+                    ps_call_summary[call] = {
+                        "date": ps_followup.get(date_key),
+                        "remark": ps_followup.get(remark_key)
+                    }
+
         return render_template('update_lead.html',
                                lead=lead_data,
                                ps_users=ps_users,
@@ -1792,7 +1807,8 @@ def update_lead(uid):
                                lead_statuses=lead_statuses,
                                next_call=next_call,
                                completed_calls=completed_calls,
-                               today=date.today())
+                               today=date.today(),
+                               ps_call_summary=ps_call_summary)
 
     except Exception as e:
         flash(f'Error loading lead: {str(e)}', 'error')
