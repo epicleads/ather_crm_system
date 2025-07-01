@@ -3646,5 +3646,166 @@ def view_event_leads():
     event_leads = safe_get_data('activity_leads')
     return render_template('view_event_leads.html', event_leads=event_leads)
 
+@app.route('/source_analysis_data')
+@require_admin
+def source_analysis_data():
+    try:
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
+        today = datetime.now().date()
+        start_date = None
+        end_date = None
+        if start_date_str and end_date_str:
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            except Exception:
+                start_date = None
+                end_date = None
+        # Define sources and subtypes
+        sources = [
+            'Google (KNOW)', 'Google', 'Meta(KNOW)', 'Know', 'OEM Web', 'OEM Tele',
+            'Affiliate Bikewale', 'Affiliate 91wheels', 'Affiliate Bikedekho',
+            'BTL (KNOW)', 'Meta'
+        ]
+        # Fetch all leads and followups
+        all_leads = safe_get_data('lead_master')
+        all_followups = safe_get_data('ps_followup_master')
+        # Filter by date if needed
+        def in_date_range(lead):
+            lead_date_str = lead.get('created_at') or lead.get('date')
+            if not lead_date_str:
+                return True
+            try:
+                if 'T' in lead_date_str:
+                    lead_date = datetime.fromisoformat(lead_date_str.replace('Z', '+00:00')).date()
+                else:
+                    lead_date = datetime.strptime(lead_date_str, '%Y-%m-%d').date()
+            except Exception:
+                return True
+            if start_date and end_date:
+                return start_date <= lead_date <= end_date
+            elif start_date:
+                return lead_date >= start_date
+            else:
+                return True
+        leads = [l for l in all_leads if in_date_range(l)]
+        # Prepare metrics for each source
+        data = {}
+        for source in sources:
+            data[source] = {
+                'calls_allocated': 0,
+                'calls_attempted': 0,
+                'calls_connected': 0,
+                'pending_total': 0,
+                'pending_interested': 0,
+                'pending_hot': 0,
+                'pending_warm': 0,
+                'pending_cold': 0,
+                'pending_callback': 0,
+                'pending_rnr': 0,
+                'pending_disconnected': 0,
+                'closed_lost_total': 0,
+                'closed_lost_competition': 0,
+                'closed_lost_not_interested': 0,
+                'closed_lost_did_not_enquire': 0,
+                'closed_lost_wrong_lead': 0,
+                'closed_lost_rnr_lost': 0,
+                'closed_lost_finance_reject': 0,
+                'closed_lost_co_dealer': 0,
+                'sales_pipeline_total': 0,
+                'call_progress': {},
+                'latest_remark': '',
+            }
+        # Helper: get source for a lead
+        def get_source(lead):
+            s = lead.get('source', '').strip()
+            for src in sources:
+                if s.lower() == src.lower():
+                    return src
+            # Try to match subtypes
+            for src in sources:
+                if src.lower() in s.lower():
+                    return src
+            return None
+        # Aggregate metrics
+        for lead in leads:
+            src = get_source(lead)
+            if not src:
+                continue
+            # Calls Allocated: all leads assigned to CRE for this source
+            data[src]['calls_allocated'] += 1
+            # Calls Attempted: if any call date is present
+            attempted = any(lead.get(f'{c}_call_date') for c in ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh'])
+            if attempted:
+                data[src]['calls_attempted'] += 1
+            # Calls Connected: if latest call status is not RNR/Busy
+            call_statuses = [lead.get(f'{c}_call_status', '').lower() for c in ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']]
+            connected = any(s and s not in ['rnr', 'busy', 'busy on another call'] for s in call_statuses)
+            if connected:
+                data[src]['calls_connected'] += 1
+            # Pending: Interested, Call back, RNR, Call disconnected
+            status = (lead.get('lead_status') or '').strip().lower()
+            if status in ['interested', 'call back', 'rnr', 'call disconnected']:
+                data[src]['pending_total'] += 1
+                if status == 'interested':
+                    data[src]['pending_interested'] += 1
+                    cat = (lead.get('lead_category') or '').strip().lower()
+                    if cat == 'hot':
+                        data[src]['pending_hot'] += 1
+                    elif cat == 'warm':
+                        data[src]['pending_warm'] += 1
+                    elif cat == 'cold':
+                        data[src]['pending_cold'] += 1
+                elif status == 'call back':
+                    data[src]['pending_callback'] += 1
+                elif status == 'rnr':
+                    data[src]['pending_rnr'] += 1
+                elif status == 'call disconnected':
+                    data[src]['pending_disconnected'] += 1
+            # Closed-Lost: Lost to Competition, Not Interested, Did Not Enquire, Wrong Lead, RNR-LOST, Finance Reject, Lost to Co-Dealer
+            final_status = (lead.get('final_status') or '').strip().lower()
+            lost_reason = (lead.get('lost_reason') or '').strip().lower()
+            if final_status == 'lost':
+                data[src]['closed_lost_total'] += 1
+                if 'competition' in lost_reason:
+                    data[src]['closed_lost_competition'] += 1
+                if 'not interested' in lost_reason:
+                    data[src]['closed_lost_not_interested'] += 1
+                if 'did not enquire' in lost_reason:
+                    data[src]['closed_lost_did_not_enquire'] += 1
+                if 'wrong lead' in lost_reason:
+                    data[src]['closed_lost_wrong_lead'] += 1
+                if 'rnr-lost' in lost_reason:
+                    data[src]['closed_lost_rnr_lost'] += 1
+                if 'finance reject' in lost_reason:
+                    data[src]['closed_lost_finance_reject'] += 1
+                if 'co-dealer' in lost_reason:
+                    data[src]['closed_lost_co_dealer'] += 1
+            # Sales Pipeline: Won
+            if final_status == 'won':
+                data[src]['sales_pipeline_total'] += 1
+            # Call Progress: which call (first, second, etc.)
+            call_progress = None
+            for idx, c in enumerate(['seventh', 'sixth', 'fifth', 'fourth', 'third', 'second', 'first']):
+                if lead.get(f'{c}_call_date'):
+                    call_progress = c.capitalize()
+                    break
+            if call_progress:
+                data[src]['call_progress'][lead.get('uid')] = call_progress
+            # Latest Remark: from followups
+            uid = lead.get('uid')
+            if uid:
+                followups = [f for f in all_followups if f.get('lead_uid') == uid]
+                if followups:
+                    latest = max(followups, key=lambda f: f.get('created_at', ''))
+                    data[src]['latest_remark'] = latest.get('remark', '')
+        # Totals row
+        total_row = {k: sum(data[src][k] for src in sources) if isinstance(data[sources[0]][k], int) else {} for k in data[sources[0]].keys()}
+        data['Total'] = total_row
+        return jsonify({'success': True, 'data': data})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
 if __name__ == '__main__':
     app.run(debug=True)
