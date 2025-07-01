@@ -21,6 +21,7 @@ from flask_limiter.util import get_remote_address
 from security_verification import run_security_verification
 import time
 import gc
+from flask_socketio import SocketIO, emit
 
 # Add this instead:
 from reportlab.lib.pagesizes import letter, A4
@@ -36,6 +37,7 @@ import tempfile
 load_dotenv()
 
 app = Flask(__name__)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 
 # Add custom Jinja2 filters
@@ -1844,6 +1846,15 @@ def update_ps_lead(uid):
 
             if request.form.get('call_remark'):
                 update_data[f'{next_call}_call_remark'] = request.form['call_remark']
+                # Emit notification to CRE dashboard
+                socketio.emit(
+                    'ps_remark_added',
+                    {
+                        'customer_name': ps_data.get('customer_name'),
+                        'ps_remark': request.form['call_remark'],
+                        'ps_name': ps_data.get('ps_name')
+                    }
+                )
 
             try:
                 if update_data:
@@ -3621,4 +3632,4 @@ def resend_quotation_email(uid):
         })
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    socketio.run(app, debug=True)
