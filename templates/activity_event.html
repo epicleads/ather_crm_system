@@ -103,11 +103,11 @@
                         </div>
                         <div class="col-md-1 mt-2">
                             <label class="form-label">Month</label>
-                            <input type="text" class="form-control" name="month[]" value="{{ now().strftime('%b') }}">
+                            <input type="text" class="form-control" name="month[]" value="{{ now.strftime('%b') }}">
                         </div>
                         <div class="col-md-2 mt-2">
                             <label class="form-label">Date</label>
-                            <input type="date" class="form-control" name="date[]" value="{{ now().strftime('%Y-%m-%d') }}">
+                            <input type="date" class="form-control" name="date[]" value="{{ now.strftime('%Y-%m-%d') }}">
                         </div>
                         <div class="col-md-1 d-flex align-items-end">
                             <button type="button" class="btn btn-danger remove-lead-row" style="display:none;"><i class="fas fa-trash"></i></button>

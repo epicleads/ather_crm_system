@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
-from supabase import create_client, Client
+from supabase.client import create_client, Client
 import csv
 import openpyxl
 import os
@@ -80,7 +80,8 @@ except Exception as e:
 
 # Initialize AuthManager
 auth_manager = AuthManager(supabase)
-app.auth_manager = auth_manager
+# Store auth_manager in app config instead of direct attribute
+app.config['AUTH_MANAGER'] = auth_manager
 
 # Initialize rate limiter
 limiter = Limiter(
@@ -194,34 +195,36 @@ def read_excel_file(filepath):
 
         # Get headers from first row
         headers = []
-        for cell in sheet[1]:
-            if cell.value:
-                headers.append(str(cell.value).strip())
-            else:
-                headers.append(None)
+        if sheet and sheet[1]:
+            for cell in sheet[1]:
+                if cell and cell.value:
+                    headers.append(str(cell.value).strip())
+                else:
+                    headers.append(None)
 
         # Read data rows with limit
         row_count = 0
-        for row_num, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
-            if row_count >= 10000:  # Limit to 10,000 rows
-                print(f"Warning: File contains more than 10,000 rows. Only processing first 10,000.")
-                break
+        if sheet:
+            for row_num, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+                if row_count >= 10000:  # Limit to 10,000 rows
+                    print(f"Warning: File contains more than 10,000 rows. Only processing first 10,000.")
+                    break
 
-            row_data = {}
-            has_data = False
+                row_data = {}
+                has_data = False
 
-            for i, value in enumerate(row):
-                if i < len(headers) and headers[i] and value is not None:
-                    row_data[headers[i]] = str(value).strip()
-                    has_data = True
+                for i, value in enumerate(row):
+                    if i < len(headers) and headers[i] and value is not None:
+                        row_data[headers[i]] = str(value).strip()
+                        has_data = True
 
-            if has_data:  # Only add rows with actual data
-                data.append(row_data)
-                row_count += 1
+                if has_data:  # Only add rows with actual data
+                    data.append(row_data)
+                    row_count += 1
 
-            # Memory management for large files
-            if row_count % 1000 == 0 and row_count > 0:
-                print(f"Processed {row_count} rows...")
+                # Memory management for large files
+                if row_count % 1000 == 0 and row_count > 0:
+                    print(f"Processed {row_count} rows...")
 
         workbook.close()  # Explicitly close workbook
 
@@ -334,7 +337,7 @@ def get_next_ps_call_info(ps_data):
 def get_accurate_count(table_name, filters=None):
     """Get accurate count from Supabase table"""
     try:
-        query = supabase.table(table_name).select('id', count='exact')
+        query = supabase.table(table_name).select('id')
 
         if filters:
             for key, value in filters.items():
@@ -343,12 +346,8 @@ def get_accurate_count(table_name, filters=None):
 
         result = query.execute()
 
-        # Try to get count from the result
-        if hasattr(result, 'count') and result.count is not None:
-            return result.count
-        else:
-            # Fallback: count the returned data
-            return len(result.data) if result.data else 0
+        # Count the returned data
+        return len(result.data) if result.data else 0
 
     except Exception as e:
         print(f"Error getting count from {table_name}: {e}")
@@ -466,7 +465,7 @@ def unified_login():
         return redirect(url_for('index'))
 
     # Check rate limiting
-    ip_address = request.environ.get('REMOTE_ADDR')
+    ip_address = request.environ.get('REMOTE_ADDR', 'unknown')
     if not auth_manager.check_rate_limit(ip_address):
         flash('Too many login attempts. Please try again later.', 'error')
         return redirect(url_for('index'))
@@ -588,6 +587,10 @@ def change_password():
     user_id = session.get('user_id')
     user_type = session.get('user_type')
 
+    if not user_id or not user_type:
+        flash('Session information not found', 'error')
+        return redirect(url_for('security_settings'))
+
     success, message = auth_manager.change_password(user_id, user_type, current_password, new_password)
 
     if success:
@@ -616,6 +619,10 @@ def change_cre_password():
 
         user_id = session.get('user_id')
         user_type = session.get('user_type')
+
+        if not user_id or not user_type:
+            flash('Session information not found', 'error')
+            return render_template('change_cre_password.html')
 
         success, message = auth_manager.change_password(user_id, user_type, current_password, new_password)
 
@@ -647,6 +654,10 @@ def change_ps_password():
         user_id = session.get('user_id')
         user_type = session.get('user_type')
 
+        if not user_id or not user_type:
+            flash('Session information not found', 'error')
+            return render_template('change_ps_password.html')
+
         success, message = auth_manager.change_password(user_id, user_type, current_password, new_password)
 
         if success:
@@ -663,6 +674,10 @@ def change_ps_password():
 def security_settings():
     user_id = session.get('user_id')
     user_type = session.get('user_type')
+
+    if not user_id or not user_type:
+        flash('Session information not found', 'error')
+        return redirect(url_for('index'))
 
     # Get active sessions
     sessions = auth_manager.get_user_sessions(user_id, user_type)
@@ -689,13 +704,17 @@ def run_security_audit():
         audit_results = run_security_verification(supabase)
 
         # Log the security audit
-        auth_manager.log_audit_event(
-            user_id=session.get('user_id'),
-            user_type=session.get('user_type'),
-            action='SECURITY_AUDIT_RUN',
-            resource='security_audit',
-            details={'overall_score': audit_results.get('overall_score', 0)}
-        )
+        user_id = session.get('user_id')
+        user_type = session.get('user_type')
+        
+        if user_id and user_type:
+            auth_manager.log_audit_event(
+                user_id=user_id,
+                user_type=user_type,
+                action='SECURITY_AUDIT_RUN',
+                resource='security_audit',
+                details={'overall_score': audit_results.get('overall_score', 0)}
+            )
 
         return jsonify({
             'success': True,
@@ -721,12 +740,16 @@ def terminate_session():
 
         auth_manager.deactivate_session(session_id)
 
-        auth_manager.log_audit_event(
-            user_id=session.get('user_id'),
-            user_type=session.get('user_type'),
-            action='SESSION_TERMINATED',
-            details={'terminated_session': session_id}
-        )
+        user_id = session.get('user_id')
+        user_type = session.get('user_type')
+        
+        if user_id and user_type:
+            auth_manager.log_audit_event(
+                user_id=user_id,
+                user_type=user_type,
+                action='SESSION_TERMINATED',
+                details={'terminated_session': session_id}
+            )
 
         return jsonify({'success': True, 'message': 'Session terminated successfully'})
     except Exception as e:
@@ -741,14 +764,16 @@ def terminate_all_sessions():
         user_type = session.get('user_type')
         current_session = session.get('session_id')
 
-        auth_manager.deactivate_all_user_sessions(user_id, user_type, current_session)
-
-        auth_manager.log_audit_event(
-            user_id=user_id,
-            user_type=user_type,
-            action='ALL_SESSIONS_TERMINATED',
-            details={'except_session': current_session}
-        )
+        if user_id and user_type and current_session:
+            auth_manager.deactivate_all_user_sessions(user_id, user_type, current_session)
+            auth_manager.log_audit_event(
+                user_id=user_id,
+                user_type=user_type,
+                action='ALL_SESSIONS_TERMINATED',
+                details={'except_session': current_session}
+            )
+        else:
+            return jsonify({'success': False, 'message': 'Session information not found'})
 
         return jsonify({'success': True, 'message': 'All other sessions terminated successfully'})
     except Exception as e:
@@ -774,12 +799,15 @@ def admin_dashboard():
         cre_count = ps_count = leads_count = unassigned_leads = 0
 
     # Log dashboard access
-    auth_manager.log_audit_event(
-        user_id=session.get('user_id'),
-        user_type=session.get('user_type'),
-        action='DASHBOARD_ACCESS',
-        resource='admin_dashboard'
-    )
+    user_id = session.get('user_id')
+    user_type = session.get('user_type')
+    if user_id and user_type:
+        auth_manager.log_audit_event(
+            user_id=user_id,
+            user_type=user_type,
+            action='DASHBOARD_ACCESS',
+            resource='admin_dashboard'
+        )
 
     return render_template('admin_dashboard.html',
                            cre_count=cre_count,
@@ -807,8 +835,8 @@ def upload_data():
             flash('No file selected', 'error')
             return redirect(request.url)
 
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
+        if file and file.filename and allowed_file(file.filename):
+            filename = secure_filename(str(file.filename))
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
 
             try:
@@ -919,180 +947,6 @@ def upload_data():
 
     return render_template('upload_data.html')
 
-#
-# @app.route('/assign_leads')
-# @require_admin
-# def assign_leads():
-#     try:
-#         # Get accurate count of unassigned leads first
-#         unassigned_count = get_accurate_count('lead_master', {'assigned': 'No'})
-#         print(f"=== ASSIGN LEADS DEBUG ===")
-#         print(f"Accurate count from get_accurate_count: {unassigned_count}")
-#
-#         # Try multiple methods to get ALL unassigned leads
-#         try:
-#             # Method 1: Direct query with explicit high limit
-#             print("Attempting Method 1: Direct query with high limit...")
-#             unassigned_result = supabase.table('lead_master').select('*').eq('assigned', 'No').limit(10000).execute()
-#             unassigned_leads_method1 = unassigned_result.data or []
-#             print(f"Method 1 fetched: {len(unassigned_leads_method1)} leads")
-#
-#             # Method 2: Try with range to get more if needed
-#             print("Attempting Method 2: Query with extended range...")
-#             unassigned_result2 = supabase.table('lead_master').select('*').eq('assigned', 'No').range(0,
-#                                                                                                       19999).execute()
-#             unassigned_leads_method2 = unassigned_result2.data or []
-#             print(f"Method 2 fetched: {len(unassigned_leads_method2)} leads")
-#
-#             # Use the method that returns more leads
-#             if len(unassigned_leads_method2) > len(unassigned_leads_method1):
-#                 unassigned_leads = unassigned_leads_method2
-#                 print(f"Using Method 2 results: {len(unassigned_leads)} leads")
-#             else:
-#                 unassigned_leads = unassigned_leads_method1
-#                 print(f"Using Method 1 results: {len(unassigned_leads)} leads")
-#
-#         except Exception as e:
-#             print(f"Error in direct queries: {e}")
-#             # Fallback to safe_get_data
-#             unassigned_leads = safe_get_data('lead_master', {'assigned': 'No'})
-#             print(f"Fallback method fetched: {len(unassigned_leads)} leads")
-#
-#         # Get all CREs
-#         cres = safe_get_data('cre_users')
-#
-#         print(f"Final counts - Unassigned leads: {len(unassigned_leads)}, CREs: {len(cres)}")
-#         print(f"=== END DEBUG ===")
-#
-#         # Force template to use actual count
-#         actual_count = len(unassigned_leads)
-#
-#         return render_template('assign_leads.html',
-#                                unassigned_leads=unassigned_leads,
-#                                actual_unassigned_count=actual_count,
-#                                cres=cres)
-#     except Exception as e:
-#         print(f"Error loading assign leads data: {e}")
-#         flash(f'Error loading data: {str(e)}', 'error')
-#         return redirect(url_for('admin_dashboard'))
-#
-#
-# @app.route('/assign_leads_action', methods=['POST'])
-# @require_admin
-# def assign_leads_action():
-#     try:
-#         # Get selected CRE IDs from form
-#         selected_cre_ids = request.form.getlist('selected_cres')
-#         chunk_size = request.form.get('chunk_size')
-#
-#         if not selected_cre_ids:
-#             flash('Please select at least one CRE for assignment', 'error')
-#             return redirect(url_for('assign_leads'))
-#
-#         # Convert to integers
-#         selected_cre_ids = [int(cre_id) for cre_id in selected_cre_ids]
-#
-#         # Parse chunk size
-#         chunk_size = int(chunk_size) if chunk_size and chunk_size.strip() else None
-#
-#         assign_leads_to_selected_cres(selected_cre_ids, chunk_size)
-#
-#         # Create appropriate flash message
-#         if chunk_size:
-#             flash(
-#                 f'Successfully assigned {chunk_size} leads to {len(selected_cre_ids)} selected CRE(s). Remaining leads are still unassigned.',
-#                 'success')
-#         else:
-#             flash(f'All leads assigned successfully to {len(selected_cre_ids)} selected CRE(s)', 'success')
-#
-#         # Log lead assignment
-#         auth_manager.log_audit_event(
-#             user_id=session.get('user_id'),
-#             user_type=session.get('user_type'),
-#             action='LEADS_ASSIGNED',
-#             resource='lead_master',
-#             details={
-#                 'assigned_to_cres': selected_cre_ids,
-#                 'cre_count': len(selected_cre_ids),
-#                 'chunk_size': chunk_size
-#             }
-#         )
-#
-#     except Exception as e:
-#         flash(f'Error assigning leads: {str(e)}', 'error')
-#
-#     return redirect(url_for('assign_leads'))
-#
-#
-# def assign_leads_to_selected_cres(selected_cre_ids, chunk_size=None):
-#     """Assign unassigned leads to selected CREs only, with optional chunk size limit"""
-#     try:
-#         # Get ALL unassigned leads without any limits
-#         unassigned_result = supabase.table('lead_master').select('*').eq('assigned', 'No').limit(10000).execute()
-#         unassigned_leads = unassigned_result.data or []
-#
-#         print(f"Found {len(unassigned_leads)} total unassigned leads for assignment")
-#
-#         # Apply chunk size limit if specified
-#         if chunk_size and chunk_size > 0:
-#             unassigned_leads = unassigned_leads[:chunk_size]
-#             print(f"Limited to {len(unassigned_leads)} leads due to chunk size")
-#
-#         # Get selected CREs
-#         selected_cres = []
-#         for cre_id in selected_cre_ids:
-#             cre_result = supabase.table('cre_users').select('*').eq('id', cre_id).execute()
-#             if cre_result.data:
-#                 selected_cres.append(cre_result.data[0])
-#
-#         if not selected_cres or not unassigned_leads:
-#             print("No CREs selected or no leads to assign")
-#             return
-#
-#         print(f"Assigning {len(unassigned_leads)} leads to {len(selected_cres)} CREs")
-#
-#         # Group leads by source for fair distribution
-#         leads_by_source = {}
-#         for lead in unassigned_leads:
-#             source = lead.get('source', 'Unknown')
-#             if source not in leads_by_source:
-#                 leads_by_source[source] = []
-#             leads_by_source[source].append(lead)
-#
-#         # Assign leads from each source to selected CREs
-#         total_assigned = 0
-#         for source, leads in leads_by_source.items():
-#             random.shuffle(leads)  # Randomize assignment
-#             print(f"Assigning {len(leads)} leads from source '{source}'")
-#
-#             for i, lead in enumerate(leads):
-#                 cre = selected_cres[i % len(selected_cres)]  # Round-robin assignment among selected CREs
-#
-#                 update_data = {
-#                     'cre_name': cre['name'],
-#                     'assigned': 'Yes',
-#                     'cre_assigned_at': datetime.now().isoformat()
-#                 }
-#
-#                 try:
-#                     supabase.table('lead_master').update(update_data).eq('uid', lead['uid']).execute()
-#                     total_assigned += 1
-#
-#                     # Add a small delay every 100 assignments to prevent overwhelming the database
-#                     if total_assigned % 100 == 0:
-#                         print(f"Assigned {total_assigned} leads so far...")
-#                         time.sleep(0.1)
-#
-#                 except Exception as e:
-#                     print(f"Error assigning lead {lead['uid']}: {e}")
-#                     continue
-#
-#         print(f"Successfully assigned {total_assigned} leads")
-#
-#     except Exception as e:
-#         print(f"Error assigning leads to selected CREs: {e}")
-#         raise
-#
 @app.route('/assign_leads')
 @require_admin
 def assign_leads():
@@ -1581,6 +1435,67 @@ def delete_ps(ps_id):
     return redirect(url_for('manage_ps'))
 
 
+@app.route('/add_lead', methods=['GET', 'POST'])
+@require_cre
+def add_lead():
+    from datetime import datetime, date
+    branches = ['SOMAJIGUDA', 'ATTAPUR', 'TOLICHOWKI', 'KOMPALLY', 'SRINAGAR COLONY', 'MALAKPET', 'VANASTHALIPURAM']
+    ps_users = safe_get_data('ps_users')
+    if request.method == 'POST':
+        customer_name = request.form.get('customer_name', '').strip()
+        customer_mobile_number = request.form.get('customer_mobile_number', '').strip()
+        source = request.form.get('source', '').strip()
+        lead_status = request.form.get('lead_status', '').strip()
+        lead_category = request.form.get('lead_category', '').strip()
+        model_interested = request.form.get('model_interested', '').strip()
+        branch = request.form.get('branch', '').strip()
+        ps_name = request.form.get('ps_name', '').strip()
+        final_status = request.form.get('final_status', 'Pending').strip()
+        follow_up_date = request.form.get('follow_up_date', '').strip()
+        remark = request.form.get('remark', '').strip()
+        date_now = datetime.now().strftime('%Y-%m-%d')
+        # Validation
+        if not customer_name or not customer_mobile_number or not source:
+            flash('Please fill all required fields', 'error')
+            return render_template('add_lead.html', branches=branches, ps_users=ps_users)
+        # UID: Source initial (uppercase) + '-' + first 5 letters of name (no spaces, uppercase) + last 5 digits of phone
+        src_initial = source[0].upper() if source else 'X'
+        name_part = ''.join(customer_name.split()).upper()[:5]
+        phone_part = customer_mobile_number[-5:] if len(customer_mobile_number) >= 5 else customer_mobile_number
+        uid = f"{src_initial}-{name_part}{phone_part}"
+        # CRE name from session
+        cre_name = session.get('cre_name')
+        # Prepare lead data
+        lead_data = {
+            'uid': uid,
+            'date': date_now,
+            'customer_name': customer_name,
+            'customer_mobile_number': customer_mobile_number,
+            'source': source,
+            'lead_status': lead_status,
+            'lead_category': lead_category,
+            'model_interested': model_interested,
+            'branch': branch,
+            'ps_name': ps_name if ps_name else None,
+            'final_status': final_status,
+            'follow_up_date': follow_up_date if follow_up_date else None,
+            'assigned': 'No',
+            'created_at': datetime.now().isoformat(),
+            'updated_at': datetime.now().isoformat(),
+            'first_remark': remark,
+            'cre_name': cre_name,
+            'first_call_date': date_now
+        }
+        try:
+            supabase.table('lead_master').insert(lead_data).execute()
+            flash('Lead added successfully!', 'success')
+            return redirect(url_for('cre_dashboard'))
+        except Exception as e:
+            flash(f'Error adding lead: {str(e)}', 'error')
+            return render_template('add_lead.html', branches=branches, ps_users=ps_users)
+    return render_template('add_lead.html', branches=branches, ps_users=ps_users)
+
+
 @app.route('/cre_dashboard')
 @require_cre
 def cre_dashboard():
@@ -1626,7 +1541,9 @@ def cre_dashboard():
                                todays_followups=todays_followups,
                                attended_leads=attended_leads,
                                assigned_to_ps=assigned_to_ps,
-                               won_leads=won_leads)
+                               won_leads=won_leads,
+                               lost_leads=lost_leads,
+                               walkin_followups=walkin_followups)
     except Exception as e:
         flash(f'Error loading dashboard: {str(e)}', 'error')
         return render_template('cre_dashboard.html',
@@ -2557,7 +2474,6 @@ def walkin_customers():
             }
 
             # --- Walk-in Follow-up Assignment Logic ---
-                    # --- Walk-in Follow-up Assignment Logic ---
             cres = safe_get_data('cre_users')
             cre_names = [cre['name'] for cre in cres]
             tomorrow = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
@@ -2570,6 +2486,7 @@ def walkin_customers():
             assigned_cre = min(cre_followup_counts, key=cre_followup_counts.get) if cre_followup_counts else None
             walkin_data['walkin_cre_name'] = assigned_cre
             walkin_data['walkin_followup_date'] = tomorrow
+
             # Insert walk-in data into the database
             result = supabase.table('walkin_data').insert(walkin_data).execute()
 
@@ -3487,6 +3404,118 @@ def export_leads_by_date_csv():
         return jsonify({'success': False, 'message': str(e)})
 
 
+@app.route('/activity_event', methods=['GET', 'POST'])
+@require_ps
+def activity_event():
+    """Add event/activity leads for PS"""
+    if request.method == 'POST':
+        # Get form data for multiple customers
+        customer_names = request.form.getlist('customer_name[]')
+        customer_phones = request.form.getlist('customer_phone_number[]')
+        customer_locations = request.form.getlist('customer_location[]')
+        customer_professions = request.form.getlist('customer_profession[]')
+        genders = request.form.getlist('gender[]')
+        interested_models = request.form.getlist('interested_model[]')
+        remarks_list = request.form.getlist('remarks[]')
+        lead_statuses = request.form.getlist('lead_status[]')
+        months = request.form.getlist('month[]')
+        dates = request.form.getlist('date[]')
+        
+        # Get activity details
+        activity_name = request.form.get('activity_name', '').strip()
+        activity_location = request.form.get('activity_location', '').strip()
+        
+        # Validation
+        if not activity_name or not activity_location:
+            flash('Please fill activity details', 'error')
+            return render_template('activity_event.html', now=datetime.now())
+        
+        if not customer_names or not customer_phones:
+            flash('Please add at least one customer lead', 'error')
+            return render_template('activity_event.html', now=datetime.now())
+        
+        try:
+            leads_added = 0
+            
+            for i in range(len(customer_names)):
+                if customer_names[i] and customer_phones[i]:  # Only process if name and phone are provided
+                    # Generate UID for event lead
+                    uid = f"E-{activity_name[:3].upper()}-{customer_phones[i][-4:]}"
+                    
+                    # Create event lead data strictly matching activity_leads schema
+                    event_lead_data = {
+                        'activity_uid': uid,
+                        'activity_name': activity_name,
+                        'activity_location': activity_location,
+                        'ps_name': session.get('ps_name'),
+                        'location': session.get('branch'),
+                        'customer_name': customer_names[i].strip(),
+                        'customer_location': customer_locations[i].strip() if i < len(customer_locations) else '',
+                        'customer_profession': customer_professions[i].strip() if i < len(customer_professions) else '',
+                        'gender': genders[i] if i < len(genders) else 'MALE',
+                        'interested_model': interested_models[i].strip() if i < len(interested_models) else '',
+                        'remarks': remarks_list[i].strip() if i < len(remarks_list) else '',
+                        'lead_status': lead_statuses[i] if i < len(lead_statuses) else 'WARM',
+                        'month': months[i] if i < len(months) else datetime.now().strftime('%b'),
+                        'date': dates[i] if i < len(dates) else datetime.now().strftime('%Y-%m-%d'),
+                        'customer_phone_number': customer_phones[i].strip(),
+                        'created_at': datetime.now().isoformat(),
+                        'lead_category': lead_statuses[i] if i < len(lead_statuses) else 'WARM'
+                    }
+                    # Insert into activity_leads
+                    result = supabase.table('activity_leads').insert(event_lead_data).execute()
+                    if result.data:
+                        leads_added += 1
+            
+            if leads_added > 0:
+                flash(f'{leads_added} event lead(s) added successfully!', 'success')
+                return redirect(url_for('ps_dashboard'))
+            else:
+                flash('Error adding event leads', 'error')
+                
+        except Exception as e:
+            flash(f'Error adding event leads: {str(e)}', 'error')
+    
+    return render_template('activity_event.html', now=datetime.now())
+
+
+@app.route('/view_event_leads')
+@require_ps
+def view_event_leads():
+    """View all event/activity leads for current PS"""
+    try:
+        ps_name = session.get('ps_name')
+        # Get event leads for this PS from activity_leads table
+        event_leads = safe_get_data('activity_leads', {'ps_name': ps_name})
+        
+        # Transform data to match template expectations
+        transformed_leads = []
+        for lead in event_leads:
+            transformed_lead = {
+                'activity_name': lead.get('activity_name', ''),
+                'activity_location': lead.get('activity_location', ''),
+                'ps_name': lead.get('ps_name', ''),
+                'location': lead.get('location', ''),
+                'customer_name': lead.get('customer_name', ''),
+                'customer_phone_number': lead.get('customer_phone_number', ''),
+                'customer_location': lead.get('customer_location', ''),
+                'customer_profession': lead.get('customer_profession', ''),
+                'gender': lead.get('gender', ''),
+                'interested_model': lead.get('interested_model', ''),
+                'remarks': lead.get('remarks', ''),
+                'lead_status': lead.get('lead_status', ''),
+                'month': lead.get('month', ''),
+                'date': lead.get('date', '')
+            }
+            transformed_leads.append(transformed_lead)
+        
+        return render_template('view_event_leads.html', event_leads=transformed_leads)
+        
+    except Exception as e:
+        flash(f'Error loading event leads: {str(e)}', 'error')
+        return redirect(url_for('ps_dashboard'))
+
+
 @app.route('/resend_quotation_email/<uid>', methods=['POST'])
 @require_ps
 def resend_quotation_email(uid):
@@ -3590,124 +3619,6 @@ def resend_quotation_email(uid):
             'success': False,
             'message': f'Error resending email: {str(e)}'
         })
-@app.route('/activity_event', methods=['GET', 'POST'])
-@require_ps
-def activity_event():
-    from datetime import datetime
-    if request.method == 'POST':
-        activity_name = request.form.get('activity_name')
-        activity_location = request.form.get('activity_location')
-        ps_name = session.get('ps_name')
-        location = session.get('branch')
-        customer_names = request.form.getlist('customer_name[]')
-        customer_phone_numbers = request.form.getlist('customer_phone_number[]')
-        customer_locations = request.form.getlist('customer_location[]')
-        customer_professions = request.form.getlist('customer_profession[]')
-        genders = request.form.getlist('gender[]')
-        interested_models = request.form.getlist('interested_model[]')
-        remarks_list = request.form.getlist('remarks[]')
-        lead_statuses = request.form.getlist('lead_status[]')
-        months = request.form.getlist('month[]')
-        dates = request.form.getlist('date[]')
-
-        # ----------------------------------------------------------
-        # Get current sequence number for UID generation
-        result = supabase.table('activity_leads').select('activity_uid').execute()
-        current_count = len(result.data) if result.data else 0
-        # ----------------------------------------------------------
-        for i in range(len(customer_names)):
-            #---------------------------------------------------
-            # Generate UID for this activity lead
-            uid = generate_uid('Activity', customer_phone_numbers[i], current_count + i + 1)
-            # ---------------------------------------------------
-            lead_data = {
-                'activity_name': activity_name,
-                'activity_location': activity_location,
-                'ps_name': ps_name,
-                'location': location,
-                'customer_name': customer_names[i],
-                'customer_phone_number': customer_phone_numbers[i],
-                'customer_location': customer_locations[i],
-                'customer_profession': customer_professions[i],
-                'gender': genders[i],
-                'interested_model': interested_models[i],
-                'remarks': remarks_list[i],
-                'lead_status': lead_statuses[i],
-                'lead_category': lead_statuses[i],
-                'month': months[i],
-                'date': dates[i] if dates[i] else datetime.now().strftime('%Y-%m-%d'),
-            }
-            supabase.table('activity_leads').insert(lead_data).execute()
-        flash('Event leads submitted successfully!', 'success')
-        return redirect(url_for('ps_dashboard'))
-    return render_template('activity_event.html', now=datetime.now)
-
-
-@app.route('/view_event_leads')
-@require_ps
-def view_event_leads():
-    event_leads = safe_get_data('activity_leads')
-    return render_template('view_event_leads.html', event_leads=event_leads)
-
-@app.route('/add_lead', methods=['GET', 'POST'])
-@require_cre
-def add_lead():
-    from datetime import datetime, date
-    branches = ['SOMAJIGUDA', 'ATTAPUR', 'TOLICHOWKI', 'KOMPALLY', 'SRINAGAR COLONY', 'MALAKPET', 'VANASTHALIPURAM']
-    ps_users = safe_get_data('ps_users')
-    if request.method == 'POST':
-        customer_name = request.form.get('customer_name', '').strip()
-        customer_mobile_number = request.form.get('customer_mobile_number', '').strip()
-        source = request.form.get('source', '').strip()
-        lead_status = request.form.get('lead_status', '').strip()
-        lead_category = request.form.get('lead_category', '').strip()
-        model_interested = request.form.get('model_interested', '').strip()
-        branch = request.form.get('branch', '').strip()
-        ps_name = request.form.get('ps_name', '').strip()
-        final_status = request.form.get('final_status', 'Pending').strip()
-        follow_up_date = request.form.get('follow_up_date', '').strip()
-        remark = request.form.get('remark', '').strip()
-        date_now = datetime.now().strftime('%Y-%m-%d')
-        # Validation
-        if not customer_name or not customer_mobile_number or not source:
-            flash('Please fill all required fields', 'error')
-            return render_template('add_lead.html', branches=branches, ps_users=ps_users)
-        # UID: Source initial (uppercase) + '-' + first 5 letters of name (no spaces, uppercase) + last 5 digits of phone
-        src_initial = source[0].upper() if source else 'X'
-        name_part = ''.join(customer_name.split()).upper()[:5]
-        phone_part = customer_mobile_number[-5:] if len(customer_mobile_number) >= 5 else customer_mobile_number
-        uid = f"{src_initial}-{name_part}{phone_part}"
-        # CRE name from session
-        cre_name = session.get('cre_name')
-        # Prepare lead data
-        lead_data = {
-            'uid': uid,
-            'date': date_now,
-            'customer_name': customer_name,
-            'customer_mobile_number': customer_mobile_number,
-            'source': source,
-            'lead_status': lead_status,
-            'lead_category': lead_category,
-            'model_interested': model_interested,
-            'branch': branch,
-            'ps_name': ps_name if ps_name else None,
-            'final_status': final_status,
-            'follow_up_date': follow_up_date if follow_up_date else None,
-            'assigned': 'No',
-            'created_at': datetime.now().isoformat(),
-            'updated_at': datetime.now().isoformat(),
-            'first_remark': remark,
-            'cre_name': cre_name,
-            'first_call_date': date_now
-        }
-        try:
-            supabase.table('lead_master').insert(lead_data).execute()
-            flash('Lead added successfully!', 'success')
-            return redirect(url_for('cre_dashboard'))
-        except Exception as e:
-            flash(f'Error adding lead: {str(e)}', 'error')
-            return render_template('add_lead.html', branches=branches, ps_users=ps_users)
-    return render_template('add_lead.html', branches=branches, ps_users=ps_users)
 
 if __name__ == '__main__':
     app.run(debug=True)
