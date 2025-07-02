@@ -95,7 +95,13 @@
                 <div class="col-md-4">
                     <div class="mb-3">
                         <label class="form-label">Lead Category</label>
-                        <input type="text" class="form-control" value="{{ lead.lead_category or 'Not set' }}" readonly>
+                        <select class="form-select" name="lead_category" id="lead_category" required>
+                            <option value="{{ lead.lead_category }}">{{ lead.lead_category or 'Select Category' }}</option>
+                            <option value="Hot">Hot</option>
+                            <option value="Warm">Warm</option>
+                            <option value="Cold">Cold</option>
+                            <option value="Not Interested">Not Interested</option>
+                        </select>
                     </div>
                 </div>
             </div>
@@ -103,8 +109,20 @@
             <div class="row mb-4">
                 <div class="col-md-6">
                     <div class="mb-3">
-                        <label class="form-label">Model Interested</label>
-                        <input type="text" class="form-control" value="{{ lead.model_interested or 'Not specified' }}" readonly>
+                        <label class="form-label">Lead Status</label>
+                        <select class="form-select" name="lead_status" id="lead_status" required>
+                            <option value="">Select Status</option>
+                            <option value="Call not Connected" {% if lead.lead_status == 'Call not Connected' %}selected{% endif %}>Call not Connected</option>
+                            <option value="Retailed" {% if lead.lead_status == 'Retailed' %}selected{% endif %}>Retailed</option>
+                            <option value="Discount Issue" {% if lead.lead_status == 'Discount Issue' %}selected{% endif %}>Discount Issue</option>
+                            <option value="Delayed" {% if lead.lead_status == 'Delayed' %}selected{% endif %}>Delayed</option>
+                            <option value="Booked" {% if lead.lead_status == 'Booked' %}selected{% endif %}>Booked</option>
+                            <option value="Test Drive" {% if lead.lead_status == 'Test Drive' %}selected{% endif %}>Test Drive</option>
+                            <option value="Talked to PS" {% if lead.lead_status == 'Talked to PS' %}selected{% endif %}>Talked to PS</option>
+                            <option value="Lost to Competition" {% if lead.lead_status == 'Lost to Competition' %}selected{% endif %}>Lost to Competition</option>
+                            <option value="Finance Rejected" {% if lead.lead_status == 'Finance Rejected' %}selected{% endif %}>Finance Rejected</option>
+                            <option value="Dropped" {% if lead.lead_status == 'Dropped' %}selected{% endif %}>Dropped</option>
+                        </select>
                     </div>
                 </div>
                 <div class="col-md-6">

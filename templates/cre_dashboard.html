@@ -478,6 +478,20 @@
 .dropdown-menu {
     z-index: 2000 !important;
 }
+
+/* Show only one calendar in daterangepicker */
+.daterangepicker .calendar {
+    width: 100% !important;
+}
+.daterangepicker .calendar.left {
+    display: block !important;
+}
+.daterangepicker .calendar.right {
+    display: none !important;
+}
+.daterangepicker .ranges {
+    margin-left: 0 !important;
+}
 </style>
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
