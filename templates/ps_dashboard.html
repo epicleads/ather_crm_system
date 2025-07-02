@@ -188,6 +188,7 @@
                     <table class="table table-striped table-hover" id="pendingLeadsTable">
                         <thead class="table-dark">
                             <tr>
+                                <th>Action</th>
                                 <th>UID</th>
                                 <th>Customer Name</th>
                                 <th>Mobile</th>
@@ -196,13 +197,17 @@
                                 <th>Category</th>
                                 <th>Model Interested</th>
                                 <th>Created Date</th>
-                                <th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for lead in pending_leads %}
                             <tr class="pending-lead-row" data-created="{{ lead.created_at[:10] if lead.created_at else '' }}"
                                 data-search="{{ (lead.lead_uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or '') + ' ' + (lead.cre_name or ''))|lower }}">
+                                <td>
+                                    <a href="{{ url_for('update_ps_lead', uid=lead.lead_uid) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-edit"></i> Update
+                                    </a>
+                                </td>
                                 <td><span class="badge bg-primary">{{ lead.lead_uid }}</span></td>
                                 <td>{{ lead.customer_name }}</td>
                                 <td>{{ lead.customer_mobile_number }}</td>
@@ -221,11 +226,6 @@
                                 </td>
                                 <td>{{ lead.model_interested or 'Not specified' }}</td>
                                 <td>{{ lead.created_at[:10] if lead.created_at else 'N/A' }}</td>
-                                <td>
-                                    <a href="{{ url_for('update_ps_lead', uid=lead.lead_uid) }}" class="btn btn-sm btn-outline-primary">
-                                        <i class="fas fa-edit"></i> Update
-                                    </a>
-                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -260,6 +260,7 @@
                     <table class="table table-striped table-hover" id="followupTable">
                         <thead class="table-dark">
                             <tr>
+                                <th>Action</th>
                                 <th>UID</th>
                                 <th>Customer Name</th>
                                 <th>Mobile</th>
@@ -267,12 +268,16 @@
                                 <th>Model Interested</th>
                                 <th>Follow-up Date</th>
                                 <th>Call Progress</th>
-                                <th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for lead in todays_followups %}
                             <tr data-search="{{ (lead.lead_uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or ''))|lower }}">
+                                <td>
+                                    <a href="{{ url_for('update_ps_lead', uid=lead.lead_uid) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-edit"></i> Update
+                                    </a>
+                                </td>
                                 <td><span class="badge bg-primary">{{ lead.lead_uid }}</span></td>
                                 <td>{{ lead.customer_name }}</td>
                                 <td>{{ lead.customer_mobile_number }}</td>
@@ -319,11 +324,6 @@
                                             </div>
                                         </div>
                                     </div>
-                                </td>
-                                <td>
-                                    <a href="{{ url_for('update_ps_lead', uid=lead.lead_uid) }}" class="btn btn-sm btn-outline-primary">
-                                        <i class="fas fa-edit"></i> Update
-                                    </a>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -373,6 +373,7 @@
                     <table class="table table-striped table-hover" id="attendedLeadsTable">
                         <thead class="table-dark">
                             <tr>
+                                <th>Action</th>
                                 <th>UID</th>
                                 <th>Customer Name</th>
                                 <th>Mobile</th>
@@ -381,7 +382,6 @@
                                 <th>Category</th>
                                 <th>Model Interested</th>
                                 <th>Final Status</th>
-                                <th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -390,6 +390,11 @@
                                 data-first-call="{{ lead.first_call_date or '' }}"
                                 data-last-call="{{ lead.third_call_date or lead.second_call_date or lead.first_call_date or '' }}"
                                 data-search="{{ (lead.lead_uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or ''))|lower }}">
+                                <td>
+                                    <a href="{{ url_for('update_ps_lead', uid=lead.lead_uid) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-edit"></i> Update
+                                    </a>
+                                </td>
                                 <td><span class="badge bg-primary">{{ lead.lead_uid }}</span></td>
                                 <td>{{ lead.customer_name }}</td>
                                 <td>{{ lead.customer_mobile_number }}</td>
@@ -415,11 +420,6 @@
                                     {% else %}
                                         <span class="badge bg-warning">{{ lead.final_status }}</span>
                                     {% endif %}
-                                </td>
-                                <td>
-                                    <a href="{{ url_for('update_ps_lead', uid=lead.lead_uid) }}" class="btn btn-sm btn-outline-primary">
-                                        <i class="fas fa-edit"></i> Update
-                                    </a>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -469,6 +469,7 @@
                     <table class="table table-striped table-hover" id="lostLeadsTable">
                         <thead class="table-dark">
                             <tr>
+                                <th>Action</th>
                                 <th>UID</th>
                                 <th>Customer Name</th>
                                 <th>Mobile</th>
@@ -476,7 +477,6 @@
                                 <th>CRE Name</th>
                                 <th>Branch</th>
                                 <th>Lost Date</th>
-                                <th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -485,6 +485,11 @@
                                 data-lost-date="{{ lead.lost_timestamp[:10] if lead.lost_timestamp else '' }}"
                                 data-lost-timestamp="{{ lead.lost_timestamp or '' }}"
                                 data-search="{{ (lead.lead_uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.cre_name or '') + ' ' + (lead.model_interested or ''))|lower }}">
+                                <td>
+                                    <a href="{{ url_for('update_ps_lead', uid=lead.lead_uid) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-edit"></i> View
+                                    </a>
+                                </td>
                                 <td><span class="badge bg-primary">{{ lead.lead_uid }}</span></td>
                                 <td>{{ lead.customer_name }}</td>
                                 <td>{{ lead.customer_mobile_number }}</td>
@@ -497,11 +502,6 @@
                                     {% else %}
                                         <span class="badge bg-secondary">N/A</span>
                                     {% endif %}
-                                </td>
-                                <td>
-                                    <a href="{{ url_for('update_ps_lead', uid=lead.lead_uid) }}" class="btn btn-sm btn-outline-primary">
-                                        <i class="fas fa-edit"></i> View
-                                    </a>
                                 </td>
                             </tr>
                             {% endfor %}
