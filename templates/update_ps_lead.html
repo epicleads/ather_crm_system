@@ -109,6 +109,27 @@
             <div class="row mb-4">
                 <div class="col-md-6">
                     <div class="mb-3">
+                        <label class="form-label">Model Interested</label>
+                        <select class="form-select" name="model_interested" id="model_interested" required>
+                            <option value="{{ lead.model_interested }}">{{ lead.model_interested or 'Select Model' }}</option>
+                            <option value="Rizta S Mono (2.9 kWh)">Rizta S Mono (2.9 kWh)</option>
+                            <option value="Rizta S Super Matte (2.9 kWh)">Rizta S Super Matte (2.9 kWh)</option>
+                            <option value="Rizta Z Mono (2.9 kWh)">Rizta Z Mono (2.9 kWh)</option>
+                            <option value="Rizta Z Duo (2.9 kWh)">Rizta Z Duo (2.9 kWh)</option>
+                            <option value="Rizta Z Super Matte (2.9 kWh)">Rizta Z Super Matte (2.9 kWh)</option>
+                            <option value="Rizta Z Mono (3.7 kWh)">Rizta Z Mono (3.7 kWh)</option>
+                            <option value="Rizta Z Duo (3.7 kWh)">Rizta Z Duo (3.7 kWh)</option>
+                            <option value="Rizta Z Super Matte (3.7 kWh)">Rizta Z Super Matte (3.7 kWh)</option>
+                            <option value="450 X (2.9 kWh)">450 X (2.9 kWh)</option>
+                            <option value="450 X (3.7 kWh)">450 X (3.7 kWh)</option>
+                            <option value="450 X (2.9 kWh) Pro Pack">450 X (2.9 kWh) Pro Pack</option>
+                            <option value="450 X (3.7 kWh) Pro Pack">450 X (3.7 kWh) Pro Pack</option>
+                            <option value="450 Apex STD">450 Apex STD</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
                         <label class="form-label">Lead Status</label>
                         <select class="form-select" name="lead_status" id="lead_status" required>
                             <option value="">Select Status</option>
@@ -125,6 +146,9 @@
                         </select>
                     </div>
                 </div>
+            </div>
+
+            <div class="row mb-4">
                 <div class="col-md-6">
                     <div class="mb-3">
                         <label class="form-label">PS Branch</label>

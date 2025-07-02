@@ -1842,6 +1842,14 @@ def update_ps_lead(uid):
                 elif final_status == 'Lost':
                     update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
+            # Sync lead_category and model_interested to lead_master if updated
+            lead_category = request.form.get('lead_category')
+            model_interested = request.form.get('model_interested')
+            if lead_category:
+                update_data['lead_category'] = lead_category
+            if model_interested:
+                update_data['model_interested'] = model_interested
+
             # Handle call dates and remarks for the next available call
             if request.form.get('call_date'):
                 update_data[f'{next_call}_call_date'] = request.form['call_date']
@@ -1863,14 +1871,20 @@ def update_ps_lead(uid):
                     supabase.table('ps_followup_master').update(update_data).eq('lead_uid', uid).execute()
 
                     # Also update the main lead table final status
+                    main_update_data = {}
                     if request.form.get('final_status'):
                         final_status = request.form['final_status']
-                        main_update_data = {'final_status': final_status}
+                        main_update_data['final_status'] = final_status
                         if final_status == 'Won':
                             main_update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                         elif final_status == 'Lost':
                             main_update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
+                    # Sync lead_category and model_interested to lead_master if updated
+                    if lead_category:
+                        main_update_data['lead_category'] = lead_category
+                    if model_interested:
+                        main_update_data['model_interested'] = model_interested
+                    if main_update_data:
                         supabase.table('lead_master').update(main_update_data).eq('uid', uid).execute()
 
                     # Log PS lead update
