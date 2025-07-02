@@ -1208,62 +1208,23 @@ def add_ps():
 @app.route('/manage_cre', methods=['GET', 'POST'])
 @require_admin
 def manage_cre():
-    cre_guide_bucket = 'cre-guides'
-    cre_guide_filename = 'cre_guide.pdf'
-    cre_guide_url = None
+    cre_guide_path = os.path.join(app.config['UPLOAD_FOLDER'], 'cre_guide.pdf')
+    cre_guide_exists = os.path.exists(cre_guide_path)
     if request.method == 'POST':
         if 'cre_guide_pdf' in request.files:
             file = request.files['cre_guide_pdf']
-            if file and file.filename and file.filename.lower().endswith('.pdf'):
-                file_content = file.read()
-                # Upload to Supabase Storage (overwrite)
-                supabase.storage.from_(cre_guide_bucket).upload(
-                    cre_guide_filename,
-                    file_content
-                )
-                cre_guide_url = supabase.storage.from_(cre_guide_bucket).get_public_url(cre_guide_filename)
+            if file and file.filename.lower().endswith('.pdf'):
+                file.save(cre_guide_path)
                 flash('CRE Guide PDF uploaded successfully!', 'success')
+                cre_guide_exists = True
             else:
                 flash('Please upload a valid PDF file.', 'error')
-    # Get the public URL if file exists
-    if not cre_guide_url:
-        cre_guide_url = supabase.storage.from_(cre_guide_bucket).get_public_url(cre_guide_filename)
     try:
         cre_users = safe_get_data('cre_users')
-        return render_template('manage_cre.html', cre_users=cre_users, cre_guide_url=cre_guide_url)
+        return render_template('manage_cre.html', cre_users=cre_users, cre_guide_exists=cre_guide_exists)
     except Exception as e:
         flash(f'Error loading CRE users: {str(e)}', 'error')
-        return render_template('manage_cre.html', cre_users=[], cre_guide_url=cre_guide_url)
-
-@app.route('/manage_ps', methods=['GET', 'POST'])
-@require_admin
-def manage_ps():
-    ps_guide_bucket = 'ps-guides'
-    ps_guide_filename = 'ps_guide.pdf'
-    ps_guide_url = None
-    if request.method == 'POST':
-        if 'ps_guide_pdf' in request.files:
-            file = request.files['ps_guide_pdf']
-            if file and file.filename and file.filename.lower().endswith('.pdf'):
-                file_content = file.read()
-                # Upload to Supabase Storage (overwrite)
-                supabase.storage.from_(ps_guide_bucket).upload(
-                    ps_guide_filename,
-                    file_content
-                )
-                ps_guide_url = supabase.storage.from_(ps_guide_bucket).get_public_url(ps_guide_filename)
-                flash('PS Guide PDF uploaded successfully!', 'success')
-            else:
-                flash('Please upload a valid PDF file.', 'error')
-    # Get the public URL if file exists
-    if not ps_guide_url:
-        ps_guide_url = supabase.storage.from_(ps_guide_bucket).get_public_url(ps_guide_filename)
-    try:
-        ps_users = safe_get_data('ps_users')
-        return render_template('manage_ps.html', ps_users=ps_users, ps_guide_url=ps_guide_url)
-    except Exception as e:
-        flash(f'Error loading PS users: {str(e)}', 'error')
-        return render_template('manage_ps.html', ps_users=[], ps_guide_url=ps_guide_url)
+        return render_template('manage_cre.html', cre_users=[], cre_guide_exists=cre_guide_exists)
 
 
 @app.route('/cre_guide_pdf')
@@ -1274,6 +1235,28 @@ def cre_guide_pdf():
         return send_file(pdf_path, mimetype='application/pdf')
     else:
         return 'No CRE Guide PDF uploaded.', 404
+
+
+@app.route('/manage_ps', methods=['GET', 'POST'])
+@require_admin
+def manage_ps():
+    ps_guide_path = os.path.join(app.config['UPLOAD_FOLDER'], 'ps_guide.pdf')
+    ps_guide_exists = os.path.exists(ps_guide_path)
+    if request.method == 'POST':
+        if 'ps_guide_pdf' in request.files:
+            file = request.files['ps_guide_pdf']
+            if file and file.filename.lower().endswith('.pdf'):
+                file.save(ps_guide_path)
+                flash('PS Guide PDF uploaded successfully!', 'success')
+                ps_guide_exists = True
+            else:
+                flash('Please upload a valid PDF file.', 'error')
+    try:
+        ps_users = safe_get_data('ps_users')
+        return render_template('manage_ps.html', ps_users=ps_users, ps_guide_exists=ps_guide_exists)
+    except Exception as e:
+        flash(f'Error loading PS users: {str(e)}', 'error')
+        return render_template('manage_ps.html', ps_users=[], ps_guide_exists=ps_guide_exists)
 
 
 @app.route('/ps_guide_pdf')

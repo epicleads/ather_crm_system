@@ -24,8 +24,8 @@
     <form action="{{ url_for('manage_ps') }}" method="post" enctype="multipart/form-data" class="d-flex align-items-center gap-3">
       <input type="file" name="ps_guide_pdf" accept="application/pdf" required class="form-control" style="max-width:300px;">
       <button type="submit" class="btn btn-primary btn-sm">Upload</button>
-      {% if ps_guide_url %}
-        <a href="{{ ps_guide_url }}" target="_blank" class="btn btn-outline-success btn-sm">View Current PS Guide PDF</a>
+      {% if ps_guide_exists %}
+        <a href="{{ url_for('ps_guide_pdf') }}" target="_blank" class="btn btn-outline-success btn-sm">View Current PS Guide PDF</a>
       {% endif %}
     </form>
     <small class="text-muted">This PDF will be shown as a quick reference overlay to all PSs in their update lead page.</small>
