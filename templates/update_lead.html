@@ -435,6 +435,12 @@
     </div>
 </div>
 
+<!-- CRE Guide Hover Zone and Overlay -->
+{% if cre_guide_url %}
+<div id="cre-guide-hover-zone" style="position:fixed;top:0;right:0;width:60px;height:60px;z-index:9999;cursor:pointer;"></div>
+<div id="cre-guide-overlay" style="display:none;position:fixed;top:0;right:0;width:50vw;height:100vh;background:rgba(0,0,0,0.7);z-index:10000;box-shadow:-2px 0 8px rgba(0,0,0,0.2);">
+  <embed src="{{ cre_guide_url }}" type="application/pdf" style="width:100%;height:100%;border:none;background:#fff;" />
+</div>
 <script>
 // Define model arrays
 const riztaModels = [
@@ -839,6 +845,14 @@ document.addEventListener('DOMContentLoaded', function() {
             submitBtn.disabled = false;
         }, 10000);
     });
+
+    const hoverZone = document.getElementById('cre-guide-hover-zone');
+    const overlay = document.getElementById('cre-guide-overlay');
+    if (hoverZone && overlay) {
+        hoverZone.addEventListener('mouseenter', () => { overlay.style.display = 'block'; });
+        overlay.addEventListener('mouseleave', () => { overlay.style.display = 'none'; });
+    }
 });
 </script>
+{% endif %}
 {% endblock %}

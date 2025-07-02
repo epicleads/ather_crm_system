@@ -17,6 +17,21 @@
     </div>
 </div>
 
+<!-- PS Guide PDF Upload Section -->
+<div class="card mb-4">
+  <div class="card-body">
+    <h5 class="card-title">Upload PS Guide PDF (Global for all PSs)</h5>
+    <form action="{{ url_for('manage_ps') }}" method="post" enctype="multipart/form-data" class="d-flex align-items-center gap-3">
+      <input type="file" name="ps_guide_pdf" accept="application/pdf" required class="form-control" style="max-width:300px;">
+      <button type="submit" class="btn btn-primary btn-sm">Upload</button>
+      {% if ps_guide_url %}
+        <a href="{{ ps_guide_url }}" target="_blank" class="btn btn-outline-success btn-sm">View Current PS Guide PDF</a>
+      {% endif %}
+    </form>
+    <small class="text-muted">This PDF will be shown as a quick reference overlay to all PSs in their update lead page.</small>
+  </div>
+</div>
+
 <div class="card">
     <div class="card-header">
         <h5 class="mb-0"><i class="fas fa-list"></i> Product Specialists ({{ ps_users|length }})</h5>
