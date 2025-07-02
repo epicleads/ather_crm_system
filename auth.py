@@ -595,7 +595,7 @@ def require_auth(user_types=None):
                 return redirect(url_for('index'))
 
             # Validate session
-            auth_manager = current_app.auth_manager
+            auth_manager = current_app.config['AUTH_MANAGER']
             if not auth_manager.validate_session(session['session_id']):
                 session.clear()
                 flash('Your session has expired. Please log in again', 'error')
