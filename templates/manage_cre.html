@@ -24,8 +24,8 @@
     <form action="{{ url_for('manage_cre') }}" method="post" enctype="multipart/form-data" class="d-flex align-items-center gap-3">
       <input type="file" name="cre_guide_pdf" accept="application/pdf" required class="form-control" style="max-width:300px;">
       <button type="submit" class="btn btn-primary btn-sm">Upload</button>
-      {% if cre_guide_url %}
-        <a href="{{ cre_guide_url }}" target="_blank" class="btn btn-outline-success btn-sm">View Current CRE Guide PDF</a>
+      {% if cre_guide_exists %}
+        <a href="{{ url_for('cre_guide_pdf') }}" target="_blank" class="btn btn-outline-success btn-sm">View Current CRE Guide PDF</a>
       {% endif %}
     </form>
     <small class="text-muted">This PDF will be shown as a quick reference overlay to all CREs in their update lead page.</small>
