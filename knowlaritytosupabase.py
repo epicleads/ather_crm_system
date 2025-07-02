@@ -16,13 +16,14 @@ KNOW_X_API_KEY = os.getenv("KNOW_X_API_KEY")
 number_to_source = {
     '+918929841338': 'Meta(KNOW)',
     '+917353089911': 'Google(KNOW)',
-    '+919513249906': 'BTL(KNOW)',
-    '+918071023606': 'BTL(KNOW)'
+    '+919513249906': 'KNOW',
+    '+918071023606': 'KNOW'
 }
 
 def generate_uid(source, mobile_number, sequence):
-    source_map = {'Google': 'G', 'Meta': 'M', 'Affiliate': 'A', 'Know': 'K', 'Whatsapp': 'W', 'Tele': 'T', 'BTL': 'B'}
-    source_char = source_map.get(source, 'X')
+    source_map = {'Google': 'G', 'Meta': 'M', 'Affiliate': 'A', 'Know': 'K', 'KNOW': 'K', 'Whatsapp': 'W', 'Tele': 'T', 'BTL': 'B'}
+    source_key = source.strip().capitalize() if source else 'X'
+    source_char = source_map.get(source_key, 'X')
     sequence_char = chr(65 + (sequence % 26))
     mobile_last4 = str(mobile_number).replace(" ", "").replace("-", "")[-4:].zfill(4)
     seq_num = f"{(sequence % 9999) + 1:04d}"
