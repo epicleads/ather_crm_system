@@ -2654,16 +2654,27 @@ def view_walkin_customers():
 @require_admin
 def analytics():
     try:
-        # Get filter period from query parameter
+        # Get filter period or custom date range from query parameter
         period = request.args.get('period', '30')
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
 
-        # Calculate date range
         today = datetime.now().date()
-        if period == 'all':
+        start_date = None
+        end_date = None
+        if start_date_str and end_date_str:
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            except Exception:
+                start_date = None
+                end_date = None
+        elif period == 'all':
             start_date = None
         else:
             days = int(period) if period.isdigit() else 30
             start_date = today - timedelta(days=days)
+            end_date = today
 
         # Get all data
         all_leads = safe_get_data('lead_master')
@@ -2672,26 +2683,29 @@ def analytics():
         ps_followups = safe_get_data('ps_followup_master')
 
         # Filter leads by date if needed
-        if start_date:
-            filtered_leads = []
-            for lead in all_leads:
-                lead_date_str = lead.get('created_at') or lead.get('date')
-                if lead_date_str:
-                    try:
-                        if 'T' in lead_date_str:
-                            lead_date = datetime.fromisoformat(lead_date_str.replace('Z', '+00:00')).date()
-                        else:
-                            lead_date = datetime.strptime(lead_date_str, '%Y-%m-%d').date()
-
-                        if lead_date >= start_date:
-                            filtered_leads.append(lead)
-                    except (ValueError, TypeError):
+        filtered_leads = []
+        for lead in all_leads:
+            lead_date_str = lead.get('created_at') or lead.get('date')
+            if lead_date_str:
+                try:
+                    if 'T' in lead_date_str:
+                        lead_date = datetime.fromisoformat(lead_date_str.replace('Z', '+00:00')).date()
+                    else:
+                        lead_date = datetime.strptime(lead_date_str, '%Y-%m-%d').date()
+                except (ValueError, TypeError):
+                    filtered_leads.append(lead)
+                    continue
+                if start_date and end_date:
+                    if start_date <= lead_date <= end_date:
+                        filtered_leads.append(lead)
+                elif start_date:
+                    if lead_date >= start_date:
                         filtered_leads.append(lead)
                 else:
                     filtered_leads.append(lead)
-            leads = filtered_leads
-        else:
-            leads = all_leads
+            else:
+                filtered_leads.append(lead)
+        leads = filtered_leads
 
         # Calculate KPIs
         total_leads = len(leads)
@@ -2708,7 +2722,6 @@ def analytics():
                     response_times.append((call_date - lead_date).days)
                 except (ValueError, TypeError):
                     continue
-
         avg_response_time = f"{round(sum(response_times) / len(response_times), 1)} days" if response_times else "N/A"
 
         # Active CREs (CREs with leads assigned)
@@ -2729,15 +2742,25 @@ def analytics():
             trend_data.append(count)
             trend_labels.append(date.strftime('%m/%d'))
 
-        # Top performing CREs
-        cre_performance = defaultdict(lambda: {'total': 0, 'won': 0, 'calls': []})
+        # Top performing CREs with new parameters
+        cre_performance = defaultdict(lambda: {'total': 0, 'hot': 0, 'warm': 0, 'cold': 0, 'won': 0, 'lost': 0, 'calls': []})
         for lead in leads:
             cre_name = lead.get('cre_name')
             if cre_name:
                 cre_performance[cre_name]['total'] += 1
-                if lead.get('final_status') == 'Won':
+                # Hot/Warm/Cold by lead_category
+                category = (lead.get('lead_category') or '').strip().lower()
+                if category == 'hot':
+                    cre_performance[cre_name]['hot'] += 1
+                elif category == 'warm':
+                    cre_performance[cre_name]['warm'] += 1
+                elif category == 'cold':
+                    cre_performance[cre_name]['cold'] += 1
+                # Won/Lost by final_status
+                if (lead.get('final_status') or '').strip().lower() == 'won':
                     cre_performance[cre_name]['won'] += 1
-
+                elif (lead.get('final_status') or '').strip().lower() == 'lost':
+                    cre_performance[cre_name]['lost'] += 1
                 # Count calls made
                 call_count = 0
                 call_fields = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
@@ -2752,27 +2775,46 @@ def analytics():
             total_calls = sum(data['calls'])
             avg_calls = round(total_calls / len(data['calls']), 1) if data['calls'] else 0
             conversion_rate_cre = round((data['won'] / data['total'] * 100) if data['total'] > 0 else 0, 1)
-
             top_cres.append({
                 'name': cre_name,
                 'total_leads': data['total'],
+                'hot': data['hot'],
+                'warm': data['warm'],
+                'cold': data['cold'],
                 'won_leads': data['won'],
+                'lost_leads': data['lost'],
                 'conversion_rate': conversion_rate_cre,
                 'avg_calls': avg_calls
             })
-
         # Sort by won leads and take top 5
         top_cres = sorted(top_cres, key=lambda x: x['won_leads'], reverse=True)[:5]
 
-        # Lead categories
-        category_counts = Counter([l.get('lead_category', 'Not specified') for l in leads])
+        # Lead categories (add Won and Lost as categories)
+        category_counts = Counter([l.get('lead_category', 'None') for l in leads])
+        won_count = len([l for l in leads if (l.get('final_status') or '').strip().lower() == 'won'])
+        lost_count = len([l for l in leads if (l.get('final_status') or '').strip().lower() == 'lost'])
+        total_leads = len(leads)
         lead_categories = []
+        # Add regular categories
         for category, count in category_counts.items():
             percentage = round((count / total_leads * 100) if total_leads > 0 else 0, 1)
             lead_categories.append({
                 'name': category,
                 'count': count,
                 'percentage': percentage
+            })
+        # Add Won and Lost as categories
+        if won_count > 0:
+            lead_categories.append({
+                'name': 'Won',
+                'count': won_count,
+                'percentage': round((won_count / total_leads * 100) if total_leads > 0 else 0, 1)
+            })
+        if lost_count > 0:
+            lead_categories.append({
+                'name': 'Lost',
+                'count': lost_count,
+                'percentage': round((lost_count / total_leads * 100) if total_leads > 0 else 0, 1)
             })
 
         # Model interest
@@ -2789,15 +2831,12 @@ def analytics():
         # Branch performance
         branch_performance = []
         branches = set([ps.get('branch') for ps in all_ps if ps.get('branch')])
-
         for branch in branches:
             branch_ps = [ps for ps in all_ps if ps.get('branch') == branch]
             ps_names = [ps['name'] for ps in branch_ps]
-
             branch_leads = [l for l in leads if l.get('ps_name') in ps_names]
             branch_won = len([l for l in branch_leads if l.get('final_status') == 'Won'])
             success_rate = round((branch_won / len(branch_leads) * 100) if branch_leads else 0, 1)
-
             branch_performance.append({
                 'name': branch,
                 'ps_count': len(branch_ps),
@@ -2810,7 +2849,6 @@ def analytics():
         assigned_cre = len([l for l in leads if l.get('cre_name')])
         first_call = len([l for l in leads if l.get('first_call_date')])
         assigned_ps = len([l for l in leads if l.get('ps_name')])
-
         funnel = {
             'total': total_leads,
             'assigned_cre': assigned_cre,
@@ -2843,7 +2881,7 @@ def analytics():
         ]
 
         # Calculate leads growth (mock calculation)
-        leads_growth = 15  # This would be calculated based on previous period
+        leads_growth = 15
 
         # Create analytics object that matches template expectations
         analytics = {
@@ -2871,7 +2909,7 @@ def analytics():
             user_type=session.get('user_type'),
             action='ANALYTICS_ACCESS',
             resource='analytics',
-            details={'period': period}
+            details={'period': period, 'start_date': start_date_str, 'end_date': end_date_str}
         )
 
         return render_template('analytics.html', analytics=analytics)
@@ -2879,7 +2917,6 @@ def analytics():
     except Exception as e:
         print(f"Error in analytics: {e}")
         flash(f'Error loading analytics: {str(e)}', 'error')
-
         # Return empty analytics object to prevent template errors
         empty_analytics = {
             'total_leads': 0,
@@ -2909,7 +2946,6 @@ def analytics():
             },
             'recent_activities': []
         }
-
         return render_template('analytics.html', analytics=empty_analytics)
 
 
@@ -3632,6 +3668,165 @@ def resend_quotation_email(uid):
             'success': False,
             'message': f'Error resending email: {str(e)}'
         })
+
+@app.route('/source_analysis_data')
+@require_admin
+def source_analysis_data():
+    try:
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
+        today = datetime.now().date()
+        start_date = None
+        end_date = None
+        if start_date_str and end_date_str:
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            except Exception:
+                start_date = None
+                end_date = None
+        sources = [
+            'Google (KNOW)', 'Google', 'Meta(KNOW)', 'Know', 'OEM Web', 'OEM Tele',
+            'Affiliate Bikewale', 'Affiliate 91wheels', 'Affiliate Bikedekho',
+            'BTL (KNOW)', 'Meta'
+        ]
+        all_leads = safe_get_data('lead_master')
+        all_followups = safe_get_data('ps_followup_master')
+        def in_date_range(lead):
+            lead_date_str = lead.get('created_at') or lead.get('date')
+            if not lead_date_str:
+                return True
+            try:
+                if 'T' in lead_date_str:
+                    lead_date = datetime.fromisoformat(lead_date_str.replace('Z', '+00:00')).date()
+                else:
+                    lead_date = datetime.strptime(lead_date_str, '%Y-%m-%d').date()
+            except Exception:
+                return True
+            if start_date and end_date:
+                return start_date <= lead_date <= end_date
+            elif start_date:
+                return lead_date >= start_date
+            else:
+                return True
+        leads = [l for l in all_leads if in_date_range(l)]
+        data = {}
+        for source in sources:
+            data[source] = {
+                'calls_allocated': 0,
+                'calls_attempted': 0,
+                'calls_connected': 0,
+                'pending_total': 0,
+                'pending_interested': 0,
+                'pending_hot': 0,
+                'pending_warm': 0,
+                'pending_cold': 0,
+                'pending_callback': 0,
+                'pending_rnr': 0,
+                'pending_disconnected': 0,
+                'closed_lost_total': 0,
+                'closed_lost_competition': 0,
+                'closed_lost_not_interested': 0,
+                'closed_lost_did_not_enquire': 0,
+                'closed_lost_wrong_lead': 0,
+                'closed_lost_rnr_lost': 0,
+                'closed_lost_finance_reject': 0,
+                'closed_lost_co_dealer': 0,
+                'sales_pipeline_total': 0,
+                'call_progress': {},
+                'latest_remark': '',
+            }
+        def get_source(lead):
+            s = lead.get('source', '').strip()
+            for src in sources:
+                if s.lower() == src.lower():
+                    return src
+            for src in sources:
+                if src.lower() in s.lower():
+                    return src
+            return None
+        for lead in leads:
+            src = get_source(lead)
+            if not src:
+                continue
+            data[src]['calls_allocated'] += 1
+            attempted = any(lead.get(f'{c}_call_date') for c in ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh'])
+            if attempted:
+                data[src]['calls_attempted'] += 1
+            call_statuses = [lead.get(f'{c}_call_status', '').lower() for c in ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']]
+            connected = any(s and s not in ['rnr', 'busy', 'busy on another call'] for s in call_statuses)
+            if connected:
+                data[src]['calls_connected'] += 1
+            status = (lead.get('lead_status') or '').strip().lower()
+            if status in ['interested', 'call back', 'rnr', 'call disconnected']:
+                data[src]['pending_total'] += 1
+                if status == 'interested':
+                    data[src]['pending_interested'] += 1
+                    cat = (lead.get('lead_category') or '').strip().lower()
+                    if cat == 'hot':
+                        data[src]['pending_hot'] += 1
+                    elif cat == 'warm':
+                        data[src]['pending_warm'] += 1
+                    elif cat == 'cold':
+                        data[src]['pending_cold'] += 1
+                elif status == 'call back':
+                    data[src]['pending_callback'] += 1
+                elif status == 'rnr':
+                    data[src]['pending_rnr'] += 1
+                elif status == 'call disconnected':
+                    data[src]['pending_disconnected'] += 1
+            # --- NEW LOGIC: Use latest follow-up for final_status and lead_status for lost reasons ---
+            uid = lead.get('uid')
+            latest_final_status = (lead.get('final_status') or '').strip().lower()
+            latest_lost_reason = (lead.get('lost_reason') or '').strip().lower()
+            latest_lead_status = (lead.get('lead_status') or '').strip().lower()
+            if uid:
+                followups = [f for f in all_followups if f.get('lead_uid') == uid]
+                if followups:
+                    latest_fu = max(followups, key=lambda f: f.get('created_at', ''))
+                    if latest_fu.get('final_status'):
+                        latest_final_status = latest_fu.get('final_status').strip().lower()
+                    if latest_fu.get('lost_reason'):
+                        latest_lost_reason = latest_fu.get('lost_reason').strip().lower()
+                    if latest_fu.get('lead_status'):
+                        latest_lead_status = latest_fu.get('lead_status').strip().lower()
+            # --- END NEW LOGIC ---
+            if latest_final_status == 'lost':
+                data[src]['closed_lost_total'] += 1
+                # Use lead_status for lost reason
+                if latest_lead_status == 'rnr-lost':
+                    data[src]['closed_lost_rnr_lost'] += 1
+                elif latest_lead_status == 'did not enquire':
+                    data[src]['closed_lost_did_not_enquire'] += 1
+                elif latest_lead_status == 'not interested':
+                    data[src]['closed_lost_not_interested'] += 1
+                elif latest_lead_status == 'lost to competition':
+                    data[src]['closed_lost_competition'] += 1
+                elif latest_lead_status == 'lost to co-dealer':
+                    data[src]['closed_lost_co_dealer'] += 1
+                elif latest_lead_status == 'finance rejected':
+                    data[src]['closed_lost_finance_reject'] += 1
+                elif latest_lead_status == 'wrong lead':
+                    data[src]['closed_lost_wrong_lead'] += 1
+            if latest_final_status == 'won':
+                data[src]['sales_pipeline_total'] += 1
+            call_progress = None
+            for idx, c in enumerate(['seventh', 'sixth', 'fifth', 'fourth', 'third', 'second', 'first']):
+                if lead.get(f'{c}_call_date'):
+                    call_progress = c.capitalize()
+                    break
+            if call_progress:
+                data[src]['call_progress'][lead.get('uid')] = call_progress
+            if uid:
+                followups = [f for f in all_followups if f.get('lead_uid') == uid]
+                if followups:
+                    latest = max(followups, key=lambda f: f.get('created_at', ''))
+                    data[src]['latest_remark'] = latest.get('remark', '')
+        total_row = {k: sum(data[src][k] for src in sources) if isinstance(data[sources[0]][k], int) else {} for k in data[sources[0]].keys()}
+        data['Total'] = total_row
+        return jsonify({'success': True, 'data': data})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)

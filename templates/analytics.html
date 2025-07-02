@@ -97,7 +97,10 @@
             margin-bottom: 1.5rem;
             box-shadow: var(--airbnb-shadow);
             border: 1px solid var(--airbnb-gray-200);
-            height: 350px;
+            height: 420px;
+            min-width: 520px;
+            max-width: 100%;
+            overflow-x: auto;
         }
 
         .table-container {
@@ -265,6 +268,330 @@
                 padding: 1rem;
             }
         }
+
+        /* Source Analysis Table Header Styling */
+        #source-analysis-table th, #source-analysis-table td {
+            border: 2px solid #e0e0e0 !important;
+            text-align: center;
+            vertical-align: middle;
+        }
+        #source-analysis-table th.pending-header, #source-analysis-table td.pending-cell {
+            background: #fffbe6 !important;
+            color: #b8860b;
+            font-weight: 600;
+        }
+        #source-analysis-table th.closedlost-header, #source-analysis-table td.closedlost-cell {
+            background: #ffeaea !important;
+            color: #c0392b;
+            font-weight: 600;
+        }
+        #source-analysis-table th.salespipeline-header, #source-analysis-table td.salespipeline-cell {
+            background: #eaffea !important;
+            color: #218838;
+            font-weight: 700;
+            transition: box-shadow 0.3s, transform 0.3s;
+        }
+        #source-analysis-table td.salespipeline-cell:hover {
+            box-shadow: 0 0 10px 2px #b6fcb6;
+            transform: scale(1.08);
+            background: linear-gradient(90deg, #eaffea 60%, #b6fcb6 100%);
+            cursor: pointer;
+        }
+        #source-analysis-table th {
+            font-size: 1rem;
+            background: #f8f9fa;
+        }
+        #source-analysis-table tr.total-row td {
+            background: #f7f7f7;
+            font-weight: bold;
+        }
+
+        /* Real-time animated effect for Sales Pipeline */
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(33, 136, 56, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(33, 136, 56, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(33, 136, 56, 0.4); }
+        }
+        #source-analysis-table td.salespipeline-cell {
+            position: relative;
+            animation: pulse-green 1.5s infinite;
+            z-index: 1;
+        }
+        #source-analysis-table td.salespipeline-cell:hover {
+            box-shadow: 0 0 20px 4px #b6fcb6, 0 0 0 8px #eaffea;
+            transform: scale(1.12) rotate(-2deg);
+            background: linear-gradient(90deg, #eaffea 60%, #b6fcb6 100%);
+            cursor: pointer;
+            animation: none;
+        }
+        /* Performance Table Theming and Animation */
+        #source-performance-table th.calls-allocated, #source-performance-table td.calls-allocated {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        #source-performance-table th.calls-attempted, #source-performance-table td.calls-attempted {
+            background: #e1f5fe;
+            color: #0288d1;
+        }
+        #source-performance-table th.calls-connected, #source-performance-table td.calls-connected {
+            background: #e0f7fa;
+            color: #0097a7;
+        }
+        #source-performance-table th.pending-perf, #source-performance-table td.pending-perf {
+            background: #fffbe6;
+            color: #b8860b;
+        }
+        #source-performance-table th.closedlost-perf, #source-performance-table td.closedlost-perf {
+            background: #ffeaea;
+            color: #c0392b;
+        }
+        #source-performance-table th.salespipeline-perf, #source-performance-table td.salespipeline-perf {
+            background: #eaffea;
+            color: #218838;
+            font-weight: 700;
+            position: relative;
+            transition: box-shadow 0.3s, transform 0.3s;
+        }
+        #source-performance-table td.salespipeline-perf:hover {
+            box-shadow: 0 0 20px 4px #b6fcb6, 0 0 0 8px #eaffea;
+            transform: scale(1.12) rotate(-2deg);
+            background: linear-gradient(90deg, #eaffea 60%, #b6fcb6 100%);
+            cursor: pointer;
+        }
+        /* Animated progress bar effect on hover for all % cells */
+        #source-performance-table td[data-pct]:hover::after {
+            content: '';
+            display: block;
+            position: absolute;
+            left: 0; top: 0; height: 100%;
+            background: rgba(33,136,56,0.08);
+            width: attr(data-pct '%');
+            z-index: 0;
+            border-radius: 8px;
+            animation: progress-bar-grow 0.7s ease-out;
+        }
+        @keyframes progress-bar-grow {
+            from { width: 0; }
+            to { width: 100%; }
+        }
+        #source-performance-table td {
+            position: relative;
+            overflow: hidden;
+        }
+        /* Compact total row */
+        #source-analysis-table tr.total-row td {
+            background: #f7f7f7;
+            font-weight: bold;
+            font-size: 0.95rem;
+            padding-top: 0.3rem;
+            padding-bottom: 0.3rem;
+        }
+        /* Combined cell styling for number + percent */
+        .metric-cell {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            font-weight: 500;
+            position: relative;
+            min-width: 70px;
+        }
+        .metric-number {
+            font-size: 1.1em;
+            font-weight: 600;
+        }
+        .metric-percent {
+            font-size: 0.95em;
+            font-weight: 400;
+            opacity: 0.85;
+            margin-top: 2px;
+            border-radius: 8px;
+            padding: 0 6px;
+            display: inline-block;
+            transition: background 0.3s;
+        }
+        /* Theming for each metric type */
+        .calls-allocated { background: #e3f2fd; color: #1976d2; }
+        .calls-attempted { background: #e1f5fe; color: #0288d1; }
+        .calls-connected { background: #e0f7fa; color: #0097a7; }
+        .pending-cell, .pending-perf { background: #fffbe6; color: #b8860b; }
+        .closedlost-cell, .closedlost-perf { background: #ffeaea; color: #c0392b; }
+        .salespipeline-cell, .salespipeline-perf {
+            background: #eaffea;
+            color: #218838;
+            font-weight: 700;
+            position: relative;
+            transition: box-shadow 0.3s, transform 0.3s;
+            animation: pulse-green 1.5s infinite;
+        }
+        .salespipeline-cell:hover, .salespipeline-perf:hover {
+            box-shadow: 0 0 20px 4px #b6fcb6, 0 0 0 8px #eaffea;
+            transform: scale(1.12) rotate(-2deg);
+            background: linear-gradient(90deg, #eaffea 60%, #b6fcb6 100%);
+            cursor: pointer;
+            animation: none;
+        }
+        /* Animated progress bar effect on hover for all % cells */
+        .metric-cell[data-pct]:hover .metric-percent::after {
+            content: '';
+            display: block;
+            position: absolute;
+            left: 0; top: 50%; height: 60%;
+            background: rgba(33,136,56,0.08);
+            width: attr(data-pct '%');
+            z-index: 0;
+            border-radius: 8px;
+            animation: progress-bar-grow 0.7s ease-out;
+            transform: translateY(-50%);
+        }
+        @keyframes progress-bar-grow {
+            from { width: 0; }
+            to { width: 100%; }
+        }
+        #source-analysis-table th, #source-analysis-table td {
+            border: 2px solid #e0e0e0 !important;
+            text-align: center;
+            vertical-align: middle;
+            font-size: 1rem;
+        }
+        #source-analysis-table th {
+            font-size: 1rem;
+            background: #f8f9fa;
+        }
+        /* Restore classic table cell layout for numbers and percentages */
+        .metric-number-cell {
+            font-size: 1.1em;
+            font-weight: 600;
+            padding-bottom: 0;
+            border-bottom: none !important;
+        }
+        .metric-percent-cell {
+            font-size: 0.95em;
+            font-weight: 400;
+            opacity: 0.85;
+            border-top: none !important;
+            padding-top: 0;
+            border-radius: 8px;
+            transition: background 0.3s;
+        }
+        /* Theming for each metric type */
+        .calls-allocated { background: #e3f2fd; color: #1976d2; }
+        .calls-attempted { background: #e1f5fe; color: #0288d1; }
+        .calls-connected { background: #e0f7fa; color: #0097a7; }
+        .pending-cell, .pending-perf { background: #fffbe6; color: #b8860b; }
+        .closedlost-cell, .closedlost-perf { background: #ffeaea; color: #c0392b; }
+        .salespipeline-cell, .salespipeline-perf {
+            background: #eaffea;
+            color: #218838;
+            font-weight: 700;
+            position: relative;
+            transition: box-shadow 0.3s, transform 0.3s;
+            animation: pulse-green 1.5s infinite;
+        }
+        .salespipeline-cell:hover, .salespipeline-perf:hover {
+            box-shadow: 0 0 20px 4px #b6fcb6, 0 0 0 8px #eaffea;
+            transform: scale(1.12) rotate(-2deg);
+            background: linear-gradient(90deg, #eaffea 60%, #b6fcb6 100%);
+            cursor: pointer;
+            animation: none;
+        }
+        /* Animated progress bar effect on hover for all % cells */
+        .metric-percent-cell[data-pct]:hover::after {
+            content: '';
+            display: block;
+            position: absolute;
+            left: 0; top: 50%; height: 60%;
+            background: rgba(33,136,56,0.08);
+            width: attr(data-pct '%');
+            z-index: 0;
+            border-radius: 8px;
+            animation: progress-bar-grow 0.7s ease-out;
+            transform: translateY(-50%);
+        }
+        @keyframes progress-bar-grow {
+            from { width: 0; }
+            to { width: 100%; }
+        }
+        #source-analysis-table th, #source-analysis-table td {
+            border: 2px solid #e0e0e0 !important;
+            text-align: center;
+            vertical-align: middle;
+            font-size: 1rem;
+        }
+        #source-analysis-table th {
+            font-size: 1rem;
+            background: #f8f9fa;
+        }
+        #source-analysis-table tr.total-row td {
+            background: #f7f7f7;
+            font-weight: bold;
+            font-size: 0.95rem;
+            padding-top: 0.3rem;
+            padding-bottom: 0.3rem;
+        }
+        /* Subcolumn header styling */
+        .sub-header {
+            font-size: 0.95em;
+            font-weight: 500;
+            color: #888;
+            background: #f4f4f4;
+            border-top: none !important;
+            border-bottom: 2px solid #e0e0e0 !important;
+        }
+        .calls-allocated { background: #e3f2fd; color: #1976d2; }
+        .calls-attempted { background: #e1f5fe; color: #0288d1; }
+        .calls-connected { background: #e0f7fa; color: #0097a7; }
+        .pending-cell, .pending-perf { background: #fffbe6; color: #b8860b; }
+        .closedlost-cell, .closedlost-perf { background: #ffeaea; color: #c0392b; }
+        .salespipeline-cell, .salespipeline-perf {
+            background: #eaffea;
+            color: #218838;
+            font-weight: 700;
+            position: relative;
+            transition: box-shadow 0.3s, transform 0.3s;
+            animation: pulse-green 1.5s infinite;
+        }
+        .salespipeline-cell:hover, .salespipeline-perf:hover {
+            box-shadow: 0 0 20px 4px #b6fcb6, 0 0 0 8px #eaffea;
+            transform: scale(1.12) rotate(-2deg);
+            background: linear-gradient(90deg, #eaffea 60%, #b6fcb6 100%);
+            cursor: pointer;
+            animation: none;
+        }
+        .metric-percent-cell[data-pct]:hover::after {
+            content: '';
+            display: block;
+            position: absolute;
+            left: 0; top: 50%; height: 60%;
+            background: rgba(33,136,56,0.08);
+            width: attr(data-pct '%');
+            z-index: 0;
+            border-radius: 8px;
+            animation: progress-bar-grow 0.7s ease-out;
+            transform: translateY(-50%);
+        }
+        @keyframes progress-bar-grow {
+            from { width: 0; }
+            to { width: 100%; }
+        }
+        #source-analysis-table th, #source-analysis-table td {
+            border: 2px solid #e0e0e0 !important;
+            text-align: center;
+            vertical-align: middle;
+            font-size: 1rem;
+        }
+        #source-analysis-table th {
+            font-size: 1rem;
+            background: #f8f9fa;
+        }
+        #source-analysis-table tr.total-row td {
+            background: #f7f7f7;
+            font-weight: bold;
+            font-size: 0.95rem;
+            padding-top: 0.3rem;
+            padding-bottom: 0.3rem;
+        }
     </style>
 </head>
 <body>
@@ -351,7 +678,7 @@
                     <h5 style="color: var(--airbnb-gray-700); font-weight: 600; margin-bottom: 1rem;">
                         <i class="fas fa-pie-chart" style="color: var(--airbnb-red);"></i> Lead Source
                     </h5>
-                    <canvas id="sourceChart" width="400" height="250"></canvas>
+                    <canvas id="sourceChart" width="600" height="350"></canvas>
                 </div>
             </div>
             <div class="col-md-6">
@@ -359,7 +686,7 @@
                     <h5 style="color: var(--airbnb-gray-700); font-weight: 600; margin-bottom: 1rem;">
                         <i class="fas fa-line-chart" style="color: var(--airbnb-red);"></i> Lead Trends
                     </h5>
-                    <canvas id="trendChart" width="400" height="250"></canvas>
+                    <canvas id="trendChart" width="600" height="350"></canvas>
                 </div>
             </div>
         </div>
@@ -368,16 +695,30 @@
         <div class="row">
             <div class="col-md-8">
                 <div class="table-container">
-                    <h5 style="color: var(--airbnb-gray-700); font-weight: 600; margin-bottom: 1rem;">
-                        <i class="fas fa-star" style="color: var(--airbnb-yellow);"></i> Top Performing CREs
-                    </h5>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 style="color: var(--airbnb-gray-700); font-weight: 600; margin-bottom: 0;">
+                            <i class="fas fa-star" style="color: var(--airbnb-yellow);"></i> Top Performing CREs
+                        </h5>
+                        <form class="d-flex align-items-center" method="get" action="{{ url_for('analytics') }}">
+                            <button type="button" class="btn btn-outline-secondary btn-sm me-2" onclick="window.location.href='{{ url_for('analytics', period='1') }}'">Reset</button>
+                            <label for="start_date" class="me-2 mb-0">From:</label>
+                            <input type="date" id="start_date" name="start_date" class="form-control form-control-sm me-2" value="{{ request.args.get('start_date', '') }}">
+                            <label for="end_date" class="me-2 mb-0">To:</label>
+                            <input type="date" id="end_date" name="end_date" class="form-control form-control-sm me-2" value="{{ request.args.get('end_date', '') }}">
+                            <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+                        </form>
+                    </div>
                     <div class="table-responsive">
                         <table class="table table-hover">
                             <thead>
                                 <tr>
                                     <th>CRE Name</th>
                                     <th>Total Leads</th>
-                                    <th>Won Leads</th>
+                                    <th>Hot</th>
+                                    <th>Warm</th>
+                                    <th>Cold</th>
+                                    <th>Won</th>
+                                    <th>Lost</th>
                                     <th>Conversion Rate</th>
                                     <th>Avg Calls</th>
                                 </tr>
@@ -387,7 +728,11 @@
                                 <tr>
                                     <td><strong>{{ cre.name }}</strong></td>
                                     <td>{{ cre.total_leads }}</td>
+                                    <td><span class="badge bg-danger">{{ cre.hot }}</span></td>
+                                    <td><span class="badge bg-warning text-dark">{{ cre.warm }}</span></td>
+                                    <td><span class="badge bg-info text-dark">{{ cre.cold }}</span></td>
                                     <td><span class="badge" style="background: var(--airbnb-green);">{{ cre.won_leads }}</span></td>
+                                    <td><span class="badge bg-secondary">{{ cre.lost_leads }}</span></td>
                                     <td>
                                         <div class="progress" style="height: 20px;">
                                             <div class="progress-bar" style="width: {{ cre.conversion_rate }}%; background: var(--airbnb-red);">
@@ -480,13 +825,19 @@
             <div class="col-md-6">
                 <div class="table-container">
                     <h5 style="color: var(--airbnb-gray-700); font-weight: 600; margin-bottom: 1rem;">
-                        <i class="fas fa-tags" style="color: var(--airbnb-yellow);"></i> Lead Categories
+                        <i class="fas fa-tags" style="color: var(--airbnb-yellow);"></i> Lead Analysis
                     </h5>
                     {% for category in analytics.lead_categories %}
                     <div class="d-flex justify-content-between align-items-center mb-2 p-2" style="background: var(--airbnb-gray-100); border-radius: var(--airbnb-border-radius);">
                         <span style="font-weight: 500;">{{ category.name }}</span>
                         <div>
-                            <span class="badge" style="background: var(--airbnb-gray-500); margin-right: 0.5rem;">{{ category.count }}</span>
+                            {% if category.name == 'Won' %}
+                                <span class="badge" style="background: var(--airbnb-green); margin-right: 0.5rem;">{{ category.count }}</span>
+                            {% elif category.name == 'Lost' %}
+                                <span class="badge" style="background: var(--airbnb-red); margin-right: 0.5rem;">{{ category.count }}</span>
+                            {% else %}
+                                <span class="badge" style="background: var(--airbnb-gray-500); margin-right: 0.5rem;">{{ category.count }}</span>
+                            {% endif %}
                             <span style="color: var(--airbnb-gray-500);">{{ category.percentage }}%</span>
                         </div>
                     </div>
@@ -524,6 +875,75 @@
             </div>
             {% endfor %}
         </div>
+
+        <!-- Source Analysis Table with subcolumns for Total and % -->
+        <div class="table-container mt-5" id="source-analysis-section">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 style="color: var(--airbnb-blue); font-weight: 600; margin-bottom: 0;">
+                    <i class="fas fa-chart-bar" style="color: var(--airbnb-blue);"></i> Source Analysis
+                </h5>
+                <form class="d-flex align-items-center" id="source-analysis-date-form" onsubmit="return false;">
+                    <label for="sa_start_date" class="me-2 mb-0">From:</label>
+                    <input type="date" id="sa_start_date" name="start_date" class="form-control form-control-sm me-2">
+                    <label for="sa_end_date" class="me-2 mb-0">To:</label>
+                    <input type="date" id="sa_end_date" name="end_date" class="form-control form-control-sm me-2">
+                    <button type="button" class="btn btn-primary btn-sm" onclick="fetchSourceAnalysis()">Apply</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm ms-2" onclick="resetSourceAnalysis()">Reset</button>
+                </form>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-bordered" id="source-analysis-table">
+                    <thead>
+                        <tr>
+                            <th rowspan="2">Source</th>
+                            <th colspan="2" class="calls-allocated">Calls Allocated</th>
+                            <th colspan="2" class="calls-attempted">Calls Attempted</th>
+                            <th colspan="2" class="calls-connected">Calls Connected</th>
+                            <th colspan="10" class="pending-header">Pending</th>
+                            <th colspan="14" class="closedlost-header">Closed-Lost</th>
+                            <th colspan="2" class="salespipeline-header">Sales Pipeline</th>
+                        </tr>
+                        <tr>
+                            <th class="sub-header calls-allocated">Total</th>
+                            <th class="sub-header calls-allocated">%</th>
+                            <th class="sub-header calls-attempted">Total</th>
+                            <th class="sub-header calls-attempted">%</th>
+                            <th class="sub-header calls-connected">Total</th>
+                            <th class="sub-header calls-connected">%</th>
+                            <th class="sub-header pending-header">Interested</th>
+                            <th class="sub-header pending-header">%</th>
+                            <th class="sub-header pending-header">Hot</th>
+                            <th class="sub-header pending-header">%</th>
+                            <th class="sub-header pending-header">Warm</th>
+                            <th class="sub-header pending-header">%</th>
+                            <th class="sub-header pending-header">Cold</th>
+                            <th class="sub-header pending-header">%</th>
+                            <th class="sub-header pending-header">Call Back</th>
+                            <th class="sub-header pending-header">%</th>
+                            <th class="sub-header closedlost-header">Lost to Competition</th>
+                            <th class="sub-header closedlost-header">%</th>
+                            <th class="sub-header closedlost-header">Not Interested</th>
+                            <th class="sub-header closedlost-header">%</th>
+                            <th class="sub-header closedlost-header">Did Not Enquire</th>
+                            <th class="sub-header closedlost-header">%</th>
+                            <th class="sub-header closedlost-header">Wrong Lead</th>
+                            <th class="sub-header closedlost-header">%</th>
+                            <th class="sub-header closedlost-header">RNR-LOST</th>
+                            <th class="sub-header closedlost-header">%</th>
+                            <th class="sub-header closedlost-header">Finance Reject</th>
+                            <th class="sub-header closedlost-header">%</th>
+                            <th class="sub-header closedlost-header">Co-Dealer</th>
+                            <th class="sub-header closedlost-header">%</th>
+                            <th class="sub-header salespipeline-header">Total</th>
+                            <th class="sub-header salespipeline-header">%</th>
+                        </tr>
+                    </thead>
+                    <tbody id="source-analysis-tbody">
+                        <tr><td colspan="34" class="text-center">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
     <!-- Branch Details Modal -->
@@ -555,13 +975,22 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Source Distribution Pie Chart
+        // Define metricCell function at the top so it's always available
+        function metricCell(val, pct, cls) {
+            return `<div class='metric-cell ${cls}' data-pct='${pct}'>
+                <span class='metric-number'>${val}</span>
+                <span class='metric-percent'>${pct}%</span>
+            </div>`;
+        }
+
+        // Source Distribution Bar Chart
         const sourceCtx = document.getElementById('sourceChart').getContext('2d');
         new Chart(sourceCtx, {
-            type: 'pie',
+            type: 'bar',
             data: {
                 labels: {{ analytics.source_labels | tojsonfilter | safe }},
                 datasets: [{
+                    label: 'Leads',
                     data: {{ analytics.source_data | tojsonfilter | safe }},
                     backgroundColor: [
                         '#FF385C', '#00A699', '#FFB400', '#007A87',
@@ -574,13 +1003,28 @@
                 maintainAspectRatio: false,
                 plugins: {
                     legend: {
-                        position: 'bottom',
-                        labels: {
-                            boxWidth: 12,
-                            padding: 15,
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(0,0,0,0.1)'
+                        },
+                        ticks: {
                             font: {
-                                family: 'Lexend',
-                                size: 12
+                                family: 'Lexend'
+                            }
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: 'rgba(0,0,0,0.1)'
+                        },
+                        ticks: {
+                            font: {
+                                family: 'Lexend'
                             }
                         }
                     }
@@ -796,6 +1240,122 @@
                 </div>
             `;
         }
+
+        function metricNumberCell(val, cls) {
+            return `<td class='metric-number-cell ${cls}'>${val}</td>`;
+        }
+        function metricPercentCell(pct, cls) {
+            return `<td class='metric-percent-cell ${cls}' data-pct='${pct}'>${pct}%</td>`;
+        }
+
+        function fetchSourceAnalysis() {
+            const start = document.getElementById('sa_start_date').value;
+            const end = document.getElementById('sa_end_date').value;
+            let url = '/source_analysis_data';
+            if (start && end) {
+                url += `?start_date=${start}&end_date=${end}`;
+            }
+            fetch(url)
+                .then(res => res.json())
+                .then(res => {
+                    if (!res.success) {
+                        document.getElementById('source-analysis-tbody').innerHTML = `<tr><td colspan='34' class='text-center'>${res.message}</td></tr>`;
+                        return;
+                    }
+                    const data = res.data;
+                    const sources = Object.keys(data).filter(s => s !== 'Total');
+                    let html = '';
+                    const t = data['Total'];
+                    const total = t.calls_allocated || 1;
+                    sources.forEach(src => {
+                        const d = data[src];
+                        html += `<tr>
+                            <td>${src}</td>
+                            ${metricNumberCell(d.calls_allocated, 'calls-allocated')}
+                            ${metricPercentCell(((d.calls_allocated/total)*100).toFixed(1), 'calls-allocated')}
+                            ${metricNumberCell(d.calls_attempted, 'calls-attempted')}
+                            ${metricPercentCell(((d.calls_attempted/total)*100).toFixed(1), 'calls-attempted')}
+                            ${metricNumberCell(d.calls_connected, 'calls-connected')}
+                            ${metricPercentCell(((d.calls_connected/total)*100).toFixed(1), 'calls-connected')}
+                            ${metricNumberCell(d.pending_interested, 'pending-cell')}
+                            ${metricPercentCell(((d.pending_interested/total)*100).toFixed(1), 'pending-cell')}
+                            ${metricNumberCell(d.pending_hot, 'pending-cell')}
+                            ${metricPercentCell(((d.pending_hot/total)*100).toFixed(1), 'pending-cell')}
+                            ${metricNumberCell(d.pending_warm, 'pending-cell')}
+                            ${metricPercentCell(((d.pending_warm/total)*100).toFixed(1), 'pending-cell')}
+                            ${metricNumberCell(d.pending_cold, 'pending-cell')}
+                            ${metricPercentCell(((d.pending_cold/total)*100).toFixed(1), 'pending-cell')}
+                            ${metricNumberCell(d.pending_callback, 'pending-cell')}
+                            ${metricPercentCell(((d.pending_callback/total)*100).toFixed(1), 'pending-cell')}
+                            ${metricNumberCell(d.closed_lost_competition, 'closedlost-cell')}
+                            ${metricPercentCell(((d.closed_lost_competition/total)*100).toFixed(1), 'closedlost-cell')}
+                            ${metricNumberCell(d.closed_lost_not_interested, 'closedlost-cell')}
+                            ${metricPercentCell(((d.closed_lost_not_interested/total)*100).toFixed(1), 'closedlost-cell')}
+                            ${metricNumberCell(d.closed_lost_did_not_enquire, 'closedlost-cell')}
+                            ${metricPercentCell(((d.closed_lost_did_not_enquire/total)*100).toFixed(1), 'closedlost-cell')}
+                            ${metricNumberCell(d.closed_lost_wrong_lead, 'closedlost-cell')}
+                            ${metricPercentCell(((d.closed_lost_wrong_lead/total)*100).toFixed(1), 'closedlost-cell')}
+                            ${metricNumberCell(d.closed_lost_rnr_lost, 'closedlost-cell')}
+                            ${metricPercentCell(((d.closed_lost_rnr_lost/total)*100).toFixed(1), 'closedlost-cell')}
+                            ${metricNumberCell(d.closed_lost_finance_reject, 'closedlost-cell')}
+                            ${metricPercentCell(((d.closed_lost_finance_reject/total)*100).toFixed(1), 'closedlost-cell')}
+                            ${metricNumberCell(d.closed_lost_co_dealer, 'closedlost-cell')}
+                            ${metricPercentCell(((d.closed_lost_co_dealer/total)*100).toFixed(1), 'closedlost-cell')}
+                            ${metricNumberCell(d.sales_pipeline_total, 'salespipeline-cell')}
+                            ${metricPercentCell(((d.sales_pipeline_total/total)*100).toFixed(1), 'salespipeline-cell')}
+                        </tr>`;
+                    });
+                    // Totals row
+                    html += `<tr class='total-row'>
+                        <td>Total</td>
+                        ${metricNumberCell(t.calls_allocated, 'calls-allocated')}
+                        ${metricPercentCell(((t.calls_allocated/total)*100).toFixed(1), 'calls-allocated')}
+                        ${metricNumberCell(t.calls_attempted, 'calls-attempted')}
+                        ${metricPercentCell(((t.calls_attempted/total)*100).toFixed(1), 'calls-attempted')}
+                        ${metricNumberCell(t.calls_connected, 'calls-connected')}
+                        ${metricPercentCell(((t.calls_connected/total)*100).toFixed(1), 'calls-connected')}
+                        ${metricNumberCell(t.pending_interested, 'pending-cell')}
+                        ${metricPercentCell(((t.pending_interested/total)*100).toFixed(1), 'pending-cell')}
+                        ${metricNumberCell(t.pending_hot, 'pending-cell')}
+                        ${metricPercentCell(((t.pending_hot/total)*100).toFixed(1), 'pending-cell')}
+                        ${metricNumberCell(t.pending_warm, 'pending-cell')}
+                        ${metricPercentCell(((t.pending_warm/total)*100).toFixed(1), 'pending-cell')}
+                        ${metricNumberCell(t.pending_cold, 'pending-cell')}
+                        ${metricPercentCell(((t.pending_cold/total)*100).toFixed(1), 'pending-cell')}
+                        ${metricNumberCell(t.pending_callback, 'pending-cell')}
+                        ${metricPercentCell(((t.pending_callback/total)*100).toFixed(1), 'pending-cell')}
+                        ${metricNumberCell(t.closed_lost_competition, 'closedlost-cell')}
+                        ${metricPercentCell(((t.closed_lost_competition/total)*100).toFixed(1), 'closedlost-cell')}
+                        ${metricNumberCell(t.closed_lost_not_interested, 'closedlost-cell')}
+                        ${metricPercentCell(((t.closed_lost_not_interested/total)*100).toFixed(1), 'closedlost-cell')}
+                        ${metricNumberCell(t.closed_lost_did_not_enquire, 'closedlost-cell')}
+                        ${metricPercentCell(((t.closed_lost_did_not_enquire/total)*100).toFixed(1), 'closedlost-cell')}
+                        ${metricNumberCell(t.closed_lost_wrong_lead, 'closedlost-cell')}
+                        ${metricPercentCell(((t.closed_lost_wrong_lead/total)*100).toFixed(1), 'closedlost-cell')}
+                        ${metricNumberCell(t.closed_lost_rnr_lost, 'closedlost-cell')}
+                        ${metricPercentCell(((t.closed_lost_rnr_lost/total)*100).toFixed(1), 'closedlost-cell')}
+                        ${metricNumberCell(t.closed_lost_finance_reject, 'closedlost-cell')}
+                        ${metricPercentCell(((t.closed_lost_finance_reject/total)*100).toFixed(1), 'closedlost-cell')}
+                        ${metricNumberCell(t.closed_lost_co_dealer, 'closedlost-cell')}
+                        ${metricPercentCell(((t.closed_lost_co_dealer/total)*100).toFixed(1), 'closedlost-cell')}
+                        ${metricNumberCell(t.sales_pipeline_total, 'salespipeline-cell')}
+                        ${metricPercentCell(((t.sales_pipeline_total/total)*100).toFixed(1), 'salespipeline-cell')}
+                    </tr>`;
+                    document.getElementById('source-analysis-tbody').innerHTML = html;
+                })
+                .catch(err => {
+                    document.getElementById('source-analysis-tbody').innerHTML = `<tr><td colspan='34' class='text-center'>Error loading data</td></tr>`;
+                    console.error(err);
+                });
+        }
+
+        function resetSourceAnalysis() {
+            document.getElementById('sa_start_date').value = '';
+            document.getElementById('sa_end_date').value = '';
+            fetchSourceAnalysis();
+        }
+
+        document.addEventListener('DOMContentLoaded', fetchSourceAnalysis);
     </script>
 </body>
 </html>
