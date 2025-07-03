@@ -543,11 +543,55 @@ def password_reset_request():
 
         success, message, token = auth_manager.generate_password_reset_token(username, user_type)
 
-        if success:
-            # In a real application, you would send this token via email
-            # For demo purposes, we'll show it in the flash message
-            reset_url = url_for('password_reset', token=token, _external=True)
-            flash(f'Password reset link: {reset_url}', 'success')
+        if success and token:
+            # Look up the user's email based on user_type
+            user_email = None
+            if user_type == 'admin':
+                user_result = supabase.table('admin_users').select('email').eq('username', username).execute()
+                if user_result.data:
+                    user_email = user_result.data[0].get('email')
+            elif user_type == 'cre':
+                user_result = supabase.table('cre_users').select('email').eq('username', username).execute()
+                if user_result.data:
+                    user_email = user_result.data[0].get('email')
+            elif user_type == 'ps':
+                user_result = supabase.table('ps_users').select('email').eq('username', username).execute()
+                if user_result.data:
+                    user_email = user_result.data[0].get('email')
+
+            if user_email:
+                # Send the reset link via email
+                reset_url = url_for('password_reset', token=token, _external=True)
+                try:
+                    msg = MIMEMultipart()
+                    msg['From'] = EMAIL_USER
+                    msg['To'] = user_email
+                    msg['Subject'] = "Password Reset Request - Ather CRM"
+                    body = f"""
+                    Dear {username},
+
+                    We received a request to reset your password for your Ather CRM account.
+
+                    Please click the link below to reset your password:
+                    {reset_url}
+
+                    If you did not request this, you can safely ignore this email.
+
+                    Best regards,\nAther CRM Team
+                    """
+                    msg.attach(MIMEText(body, 'plain'))
+                    server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+                    server.starttls()
+                    server.login(EMAIL_USER, EMAIL_PASSWORD)
+                    text = msg.as_string()
+                    server.sendmail(EMAIL_USER, user_email, text)
+                    server.quit()
+                    flash('If the username and user type are correct, a password reset link has been sent to your email.', 'success')
+                except Exception as e:
+                    print(f"Error sending password reset email: {e}")
+                    flash('Error sending password reset email. Please try again later.', 'error')
+            else:
+                flash('If the username and user type are correct, a password reset link has been sent to your email.', 'success')
         else:
             flash(message, 'error')
 
