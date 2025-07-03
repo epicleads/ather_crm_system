@@ -612,9 +612,20 @@
 
             {% if session.user_type %}
             <div class="navbar-nav ms-auto d-flex align-items-center">
-                <span class="navbar-text">
-                    <i class="fas fa-user-circle"></i> Welcome, {{ session.username }}
-                </span>
+                <div class="dropdown">
+                    <button class="btn btn-link text-dark dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false" style="text-decoration: none;">
+                        <i class="fas fa-user-circle"></i> Welcome, {{ session.username }}
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                        {% if session.user_type == 'cre' %}
+                        <li><a class="dropdown-item" href="{{ url_for('change_cre_password') }}"><i class="fas fa-key"></i> Change Password</a></li>
+                        {% elif session.user_type == 'ps' %}
+                        <li><a class="dropdown-item" href="{{ url_for('change_ps_password') }}"><i class="fas fa-key"></i> Change Password</a></li>
+                        {% elif session.user_type == 'admin' %}
+                        <li><a class="dropdown-item" href="{{ url_for('security_settings') }}"><i class="fas fa-key"></i> Change Password</a></li>
+                        {% endif %}
+                    </ul>
+                </div>
                 <a class="btn btn-outline-primary" href="{{ url_for('logout') }}">
                     <i class="fas fa-sign-out-alt"></i> Logout
                 </a>

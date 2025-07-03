@@ -460,6 +460,7 @@ def filter_leads_by_date(leads, filter_type, date_field='created_at'):
 
 @app.route('/')
 def index():
+    session.clear()  # Ensure no session data is present
     return render_template('index.html')
 
 
