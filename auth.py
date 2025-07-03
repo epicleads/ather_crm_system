@@ -11,6 +11,7 @@ import qrcode
 import io
 import base64
 from supabase import Client
+import time
 
 
 class AuthManager:
@@ -542,18 +543,23 @@ class AuthManager:
 
     def check_rate_limit(self, ip_address: str, time_window: int = 15) -> bool:
         """Check if IP is rate limited"""
+        t_start = time.time()
+        print(f"[PERF] check_rate_limit: start for {ip_address}")
         try:
             since = datetime.now() - timedelta(minutes=time_window)
-
-            result = self.supabase.table('login_attempts').select('*').eq('ip_address', ip_address).gte('timestamp',
-                                                                                                        since.isoformat()).execute()
-
+            t_query_start = time.time()
+            result = self.supabase.table('login_attempts').select('id').eq('ip_address', ip_address).gte('timestamp', since.isoformat()).execute()
+            print(f"[PERF] check_rate_limit: Supabase query took {time.time() - t_query_start:.3f} seconds")
             if len(result.data) > 20:  # Max 20 attempts per 15 minutes
+                print(f"[PERF] check_rate_limit: rate limited (found {len(result.data)} attempts)")
+                print(f"[PERF] check_rate_limit: TOTAL took {time.time() - t_start:.3f} seconds")
                 return False
-
+            print(f"[PERF] check_rate_limit: allowed (found {len(result.data)} attempts)")
+            print(f"[PERF] check_rate_limit: TOTAL took {time.time() - t_start:.3f} seconds")
             return True
         except Exception as e:
             print(f"Error checking rate limit: {e}")
+            print(f"[PERF] check_rate_limit: ERROR, TOTAL took {time.time() - t_start:.3f} seconds")
             return True  # Allow on error
 
     def get_user_sessions(self, user_id: int, user_type: str) -> list:

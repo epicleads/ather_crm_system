@@ -24,6 +24,7 @@ from security_verification import run_security_verification
 import time
 import gc
 from flask_socketio import SocketIO, emit
+# from redis import Redis  # REMOVE this line for local development
 
 # Add this instead:
 from reportlab.lib.pagesizes import letter, A4
@@ -41,6 +42,10 @@ load_dotenv()
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
+# Reduce Flask log noise
+import logging
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.WARNING)
 
 # Add custom Jinja2 filters
 @app.template_filter('tojson')
@@ -78,6 +83,7 @@ app.permanent_session_lifetime = timedelta(hours=24)
 try:
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     print("✅ Supabase client initialized successfully")
+    # Removed Supabase warm-up query for local development
 except Exception as e:
     print(f"❌ Error initializing Supabase client: {e}")
     raise
@@ -91,7 +97,7 @@ app.config['AUTH_MANAGER'] = auth_manager
 limiter = Limiter(
     key_func=get_remote_address,
     app=app,
-    default_limits=["200 per day", "50 per hour"]
+    default_limits=["1000 per minute"]  # Use in-memory backend for local/dev
 )
 
 # Upload folder configuration
@@ -262,7 +268,7 @@ def batch_insert_leads(leads_data, batch_size=100):
                 print(f"Batch {batch_num}/{total_batches}: No data returned from insert")
 
             # Small delay to prevent overwhelming the database
-            time.sleep(0.1)
+            eventlet.sleep(0.1)  # CHANGED from time.sleep(0.1)
 
             # Force garbage collection every 10 batches
             if batch_num % 10 == 0:
@@ -458,47 +464,46 @@ def index():
 
 
 @app.route('/unified_login', methods=['POST'])
-@limiter.limit("1000 per minute")  # Temporarily relaxed for development/testing
+@limiter.limit("1000 per minute")  # Now using Redis backend for rate limiting
 def unified_login():
-    """Unified login that automatically detects user type"""
+    start_time = time.time()
     username = request.form.get('username', '').strip()
     password = request.form.get('password', '').strip()
 
-    if not username or not password:
-        flash('Please enter both username and password', 'error')
-        return redirect(url_for('index'))
-
-    # Check rate limiting
-    ip_address = request.environ.get('REMOTE_ADDR', 'unknown')
-    if not auth_manager.check_rate_limit(ip_address):
-        flash('Too many login attempts. Please try again later.', 'error')
-        return redirect(url_for('index'))
-
-    # Try to authenticate against all user types
+    t1 = time.time()
     user_types = ['admin', 'cre', 'ps']
-
     for user_type in user_types:
+        t_user = time.time()
         success, message, user_data = auth_manager.authenticate_user(username, password, user_type)
-
+        print(f"[PERF] unified_login: authenticate_user({user_type}) took {time.time() - t_user:.3f} seconds")
         if success:
-            # Create session
+            t2 = time.time()
             session_id = auth_manager.create_session(user_data['id'], user_type, user_data)
+            print(f"[PERF] unified_login: create_session took {time.time() - t2:.3f} seconds")
             if session_id:
                 flash(f'Welcome! Logged in as {user_type.upper()}', 'success')
-
+                t3 = time.time()
                 # Redirect to appropriate dashboard
                 if user_type == 'admin':
+                    print(f"[PERF] unified_login: redirect to admin_dashboard after {time.time() - t3:.3f} seconds")
+                    print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
                     return redirect(url_for('admin_dashboard'))
                 elif user_type == 'cre':
+                    print(f"[PERF] unified_login: redirect to cre_dashboard after {time.time() - t3:.3f} seconds")
+                    print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
                     return redirect(url_for('cre_dashboard'))
                 elif user_type == 'ps':
+                    print(f"[PERF] unified_login: redirect to ps_dashboard after {time.time() - t3:.3f} seconds")
+                    print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
                     return redirect(url_for('ps_dashboard'))
             else:
                 flash('Error creating session', 'error')
+                print(f"[PERF] unified_login: session creation failed after {time.time() - t2:.3f} seconds")
+                print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
                 return redirect(url_for('index'))
-
-    # If we reach here, authentication failed for all user types
+    print(f"[PERF] unified_login: all user_type attempts took {time.time() - t1:.3f} seconds")
     flash('Invalid username or password', 'error')
+    print(f"[PERF] unified_login TOTAL (invalid login) took {time.time() - start_time:.3f} seconds")
     return redirect(url_for('index'))
 
 
@@ -1062,7 +1067,7 @@ def assign_leads_dynamic_action():
                     total_assigned += 1
                     print(f"Assigned lead {lead['uid']} to CRE {cre['name']} for source {source}")
                     if total_assigned % 100 == 0:
-                        time.sleep(0.1)
+                        eventlet.sleep(0.1)
                 except Exception as e:
                     print(f"Error assigning lead {lead['uid']}: {e}")
 
@@ -1503,44 +1508,60 @@ def add_lead():
 @app.route('/cre_dashboard')
 @require_cre
 def cre_dashboard():
+    start_time = time.time()
     cre_name = session.get('cre_name')
     today = datetime.now().date()
 
     try:
+        t0 = time.time()
         # Get all leads assigned to this CRE
         all_leads = safe_get_data('lead_master', {'cre_name': cre_name})
+        print(f"[PERF] cre_dashboard: safe_get_data('lead_master') took {time.time() - t0:.3f} seconds")
 
+        t1 = time.time()
         # Get pending leads (assigned but no first call date), sorted by cre_assigned_at ascending
         pending_leads = sorted(
             [lead for lead in all_leads if not lead.get('first_call_date')],
             key=lambda l: l.get('cre_assigned_at') or ''
         )
+        print(f"[PERF] cre_dashboard: pending_leads filter/sort took {time.time() - t1:.3f} seconds")
 
+        t2 = time.time()
         # Get today's followups
         todays_followups = [
             lead for lead in all_leads
             if lead.get('follow_up_date') and lead.get('follow_up_date').startswith(str(today))
         ]
+        print(f"[PERF] cre_dashboard: todays_followups filter took {time.time() - t2:.3f} seconds")
 
+        t3 = time.time()
         # Get attended leads (leads with at least one call)
         attended_leads = [lead for lead in all_leads if lead.get('first_call_date')]
+        print(f"[PERF] cre_dashboard: attended_leads filter took {time.time() - t3:.3f} seconds")
 
+        t4 = time.time()
         # Get leads assigned to PS
         assigned_to_ps = [lead for lead in all_leads if lead.get('ps_name')]
+        print(f"[PERF] cre_dashboard: assigned_to_ps filter took {time.time() - t4:.3f} seconds")
 
+        t5 = time.time()
         # Get won leads (leads with final status "Won")
         won_leads = [lead for lead in all_leads if lead.get('final_status') == 'Won']
         # Get lost leads (leads with final status "Lost")
         lost_leads = [lead for lead in all_leads if lead.get('final_status') == 'Lost']
+        print(f"[PERF] cre_dashboard: won/lost_leads filter took {time.time() - t5:.3f} seconds")
 
         # --- Walk-in Follow-up Section ---
+        t6 = time.time()
         walkin_followups = []
         try:
             walkin_followups = [lead for lead in safe_get_data('walkin_data', {'walkin_cre_name': cre_name, 'walkin_followup_date': str(today)})]
         except Exception as e:
             walkin_followups = []
+        print(f"[PERF] cre_dashboard: walkin_followups fetch/filter took {time.time() - t6:.3f} seconds")
 
-        return render_template('cre_dashboard.html',
+        t7 = time.time()
+        result = render_template('cre_dashboard.html',
                                pending_leads=pending_leads,
                                todays_followups=todays_followups,
                                attended_leads=attended_leads,
@@ -1548,7 +1569,11 @@ def cre_dashboard():
                                won_leads=won_leads,
                                lost_leads=lost_leads,
                                walkin_followups=walkin_followups)
+        print(f"[PERF] cre_dashboard: render_template took {time.time() - t7:.3f} seconds")
+        print(f"[PERF] cre_dashboard TOTAL took {time.time() - start_time:.3f} seconds")
+        return result
     except Exception as e:
+        print(f"[PERF] cre_dashboard failed after {time.time() - start_time:.3f} seconds")
         flash(f'Error loading dashboard: {str(e)}', 'error')
         return render_template('cre_dashboard.html',
                                pending_leads=[],
@@ -1647,12 +1672,7 @@ def update_lead(uid):
                 try:
                     if ps_user:
                         lead_data_for_email = {**lead_data, **update_data}
-                        send_email_to_ps(
-                            ps_user['email'],
-                            ps_user['name'],
-                            lead_data_for_email,
-                            session.get('cre_name')
-                        )
+                        socketio.start_background_task(send_email_to_ps, ps_user['email'], ps_user['name'], lead_data_for_email, session.get('cre_name'))
                         flash(f'Lead assigned to {ps_name} and email notification sent', 'success')
                     else:
                         flash(f'Lead assigned to {ps_name}', 'success')
@@ -1756,34 +1776,51 @@ def update_lead(uid):
 @app.route('/ps_dashboard')
 @require_ps
 def ps_dashboard():
+    start_time = time.time()
     ps_name = session.get('ps_name')
     today = datetime.now().date()
 
     try:
+        t0 = time.time()
         # Get all assigned leads
         assigned_leads = safe_get_data('ps_followup_master', {'ps_name': ps_name})
+        print(f"[PERF] ps_dashboard: safe_get_data('ps_followup_master') took {time.time() - t0:.3f} seconds")
 
+        t1 = time.time()
         # Get pending leads (assigned but no first call date)
         pending_leads = [lead for lead in assigned_leads if not lead.get('first_call_date')]
+        print(f"[PERF] ps_dashboard: pending_leads filter took {time.time() - t1:.3f} seconds")
 
+        t2 = time.time()
         # Get today's followups
         todays_followups = [
             lead for lead in assigned_leads
             if lead.get('follow_up_date') and lead.get('follow_up_date').startswith(str(today))
         ]
+        print(f"[PERF] ps_dashboard: todays_followups filter took {time.time() - t2:.3f} seconds")
 
+        t3 = time.time()
         # Get attended leads (leads with at least one call)
         attended_leads = [lead for lead in assigned_leads if lead.get('first_call_date')]
+        print(f"[PERF] ps_dashboard: attended_leads filter took {time.time() - t3:.3f} seconds")
 
+        t4 = time.time()
         # Get lost leads (assigned leads with final status "Lost")
         lost_leads = [lead for lead in assigned_leads if lead.get('final_status') == 'Lost']
-        return render_template('ps_dashboard.html',
+        print(f"[PERF] ps_dashboard: lost_leads filter took {time.time() - t4:.3f} seconds")
+
+        t5 = time.time()
+        result = render_template('ps_dashboard.html',
                                assigned_leads=assigned_leads,
                                pending_leads=pending_leads,
                                todays_followups=todays_followups,
                                attended_leads=attended_leads,
                                lost_leads=lost_leads)
+        print(f"[PERF] ps_dashboard: render_template took {time.time() - t5:.3f} seconds")
+        print(f"[PERF] ps_dashboard TOTAL took {time.time() - start_time:.3f} seconds")
+        return result
     except Exception as e:
+        print(f"[PERF] ps_dashboard failed after {time.time() - start_time:.3f} seconds")
         flash(f'Error loading dashboard: {str(e)}', 'error')
         return render_template('ps_dashboard.html',
                                assigned_leads=[],
@@ -2528,7 +2565,7 @@ def walkin_customers():
                         'ps_branch': session.get('branch')
                     }
 
-                    email_sent = send_quotation_email(customer_email, customer_name, quotation_email_data, pdf_path)
+                    socketio.start_background_task(send_quotation_email, customer_email, customer_name, quotation_email_data, pdf_path)
 
                     if email_sent:
                         flash(f'Walk-in customer added successfully! Quotation PDF sent to {customer_email}', 'success')
