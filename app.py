@@ -543,30 +543,33 @@ def password_reset_request():
 
         success, message, token = auth_manager.generate_password_reset_token(username, user_type)
 
-        if success and token:
-            # Look up the user's email based on user_type
+        if success:
+            # Send the reset link via email
+            # Fetch user email from the appropriate table
             user_email = None
-            if user_type == 'admin':
-                user_result = supabase.table('admin_users').select('email').eq('username', username).execute()
-                if user_result.data:
-                    user_email = user_result.data[0].get('email')
-            elif user_type == 'cre':
-                user_result = supabase.table('cre_users').select('email').eq('username', username).execute()
-                if user_result.data:
-                    user_email = user_result.data[0].get('email')
-            elif user_type == 'ps':
-                user_result = supabase.table('ps_users').select('email').eq('username', username).execute()
-                if user_result.data:
-                    user_email = user_result.data[0].get('email')
+            try:
+                if user_type == 'admin':
+                    user_result = supabase.table('admin_users').select('email').eq('username', username).execute()
+                elif user_type == 'cre':
+                    user_result = supabase.table('cre_users').select('email').eq('username', username).execute()
+                elif user_type == 'ps':
+                    user_result = supabase.table('ps_users').select('email').eq('username', username).execute()
+                else:
+                    user_result = None
+                if user_result and user_result.data and user_result.data[0].get('email'):
+                    user_email = user_result.data[0]['email']
+            except Exception as e:
+                print(f"Error fetching user email for password reset: {e}")
+                user_email = None
 
+            reset_url = url_for('password_reset', token=token, _external=True)
+            email_sent = False
             if user_email:
-                # Send the reset link via email
-                reset_url = url_for('password_reset', token=token, _external=True)
                 try:
                     msg = MIMEMultipart()
                     msg['From'] = EMAIL_USER
                     msg['To'] = user_email
-                    msg['Subject'] = "Password Reset Request - Ather CRM"
+                    msg['Subject'] = 'Ather CRM Password Reset Request'
                     body = f"""
                     Dear {username},
 
@@ -575,9 +578,9 @@ def password_reset_request():
                     Please click the link below to reset your password:
                     {reset_url}
 
-                    If you did not request this, you can safely ignore this email.
+                    If you did not request this, please ignore this email.
 
-                    Best regards,\nAther CRM Team
+                    Best regards,\nAther CRM System
                     """
                     msg.attach(MIMEText(body, 'plain'))
                     server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
@@ -586,12 +589,16 @@ def password_reset_request():
                     text = msg.as_string()
                     server.sendmail(EMAIL_USER, user_email, text)
                     server.quit()
-                    flash('If the username and user type are correct, a password reset link has been sent to your email.', 'success')
+                    print(f"Password reset email sent to {user_email}")
+                    email_sent = True
                 except Exception as e:
                     print(f"Error sending password reset email: {e}")
-                    flash('Error sending password reset email. Please try again later.', 'error')
+                    email_sent = False
+            if email_sent:
+                flash('If the username exists and is valid, a password reset link has been sent to the registered email address.', 'success')
             else:
-                flash('If the username and user type are correct, a password reset link has been sent to your email.', 'success')
+                flash('If the username exists and is valid, a password reset link has been sent to the registered email address.', 'success')
+                # Optionally, log or alert admin if email sending failed
         else:
             flash(message, 'error')
 
