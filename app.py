@@ -401,7 +401,8 @@ def create_or_update_ps_followup(lead_data, ps_name, ps_branch):
             'cre_name': lead_data.get('cre_name'),
             'lead_category': lead_data.get('lead_category'),
             'model_interested': lead_data.get('model_interested'),
-            'final_status': 'Pending'
+            'final_status': 'Pending',
+            'ps_assigned_at': lead_data.get('ps_assigned_at')  # Sync assignment timestamp
         }
 
         if existing.data:
@@ -1690,7 +1691,10 @@ def update_lead(uid):
         if request.method == 'POST':
             update_data = {}
 
-            # Update basic fields
+            # Always update lead_status from the form
+            if request.form.get('lead_status'):
+                update_data['lead_status'] = request.form['lead_status']
+
             if request.form.get('customer_name'):
                 update_data['customer_name'] = request.form['customer_name']
 
@@ -1731,17 +1735,6 @@ def update_lead(uid):
                 except Exception as e:
                     print(f"Error sending email: {e}")
                     flash(f'Lead assigned to {ps_name} (email notification failed)', 'warning')
-
-            if request.form.get('lead_status'):
-                status = request.form['lead_status']
-                update_data['lead_status'] = status
-                
-                # Automatically set final status to Lost for certain lead statuses
-                if status in ['Lost to Co Dealer', 'Wrong Number']:
-                    update_data['final_status'] = 'Lost'
-                # If a fresh status, update cre_assigned_at to now
-                if status in ['Call Disconnected', 'Busy on another Call', 'RNR', 'Call me Back']:
-                    update_data['cre_assigned_at'] = datetime.now().isoformat()
 
             if request.form.get('follow_up_date'):
                 update_data['follow_up_date'] = request.form['follow_up_date']
@@ -1832,19 +1825,47 @@ def ps_dashboard():
     ps_name = session.get('ps_name')
     today = datetime.now().date()
 
+    # Get filter parameters from query string
+    filter_type = request.args.get('filter_type', 'all')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+
     try:
         t0 = time.time()
         # Get all assigned leads
         assigned_leads = safe_get_data('ps_followup_master', {'ps_name': ps_name})
         print(f"[PERF] ps_dashboard: safe_get_data('ps_followup_master') took {time.time() - t0:.3f} seconds")
 
+        # Filter by ps_assigned_at for all sections except Today's Follow-ups
+        def filter_by_assigned_at(leads):
+            if filter_type == 'all':
+                return leads
+            elif filter_type == 'today':
+                today_str = today.strftime('%Y-%m-%d')
+                return [l for l in leads if l.get('ps_assigned_at', '').startswith(today_str)]
+            elif filter_type == 'range' and start_date and end_date:
+                filtered = []
+                for l in leads:
+                    ts = l.get('ps_assigned_at')
+                    if ts:
+                        try:
+                            date_val = ts[:10]
+                            if start_date <= date_val <= end_date:
+                                filtered.append(l)
+                        except Exception:
+                            continue
+                return filtered
+            else:
+                return leads
+
+        filtered_leads = filter_by_assigned_at(assigned_leads)
+
         t1 = time.time()
-        # Get pending leads (assigned but no first call date)
-        pending_leads = [lead for lead in assigned_leads if not lead.get('first_call_date')]
+        pending_leads = [lead for lead in filtered_leads if not lead.get('first_call_date')]
         print(f"[PERF] ps_dashboard: pending_leads filter took {time.time() - t1:.3f} seconds")
 
         t2 = time.time()
-        # Get today's followups
+        # Today's Follow-ups (not filtered by ps_assigned_at)
         todays_followups = [
             lead for lead in assigned_leads
             if lead.get('follow_up_date') and lead.get('follow_up_date').startswith(str(today))
@@ -1852,22 +1873,24 @@ def ps_dashboard():
         print(f"[PERF] ps_dashboard: todays_followups filter took {time.time() - t2:.3f} seconds")
 
         t3 = time.time()
-        # Get attended leads (leads with at least one call)
-        attended_leads = [lead for lead in assigned_leads if lead.get('first_call_date')]
+        # Attended leads: must have first_call_date AND final_status == 'Pending'
+        attended_leads = [lead for lead in filtered_leads if lead.get('first_call_date') and lead.get('final_status') == 'Pending']
         print(f"[PERF] ps_dashboard: attended_leads filter took {time.time() - t3:.3f} seconds")
 
         t4 = time.time()
-        # Get lost leads (assigned leads with final status "Lost")
-        lost_leads = [lead for lead in assigned_leads if lead.get('final_status') == 'Lost']
+        lost_leads = [lead for lead in filtered_leads if lead.get('final_status') == 'Lost']
         print(f"[PERF] ps_dashboard: lost_leads filter took {time.time() - t4:.3f} seconds")
 
         t5 = time.time()
         result = render_template('ps_dashboard.html',
-                               assigned_leads=assigned_leads,
+                               assigned_leads=filtered_leads,
                                pending_leads=pending_leads,
                                todays_followups=todays_followups,
                                attended_leads=attended_leads,
-                               lost_leads=lost_leads)
+                               lost_leads=lost_leads,
+                               filter_type=filter_type,
+                               start_date=start_date,
+                               end_date=end_date)
         print(f"[PERF] ps_dashboard: render_template took {time.time() - t5:.3f} seconds")
         print(f"[PERF] ps_dashboard TOTAL took {time.time() - start_time:.3f} seconds")
         return result
@@ -1878,7 +1901,11 @@ def ps_dashboard():
                                assigned_leads=[],
                                pending_leads=[],
                                todays_followups=[],
-                               attended_leads=[])
+                               attended_leads=[],
+                               lost_leads=[],
+                               filter_type=filter_type,
+                               start_date=start_date,
+                               end_date=end_date)
 
 
 @app.route('/update_ps_lead/<uid>', methods=['GET', 'POST'])
@@ -1920,6 +1947,10 @@ def update_ps_lead(uid):
         if request.method == 'POST':
             update_data = {}
 
+            # Always update lead_status from the form
+            if request.form.get('lead_status'):
+                update_data['lead_status'] = request.form['lead_status']
+
             if request.form.get('follow_up_date'):
                 update_data['follow_up_date'] = request.form['follow_up_date']
 
@@ -1932,7 +1963,14 @@ def update_ps_lead(uid):
                     update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
             # Handle call dates and remarks for the next available call
-            if request.form.get('call_date'):
+            lead_status = request.form.get('lead_status', '')
+            skip_first_call_statuses = [
+                'Call not Connected',
+                'Busy on another call',
+                'RNR',
+                'Call me Back'
+            ]
+            if request.form.get('call_date') and lead_status not in skip_first_call_statuses:
                 update_data[f'{next_call}_call_date'] = request.form['call_date']
 
             if request.form.get('call_remark'):
