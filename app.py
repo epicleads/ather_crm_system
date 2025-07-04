@@ -1752,14 +1752,18 @@ def update_lead(uid):
                 lead_status = request.form.get('lead_status', '')
                 call_remark = request.form['call_remark']
                 combined_remark = f"{lead_status}, {call_remark}"
-                update_data[f'{next_call}_call_remark'] = combined_remark
+                # For all 7 calls, use the correct schema columns
+                call_names = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
+                if next_call in call_names:
+                    update_data[f'{next_call}_call_date'] = request.form['call_date']
+                    update_data[f'{next_call}_remark'] = combined_remark
                 # Emit notification to CRE dashboard
                 socketio.emit(
                     'ps_remark_added',
                     {
-                        'customer_name': ps_data.get('customer_name'),
+                        'customer_name': update_data.get('customer_name', lead_data.get('customer_name')),
                         'ps_remark': combined_remark,
-                        'ps_name': ps_data.get('ps_name')
+                        'ps_name': update_data.get('ps_name', lead_data.get('ps_name'))
                     }
                 )
 
