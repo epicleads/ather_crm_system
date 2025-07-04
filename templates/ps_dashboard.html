@@ -141,24 +141,24 @@
         </ul>
     </div>
     <div class="card-body">
-        <div class="d-flex align-items-center mb-3">
-            <div class="btn-group me-2">
-                <button type="button" class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" id="psFilterDropdown">
-                    {% if filter_type == 'today' %}Today{% elif filter_type == 'range' %}Date Range{% else %}All Time{% endif %}
-                </button>
-                <ul class="dropdown-menu">
-                    <li><a class="dropdown-item ps-filter-option" href="#" data-filter="today">Today</a></li>
-                    <li><a class="dropdown-item ps-filter-option" href="#" data-filter="all">All Time</a></li>
-                    <li><a class="dropdown-item ps-filter-option" href="#" data-filter="range">Date Range</a></li>
-                </ul>
-            </div>
-            <input type="date" class="form-control me-2" id="psFilterStartDate" value="{{ start_date or '' }}" style="width: 160px; display: {% if filter_type == 'range' %}inline-block{% else %}none{% endif %};">
-            <input type="date" class="form-control me-2" id="psFilterEndDate" value="{{ end_date or '' }}" style="width: 160px; display: {% if filter_type == 'range' %}inline-block{% else %}none{% endif %};">
-            <button class="btn btn-outline-primary" id="psFilterApplyBtn">Apply</button>
-        </div>
         <div class="tab-content" id="psLeadTabsContent">
             <!-- Fresh Leads Tab -->
             <div class="tab-pane fade show active" id="fresh-leads" role="tabpanel" aria-labelledby="fresh-leads-tab">
+                <div class="d-flex align-items-center mb-3" id="psFilterBar-fresh">
+                    <div class="btn-group me-2">
+                        <button type="button" class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" id="freshFilterDropdown">
+                            {% if filter_type == 'today' %}Today{% elif filter_type == 'range' %}Date Range{% else %}All Time{% endif %}
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item fresh-filter-option" href="#" data-filter="today">Today</a></li>
+                            <li><a class="dropdown-item fresh-filter-option" href="#" data-filter="all">All Time</a></li>
+                            <li><a class="dropdown-item fresh-filter-option" href="#" data-filter="range">Date Range</a></li>
+                        </ul>
+                    </div>
+                    <input type="date" class="form-control me-2" id="freshFilterStartDate" value="{{ start_date or '' }}" style="width: 160px; display: {% if filter_type == 'range' %}inline-block{% else %}none{% endif %};">
+                    <input type="date" class="form-control me-2" id="freshFilterEndDate" value="{{ end_date or '' }}" style="width: 160px; display: {% if filter_type == 'range' %}inline-block{% else %}none{% endif %};">
+                    <button class="btn btn-outline-primary" id="freshFilterApplyBtn">Apply</button>
+                </div>
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h5 class="mb-0">Fresh Leads ({{ pending_leads|length }})</h5>
                     <div class="d-flex gap-2">
@@ -440,6 +440,21 @@
 
             <!-- Lost Leads Tab -->
             <div class="tab-pane fade" id="lost-leads" role="tabpanel" aria-labelledby="lost-leads-tab">
+                <div class="d-flex align-items-center mb-3" id="psFilterBar-lost">
+                    <div class="btn-group me-2">
+                        <button type="button" class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" id="lostFilterDropdown">
+                            {% if filter_type == 'today' %}Today{% elif filter_type == 'range' %}Date Range{% else %}All Time{% endif %}
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item lost-filter-option" href="#" data-filter="today">Today</a></li>
+                            <li><a class="dropdown-item lost-filter-option" href="#" data-filter="all">All Time</a></li>
+                            <li><a class="dropdown-item lost-filter-option" href="#" data-filter="range">Date Range</a></li>
+                        </ul>
+                    </div>
+                    <input type="date" class="form-control me-2" id="lostFilterStartDate" value="{{ start_date or '' }}" style="width: 160px; display: {% if filter_type == 'range' %}inline-block{% else %}none{% endif %};">
+                    <input type="date" class="form-control me-2" id="lostFilterEndDate" value="{{ end_date or '' }}" style="width: 160px; display: {% if filter_type == 'range' %}inline-block{% else %}none{% endif %};">
+                    <button class="btn btn-outline-primary" id="lostFilterApplyBtn">Apply</button>
+                </div>
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h5 class="mb-0">Lost Leads (<span id="lostLeadsCount">{{ lost_leads|length }}</span>)</h5>
                     <div class="d-flex gap-2">
@@ -555,6 +570,49 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Helper to set up filter bar logic for a given tab
+    function setupFilterBar(tabPrefix, tabName) {
+        const filterDropdown = document.getElementById(tabPrefix + 'FilterDropdown');
+        const filterOptions = document.querySelectorAll('.' + tabPrefix + '-filter-option');
+        const startDateInput = document.getElementById(tabPrefix + 'FilterStartDate');
+        const endDateInput = document.getElementById(tabPrefix + 'FilterEndDate');
+        const applyBtn = document.getElementById(tabPrefix + 'FilterApplyBtn');
+        let selectedFilter = '{{ filter_type }}';
+        if (!filterDropdown || !applyBtn) return;
+        filterOptions.forEach(option => {
+            option.addEventListener('click', function(e) {
+                e.preventDefault();
+                selectedFilter = this.getAttribute('data-filter');
+                filterDropdown.textContent = this.textContent;
+                if (selectedFilter === 'range') {
+                    if (startDateInput) startDateInput.style.display = 'inline-block';
+                    if (endDateInput) endDateInput.style.display = 'inline-block';
+                } else {
+                    if (startDateInput) startDateInput.style.display = 'none';
+                    if (endDateInput) endDateInput.style.display = 'none';
+                }
+            });
+        });
+        applyBtn.addEventListener('click', function() {
+            let url = new URL(window.location.href.split('?')[0], window.location.origin);
+            let params = new URLSearchParams(window.location.search);
+            params.set('filter_type', selectedFilter);
+            params.set('tab', tabName);
+            if (selectedFilter === 'range') {
+                if (startDateInput && startDateInput.value) params.set('start_date', startDateInput.value);
+                if (endDateInput && endDateInput.value) params.set('end_date', endDateInput.value);
+            } else {
+                params.delete('start_date');
+                params.delete('end_date');
+            }
+            window.location.href = url.pathname + '?' + params.toString();
+        });
+    }
+    // Setup for Fresh Leads
+    setupFilterBar('fresh', 'fresh-leads');
+    // Setup for Lost Leads
+    setupFilterBar('lost', 'lost-leads');
+
     // Generic search function
     function setupSearch(inputId, buttonId, clearId, tableId) {
         const searchInput = document.getElementById(inputId);
@@ -601,39 +659,37 @@ document.addEventListener('DOMContentLoaded', function() {
     setupSearch('attendedSearchInput', 'attendedSearchButton', 'attendedClearButton', 'attendedLeadsTable');
     setupSearch('lostLeadSearchInput', 'lostLeadSearchButton', 'lostLeadClearButton', 'lostLeadsTable');
 
-    const filterDropdown = document.getElementById('psFilterDropdown');
-    const filterOptions = document.querySelectorAll('.ps-filter-option');
-    const startDateInput = document.getElementById('psFilterStartDate');
-    const endDateInput = document.getElementById('psFilterEndDate');
-    const applyBtn = document.getElementById('psFilterApplyBtn');
-
-    let selectedFilter = '{{ filter_type }}';
-
-    filterOptions.forEach(option => {
-        option.addEventListener('click', function(e) {
-            e.preventDefault();
-            selectedFilter = this.getAttribute('data-filter');
-            filterDropdown.textContent = this.textContent;
-            if (selectedFilter === 'range') {
-                startDateInput.style.display = 'inline-block';
-                endDateInput.style.display = 'inline-block';
-            } else {
-                startDateInput.style.display = 'none';
-                endDateInput.style.display = 'none';
-            }
-        });
-    });
-
-    applyBtn.addEventListener('click', function() {
-        let url = new URL(window.location.href.split('?')[0], window.location.origin);
-        let params = new URLSearchParams();
-        params.set('filter_type', selectedFilter);
-        if (selectedFilter === 'range') {
-            if (startDateInput.value) params.set('start_date', startDateInput.value);
-            if (endDateInput.value) params.set('end_date', endDateInput.value);
+    // Hide filter bar for Today's Follow-ups and Pending Leads tabs
+    function updateFilterBarVisibility() {
+        const filterBar = document.getElementById('psFilterBar');
+        const activeTab = document.querySelector('.nav-link.active');
+        if (!filterBar || !activeTab) return;
+        const tabId = activeTab.getAttribute('id');
+        if (tabId === 'fresh-leads-tab' || tabId === 'lost-leads-tab') {
+            filterBar.style.display = '';
+        } else {
+            filterBar.style.display = 'none';
         }
-        window.location.href = url.pathname + '?' + params.toString();
+    }
+    // Initial check
+    updateFilterBarVisibility();
+    // Listen for tab changes
+    document.querySelectorAll('.nav-link').forEach(tab => {
+        tab.addEventListener('shown.bs.tab', updateFilterBarVisibility);
     });
+
+    // Activate the correct tab based on the 'tab' query parameter
+    function activateTabFromQuery() {
+        const params = new URLSearchParams(window.location.search);
+        const tab = params.get('tab');
+        if (tab) {
+            const tabBtn = document.querySelector(`[data-bs-target='#${tab}']`);
+            if (tabBtn) {
+                new bootstrap.Tab(tabBtn).show();
+            }
+        }
+    }
+    activateTabFromQuery();
 });
 </script>
 {% endblock %}

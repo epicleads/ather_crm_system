@@ -1878,7 +1878,29 @@ def ps_dashboard():
         print(f"[PERF] ps_dashboard: attended_leads filter took {time.time() - t3:.3f} seconds")
 
         t4 = time.time()
-        lost_leads = [lead for lead in filtered_leads if lead.get('final_status') == 'Lost']
+        # Lost leads: filter by lost_timestamp for date-based filtering
+        def filter_lost_by_timestamp(leads):
+            if filter_type == 'all':
+                return [lead for lead in leads if lead.get('final_status') == 'Lost']
+            elif filter_type == 'today':
+                today_str = today.strftime('%Y-%m-%d')
+                return [lead for lead in leads if lead.get('final_status') == 'Lost' and lead.get('lost_timestamp', '').startswith(today_str)]
+            elif filter_type == 'range' and start_date and end_date:
+                filtered = []
+                for lead in leads:
+                    ts = lead.get('lost_timestamp')
+                    if lead.get('final_status') == 'Lost' and ts:
+                        try:
+                            date_val = ts[:10]
+                            if start_date <= date_val <= end_date:
+                                filtered.append(lead)
+                        except Exception:
+                            continue
+                return filtered
+            else:
+                return [lead for lead in leads if lead.get('final_status') == 'Lost']
+
+        lost_leads = filter_lost_by_timestamp(filtered_leads)
         print(f"[PERF] ps_dashboard: lost_leads filter took {time.time() - t4:.3f} seconds")
 
         t5 = time.time()
