@@ -328,8 +328,8 @@ def get_next_call_info(lead_data):
 
 
 def get_next_ps_call_info(ps_data):
-    """Determine the next available PS call number and which calls are completed"""
-    call_order = ['first', 'second', 'third']
+    """Determine the next available PS call number and which calls are completed (now 7 calls)"""
+    call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
     completed_calls = []
     next_call = 'first'
 
@@ -1750,14 +1750,18 @@ def update_lead(uid):
             # Handle call dates and remarks - only record for actual conversations
             if request.form.get('call_date') and request.form.get('call_remark'):
                 lead_status = request.form.get('lead_status', '')
-
-                # Only record call date and remark if it's an actual conversation
-                non_conversation_statuses = ['Call me Back', 'RNR', 'Busy on another Call', 'Call Disconnected']
-
-                if lead_status not in non_conversation_statuses:
-                    # This was an actual conversation, record both call date and remark
-                    update_data[f'{next_call}_call_date'] = request.form['call_date']
-                    update_data[f'{next_call}_remark'] = request.form['call_remark']
+                call_remark = request.form['call_remark']
+                combined_remark = f"{lead_status}, {call_remark}"
+                update_data[f'{next_call}_call_remark'] = combined_remark
+                # Emit notification to CRE dashboard
+                socketio.emit(
+                    'ps_remark_added',
+                    {
+                        'customer_name': ps_data.get('customer_name'),
+                        'ps_remark': combined_remark,
+                        'ps_name': ps_data.get('ps_name')
+                    }
+                )
 
             try:
                 if update_data:
@@ -1963,7 +1967,7 @@ def update_ps_lead(uid):
             flash('Access denied - This lead is not assigned to you', 'error')
             return redirect(url_for('ps_dashboard'))
 
-        # Get next call info for PS (only 3 calls)
+        # Get next call info for PS (only 7 calls)
         next_call, completed_calls = get_next_ps_call_info(ps_data)
 
         if request.method == 'POST':
@@ -1996,13 +2000,16 @@ def update_ps_lead(uid):
                 update_data[f'{next_call}_call_date'] = request.form['call_date']
 
             if request.form.get('call_remark'):
-                update_data[f'{next_call}_call_remark'] = request.form['call_remark']
+                lead_status = request.form.get('lead_status', '')
+                call_remark = request.form['call_remark']
+                combined_remark = f"{lead_status}, {call_remark}"
+                update_data[f'{next_call}_call_remark'] = combined_remark
                 # Emit notification to CRE dashboard
                 socketio.emit(
                     'ps_remark_added',
                     {
                         'customer_name': ps_data.get('customer_name'),
-                        'ps_remark': request.form['call_remark'],
+                        'ps_remark': combined_remark,
                         'ps_name': ps_data.get('ps_name')
                     }
                 )
@@ -3141,7 +3148,7 @@ def branch_performance(branch_name):
             total_calls = 0
             for lead in ps_leads:
                 call_count = 0
-                for call_num in ['first', 'second', 'third']:
+                for call_num in ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']:
                     if lead.get(f'{call_num}_call_date'):
                         call_count += 1
                 total_calls += call_count
@@ -3151,7 +3158,7 @@ def branch_performance(branch_name):
             # Get last activity (most recent call date)
             last_activity = None
             for lead in ps_leads:
-                for call_num in ['third', 'second', 'first']:  # Check in reverse order
+                for call_num in ['seventh', 'sixth', 'fifth', 'fourth', 'third', 'second', 'first']:  # Check in reverse order
                     call_date = lead.get(f'{call_num}_call_date')
                     if call_date:
                         try:
