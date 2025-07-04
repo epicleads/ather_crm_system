@@ -21,7 +21,7 @@
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <h4>{{ pending_leads|length }}</h4>
-                    <small class="text-white">Pending Leads</small>
+                    <small class="text-white">Fresh Leads</small>
                 </div>
                 <i class="fas fa-clock fa-2x"></i>
             </div>
@@ -43,7 +43,7 @@
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <h4>{{ attended_leads|length }}</h4>
-                    <small class="text-white">Attended Leads</small>
+                    <small class="text-white">Pending Leads</small>
                 </div>
                 <i class="fas fa-check-circle fa-2x"></i>
             </div>
@@ -119,8 +119,8 @@
     <div class="card-header">
         <ul class="nav nav-tabs card-header-tabs" id="psLeadTabs" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="pending-leads-tab" data-bs-toggle="tab" data-bs-target="#pending-leads" type="button" role="tab" aria-controls="pending-leads" aria-selected="true">
-                    <i class="fas fa-clock"></i> Pending Leads
+                <button class="nav-link active" id="fresh-leads-tab" data-bs-toggle="tab" data-bs-target="#fresh-leads" type="button" role="tab" aria-controls="fresh-leads" aria-selected="true">
+                    <i class="fas fa-clock"></i> Fresh Leads
                 </button>
             </li>
             <li class="nav-item" role="presentation">
@@ -129,8 +129,8 @@
                 </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="attended-tab" data-bs-toggle="tab" data-bs-target="#attended" type="button" role="tab" aria-controls="attended" aria-selected="false">
-                    <i class="fas fa-check-circle"></i> Attended Leads
+                <button class="nav-link" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending" type="button" role="tab" aria-controls="pending" aria-selected="false">
+                    <i class="fas fa-check-circle"></i> Pending Leads
                 </button>
             </li>
             <li class="nav-item" role="presentation">
@@ -142,24 +142,26 @@
     </div>
     <div class="card-body">
         <div class="tab-content" id="psLeadTabsContent">
-            <!-- Pending Leads Tab -->
-            <div class="tab-pane fade show active" id="pending-leads" role="tabpanel" aria-labelledby="pending-leads-tab">
+            <!-- Fresh Leads Tab -->
+            <div class="tab-pane fade show active" id="fresh-leads" role="tabpanel" aria-labelledby="fresh-leads-tab">
+                <div class="d-flex align-items-center mb-3" id="psFilterBar-fresh">
+                    <div class="btn-group me-2">
+                        <button type="button" class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" id="freshFilterDropdown">
+                            {% if filter_type == 'today' %}Today{% elif filter_type == 'range' %}Date Range{% else %}All Time{% endif %}
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item fresh-filter-option" href="#" data-filter="today">Today</a></li>
+                            <li><a class="dropdown-item fresh-filter-option" href="#" data-filter="all">All Time</a></li>
+                            <li><a class="dropdown-item fresh-filter-option" href="#" data-filter="range">Date Range</a></li>
+                        </ul>
+                    </div>
+                    <input type="date" class="form-control me-2" id="freshFilterStartDate" value="{{ start_date or '' }}" style="width: 160px; display: {% if filter_type == 'range' %}inline-block{% else %}none{% endif %};">
+                    <input type="date" class="form-control me-2" id="freshFilterEndDate" value="{{ end_date or '' }}" style="width: 160px; display: {% if filter_type == 'range' %}inline-block{% else %}none{% endif %};">
+                    <button class="btn btn-outline-primary" id="freshFilterApplyBtn">Apply</button>
+                </div>
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="mb-0">Pending Leads ({{ pending_leads|length }})</h5>
+                    <h5 class="mb-0">Fresh Leads ({{ pending_leads|length }})</h5>
                     <div class="d-flex gap-2">
-                        <div class="btn-group">
-                            <button type="button" class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-                                <span id="pendingTimeFilterText">All Time</span>
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li><a class="dropdown-item pending-time-filter" href="#" data-filter="all">All Time</a></li>
-                                <li><a class="dropdown-item pending-time-filter" href="#" data-filter="mtd">MTD</a></li>
-                                <li><a class="dropdown-item pending-time-filter" href="#" data-filter="week">This Week</a></li>
-                                <li><a class="dropdown-item pending-time-filter" href="#" data-filter="month">Last Month</a></li>
-                                <li><a class="dropdown-item pending-time-filter" href="#" data-filter="quarter">Last Quarter</a></li>
-                                <li><a class="dropdown-item pending-time-filter" href="#" data-filter="year">Last Year</a></li>
-                            </ul>
-                        </div>
                         <div class="input-group" style="max-width: 300px;">
                             <input type="text" class="form-control" id="pendingLeadSearchInput" placeholder="Search by UID, name, mobile...">
                             <button class="btn btn-outline-secondary" type="button" id="pendingLeadSearchButton">
@@ -178,7 +180,7 @@
                         <thead class="table-dark">
                             <tr>
                                 <th>Action</th>
-                                <th>UID</th>
+                                <th>Lead Status</th>
                                 <th>Customer Name</th>
                                 <th>Mobile</th>
                                 <th>Source</th>
@@ -186,6 +188,7 @@
                                 <th>Category</th>
                                 <th>Model Interested</th>
                                 <th>Created Date</th>
+                                <th>UID</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -197,7 +200,13 @@
                                         <i class="fas fa-edit"></i> Update
                                     </a>
                                 </td>
-                                <td><span class="badge bg-primary">{{ lead.lead_uid }}</span></td>
+                                <td>
+                                    {% if lead.lead_status %}
+                                        <span class="badge bg-info">{{ lead.lead_status }}</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Not Set</span>
+                                    {% endif %}
+                                </td>
                                 <td>{{ lead.customer_name }}</td>
                                 <td>{{ lead.customer_mobile_number }}</td>
                                 <td><span class="badge bg-secondary">{{ lead.source }}</span></td>
@@ -215,6 +224,7 @@
                                 </td>
                                 <td>{{ lead.model_interested or 'Not specified' }}</td>
                                 <td>{{ lead.created_at[:10] if lead.created_at else 'N/A' }}</td>
+                                <td><span class="badge bg-primary">{{ lead.lead_uid }}</span></td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -223,7 +233,7 @@
                 {% else %}
                 <div class="text-center py-5">
                     <i class="fas fa-clock fa-3x text-muted mb-3"></i>
-                    <h5 class="text-muted">No pending leads</h5>
+                    <h5 class="text-muted">No fresh leads</h5>
                     <p class="text-muted">All assigned leads have been attended</p>
                 </div>
                 {% endif %}
@@ -250,13 +260,14 @@
                         <thead class="table-dark">
                             <tr>
                                 <th>Action</th>
-                                <th>UID</th>
+                                <th>Lead Status</th>
                                 <th>Customer Name</th>
                                 <th>Mobile</th>
                                 <th>Category</th>
                                 <th>Model Interested</th>
                                 <th>Follow-up Date</th>
                                 <th>Call Progress</th>
+                                <th>UID</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -267,7 +278,13 @@
                                         <i class="fas fa-edit"></i> Update
                                     </a>
                                 </td>
-                                <td><span class="badge bg-primary">{{ lead.lead_uid }}</span></td>
+                                <td>
+                                    {% if lead.lead_status %}
+                                        <span class="badge bg-info">{{ lead.lead_status }}</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Not Set</span>
+                                    {% endif %}
+                                </td>
                                 <td>{{ lead.customer_name }}</td>
                                 <td>{{ lead.customer_mobile_number }}</td>
                                 <td>
@@ -314,6 +331,7 @@
                                         </div>
                                     </div>
                                 </td>
+                                <td><span class="badge bg-primary">{{ lead.lead_uid }}</span></td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -328,23 +346,11 @@
                 {% endif %}
             </div>
 
-            <!-- Attended Leads Tab -->
-            <div class="tab-pane fade" id="attended" role="tabpanel" aria-labelledby="attended-tab">
+            <!-- Pending Leads Tab -->
+            <div class="tab-pane fade" id="pending" role="tabpanel" aria-labelledby="pending-tab">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="mb-0">Attended Leads ({{ attended_leads|length }})</h5>
+                    <h5 class="mb-0">Pending Leads ({{ attended_leads|length }})</h5>
                     <div class="d-flex gap-2">
-                        <div class="btn-group">
-                            <button type="button" class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-                                <span id="timeFilterText">All Time</span>
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li><a class="dropdown-item time-filter" href="#" data-filter="all">All Time</a></li>
-                                <li><a class="dropdown-item time-filter" href="#" data-filter="week">Last Week</a></li>
-                                <li><a class="dropdown-item time-filter" href="#" data-filter="month">Last Month</a></li>
-                                <li><a class="dropdown-item time-filter" href="#" data-filter="quarter">Last Quarter</a></li>
-                                <li><a class="dropdown-item time-filter" href="#" data-filter="year">Last Year</a></li>
-                            </ul>
-                        </div>
                         <div class="input-group" style="max-width: 300px;">
                             <input type="text" class="form-control" id="attendedSearchInput" placeholder="Search by UID, name, mobile...">
                             <button class="btn btn-outline-secondary" type="button" id="attendedSearchButton">
@@ -363,7 +369,7 @@
                         <thead class="table-dark">
                             <tr>
                                 <th>Action</th>
-                                <th>UID</th>
+                                <th>Lead Status</th>
                                 <th>Customer Name</th>
                                 <th>Mobile</th>
                                 <th>First Call Date</th>
@@ -371,6 +377,7 @@
                                 <th>Category</th>
                                 <th>Model Interested</th>
                                 <th>Final Status</th>
+                                <th>UID</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -384,7 +391,13 @@
                                         <i class="fas fa-edit"></i> Update
                                     </a>
                                 </td>
-                                <td><span class="badge bg-primary">{{ lead.lead_uid }}</span></td>
+                                <td>
+                                    {% if lead.lead_status %}
+                                        <span class="badge bg-info">{{ lead.lead_status }}</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Not Set</span>
+                                    {% endif %}
+                                </td>
                                 <td>{{ lead.customer_name }}</td>
                                 <td>{{ lead.customer_mobile_number }}</td>
                                 <td>{{ lead.first_call_date or 'N/A' }}</td>
@@ -410,6 +423,7 @@
                                         <span class="badge bg-warning">{{ lead.final_status }}</span>
                                     {% endif %}
                                 </td>
+                                <td><span class="badge bg-primary">{{ lead.lead_uid }}</span></td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -418,7 +432,7 @@
                 {% else %}
                 <div class="text-center py-5">
                     <i class="fas fa-phone-slash fa-3x text-muted mb-3"></i>
-                    <h5 class="text-muted">No leads attended yet</h5>
+                    <h5 class="text-muted">No pending leads</h5>
                     <p class="text-muted">Leads will appear here after your first call</p>
                 </div>
                 {% endif %}
@@ -426,22 +440,24 @@
 
             <!-- Lost Leads Tab -->
             <div class="tab-pane fade" id="lost-leads" role="tabpanel" aria-labelledby="lost-leads-tab">
+                <div class="d-flex align-items-center mb-3" id="psFilterBar-lost">
+                    <div class="btn-group me-2">
+                        <button type="button" class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" id="lostFilterDropdown">
+                            {% if filter_type == 'today' %}Today{% elif filter_type == 'range' %}Date Range{% else %}All Time{% endif %}
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item lost-filter-option" href="#" data-filter="today">Today</a></li>
+                            <li><a class="dropdown-item lost-filter-option" href="#" data-filter="all">All Time</a></li>
+                            <li><a class="dropdown-item lost-filter-option" href="#" data-filter="range">Date Range</a></li>
+                        </ul>
+                    </div>
+                    <input type="date" class="form-control me-2" id="lostFilterStartDate" value="{{ start_date or '' }}" style="width: 160px; display: {% if filter_type == 'range' %}inline-block{% else %}none{% endif %};">
+                    <input type="date" class="form-control me-2" id="lostFilterEndDate" value="{{ end_date or '' }}" style="width: 160px; display: {% if filter_type == 'range' %}inline-block{% else %}none{% endif %};">
+                    <button class="btn btn-outline-primary" id="lostFilterApplyBtn">Apply</button>
+                </div>
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h5 class="mb-0">Lost Leads (<span id="lostLeadsCount">{{ lost_leads|length }}</span>)</h5>
                     <div class="d-flex gap-2">
-                        <div class="btn-group">
-                            <button type="button" class="btn btn-outline-danger dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-                                <span id="lostTimeFilterText">All Time</span>
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li><a class="dropdown-item lost-time-filter" href="#" data-filter="all">All Time</a></li>
-                                <li><a class="dropdown-item lost-time-filter" href="#" data-filter="mtd">MTD</a></li>
-                                <li><a class="dropdown-item lost-time-filter" href="#" data-filter="week">This Week</a></li>
-                                <li><a class="dropdown-item lost-time-filter" href="#" data-filter="month">Last Month</a></li>
-                                <li><a class="dropdown-item lost-time-filter" href="#" data-filter="quarter">Last Quarter</a></li>
-                                <li><a class="dropdown-item lost-time-filter" href="#" data-filter="year">Last Year</a></li>
-                            </ul>
-                        </div>
                         <div class="input-group" style="max-width: 300px;">
                             <input type="text" class="form-control" id="lostLeadSearchInput" placeholder="Search by UID, name, mobile...">
                             <button class="btn btn-outline-secondary" type="button" id="lostLeadSearchButton">
@@ -459,13 +475,14 @@
                         <thead class="table-dark">
                             <tr>
                                 <th>Action</th>
-                                <th>UID</th>
+                                <th>Lead Status</th>
                                 <th>Customer Name</th>
                                 <th>Mobile</th>
                                 <th>Model Interested</th>
                                 <th>CRE Name</th>
                                 <th>Branch</th>
                                 <th>Lost Date</th>
+                                <th>UID</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -479,7 +496,13 @@
                                         <i class="fas fa-edit"></i> View
                                     </a>
                                 </td>
-                                <td><span class="badge bg-primary">{{ lead.lead_uid }}</span></td>
+                                <td>
+                                    {% if lead.lead_status %}
+                                        <span class="badge bg-info">{{ lead.lead_status }}</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Not Set</span>
+                                    {% endif %}
+                                </td>
                                 <td>{{ lead.customer_name }}</td>
                                 <td>{{ lead.customer_mobile_number }}</td>
                                 <td>{{ lead.model_interested or 'Not specified' }}</td>
@@ -492,6 +515,7 @@
                                         <span class="badge bg-secondary">N/A</span>
                                     {% endif %}
                                 </td>
+                                <td><span class="badge bg-primary">{{ lead.lead_uid }}</span></td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -546,6 +570,49 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Helper to set up filter bar logic for a given tab
+    function setupFilterBar(tabPrefix, tabName) {
+        const filterDropdown = document.getElementById(tabPrefix + 'FilterDropdown');
+        const filterOptions = document.querySelectorAll('.' + tabPrefix + '-filter-option');
+        const startDateInput = document.getElementById(tabPrefix + 'FilterStartDate');
+        const endDateInput = document.getElementById(tabPrefix + 'FilterEndDate');
+        const applyBtn = document.getElementById(tabPrefix + 'FilterApplyBtn');
+        let selectedFilter = '{{ filter_type }}';
+        if (!filterDropdown || !applyBtn) return;
+        filterOptions.forEach(option => {
+            option.addEventListener('click', function(e) {
+                e.preventDefault();
+                selectedFilter = this.getAttribute('data-filter');
+                filterDropdown.textContent = this.textContent;
+                if (selectedFilter === 'range') {
+                    if (startDateInput) startDateInput.style.display = 'inline-block';
+                    if (endDateInput) endDateInput.style.display = 'inline-block';
+                } else {
+                    if (startDateInput) startDateInput.style.display = 'none';
+                    if (endDateInput) endDateInput.style.display = 'none';
+                }
+            });
+        });
+        applyBtn.addEventListener('click', function() {
+            let url = new URL(window.location.href.split('?')[0], window.location.origin);
+            let params = new URLSearchParams(window.location.search);
+            params.set('filter_type', selectedFilter);
+            params.set('tab', tabName);
+            if (selectedFilter === 'range') {
+                if (startDateInput && startDateInput.value) params.set('start_date', startDateInput.value);
+                if (endDateInput && endDateInput.value) params.set('end_date', endDateInput.value);
+            } else {
+                params.delete('start_date');
+                params.delete('end_date');
+            }
+            window.location.href = url.pathname + '?' + params.toString();
+        });
+    }
+    // Setup for Fresh Leads
+    setupFilterBar('fresh', 'fresh-leads');
+    // Setup for Lost Leads
+    setupFilterBar('lost', 'lost-leads');
+
     // Generic search function
     function setupSearch(inputId, buttonId, clearId, tableId) {
         const searchInput = document.getElementById(inputId);
@@ -592,112 +659,37 @@ document.addEventListener('DOMContentLoaded', function() {
     setupSearch('attendedSearchInput', 'attendedSearchButton', 'attendedClearButton', 'attendedLeadsTable');
     setupSearch('lostLeadSearchInput', 'lostLeadSearchButton', 'lostLeadClearButton', 'lostLeadsTable');
 
-    // Time filter functionality for pending leads
-    const pendingTimeFilters = document.querySelectorAll('.pending-time-filter');
-    const pendingTimeFilterText = document.getElementById('pendingTimeFilterText');
-    const pendingRows = document.querySelectorAll('.pending-lead-row');
-
-    pendingTimeFilters.forEach(filter => {
-        filter.addEventListener('click', function(e) {
-            e.preventDefault();
-            const filterType = this.getAttribute('data-filter');
-            pendingTimeFilterText.textContent = this.textContent;
-
-            // Calculate date thresholds
-            const today = new Date();
-            let threshold = new Date();
-
-            switch(filterType) {
-                case 'mtd':
-                    threshold = new Date(today.getFullYear(), today.getMonth(), 1);
-                    break;
-                case 'week':
-                    threshold.setDate(today.getDate() - today.getDay()); // Start of current week
-                    break;
-                case 'month':
-                    threshold.setMonth(today.getMonth() - 1);
-                    break;
-                case 'quarter':
-                    threshold.setMonth(today.getMonth() - 3);
-                    break;
-                case 'year':
-                    threshold.setFullYear(today.getFullYear() - 1);
-                    break;
-                default:
-                    threshold = new Date(0); // Beginning of time
-            }
-
-            // Filter rows based on created date
-            pendingRows.forEach(row => {
-                const createdDate = row.getAttribute('data-created');
-
-                if (!createdDate) {
-                    row.style.display = 'none';
-                    return;
-                }
-
-                const date = new Date(createdDate);
-
-                if (date >= threshold) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
-            });
-        });
+    // Hide filter bar for Today's Follow-ups and Pending Leads tabs
+    function updateFilterBarVisibility() {
+        const filterBar = document.getElementById('psFilterBar');
+        const activeTab = document.querySelector('.nav-link.active');
+        if (!filterBar || !activeTab) return;
+        const tabId = activeTab.getAttribute('id');
+        if (tabId === 'fresh-leads-tab' || tabId === 'lost-leads-tab') {
+            filterBar.style.display = '';
+        } else {
+            filterBar.style.display = 'none';
+        }
+    }
+    // Initial check
+    updateFilterBarVisibility();
+    // Listen for tab changes
+    document.querySelectorAll('.nav-link').forEach(tab => {
+        tab.addEventListener('shown.bs.tab', updateFilterBarVisibility);
     });
 
-    // Time filter functionality for attended leads
-    const timeFilters = document.querySelectorAll('.time-filter');
-    const timeFilterText = document.getElementById('timeFilterText');
-    const attendedRows = document.querySelectorAll('.attended-lead-row');
-
-    timeFilters.forEach(filter => {
-        filter.addEventListener('click', function(e) {
-            e.preventDefault();
-            const filterType = this.getAttribute('data-filter');
-            timeFilterText.textContent = this.textContent;
-
-            // Calculate date thresholds
-            const today = new Date();
-            let threshold = new Date();
-
-            switch(filterType) {
-                case 'week':
-                    threshold.setDate(today.getDate() - 7);
-                    break;
-                case 'month':
-                    threshold.setMonth(today.getMonth() - 1);
-                    break;
-                case 'quarter':
-                    threshold.setMonth(today.getMonth() - 3);
-                    break;
-                case 'year':
-                    threshold.setFullYear(today.getFullYear() - 1);
-                    break;
-                default:
-                    threshold = new Date(0); // Beginning of time
+    // Activate the correct tab based on the 'tab' query parameter
+    function activateTabFromQuery() {
+        const params = new URLSearchParams(window.location.search);
+        const tab = params.get('tab');
+        if (tab) {
+            const tabBtn = document.querySelector(`[data-bs-target='#${tab}']`);
+            if (tabBtn) {
+                new bootstrap.Tab(tabBtn).show();
             }
-
-            // Filter rows based on last call date
-            attendedRows.forEach(row => {
-                const lastCallDate = row.getAttribute('data-last-call');
-
-                if (!lastCallDate) {
-                    row.style.display = 'none';
-                    return;
-                }
-
-                const callDate = new Date(lastCallDate);
-
-                if (callDate >= threshold) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
-            });
-        });
-    });
+        }
+    }
+    activateTabFromQuery();
 });
 </script>
 {% endblock %}

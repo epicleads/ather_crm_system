@@ -173,13 +173,13 @@
                         <thead class="table-dark">
                             <tr>
                                 <th>Action</th>
-                                <th>UID</th>
+                                <th>Lead Status</th>
                                 <th>Customer Name</th>
                                 <th>Mobile</th>
                                 <th>Source</th>
                                 <th>Campaign</th>
                                 <th>Date</th>
-                                <th>Lead Status</th>
+                                <th>UID</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -193,12 +193,6 @@
                                         <i class="fas fa-edit"></i> Update
                                     </a>
                                 </td>
-                                <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
-                                <td>{{ lead.customer_name }}</td>
-                                <td>{{ lead.customer_mobile_number }}</td>
-                                <td><span class="badge bg-secondary">{{ lead.source }}</span></td>
-                                <td><span class="badge bg-info">{{ lead.campaign or 'N/A' }}</span></td>
-                                <td>{{ lead.date }}</td>
                                 <td>
                                     {% if lead.lead_status %}
                                         <span class="badge bg-info">{{ lead.lead_status }}</span>
@@ -206,6 +200,12 @@
                                         <span class="badge bg-secondary">Not Set</span>
                                     {% endif %}
                                 </td>
+                                <td>{{ lead.customer_name }}</td>
+                                <td>{{ lead.customer_mobile_number }}</td>
+                                <td><span class="badge bg-secondary">{{ lead.source }}</span></td>
+                                <td><span class="badge bg-info">{{ lead.campaign or 'N/A' }}</span></td>
+                                <td>{{ lead.date }}</td>
+                                <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -241,12 +241,12 @@
                         <thead class="table-dark">
                             <tr>
                                 <th>Action</th>
-                                <th>UID</th>
+                                <th>Lead Status</th>
                                 <th>Customer Name</th>
                                 <th>Mobile</th>
                                 <th>Category</th>
-                                <th>Lead Status</th>
-                                <th>Follow-up Date</th>
+                                <th>Date</th>
+                                <th>UID</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -257,7 +257,13 @@
                                         <i class="fas fa-edit"></i> Update
                                     </a>
                                 </td>
-                                <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
+                                <td>
+                                    {% if lead.lead_status %}
+                                        <span class="badge bg-info">{{ lead.lead_status }}</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Not Set</span>
+                                    {% endif %}
+                                </td>
                                 <td>{{ lead.customer_name }}</td>
                                 <td>{{ lead.customer_mobile_number }}</td>
                                 <td>
@@ -271,12 +277,8 @@
                                         <span class="badge bg-dark">{{ lead.lead_category or 'Not Set' }}</span>
                                     {% endif %}
                                 </td>
-                                <td>{{ lead.lead_status or 'Pending' }}</td>
-                                <td>
-                                    {% if lead.follow_up_date %}
-                                    <span class="badge bg-warning">{{ lead.follow_up_date.replace('T', ' ')[:16] }}</span>
-                                    {% endif %}
-                                </td>
+                                <td>{{ lead.date }}</td>
+                                <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -345,14 +347,14 @@
                         <thead class="table-dark">
                             <tr>
                                 <th>Action</th>
-                                <th>UID</th>
+                                <th>Lead Status</th>
                                 <th>Customer Name</th>
                                 <th>Mobile</th>
                                 <th>First Call Date</th>
                                 <th>Last Call Date</th>
                                 <th>Category</th>
-                                <th>Lead Status</th>
-                                <th>Final Status</th>
+                                <th>Date</th>
+                                <th>UID</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -366,7 +368,13 @@
                                         <i class="fas fa-edit"></i> Update
                                     </a>
                                 </td>
-                                <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
+                                <td>
+                                    {% if lead.lead_status %}
+                                        <span class="badge bg-info">{{ lead.lead_status }}</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Not Set</span>
+                                    {% endif %}
+                                </td>
                                 <td>{{ lead.customer_name }}</td>
                                 <td>{{ lead.customer_mobile_number }}</td>
                                 <td>{{ lead.first_call_date or 'N/A' }}</td>
@@ -382,16 +390,8 @@
                                         <span class="badge bg-dark">{{ lead.lead_category or 'Not Set' }}</span>
                                     {% endif %}
                                 </td>
-                                <td>{{ lead.lead_status or 'Pending' }}</td>
-                                <td>
-                                    {% if lead.final_status == 'Won' %}
-                                        <span class="badge bg-success">{{ lead.final_status }}</span>
-                                    {% elif lead.final_status == 'Lost' %}
-                                        <span class="badge bg-danger">{{ lead.final_status }}</span>
-                                    {% else %}
-                                        <span class="badge bg-warning">{{ lead.final_status or 'Pending' }}</span>
-                                    {% endif %}
-                                </td>
+                                <td>{{ lead.date }}</td>
+                                <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
                             </tr>
                             {% endif %}
                             {% endfor %}
@@ -447,15 +447,15 @@
                         <thead class="table-dark">
                             <tr>
                                 <th>Action</th>
-                                <th>UID</th>
+                                <th>Lead Status</th>
                                 <th>Customer Name</th>
                                 <th>Mobile</th>
                                 <th>PS Name</th>
                                 <th>Branch</th>
                                 <th>Category</th>
                                 <th>Model Interested</th>
-                                <th>PS Assigned Date</th>
-                                <th>Final Status</th>
+                                <th>Date</th>
+                                <th>UID</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -468,7 +468,13 @@
                                         <i class="fas fa-edit"></i> Update
                                     </a>
                                 </td>
-                                <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
+                                <td>
+                                    {% if lead.lead_status %}
+                                        <span class="badge bg-info">{{ lead.lead_status }}</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Not Set</span>
+                                    {% endif %}
+                                </td>
                                 <td>{{ lead.customer_name }}</td>
                                 <td>{{ lead.customer_mobile_number }}</td>
                                 <td>{{ lead.ps_name }}</td>
@@ -484,23 +490,8 @@
                                         <span class="badge bg-dark">{{ lead.lead_category or 'Not Set' }}</span>
                                     {% endif %}
                                 </td>
-                                <td>{{ lead.model_interested or 'Not specified' }}</td>
-                                <td>
-                                    {% if lead.ps_assigned_at %}
-                                        <span class="badge bg-info">{{ lead.ps_assigned_at[:10] }}</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">N/A</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if lead.final_status == 'Won' %}
-                                        <span class="badge bg-success">{{ lead.final_status }}</span>
-                                    {% elif lead.final_status == 'Lost' %}
-                                        <span class="badge bg-danger">{{ lead.final_status }}</span>
-                                    {% else %}
-                                        <span class="badge bg-warning">{{ lead.final_status or 'Pending' }}</span>
-                                    {% endif %}
-                                </td>
+                                <td>{{ lead.date }}</td>
+                                <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -555,13 +546,14 @@
                         <thead class="table-dark">
                             <tr>
                                 <th>Action</th>
-                                <th>UID</th>
+                                <th>Lead Status</th>
                                 <th>Customer Name</th>
                                 <th>Mobile</th>
                                 <th>Model Interested</th>
                                 <th>PS Name</th>
                                 <th>Branch</th>
-                                <th>Won Date</th>
+                                <th>Date</th>
+                                <th>UID</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -575,19 +567,20 @@
                                         <i class="fas fa-edit"></i> View
                                     </a>
                                 </td>
-                                <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
+                                <td>
+                                    {% if lead.lead_status %}
+                                        <span class="badge bg-info">{{ lead.lead_status }}</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Not Set</span>
+                                    {% endif %}
+                                </td>
                                 <td>{{ lead.customer_name }}</td>
                                 <td>{{ lead.customer_mobile_number }}</td>
                                 <td>{{ lead.model_interested or 'Not specified' }}</td>
                                 <td>{{ lead.ps_name or 'N/A' }}</td>
                                 <td>{{ lead.branch or 'N/A' }}</td>
-                                <td>
-                                    {% if lead.won_timestamp %}
-                                        <span class="badge bg-success">{{ lead.won_timestamp[:10] }}</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">N/A</span>
-                                    {% endif %}
-                                </td>
+                                <td>{{ lead.date }}</td>
+                                <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -611,12 +604,12 @@
                         <thead class="table-dark">
                             <tr>
                                 <th>Action</th>
-                                <th>UID</th>
+                                <th>Lead Status</th>
                                 <th>Customer Name</th>
                                 <th>Mobile</th>
                                 <th>Model</th>
-                                <th>Follow-up Date</th>
-                                <th>Status</th>
+                                <th>Date</th>
+                                <th>UID</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -625,12 +618,18 @@
                                 <td>
                                     <a href="#" class="btn btn-sm btn-success">Update</a>
                                 </td>
-                                <td>{{ lead.uid }}</td>
+                                <td>
+                                    {% if lead.lead_status %}
+                                        <span class="badge bg-info">{{ lead.lead_status }}</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Not Set</span>
+                                    {% endif %}
+                                </td>
                                 <td>{{ lead.customer_name }}</td>
                                 <td>{{ lead.customer_mobile_number }}</td>
                                 <td>{{ lead.model_interested }}</td>
                                 <td>{{ lead.walkin_followup_date }}</td>
-                                <td>{{ lead.status or 'Pending' }}</td>
+                                <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
                             </tr>
                             {% endfor %}
                         </tbody>
