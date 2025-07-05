@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block title %}Event Leads Entry - Ather CRM{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card shadow">
+        <div class="card-header bg-info text-white">
+            <h4><i class="fas fa-calendar-alt"></i> Event/Activity Lead Entry</h4>
+        </div>
+        <div class="card-body">
+            <form method="POST" id="eventLeadForm">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="activity_name" class="form-label">Activity Name</label>
+                        <select class="form-select" id="activity_name" name="activity_name" required>
+                            <option value="">Select Activity</option>
+                            <option value="Umbrella Event">Umbrella Event</option>
+                            <option value="Umbrella Activity">Umbrella Activity</option>
+                            <option value="BTL">BTL</option>
+                            <option value="Mall Activity">Mall Activity</option>
+                            <option value="Corporate Activity">Corporate Activity</option>
+                            <option value="Society Activity">Society Activity</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="activity_location" class="form-label">Activity Location</label>
+                        <input type="text" class="form-control" id="activity_location" name="activity_location" required>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="ps_name" class="form-label">PS Name</label>
+                        <input type="text" class="form-control" id="ps_name" name="ps_name" value="{{ session.ps_name }}" required readonly>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="location" class="form-label">Location (Branch)</label>
+                        <input type="text" class="form-control" id="location" name="location" value="{{ session.branch }}" required readonly>
+                    </div>
+                </div>
+                <hr>
+                <h5>Customer Details</h5>
+                <div id="customerLeads">
+                    <div class="row mb-3 customer-lead-row">
+                        <div class="col-md-3">
+                            <label class="form-label">Customer Name</label>
+                            <input type="text" class="form-control" name="customer_name[]" required>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Mobile Number</label>
+                            <input type="tel" class="form-control" name="customer_phone_number[]" pattern="[0-9]{10}" maxlength="10" required>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Customer Location</label>
+                            <input type="text" class="form-control" name="customer_location[]">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Profession</label>
+                            <input type="text" class="form-control" name="customer_profession[]">
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label">Gender</label>
+                            <select class="form-select" name="gender[]">
+                                <option value="MALE">Male</option>
+                                <option value="FEMALE">Female</option>
+                                <option value="OTHER">Other</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Interested Model</label>
+                            <select class="form-select" name="interested_model[]">
+                                <option value="">Select Model</option>
+                                <option>ATHER 450</option>
+                                <option>ATHER 450X (2.9 kWh)</option>
+                                <option>ATHER 450X (3.7 kWh)</option>
+                                <option>ATHER 450X (2.9 kWh) Pro Pack</option>
+                                <option>ATHER 450X (3.7 kWh) Pro Pack</option>
+                                <option>ATHER 450 Apex STD</option>
+                                <option>ATHER RIZTA S Mono (2.9 kWh)</option>
+                                <option>ATHER RIZTA S Super Matte (2.9 kWh)</option>
+                                <option>ATHER RIZTA Z Mono (2.9 kWh)</option>
+                                <option>ATHER RIZTA Z Duo (2.9 kWh)</option>
+                                <option>ATHER RIZTA Z Super Matte (2.9 kWh)</option>
+                                <option>ATHER RIZTA Z Mono (3.7 kWh)</option>
+                                <option>ATHER RIZTA Z Duo (3.7 kWh)</option>
+                                <option>ATHER RIZTA Z Super Matte (3.7 kWh)</option>
+                                <option>APEX</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2 mt-2">
+                            <label class="form-label">Remarks</label>
+                            <input type="text" class="form-control" name="remarks[]">
+                        </div>
+                        <div class="col-md-2 mt-2">
+                            <label class="form-label">Lead Status</label>
+                            <select class="form-select" name="lead_status[]">
+                                <option value="HOT">Hot</option>
+                                <option value="WARM">Warm</option>
+                                <option value="COLD">Cold</option>
+                                <option value="CASUAL ENQUIRY">Casual Enquiry</option>
+                            </select>
+                        </div>
+                        <div class="col-md-1 mt-2">
+                            <label class="form-label">Month</label>
+                            <input type="text" class="form-control" name="month[]" value="{{ now.strftime('%b') }}">
+                        </div>
+                        <div class="col-md-2 mt-2">
+                            <label class="form-label">Date</label>
+                            <input type="date" class="form-control" name="date[]" value="{{ now.strftime('%Y-%m-%d') }}">
+                        </div>
+                        <div class="col-md-1 d-flex align-items-end">
+                            <button type="button" class="btn btn-danger remove-lead-row" style="display:none;"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <button type="button" class="btn btn-secondary" id="addCustomerLead"><i class="fas fa-plus"></i> Add Another Lead</button>
+                </div>
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-info btn-lg"><i class="fas fa-save"></i> Submit Event Leads</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+document.getElementById('addCustomerLead').addEventListener('click', function() {
+    const container = document.getElementById('customerLeads');
+    const firstRow = container.querySelector('.customer-lead-row');
+    const newRow = firstRow.cloneNode(true);
+    newRow.querySelectorAll('input, select').forEach(input => {
+        input.value = '';
+    });
+    newRow.querySelector('.remove-lead-row').style.display = 'block';
+    container.appendChild(newRow);
+});
+document.getElementById('customerLeads').addEventListener('click', function(e) {
+    if (e.target.classList.contains('remove-lead-row')) {
+        e.target.closest('.customer-lead-row').remove();
+    }
+});
+</script>
+{% endblock %} 

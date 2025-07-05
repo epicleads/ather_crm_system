@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>RAAM ATHER - Customer Quotation</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #fff;
+      color: #333;
+      margin: 0;
+      padding: 10px;
+    }
+
+    .container {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 20px 30px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #ccc;
+      padding-bottom: 8px;
+    }
+
+    .header img {
+      height: 50px;
+    }
+
+    .header h1 {
+      color: #147a49;
+      font-size: 20px;
+      margin: 0;
+      text-align: right;
+    }
+
+    h2 {
+      margin: 25px 0 10px;
+      color: #147a49;
+      font-size: 18px;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 5px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th, td {
+      border: 1px solid #ddd;
+      padding: 6px 10px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f0f0f0;
+    }
+
+    .totals td {
+      font-weight: bold;
+      background-color: #fafafa;
+    }
+
+    .note {
+      margin-top: 20px;
+      background: #fff8e1;
+      padding: 10px;
+      border-left: 4px solid #ffc107;
+      font-size: 13px;
+    }
+
+    .print-btn {
+      text-align: center;
+      margin-top: 25px;
+    }
+
+    .print-btn button {
+      background-color: #147a49;
+      color: white;
+      padding: 8px 24px;
+      font-size: 14px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .print-btn button:hover {
+      background-color: #0e5a35;
+    }
+
+    @media print {
+      .print-btn {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <img src="{{ url_for('static', filename='images/logo.jpg') }}" alt="RAAM ATHER Logo">
+
+      <h1>Customer Quotation</h1>
+    </div>
+
+    <p style="font-size: 14px;">
+      <strong>Executive:</strong> {{ data.psName }}<br>
+      <strong>Mobile:</strong> {{ data.executiveMobile }}<br>
+      <strong>Date:</strong> {{ data.date }}<br>
+      <strong>Branch:</strong> {{ data.branch }}
+    </p>
+
+    <h2>Customer Details</h2>
+    <table>
+      <tr><th>Full Name</th><td>{{ data.customerName }}</td></tr>
+      <tr><th>Mobile</th><td>{{ data.customerMobile }}</td></tr>
+      <tr><th>Email</th><td>{{ data.email }}</td></tr>
+      <tr><th>Address</th><td>{{ data.address }}</td></tr>
+      <tr><th>Occupation</th><td>{{ data.occupation }}</td></tr>
+      <tr><th>Lead Source</th><td>{{ data.leadSource }}</td></tr>
+      <tr><th>Lead Category</th><td>{{ data.leadCategory }}</td></tr>
+      <tr><th>Purchase Type</th><td>{{ data.purchaseType }}</td></tr>
+      <tr><th>Model</th><td>{{ data.model }}</td></tr>
+      <tr><th>Color</th><td>{{ data.color }}</td></tr>
+      <tr><th>Expected Delivery</th><td>{{ data.expectedDate }}</td></tr>
+    </table>
+
+    {% set model_data = {
+      "Rizta S Mono (2.9 kWh)": [114841, 17000],
+      "Rizta S Super Matte (2.9 kWh)": [116841, 18000],
+      "Rizta Z Mono (2.9 kWh)": [129841, 20000],
+      "Rizta Z Duo (2.9 kWh)": [130841, 17000],
+      "Rizta Z Super Matte (2.9 kWh)": [131841, 18000],
+      "Rizta Z Mono (3.7 kWh)": [149842, 20000],
+      "Rizta Z Duo (3.7 kWh)": [150842, 17000],
+      "Rizta Z Super Matte (3.7 kWh)": [151842, 18000],
+      "450 X (2.9 kWh)": [149047, 20000],
+      "450 X (3.7 kWh)": [159046, 17000],
+      "450 X (2.9 kWh) Pro Pack": [166047, 18000],
+      "450 X (3.7 kWh) Pro Pack": [179046, 20000],
+      "450 Apex STD": [189841, 0]
+    } %}
+
+    {% set model_price = model_data[data.model][0] if data.model in model_data else 0 %}
+    {% set pro_pack_price = model_data[data.model][1] if data.model in model_data else 0 %}
+    {% set rto = 1000 %}
+    {% set insurance = 5500 %}
+    {% set ebw = 6000 %}
+    {% set amc = 2500 %}
+    {% set subsidy = 5000 %}
+    {% set accessories = data.accessories|int if data.accessories else 0 %}
+    {% set grand_total = model_price + pro_pack_price + rto + insurance + accessories + ebw + amc - subsidy %}
+
+    <h2>Pricing Summary</h2>
+    <table>
+      <tr><th>Description</th><th>Amount (₹)</th></tr>
+      <tr><td>Ex Showroom Price (incl. GST + Charger)</td><td>{{ "{:,}".format(model_price) }}</td></tr>
+      <tr><td>PM E-Drive Subsidy</td><td>-{{ "{:,}".format(subsidy) }}</td></tr>
+      <tr><td>Pro Pack</td><td>{{ "{:,}".format(pro_pack_price) }}</td></tr>
+      <tr><td>RTO Registration</td><td>{{ "{:,}".format(rto) }}</td></tr>
+      <tr><td>Insurance (Add-on)</td><td>{{ "{:,}".format(insurance) }}</td></tr>
+      <tr><td>Accessories</td><td>{{ "{:,}".format(accessories) }}</td></tr>
+      <tr><td>EBW</td><td>{{ "{:,}".format(ebw) }}</td></tr>
+      <tr><td>AMC</td><td>{{ "{:,}".format(amc) }}</td></tr>
+      <tr class="totals"><td>Grand Total</td><td><strong>₹{{ "{:,}".format(grand_total) }}</strong></td></tr>
+    </table>
+
+    <div class="note">
+      <strong>Note:</strong> Vehicle delivery is subject to successful completion of PM-E Drive face verification.
+    </div>
+
+    <div class="print-btn">
+      <button onclick="window.print()">🖨️ Print Quotation</button>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ATHER ENERGY - Customer Quotation</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 1cm;
+    }
+
+    body {
+      font-family: 'Arial', sans-serif;
+      background: #fff;
+      color: #333;
+      margin: 0;
+      padding: 0;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .container {
+      max-width: 100%;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid #147a49;
+      padding-bottom: 15px;
+      margin-bottom: 20px;
+    }
+
+    .logo {
+      font-size: 24px;
+      font-weight: bold;
+      color: #147a49;
+    }
+
+    .header h1 {
+      color: #147a49;
+      font-size: 20px;
+      margin: 0;
+      text-align: right;
+    }
+
+    .quotation-info {
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    .quotation-info p {
+      margin: 5px 0;
+      font-size: 13px;
+    }
+
+    h2 {
+      margin: 25px 0 15px;
+      color: #147a49;
+      font-size: 16px;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+      margin-bottom: 20px;
+    }
+
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px 10px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f0f0f0;
+      font-weight: bold;
+    }
+
+    .totals td {
+      font-weight: bold;
+      background-color: #fafafa;
+    }
+
+    .grand-total {
+      background-color: #147a49 !important;
+      color: white !important;
+    }
+
+    .note {
+      margin-top: 20px;
+      background: #fff8e1;
+      padding: 15px;
+      border-left: 4px solid #ffc107;
+      font-size: 11px;
+    }
+
+    .footer {
+      margin-top: 30px;
+      text-align: center;
+      font-size: 10px;
+      color: #666;
+      border-top: 1px solid #eee;
+      padding-top: 15px;
+    }
+
+    .amount {
+      text-align: right;
+    }
+
+    .highlight {
+      background-color: #e8f5e8;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">ATHER ENERGY</div>
+      <h1>Customer Quotation</h1>
+    </div>
+
+    <div class="quotation-info">
+      <p><strong>Quotation ID:</strong> {{ data.uid }}</p>
+      <p><strong>Executive:</strong> {{ data.psName }}</p>
+      <p><strong>Mobile:</strong> {{ data.executiveMobile }}</p>
+      <p><strong>Date:</strong> {{ data.date }}</p>
+      <p><strong>Branch:</strong> {{ data.branch }}</p>
+    </div>
+
+    <h2>Customer Details</h2>
+    <table>
+      <tr><th style="width: 30%;">Full Name</th><td>{{ data.customerName }}</td></tr>
+      <tr><th>Mobile</th><td>{{ data.customerMobile }}</td></tr>
+      <tr><th>Email</th><td>{{ data.email }}</td></tr>
+      <tr><th>Address</th><td>{{ data.address }}</td></tr>
+      <tr><th>Occupation</th><td>{{ data.occupation }}</td></tr>
+      <tr><th>Lead Source</th><td>{{ data.leadSource }}</td></tr>
+      <tr><th>Lead Category</th><td>{{ data.leadCategory }}</td></tr>
+      <tr><th>Purchase Type</th><td>{{ data.purchaseType }}</td></tr>
+      <tr><th>Model</th><td>{{ data.model }}</td></tr>
+      <tr><th>Color</th><td>{{ data.color }}</td></tr>
+      <tr><th>Expected Delivery</th><td>{{ data.expectedDate }}</td></tr>
+    </table>
+
+    {% set model_data = {
+      "Rizta S Mono (2.9 kWh)": [114841, 17000],
+      "Rizta S Super Matte (2.9 kWh)": [116841, 18000],
+      "Rizta Z Mono (2.9 kWh)": [129841, 20000],
+      "Rizta Z Duo (2.9 kWh)": [130841, 17000],
+      "Rizta Z Super Matte (2.9 kWh)": [131841, 18000],
+      "Rizta Z Mono (3.7 kWh)": [149842, 20000],
+      "Rizta Z Duo (3.7 kWh)": [150842, 17000],
+      "Rizta Z Super Matte (3.7 kWh)": [151842, 18000],
+      "450 X (2.9 kWh)": [149047, 20000],
+      "450 X (3.7 kWh)": [159046, 17000],
+      "450 X (2.9 kWh) Pro Pack": [166047, 18000],
+      "450 X (3.7 kWh) Pro Pack": [179046, 20000],
+      "450 Apex STD": [189841, 0]
+    } %}
+
+    {% set model_price = model_data[data.model][0] if data.model in model_data else 0 %}
+    {% set pro_pack_price = model_data[data.model][1] if data.model in model_data else 0 %}
+    {% set rto = 1000 %}
+    {% set insurance = 5500 %}
+    {% set ebw = 6000 %}
+    {% set amc = 2500 %}
+    {% set subsidy = 5000 %}
+    {% set accessories = data.accessories|int if data.accessories else 0 %}
+    {% set grand_total = model_price + pro_pack_price + rto + insurance + accessories + ebw + amc - subsidy %}
+
+    <h2>Pricing Summary</h2>
+    <table>
+      <tr><th style="width: 70%;">Description</th><th class="amount">Amount (₹)</th></tr>
+      <tr><td>Ex Showroom Price (incl. GST + Charger)</td><td class="amount">{{ "{:,}".format(model_price) }}</td></tr>
+      <tr class="highlight"><td>PM E-Drive Subsidy</td><td class="amount">-{{ "{:,}".format(subsidy) }}</td></tr>
+      <tr><td>Pro Pack</td><td class="amount">{{ "{:,}".format(pro_pack_price) }}</td></tr>
+      <tr><td>RTO Registration</td><td class="amount">{{ "{:,}".format(rto) }}</td></tr>
+      <tr><td>Insurance (Add-on)</td><td class="amount">{{ "{:,}".format(insurance) }}</td></tr>
+      <tr><td>Accessories</td><td class="amount">{{ "{:,}".format(accessories) }}</td></tr>
+      <tr><td>EBW (Extended Battery Warranty)</td><td class="amount">{{ "{:,}".format(ebw) }}</td></tr>
+      <tr><td>AMC (Annual Maintenance Contract)</td><td class="amount">{{ "{:,}".format(amc) }}</td></tr>
+      <tr class="totals grand-total"><td><strong>Grand Total</strong></td><td class="amount"><strong>₹{{ "{:,}".format(grand_total) }}</strong></td></tr>
+    </table>
+
+    <div class="note">
+      <strong>Important Notes:</strong><br>
+      • Vehicle delivery is subject to successful completion of PM-E Drive face verification.<br>
+      • This quotation is valid for 30 days from the date of issue.<br>
+      • Prices are subject to change without prior notice.<br>
+      • All government subsidies are subject to availability and eligibility criteria.<br>
+      • For financing options, please contact our sales team.
+    </div>
+
+    <div class="footer">
+      <p><strong>Thank you for choosing Ather Energy!</strong></p>
+      <p>For any queries, please contact us at {{ data.branch }} branch</p>
+      <p>Visit us: www.atherenergy.com | Call: 1800-123-ATHER</p>
+    </div>
+  </div>
+</body>
+</html>
