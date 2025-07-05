@@ -3,697 +3,357 @@
 {% block title %}Manage Leads - Ather CRM{% endblock %}
 
 {% block content %}
-<div class="row mb-4">
-    <div class="col-12 d-flex justify-content-between align-items-center">
-        <div>
-            <h2 class="mb-0"><i class="fas fa-database text-danger"></i> Manage Lead Data</h2>
-            <p class="text-muted">View, search, and delete lead records</p>
-        </div>
-        <div class="btn-group">
-            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary">
-                <i class="fas fa-arrow-left"></i> Back to Dashboard
-            </a>
+<div class="container-main">
+    <div class="row mb-4">
+        <div class="col-12 d-flex justify-content-between align-items-center">
+            <h2 class="mb-0" style="color: var(--airbnb-gray-700); font-weight: 700;">
+                <i class="fas fa-tasks" style="color: var(--airbnb-yellow);"></i> Manage Leads
+            </h2>
         </div>
     </div>
-</div>
-
-<!-- Search and Filter Controls -->
-<div class="card mb-4">
-    <div class="card-header bg-info text-white">
-        <h5 class="mb-0"><i class="fas fa-search"></i> Search & Filter Leads</h5>
+    <!-- CRE Buttons Row -->
+    <div class="row mb-3">
+        <div class="col-12 d-flex flex-wrap align-items-center gap-2">
+            {% for cre in cres %}
+                <a href="{{ url_for('manage_leads', cre_id=cre.id) }}"
+                   class="btn btn-outline-primary btn-sm mb-2 {% if selected_cre and cre.id == selected_cre.id %}active fw-bold{% endif %}"
+                   style="min-width: 120px; margin-right: 8px;">
+                    <i class="fas fa-user me-1"></i>{{ cre.name }}
+                </a>
+            {% endfor %}
+        </div>
     </div>
-    <div class="card-body">
-        <div class="row g-3">
-            <div class="col-md-4">
-                <label for="searchInput" class="form-label">Search</label>
-                <div class="input-group">
-                    <input type="text" class="form-control" id="searchInput" placeholder="Search by UID, name, mobile, source...">
-                    <button class="btn btn-outline-secondary" type="button" id="searchButton">
-                        <i class="fas fa-search"></i>
-                    </button>
-                    <button class="btn btn-outline-warning" type="button" id="clearButton">
-                        <i class="fas fa-times"></i>
-                    </button>
+    <!-- Leads Table -->
+    <div class="row">
+        <div class="col-12">
+            {% if selected_cre %}
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <div>
+                    <strong>Showing {{ total_leads }} lead{{ total_leads != 1 and 's' or '' }}</strong>
                 </div>
             </div>
-            <div class="col-md-2">
-                <label for="sourceFilter" class="form-label">Source</label>
-                <select class="form-select" id="sourceFilter">
-                    <option value="">All Sources</option>
-                    <option value="Google">Google</option>
-                    <option value="Meta">Meta</option>
-                    <option value="Affiliate">Affiliate</option>
-                    <option value="Know">Know</option>
-                    <option value="Whatsapp">Whatsapp</option>
-                    <option value="Tele">Tele</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label for="statusFilter" class="form-label">Assignment</label>
-                <select class="form-select" id="
-                <select class="form-select" id="statusFilter">
-                    <option value="">All Status</option>
-                    <option value="Yes">Assigned</option>
-                    <option value="No">Unassigned</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label for="finalStatusFilter" class="form-label">Final Status</label>
-                <select class="form-select" id="finalStatusFilter">
-                    <option value="">All Status</option>
-                    <option value="Pending">Pending</option>
-                    <option value="Won">Won</option>
-                    <option value="Lost">Lost</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label for="dateFilter" class="form-label">Date Range</label>
-                <select class="form-select" id="dateFilter">
-                    <option value="all">All Time</option>
-                    <option value="today">Today</option>
-                    <option value="week">This Week</option>
-                    <option value="month">This Month</option>
-                    <option value="quarter">Last Quarter</option>
-                    <option value="year">This Year</option>
-                </select>
-            </div>
-        </div>
-        <div class="row mt-3">
-            <div class="col-12">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <button type="button" class="btn btn-primary" id="applyFilters">
-                            <i class="fas fa-filter"></i> Apply Filters
-                        </button>
-                        <button type="button" class="btn btn-secondary" id="resetFilters">
-                            <i class="fas fa-undo"></i> Reset
-                        </button>
-                    </div>
-                    <div>
-                        <span class="text-muted">Total Leads: <strong id="totalCount">{{ leads|length }}</strong></span>
-                        <span class="text-muted ms-3">Showing: <strong id="visibleCount">{{ leads|length }}</strong></span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Bulk Actions -->
-<div class="card mb-4">
-    <div class="card-header bg-warning text-dark">
-        <div class="d-flex justify-content-between align-items-center">
-            <h5 class="mb-0"><i class="fas fa-tasks"></i> Bulk Actions</h5>
-            <div>
-                <button type="button" class="btn btn-sm btn-outline-dark" id="selectAllBtn">
-                    <i class="fas fa-check-square"></i> Select All
-                </button>
-                <button type="button" class="btn btn-sm btn-outline-dark" id="deselectAllBtn">
-                    <i class="fas fa-square"></i> Deselect All
-                </button>
-            </div>
-        </div>
-    </div>
-    <div class="card-body">
-        <div class="d-flex gap-2">
-            <button type="button" class="btn btn-danger" id="bulkDeleteBtn" disabled>
-                <i class="fas fa-trash"></i> Delete Selected (<span id="selectedCount">0</span>)
-            </button>
-            <button type="button" class="btn btn-warning" id="bulkUnassignBtn" disabled>
-                <i class="fas fa-user-times"></i> Unassign Selected
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- Leads Table -->
-<div class="card">
-    <div class="card-header">
-        <h5 class="mb-0"><i class="fas fa-list"></i> All Leads ({{ leads|length }})</h5>
-    </div>
-    <div class="card-body p-0">
-        {% if leads %}
-        <div class="table-responsive">
-            <table class="table table-hover mb-0" id="leadsTable">
-                <thead class="table-dark">
-                    <tr>
-                        <th width="50">
-                            <input type="checkbox" id="selectAllCheckbox" class="form-check-input">
-                        </th>
-                        <th>UID</th>
-                        <th>Customer Name</th>
-                        <th>Mobile</th>
-                        <th>Source</th>
-                        <th>CRE Name</th>
-                        <th>PS Name</th>
-                        <th>Assignment</th>
-                        <th>Final Status</th>
-                        <th>Date</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for lead in leads %}
-                    <tr class="lead-row"
-                        data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or '') + ' ' + (lead.cre_name or '') + ' ' + (lead.ps_name or ''))|lower }}"
-                        data-source="{{ lead.source or '' }}"
-                        data-assigned="{{ lead.assigned or 'No' }}"
-                        data-final-status="{{ lead.final_status or 'Pending' }}"
-                        data-date="{{ lead.date or '' }}">
-                        <td>
-                            <input type="checkbox" class="form-check-input lead-checkbox" value="{{ lead.uid }}">
-                        </td>
-                        <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
-                        <td>{{ lead.customer_name }}</td>
-                        <td>{{ lead.customer_mobile_number }}</td>
-                        <td><span class="badge bg-secondary">{{ lead.source }}</span></td>
-                        <td>{{ lead.cre_name or 'Unassigned' }}</td>
-                        <td>{{ lead.ps_name or 'Not Assigned' }}</td>
-                        <td>
-                            {% if lead.assigned == 'Yes' %}
-                                <span class="badge bg-success">Assigned</span>
-                            {% else %}
-                                <span class="badge bg-warning">Unassigned</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if lead.final_status == 'Won' %}
-                                <span class="badge bg-success">{{ lead.final_status }}</span>
-                            {% elif lead.final_status == 'Lost' %}
-                                <span class="badge bg-danger">{{ lead.final_status }}</span>
-                            {% else %}
-                                <span class="badge bg-warning">{{ lead.final_status }}</span>
-                            {% endif %}
-                        </td>
-                        <td>{{ lead.date }}</td>
-                        <td>
-                            <div class="btn-group btn-group-sm">
-                                <a href="{{ url_for('view_call_attempt_history', uid=lead.uid) }}" class="btn btn-outline-info btn-sm" title="View CRE Call History">
-                                    <i class="fas fa-history"></i>
-                                </a>
-                                {% if lead.ps_name %}
-                                    <a href="{{ url_for('view_ps_call_attempt_history', uid=lead.uid) }}" class="btn btn-outline-warning btn-sm" title="View PS Call History">
-                                        <i class="fas fa-user-tie"></i>
-                                    </a>
-                                {% endif %}
-                                {% if lead.assigned == 'Yes' and lead.cre_name %}
-                                    <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-outline-primary btn-sm" title="Edit Lead">
-                                        <i class="fas fa-edit"></i>
-                                    </a>
-                                {% endif %}
-                                <button type="button" class="btn btn-outline-danger btn-sm delete-single-btn" data-uid="{{ lead.uid }}" data-name="{{ lead.customer_name }}" title="Delete Lead">
-                                    <i class="fas fa-trash"></i>
-                                </button>
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
+                    <span><strong>Leads assigned to:</strong> {{ selected_cre.name }}</span>
+                    <div class="card-header">
+                        <form method="get" class="row g-2 align-items-end mb-0">
+                            <input type="hidden" name="cre_id" value="{{ selected_cre.id }}">
+                            <div class="col-12 col-md-3">
+                                <label for="source" class="form-label mb-1">Source</label>
+                                <select name="source" id="source" class="form-select form-select-sm" onchange="this.form.submit()">
+                                    <option value="">All</option>
+                                    {% for src in sources %}
+                                    <option value="{{ src }}" {% if selected_source == src %}selected{% endif %}>{{ src }}</option>
+                                    {% endfor %}
+                                </select>
                             </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <div class="text-center py-5">
-            <i class="fas fa-database fa-3x text-muted mb-3"></i>
-            <h5 class="text-muted">No leads found</h5>
-            <p class="text-muted">Upload lead data to get started</p>
-            <a href="{{ url_for('upload_data') }}" class="btn btn-primary">
-                <i class="fas fa-upload"></i> Upload Data
-            </a>
-        </div>
-        {% endif %}
-    </div>
-</div>
-
-<!-- Delete Confirmation Modal -->
-<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header bg-danger text-white">
-                <h5 class="modal-title" id="deleteModalLabel">
-                    <i class="fas fa-exclamation-triangle"></i> Confirm Deletion
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p id="deleteMessage">Are you sure you want to delete the selected lead(s)?</p>
-                <div class="alert alert-warning">
-                    <i class="fas fa-warning"></i>
-                    <strong>Warning:</strong> This action cannot be undone. All related data including call records and PS followups will be permanently deleted.
+                            <div class="col-12 col-md-3">
+                                <label for="qualification" class="form-label mb-1">Qualification</label>
+                                <select name="qualification" id="qualification" class="form-select form-select-sm" onchange="this.form.submit()">
+                                    <option value="all" {% if qualification == 'all' %}selected{% endif %}>All</option>
+                                    <option value="qualified" {% if qualification == 'qualified' %}selected{% endif %}>Qualified</option>
+                                    <option value="unqualified" {% if qualification == 'unqualified' %}selected{% endif %}>Unqualified</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-3">
+                                <label for="final_status" class="form-label mb-1">Final Status</label>
+                                <select name="final_status" id="final_status" class="form-select form-select-sm" onchange="this.form.submit()">
+                                    <option value="">All</option>
+                                    <option value="Pending" {% if final_status == 'Pending' %}selected{% endif %}>Pending</option>
+                                    <option value="Won" {% if final_status == 'Won' %}selected{% endif %}>Won</option>
+                                    <option value="Lost" {% if final_status == 'Lost' %}selected{% endif %}>Lost</option>
+                                    <option value="In Progress" {% if final_status == 'In Progress' %}selected{% endif %}>In Progress</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-3">
+                                <label for="date_filter" class="form-label mb-1">Date</label>
+                                <select name="date_filter" id="date_filter" class="form-select form-select-sm" onchange="onDateFilterChange(this)">
+                                    <option value="all" {% if date_filter == 'all' %}selected{% endif %}>All Time</option>
+                                    <option value="today" {% if date_filter == 'today' %}selected{% endif %}>Today</option>
+                                    <option value="range" {% if date_filter == 'range' %}selected{% endif %}>Date Range</option>
+                                </select>
+                            </div>
+                            <div class="w-100"></div>
+                            <div class="col-12 col-md-3 d-none" id="dateRangeInputs">
+                                <input type="date" name="start_date" class="form-control form-control-sm mb-1" placeholder="dd-mm-yyyy" value="{{ start_date or '' }}">
+                            </div>
+                            <div class="col-12 col-md-3 d-flex align-items-end d-none" id="dateRangeInputs2">
+                                <span class="mx-2">to</span>
+                                <input type="date" name="end_date" class="form-control form-control-sm mb-1" placeholder="dd-mm-yyyy" value="{{ end_date or '' }}">
+                            </div>
+                            <div class="col-12 col-md-auto d-flex align-items-end">
+                                <button type="submit" class="btn btn-sm btn-primary px-4">Apply</button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
+                <form id="bulkUnassignForm" method="post" action="{{ url_for('bulk_unassign_leads') }}">
+                <div class="card-body p-0">
+                    {% if leads %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th><input type="checkbox" id="selectAll"></th>
+                                    <th>Customer Name</th>
+                                    <th>Mobile</th>
+                                    <th>Qualification</th>
+                                    <th>Actions</th>
+                                </tr>
+                                <tr>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                    <th class="p-0">
+                                        <div class="d-flex w-100">
+                                            <div class="flex-fill text-center small" style="color:#856404; background:#fff3cd; border-radius:4px 0 0 4px;">Unassign</div>
+                                            <div class="flex-fill text-center small" style="color:#084298; background:#cfe2ff;">CRE History</div>
+                                            <div class="flex-fill text-center small" style="color:#0f5132; background:#d1e7dd; border-radius:0 4px 4px 0;">PS History</div>
+                                        </div>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for lead in leads %}
+                                <tr>
+                                    <td>
+                                        {% if not lead.first_call_date %}
+                                        <input type="checkbox" name="uids" value="{{ lead.uid }}" class="lead-checkbox">
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ lead.customer_name }}</td>
+                                    <td>{{ lead.customer_mobile_number }}</td>
+                                    <td>{% if lead.first_call_date %}Qualified{% else %}Unqualified{% endif %}</td>
+                                    <td>
+                                        <div class="btn-group w-100" role="group" aria-label="Actions">
+                                            {% if not lead.first_call_date %}
+                                            <button type="button" class="btn btn-sm btn-warning unassign-btn" data-uid="{{ lead.uid }}" title="Unassign">
+                                                <i class="fas fa-undo"></i>
+                                            </button>
+                                            {% else %}
+                                            <button type="button" class="btn btn-sm btn-warning" disabled title="Unassign not allowed">
+                                                <i class="fas fa-undo"></i>
+                                            </button>
+                                            {% endif %}
+                                            <button type="button" class="btn btn-sm btn-primary call-history-btn" data-uid="{{ lead.uid }}" title="CRE Call History">
+                                                <i class="fas fa-history"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-success ps-call-history-btn" data-uid="{{ lead.uid }}" title="PS Call History">
+                                                <i class="fas fa-history"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mt-2">
+                        <button type="submit" class="btn btn-danger btn-sm" id="bulkUnassignBtn" disabled>
+                            <i class="fas fa-undo"></i> Bulk Unassign Selected
+                        </button>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No leads assigned to this CRE{% if selected_source %} for source '{{ selected_source }}'{% endif %}</h5>
+                    </div>
+                    {% endif %}
+                </div>
+                </form>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">
-                    <i class="fas fa-trash"></i> Delete
-                </button>
+            <!-- Modal for Call Attempt History -->
+            <div class="modal fade" id="callHistoryModal" tabindex="-1" aria-labelledby="callHistoryModalLabel" aria-hidden="true">
+              <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title" id="callHistoryModalLabel">CRE Call Attempt History</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <div class="modal-body">
+                    <div id="callHistoryContent">
+                      <div class="text-center"><span class="spinner-border spinner-border-sm"></span> Loading...</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
+            <!-- Add PS Call Attempt History Modal -->
+            <div class="modal fade" id="psCallHistoryModal" tabindex="-1" aria-labelledby="psCallHistoryModalLabel" aria-hidden="true">
+              <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title" id="psCallHistoryModalLabel">PS Call Attempt History</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <div class="modal-body">
+                    <div id="ps-call-history-content">
+                      <div class="text-center"><span class="spinner-border"></span> Loading...</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {# Pagination controls below the leads table #}
+            {% if selected_cre and total_pages > 1 %}
+                <nav aria-label="Leads pagination">
+                    <ul class="pagination justify-content-center mt-3">
+                        <li class="page-item {% if page == 1 %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('manage_leads', cre_id=selected_cre.id, source=selected_source, qualification=qualification, date_filter=date_filter, start_date=start_date, end_date=end_date, page=page-1) }}">Previous</a>
+                        </li>
+                        {% for p in range(1, total_pages + 1) %}
+                        <li class="page-item {% if p == page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('manage_leads', cre_id=selected_cre.id, source=selected_source, qualification=qualification, date_filter=date_filter, start_date=start_date, end_date=end_date, page=p) }}">{{ p }}</a>
+                        </li>
+                        {% endfor %}
+                        <li class="page-item {% if page == total_pages %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('manage_leads', cre_id=selected_cre.id, source=selected_source, qualification=qualification, date_filter=date_filter, start_date=start_date, end_date=end_date, page=page+1) }}">Next</a>
+                        </li>
+                    </ul>
+                </nav>
+            {% endif %}
+            {% else %}
+            <div class="alert alert-info mt-4">Select a CRE to view and manage their assigned leads.</div>
+            {% endif %}
         </div>
     </div>
 </div>
-
-<style>
-.lead-row {
-    transition: all 0.2s ease;
-}
-
-.lead-row:hover {
-    background-color: var(--ather-dark) !important;
-}
-
-.lead-row.selected {
-    background-color: rgba(0, 212, 170, 0.1) !important;
-    border-left: 4px solid var(--ather-primary);
-}
-
-.table th {
-    position: sticky;
-    top: 0;
-    z-index: 10;
-}
-</style>
 
 <script>
+function onDateFilterChange(sel) {
+    var rangeDiv = document.getElementById('dateRangeInputs');
+    var rangeDiv2 = document.getElementById('dateRangeInputs2');
+    if (sel.value === 'range') {
+        rangeDiv.classList.remove('d-none');
+        rangeDiv2.classList.remove('d-none');
+    } else {
+        rangeDiv.classList.add('d-none');
+        rangeDiv2.classList.add('d-none');
+    }
+}
 document.addEventListener('DOMContentLoaded', function() {
-    let selectedLeads = new Set();
-    let deleteType = 'single'; // 'single' or 'bulk'
-    let deleteTarget = null;
-
-    // Search functionality
-    function setupSearch() {
-        const searchInput = document.getElementById('searchInput');
-        const searchButton = document.getElementById('searchButton');
-        const clearButton = document.getElementById('clearButton');
-
-        function performSearch() {
-            const searchTerm = searchInput.value.toLowerCase().trim();
-            const rows = document.querySelectorAll('.lead-row');
-            let visibleCount = 0;
-
-            rows.forEach(row => {
-                const searchData = row.getAttribute('data-search') || '';
-                if (searchData.includes(searchTerm) || searchTerm === '') {
-                    row.style.display = '';
-                    visibleCount++;
-                } else {
-                    row.style.display = 'none';
-                }
-            });
-
-            updateCounts(visibleCount);
-        }
-
-        function clearSearch() {
-            searchInput.value = '';
-            performSearch();
-        }
-
-        searchButton.addEventListener('click', performSearch);
-        clearButton.addEventListener('click', clearSearch);
-        searchInput.addEventListener('input', performSearch);
-        searchInput.addEventListener('keyup', function(e) {
-            if (e.key === 'Enter') {
-                performSearch();
-            }
+    var dateFilter = document.getElementById('date_filter');
+    var rangeDiv = document.getElementById('dateRangeInputs');
+    var rangeDiv2 = document.getElementById('dateRangeInputs2');
+    if (dateFilter && dateFilter.value === 'range') {
+        rangeDiv.classList.remove('d-none');
+        rangeDiv2.classList.remove('d-none');
+    } else {
+        rangeDiv.classList.add('d-none');
+        rangeDiv2.classList.add('d-none');
+    }
+    // Select/Deselect all checkboxes
+    const selectAll = document.getElementById('selectAll');
+    if (selectAll) {
+        selectAll.addEventListener('change', function() {
+            document.querySelectorAll('.lead-checkbox').forEach(function(cb) { cb.checked = selectAll.checked; });
+            updateBulkBtn();
         });
     }
-
-    // Filter functionality
-    function setupFilters() {
-        const applyBtn = document.getElementById('applyFilters');
-        const resetBtn = document.getElementById('resetFilters');
-
-        function applyFilters() {
-            const sourceFilter = document.getElementById('sourceFilter').value;
-            const statusFilter = document.getElementById('statusFilter').value;
-            const finalStatusFilter = document.getElementById('finalStatusFilter').value;
-            const dateFilter = document.getElementById('dateFilter').value;
-
-            const rows = document.querySelectorAll('.lead-row');
-            let visibleCount = 0;
-
-            rows.forEach(row => {
-                let show = true;
-
-                // Source filter
-                if (sourceFilter && row.getAttribute('data-source') !== sourceFilter) {
-                    show = false;
-                }
-
-                // Assignment status filter
-                if (statusFilter && row.getAttribute('data-assigned') !== statusFilter) {
-                    show = false;
-                }
-
-                // Final status filter
-                if (finalStatusFilter && row.getAttribute('data-final-status') !== finalStatusFilter) {
-                    show = false;
-                }
-
-                // Date filter
-                if (dateFilter !== 'all') {
-                    const rowDate = new Date(row.getAttribute('data-date'));
-                    const today = new Date();
-                    let threshold = new Date();
-
-                    switch(dateFilter) {
-                        case 'today':
-                            threshold = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-                            break;
-                        case 'week':
-                            threshold.setDate(today.getDate() - 7);
-                            break;
-                        case 'month':
-                            threshold.setMonth(today.getMonth() - 1);
-                            break;
-                        case 'quarter':
-                            threshold.setMonth(today.getMonth() - 3);
-                            break;
-                        case 'year':
-                            threshold.setFullYear(today.getFullYear() - 1);
-                            break;
-                    }
-
-                    if (rowDate < threshold) {
-                        show = false;
-                    }
-                }
-
-                if (show) {
-                    row.style.display = '';
-                    visibleCount++;
-                } else {
-                    row.style.display = 'none';
-                }
-            });
-
-            updateCounts(visibleCount);
-        }
-
-        function resetFilters() {
-            document.getElementById('sourceFilter').value = '';
-            document.getElementById('statusFilter').value = '';
-            document.getElementById('finalStatusFilter').value = '';
-            document.getElementById('dateFilter').value = 'all';
-            document.getElementById('searchInput').value = '';
-
-            const rows = document.querySelectorAll('.lead-row');
-            rows.forEach(row => {
-                row.style.display = '';
-            });
-
-            updateCounts(rows.length);
-        }
-
-        applyBtn.addEventListener('click', applyFilters);
-        resetBtn.addEventListener('click', resetFilters);
+    // Enable/disable bulk unassign button
+    function updateBulkBtn() {
+        const checked = document.querySelectorAll('.lead-checkbox:checked').length;
+        const bulkBtn = document.getElementById('bulkUnassignBtn');
+        if (bulkBtn) { bulkBtn.disabled = checked === 0; }
     }
-
-    // Selection functionality
-    function setupSelection() {
-        const selectAllCheckbox = document.getElementById('selectAllCheckbox');
-        const selectAllBtn = document.getElementById('selectAllBtn');
-        const deselectAllBtn = document.getElementById('deselectAllBtn');
-        const leadCheckboxes = document.querySelectorAll('.lead-checkbox');
-
-        function updateSelection() {
-            const selectedCount = selectedLeads.size;
-            document.getElementById('selectedCount').textContent = selectedCount;
-
-            const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
-            const bulkUnassignBtn = document.getElementById('bulkUnassignBtn');
-
-            bulkDeleteBtn.disabled = selectedCount === 0;
-            bulkUnassignBtn.disabled = selectedCount === 0;
-
-            // Update select all checkbox state
-            const visibleCheckboxes = Array.from(leadCheckboxes).filter(cb =>
-                cb.closest('.lead-row').style.display !== 'none'
-            );
-            const visibleSelected = visibleCheckboxes.filter(cb => cb.checked);
-
-            if (visibleSelected.length === 0) {
-                selectAllCheckbox.indeterminate = false;
-                selectAllCheckbox.checked = false;
-            } else if (visibleSelected.length === visibleCheckboxes.length) {
-                selectAllCheckbox.indeterminate = false;
-                selectAllCheckbox.checked = true;
-            } else {
-                selectAllCheckbox.indeterminate = true;
-            }
-        }
-
-        leadCheckboxes.forEach(checkbox => {
-            checkbox.addEventListener('change', function() {
-                const uid = this.value;
-                const row = this.closest('.lead-row');
-
-                if (this.checked) {
-                    selectedLeads.add(uid);
-                    row.classList.add('selected');
-                } else {
-                    selectedLeads.delete(uid);
-                    row.classList.remove('selected');
-                }
-
-                updateSelection();
-            });
+    document.querySelectorAll('.lead-checkbox').forEach(function(cb) {
+        cb.addEventListener('change', updateBulkBtn);
+    });
+    updateBulkBtn();
+    // Unassign single lead
+    document.querySelectorAll('.unassign-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const uid = btn.getAttribute('data-uid');
+            if (!uid) return;
+            if (!confirm('Are you sure you want to unassign this lead?')) return;
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/bulk_unassign_leads';
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'uids';
+            input.value = uid;
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
         });
-
-        selectAllCheckbox.addEventListener('change', function() {
-            const visibleCheckboxes = Array.from(leadCheckboxes).filter(cb =>
-                cb.closest('.lead-row').style.display !== 'none'
-            );
-
-            visibleCheckboxes.forEach(checkbox => {
-                checkbox.checked = this.checked;
-                const uid = checkbox.value;
-                const row = checkbox.closest('.lead-row');
-
-                if (this.checked) {
-                    selectedLeads.add(uid);
-                    row.classList.add('selected');
-                } else {
-                    selectedLeads.delete(uid);
-                    row.classList.remove('selected');
-                }
-            });
-
-            updateSelection();
+    });
+    // Bulk unassign
+    const bulkBtn = document.getElementById('bulkUnassignBtn');
+    if (bulkBtn) {
+        bulkBtn.addEventListener('click', function() {
+            if (bulkBtn.disabled) return;
+            if (!confirm('Are you sure you want to unassign selected leads?')) return;
+            const form = document.getElementById('bulkUnassignForm');
+            if (form) form.submit();
         });
-
-        selectAllBtn.addEventListener('click', function() {
-            selectAllCheckbox.checked = true;
-            selectAllCheckbox.dispatchEvent(new Event('change'));
-        });
-
-        deselectAllBtn.addEventListener('click', function() {
-            selectAllCheckbox.checked = false;
-            selectAllCheckbox.dispatchEvent(new Event('change'));
-        });
-
-        updateSelection();
     }
-
-    // Delete functionality
-    function setupDelete() {
-        const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
-        const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
-        const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
-        const deleteSingleBtns = document.querySelectorAll('.delete-single-btn');
-
-        // Single delete
-        deleteSingleBtns.forEach(btn => {
-            btn.addEventListener('click', function() {
-                const uid = this.getAttribute('data-uid');
-                const name = this.getAttribute('data-name');
-
-                deleteType = 'single';
-                deleteTarget = uid;
-
-                document.getElementById('deleteMessage').innerHTML =
-                    `Are you sure you want to delete the lead for <strong>${name}</strong> (${uid})?`;
-
-                deleteModal.show();
-            });
-        });
-
-        // Bulk delete
-        bulkDeleteBtn.addEventListener('click', function() {
-            if (selectedLeads.size === 0) return;
-
-            deleteType = 'bulk';
-            deleteTarget = Array.from(selectedLeads);
-
-            document.getElementById('deleteMessage').innerHTML =
-                `Are you sure you want to delete <strong>${selectedLeads.size}</strong> selected lead(s)?`;
-
-            deleteModal.show();
-        });
-
-        // Confirm delete
-        confirmDeleteBtn.addEventListener('click', function() {
-            const originalText = this.innerHTML;
-            this.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Deleting...';
-            this.disabled = true;
-
-            const formData = new FormData();
-            formData.append('delete_type', deleteType);
-
-            if (deleteType === 'single') {
-                formData.append('uid', deleteTarget);
-            } else {
-                deleteTarget.forEach(uid => {
-                    formData.append('uids', uid);
-                });
-            }
-
-            fetch('{{ url_for("delete_leads") }}', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Remove deleted rows from table
-                    if (deleteType === 'single') {
-                        const row = document.querySelector(`input[value="${deleteTarget}"]`).closest('.lead-row');
-                        row.remove();
-                    } else {
-                        deleteTarget.forEach(uid => {
-                            const row = document.querySelector(`input[value="${uid}"]`).closest('.lead-row');
-                            if (row) row.remove();
+    // Call History modal logic
+    document.querySelectorAll('.call-history-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var uid = btn.getAttribute('data-uid');
+            var modal = new bootstrap.Modal(document.getElementById('callHistoryModal'));
+            var content = document.getElementById('callHistoryContent');
+            content.innerHTML = '<div class="text-center"><span class="spinner-border spinner-border-sm"></span> Loading...</div>';
+            modal.show();
+            fetch('/cre_call_attempt_history_json/' + uid)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.history.length > 0) {
+                        var html = '<table class="table table-bordered table-sm"><thead><tr><th>Call No</th><th>Attempt</th><th>Status</th><th>CRE Name</th><th>Timestamp</th></tr></thead><tbody>';
+                        data.history.forEach(function(attempt) {
+                            html += `<tr><td>${attempt.call_no}</td><td>${attempt.attempt}</td><td>${attempt.status}</td><td>${attempt.cre_name}</td><td>${attempt.update_ts || ''}</td></tr>`;
                         });
+                        html += '</tbody></table>';
+                        content.innerHTML = html;
+                    } else {
+                        content.innerHTML = '<div class="alert alert-info">No call attempt history found for this lead.</div>';
                     }
-
-                    // Clear selection
-                    selectedLeads.clear();
-                    document.querySelectorAll('.lead-checkbox').forEach(cb => {
-                        cb.checked = false;
-                        cb.closest('.lead-row').classList.remove('selected');
-                    });
-
-                    // Update counts
-                    const remainingRows = document.querySelectorAll('.lead-row').length;
-                    updateCounts(remainingRows);
-                    document.getElementById('totalCount').textContent = remainingRows;
-
-                    // Show success message
-                    showAlert('success', data.message);
-
-                    deleteModal.hide();
-                } else {
-                    showAlert('error', data.message || 'Failed to delete leads');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showAlert('error', 'An error occurred while deleting leads');
-            })
-            .finally(() => {
-                this.innerHTML = originalText;
-                this.disabled = false;
-            });
+                })
+                .catch(function() {
+                    content.innerHTML = '<div class="alert alert-danger">Failed to load call attempt history.</div>';
+                });
         });
-    }
-
-    // Bulk unassign functionality
-    function setupBulkUnassign() {
-        const bulkUnassignBtn = document.getElementById('bulkUnassignBtn');
-
-        bulkUnassignBtn.addEventListener('click', function() {
-            if (selectedLeads.size === 0) return;
-
-            if (!confirm(`Are you sure you want to unassign ${selectedLeads.size} selected lead(s)?`)) {
-                return;
-            }
-
-            const originalText = this.innerHTML;
-            this.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Unassigning...';
-            this.disabled = true;
-
-            const formData = new FormData();
-            Array.from(selectedLeads).forEach(uid => {
-                formData.append('uids', uid);
-            });
-
-            fetch('{{ url_for("bulk_unassign_leads") }}', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Update the affected rows
-                    selectedLeads.forEach(uid => {
-                        const row = document.querySelector(`input[value="${uid}"]`).closest('.lead-row');
-                        if (row) {
-                            // Update CRE name
-                            const creCell = row.cells[5]; // CRE Name column
-                            creCell.textContent = 'Unassigned';
-
-                            // Update assignment status
-                            const statusCell = row.cells[7]; // Assignment column
-                            statusCell.innerHTML = '<span class="badge bg-warning">Unassigned</span>';
-
-                            // Update data attributes
-                            row.setAttribute('data-assigned', 'No');
+    });
+    // PS Call History
+    document.querySelectorAll('.ps-call-history-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var uid = btn.getAttribute('data-uid');
+            var modal = new bootstrap.Modal(document.getElementById('psCallHistoryModal'));
+            var content = document.getElementById('ps-call-history-content');
+            content.innerHTML = '<div class="text-center"><span class="spinner-border"></span> Loading...</div>';
+            fetch('/ps_call_attempt_history_json/' + uid)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        if (data.history.length === 0) {
+                            content.innerHTML = '<div class="alert alert-info">No PS call attempt history found for this lead.</div>';
+                        } else {
+                            var html = '<table class="table table-bordered table-sm">';
+                            html += '<thead><tr><th>Call No</th><th>Attempt</th><th>Status</th><th>PS Name</th><th>Timestamp</th></tr></thead><tbody>';
+                            data.history.forEach(function(row) {
+                                html += '<tr>' +
+                                    '<td>' + (row.call_no || '') + '</td>' +
+                                    '<td>' + (row.attempt || '') + '</td>' +
+                                    '<td>' + (row.status || '') + '</td>' +
+                                    '<td>' + (row.ps_name || '') + '</td>' +
+                                    '<td>' + (row.created_at || '') + '</td>' +
+                                    '</tr>';
+                            });
+                            html += '</tbody></table>';
+                            content.innerHTML = html;
                         }
-                    });
-
-                    // Clear selection
-                    selectedLeads.clear();
-                    document.querySelectorAll('.lead-checkbox').forEach(cb => {
-                        cb.checked = false;
-                        cb.closest('.lead-row').classList.remove('selected');
-                    });
-
-                    showAlert('success', data.message);
-                } else {
-                    showAlert('error', data.message || 'Failed to unassign leads');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showAlert('error', 'An error occurred while unassigning leads');
-            })
-            .finally(() => {
-                this.innerHTML = originalText;
-                this.disabled = false;
-            });
+                    } else {
+                        content.innerHTML = '<div class="alert alert-danger">Failed to load PS call attempt history.</div>';
+                    }
+                })
+                .catch(function() {
+                    content.innerHTML = '<div class="alert alert-danger">Failed to load PS call attempt history.</div>';
+                });
+            modal.show();
         });
-    }
-
-    // Utility functions
-    function updateCounts(visibleCount) {
-        document.getElementById('visibleCount').textContent = visibleCount;
-    }
-
-    function showAlert(type, message) {
-        const alertDiv = document.createElement('div');
-        alertDiv.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show`;
-        alertDiv.innerHTML = `
-            <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-triangle'}"></i>
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
-
-        const container = document.querySelector('.container-main');
-        container.insertBefore(alertDiv, container.firstChild);
-
-        // Auto-hide after 5 seconds
-        setTimeout(() => {
-            if (alertDiv.parentNode) {
-                alertDiv.remove();
-            }
-        }, 5000);
-    }
-
-    // Initialize all functionality
-    setupSearch();
-    setupFilters();
-    setupSelection();
-    setupDelete();
-    setupBulkUnassign();
+    });
 });
 </script>
-{% endblock %}
+{% endblock %} 
