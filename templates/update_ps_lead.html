@@ -94,8 +94,14 @@
                 </div>
                 <div class="col-md-4">
                     <div class="mb-3">
-                        <label class="form-label">Lead Category</label>
-                        <input type="text" class="form-control" value="{{ lead.lead_category or 'Not set' }}" readonly>
+                        <label for="lead_category" class="form-label">Lead Category</label>
+                        <select class="form-select" id="lead_category" name="lead_category" required>
+                            <option value="" disabled {% if not lead.lead_category %}selected{% endif %}>Select Category</option>
+                            <option value="Hot" {% if lead.lead_category == 'Hot' %}selected{% endif %}>Hot</option>
+                            <option value="Warm" {% if lead.lead_category == 'Warm' %}selected{% endif %}>Warm</option>
+                            <option value="Cold" {% if lead.lead_category == 'Cold' %}selected{% endif %}>Cold</option>
+                            <option value="Not Interested" {% if lead.lead_category == 'Not Interested' %}selected{% endif %}>Not Interested</option>
+                        </select>
                     </div>
                 </div>
             </div>

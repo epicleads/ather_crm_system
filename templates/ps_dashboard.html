@@ -378,6 +378,7 @@
                                 <th>Model Interested</th>
                                 <th>Final Status</th>
                                 <th>UID</th>
+                                <th>Call History</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -424,6 +425,11 @@
                                     {% endif %}
                                 </td>
                                 <td><span class="badge bg-primary">{{ lead.lead_uid }}</span></td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-info view-ps-call-history-btn" data-uid="{{ lead.lead_uid }}">
+                                        <i class="fas fa-history"></i> View
+                                    </button>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -531,6 +537,36 @@
             </div>
         </div>
     </div>
+</div>
+
+<!-- PS Call Attempt History Modal -->
+<div class="modal fade" id="psCallHistoryModal" tabindex="-1" aria-labelledby="psCallHistoryModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="psCallHistoryModalLabel">Call Attempt History</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="psCallHistoryStats" class="mb-3"></div>
+        <div class="table-responsive">
+          <table class="table table-bordered table-hover" id="psCallHistoryTable">
+            <thead class="table-light">
+              <tr>
+                <th>UID</th>
+                <th>CALL NO</th>
+                <th>ATTEMPT</th>
+                <th>STATUS</th>
+                <th>PS NAME</th>
+                <th>UPDATE TS</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <style>
@@ -690,6 +726,69 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     activateTabFromQuery();
+
+    // View PS Call History button click
+    document.querySelectorAll('.view-ps-call-history-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const uid = this.getAttribute('data-uid');
+            fetchPSCallHistory(uid);
+        });
+    });
+
+    function fetchPSCallHistory(uid) {
+        // Clear previous data
+        const modal = new bootstrap.Modal(document.getElementById('psCallHistoryModal'));
+        document.querySelector('#psCallHistoryTable tbody').innerHTML = '<tr><td colspan="6" class="text-center">Loading...</td></tr>';
+        document.getElementById('psCallHistoryStats').innerHTML = '';
+        modal.show();
+        fetch(`/ps_call_attempt_history_json/${uid}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    renderPSCallHistoryTable(data.history, uid);
+                } else {
+                    document.querySelector('#psCallHistoryTable tbody').innerHTML = '<tr><td colspan="6" class="text-danger">Failed to load call history</td></tr>';
+                }
+            })
+            .catch(() => {
+                document.querySelector('#psCallHistoryTable tbody').innerHTML = '<tr><td colspan="6" class="text-danger">Error loading call history</td></tr>';
+            });
+    }
+
+    function renderPSCallHistoryTable(history, uid) {
+        const tbody = document.querySelector('#psCallHistoryTable tbody');
+        if (!history.length) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center">No call attempts found</td></tr>';
+            document.getElementById('psCallHistoryStats').innerHTML = '';
+            return;
+        }
+        // Stats
+        const total = history.length;
+        const rnr = history.filter(h => h.status && h.status.toLowerCase().includes('rnr')).length;
+        const busy = history.filter(h => h.status && h.status.toLowerCase().includes('busy')).length;
+        const callback = history.filter(h => h.status && h.status.toLowerCase().includes('call me back')).length;
+        const notConnected = history.filter(h => h.status && h.status.toLowerCase().includes('not connected')).length;
+        const connected = history.filter(h => h.status && h.status.toLowerCase().includes('interested')).length;
+        document.getElementById('psCallHistoryStats').innerHTML =
+            `<b>Total Calls Made: ${total}</b> |
+             RNR Calls: ${rnr} |
+             Busy on another Call: ${busy} |
+             Call me Back: ${callback} |
+             Call not Connected: ${notConnected} |
+             Connected Calls: ${connected}`;
+        // Table
+        tbody.innerHTML = '';
+        history.forEach(row => {
+            tbody.innerHTML += `<tr>
+                <td>${row.uid}</td>
+                <td>${row.call_no}</td>
+                <td>${row.attempt}</td>
+                <td>${row.status || ''}</td>
+                <td>${row.ps_name || ''}</td>
+                <td>${row.created_at ? row.created_at.replace('T', ' ').substring(0, 19) : ''}</td>
+            </tr>`;
+        });
+    }
 });
 </script>
 {% endblock %}
