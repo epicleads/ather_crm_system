@@ -69,6 +69,8 @@ EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD', '')
 # Debug: Print to check if variables are loaded (remove in production)
 print(f"SUPABASE_URL loaded: {SUPABASE_URL is not None}")
 print(f"SUPABASE_KEY loaded: {SUPABASE_KEY is not None}")
+print(f"SUPABASE_URL: {SUPABASE_URL}")
+print(f"SUPABASE_ANON_KEY: {SUPABASE_KEY}")
 
 # Validate required environment variables
 if not SUPABASE_URL:
@@ -414,6 +416,37 @@ def create_or_update_ps_followup(lead_data, ps_name, ps_branch):
 
     except Exception as e:
         print(f"Error creating/updating PS followup: {e}")
+
+
+def track_cre_call_attempt(uid, cre_name, call_no, lead_status, call_was_recorded=False, follow_up_date=None, remarks=None):
+    """Track CRE call attempt in the history table"""
+    try:
+        # Get the next attempt number for this call
+        attempt_result = supabase.table('cre_call_attempt_history').select('attempt').eq('uid', uid).eq('call_no', call_no).order('attempt', desc=True).limit(1).execute()
+        
+        next_attempt = 1
+        if attempt_result.data:
+            next_attempt = attempt_result.data[0]['attempt'] + 1
+
+        # Prepare attempt data
+        attempt_data = {
+            'uid': uid,
+            'call_no': call_no,
+            'attempt': next_attempt,
+            'status': lead_status,
+            'cre_name': cre_name,
+            'call_was_recorded': call_was_recorded,
+            'follow_up_date': follow_up_date,
+            'remarks': remarks
+        }
+
+        # Insert the attempt record
+        supabase.table('cre_call_attempt_history').insert(attempt_data).execute()
+        
+        print(f"Tracked call attempt: {uid} - {call_no} call, attempt {next_attempt}, status: {lead_status}")
+        
+    except Exception as e:
+        print(f"Error tracking CRE call attempt: {e}")
 
 
 def filter_leads_by_date(leads, filter_type, date_field='created_at'):
@@ -1550,6 +1583,19 @@ def add_lead():
         }
         try:
             supabase.table('lead_master').insert(lead_data).execute()
+            
+            # Track the initial call attempt for fresh leads
+            if lead_status:
+                track_cre_call_attempt(
+                    uid=uid,
+                    cre_name=cre_name,
+                    call_no='first',
+                    lead_status=lead_status,
+                    call_was_recorded=True,  # Fresh leads always have first_call_date recorded
+                    follow_up_date=follow_up_date if follow_up_date else None,
+                    remarks=remark if remark else None
+                )
+            
             flash('Lead added successfully!', 'success')
             return redirect(url_for('cre_dashboard'))
         except Exception as e:
@@ -1572,10 +1618,22 @@ def cre_dashboard():
         print(f"[PERF] cre_dashboard: safe_get_data('lead_master') took {time.time() - t0:.3f} seconds")
 
         t1 = time.time()
-        # Get pending leads (assigned but no first call date), sorted by cre_assigned_at ascending
+        # Get pending leads (assigned but no first call date), sorted by priority
+        # Leads with status 'RNR', 'Busy on another Call', 'Call me Back' should be at the bottom
+        pending_leads = [lead for lead in all_leads if not lead.get('first_call_date')]
+        
+        # Define priority statuses that should move leads down in the list
+        low_priority_statuses = ['RNR', 'Busy on another Call', 'Call me Back']
+        
+        # Sort leads: high priority first (by cre_assigned_at), then low priority (by cre_assigned_at)
         pending_leads = sorted(
-            [lead for lead in all_leads if not lead.get('first_call_date')],
-            key=lambda l: l.get('cre_assigned_at') or ''
+            pending_leads,
+            key=lambda l: (
+                # First sort by priority (low priority statuses get higher priority number)
+                1 if (l.get('lead_status') or '').strip() in low_priority_statuses else 0,
+                # Then sort by assignment date (oldest first within each priority group)
+                l.get('cre_assigned_at') or ''
+            )
         )
         print(f"[PERF] cre_dashboard: pending_leads filter/sort took {time.time() - t1:.3f} seconds")
 
@@ -1690,10 +1748,14 @@ def update_lead(uid):
 
         if request.method == 'POST':
             update_data = {}
+            # Always define these variables
+            lead_status = request.form.get('lead_status', '')
+            follow_up_date = request.form.get('follow_up_date', '')
+            call_remark = request.form.get('call_remark', '')
 
             # Always update lead_status from the form
-            if request.form.get('lead_status'):
-                update_data['lead_status'] = request.form['lead_status']
+            if lead_status:
+                update_data['lead_status'] = lead_status
 
             if request.form.get('customer_name'):
                 update_data['customer_name'] = request.form['customer_name']
@@ -1736,8 +1798,8 @@ def update_lead(uid):
                     print(f"Error sending email: {e}")
                     flash(f'Lead assigned to {ps_name} (email notification failed)', 'warning')
 
-            if request.form.get('follow_up_date'):
-                update_data['follow_up_date'] = request.form['follow_up_date']
+            if follow_up_date:
+                update_data['follow_up_date'] = follow_up_date
 
             if request.form.get('final_status'):
                 final_status = request.form['final_status']
@@ -1748,9 +1810,7 @@ def update_lead(uid):
                     update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
             # Handle call dates and remarks - only record for actual conversations
-            if request.form.get('call_date') and request.form.get('call_remark'):
-                lead_status = request.form.get('lead_status', '')
-                call_remark = request.form['call_remark']
+            if request.form.get('call_date') and call_remark:
                 combined_remark = f"{lead_status}, {call_remark}"
                 # For all 7 calls, use the correct schema columns
                 call_names = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
@@ -1768,6 +1828,21 @@ def update_lead(uid):
                 )
 
             try:
+                # Track the call attempt before updating the lead
+                if lead_status:
+                    # Determine if this attempt resulted in a recorded call
+                    call_was_recorded = bool(request.form.get('call_date') and call_remark)
+                    # Track the attempt
+                    track_cre_call_attempt(
+                        uid=uid,
+                        cre_name=session.get('cre_name'),
+                        call_no=next_call,
+                        lead_status=lead_status,
+                        call_was_recorded=call_was_recorded,
+                        follow_up_date=follow_up_date if follow_up_date else None,
+                        remarks=call_remark if call_remark else None
+                    )
+
                 if update_data:
                     supabase.table('lead_master').update(update_data).eq('uid', uid).execute()
 
@@ -3829,6 +3904,46 @@ def resend_quotation_email(uid):
             'message': f'Error resending email: {str(e)}'
         })
 
+@app.route('/view_call_attempt_history/<uid>')
+@require_admin
+def view_call_attempt_history(uid):
+    """View call attempt history for a specific lead"""
+    try:
+        # Get lead data
+        lead_result = supabase.table('lead_master').select('*').eq('uid', uid).execute()
+        if not lead_result.data:
+            flash('Lead not found', 'error')
+            return redirect(url_for('admin_dashboard'))
+        
+        lead_data = lead_result.data[0]
+        
+        # Get call attempt history
+        history_result = supabase.table('cre_call_attempt_history').select('*').eq('uid', uid).order('created_at', desc=True).execute()
+        call_history = history_result.data if history_result.data else []
+        
+        # Add total_attempts
+        total_attempts = len(call_history)
+        
+        # Log access
+        auth_manager.log_audit_event(
+            user_id=session.get('user_id'),
+            user_type=session.get('user_type'),
+            action='CALL_HISTORY_ACCESS',
+            resource='cre_call_attempt_history',
+            resource_id=uid,
+            details={'lead_uid': uid, 'history_count': len(call_history)}
+        )
+        
+        return render_template('call_attempt_history.html', 
+                               lead=lead_data, 
+                               call_history=call_history,
+                               total_attempts=total_attempts)
+        
+    except Exception as e:
+        flash(f'Error loading call history: {str(e)}', 'error')
+        return redirect(url_for('admin_dashboard'))
+
+
 @app.route('/source_analysis_data')
 @require_admin
 def source_analysis_data():
@@ -3987,6 +4102,32 @@ def source_analysis_data():
         return jsonify({'success': True, 'data': data})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/cre_call_attempt_history_json/<uid>')
+@require_cre
+def cre_call_attempt_history_json(uid):
+    """Return call attempt history for a lead as JSON (for CRE dashboard modal)"""
+    try:
+        # Get all call attempt history for this lead
+        history_result = supabase.table('cre_call_attempt_history').select('uid,call_no,attempt,status,cre_name,update_ts').eq('uid', uid).execute()
+        history = history_result.data if history_result.data else []
+        
+        # Define the order of call numbers
+        call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
+        
+        # Sort the history: first by call_no in ascending order, then by attempt in ascending order
+        def sort_key(item):
+            call_no = item.get('call_no', '')
+            attempt = item.get('attempt', 0)
+            # Get the index of call_no in the predefined order, default to end if not found
+            call_index = call_order.index(call_no) if call_no in call_order else len(call_order)
+            return (call_index, attempt)
+        
+        sorted_history = sorted(history, key=sort_key)
+        
+        return jsonify({'success': True, 'history': sorted_history})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e), 'history': []})
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)

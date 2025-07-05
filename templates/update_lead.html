@@ -313,6 +313,9 @@
                             <select class="form-select" id="lead_status" name="lead_status" onchange="handleLeadStatusChange()" required>
                                 <option value="">Select Status</option>
                                 <option value="Call not Connected" {{ 'selected' if lead.lead_status == 'Call not Connected' else '' }}>Call not Connected</option>
+                                <option value="Busy on another Call" {{ 'selected' if lead.lead_status == 'Busy on another Call' else '' }}>Busy on another Call</option>
+                                <option value="RNR" {{ 'selected' if lead.lead_status == 'RNR' else '' }}>RNR</option>
+                                <option value="Call me Back" {{ 'selected' if lead.lead_status == 'Call me Back' else '' }}>Call me Back</option>
                                 <option value="Retailed" {{ 'selected' if lead.lead_status == 'Retailed' else '' }}>Retailed</option>
                                 <option value="Discount Issue" {{ 'selected' if lead.lead_status == 'Discount Issue' else '' }}>Discount Issue</option>
                                 <option value="Delayed" {{ 'selected' if lead.lead_status == 'Delayed' else '' }}>Delayed</option>
@@ -511,6 +514,9 @@ function handleLeadStatusChange() {
                 }
                 // Explicitly set shouldRecordCall to false to ensure no call is recorded
                 shouldRecordCall.value = 'false';
+                // Clear call date and remark fields to prevent them from being submitted
+                if (callDate) callDate.value = '';
+                if (callRemark) callRemark.value = '';
                 break;
 
             case 'Interested':
@@ -567,6 +573,9 @@ function handleLeadStatusChange() {
                 // For call disconnected, NO call is recorded - lead stays fresh
                 // No additional fields shown, no call recorded
                 shouldRecordCall.value = 'false';
+                // Clear call date and remark fields to prevent them from being submitted
+                if (callDate) callDate.value = '';
+                if (callRemark) callRemark.value = '';
                 break;
 
             default:
@@ -581,7 +590,20 @@ function handleLeadStatusChange() {
         }
         switch(leadStatus) {
             case 'Call not Connected':
-                // No additional fields shown, no call recorded
+            case 'Busy on another Call':
+            case 'RNR':
+            case 'Call me Back':
+                // For these statuses, NO call is recorded - lead stays fresh
+                // Only show follow-up date for "Call me Back"
+                if (leadStatus === 'Call me Back' && followupSection) {
+                    followupSection.style.display = 'block';
+                    if (followupDate) followupDate.required = true;
+                }
+                // Explicitly set shouldRecordCall to false to ensure no call is recorded
+                shouldRecordCall.value = 'false';
+                // Clear call date and remark fields to prevent them from being submitted
+                if (callDate) callDate.value = '';
+                if (callRemark) callRemark.value = '';
                 break;
 
             case 'Retailed':

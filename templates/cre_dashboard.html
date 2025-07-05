@@ -2,6 +2,32 @@
 
 {% block title %}CRE Dashboard - Ather CRM{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* Style for low priority fresh leads */
+    .fresh-lead-row[data-lead-status="RNR"],
+    .fresh-lead-row[data-lead-status="Busy on another Call"],
+    .fresh-lead-row[data-lead-status="Call me Back"] {
+        background-color: #f8f9fa !important;
+        opacity: 0.8;
+    }
+    
+    .fresh-lead-row[data-lead-status="RNR"]:hover,
+    .fresh-lead-row[data-lead-status="Busy on another Call"]:hover,
+    .fresh-lead-row[data-lead-status="Call me Back"]:hover {
+        background-color: #e9ecef !important;
+        opacity: 1;
+    }
+    
+    /* Add a subtle border to distinguish low priority leads */
+    .fresh-lead-row[data-lead-status="RNR"],
+    .fresh-lead-row[data-lead-status="Busy on another Call"],
+    .fresh-lead-row[data-lead-status="Call me Back"] {
+        border-left: 3px solid #6c757d;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row">
     <div class="col-12">
@@ -187,6 +213,7 @@
                             <tr class="fresh-lead-row"
                                 data-assigned-date="{{ lead.cre_assigned_at[:10] if lead.cre_assigned_at else '' }}"
                                 data-has-first-call="{{ 'yes' if lead.first_call_date else 'no' }}"
+                                data-lead-status="{{ lead.lead_status or '' }}"
                                 data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or '') + ' ' + (lead.campaign or ''))|lower }}">
                                 <td>
                                     <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-outline-primary">
@@ -355,6 +382,7 @@
                                 <th>Category</th>
                                 <th>Date</th>
                                 <th>UID</th>
+                                <th>Call History</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -392,6 +420,11 @@
                                 </td>
                                 <td>{{ lead.date }}</td>
                                 <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-info view-call-history-btn" data-uid="{{ lead.uid }}">
+                                        <i class="fas fa-history"></i> View
+                                    </button>
+                                </td>
                             </tr>
                             {% endif %}
                             {% endfor %}
@@ -649,6 +682,24 @@
 <!-- Toast container for follow-up notifications -->
 <div id="followup-toast-container" style="position: fixed; top: 20px; right: 20px; z-index: 9999;"></div>
 <audio id="followup-audio" src="https://cdn.pixabay.com/audio/2022/07/26/audio_124bfae5b6.mp3" preload="auto"></audio>
+
+<!-- Modal for Call History -->
+<div class="modal fade" id="callHistoryModal" tabindex="-1" aria-labelledby="callHistoryModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="callHistoryModalLabel">Call Attempt History</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="callHistoryTotal" class="mb-2"></div>
+        <div id="callHistoryTableContainer">
+          <div class="text-center text-muted">Loading...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <style>
 .stats-card {
@@ -1194,6 +1245,47 @@ document.addEventListener('DOMContentLoaded', function() {
         // Optionally play a sound or vibrate
         const audio = document.getElementById('followup-audio');
         if (audio) { audio.currentTime = 0; audio.play(); }
+    });
+
+    const callHistoryModal = new bootstrap.Modal(document.getElementById('callHistoryModal'));
+    const callHistoryTableContainer = document.getElementById('callHistoryTableContainer');
+    document.querySelectorAll('.view-call-history-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const uid = this.getAttribute('data-uid');
+            callHistoryTableContainer.innerHTML = '<div class="text-center text-muted">Loading...</div>';
+            document.getElementById('callHistoryTotal').innerHTML = '';
+            callHistoryModal.show();
+            fetch(`/cre_call_attempt_history_json/${uid}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.history.length > 0) {
+                        // Count RNR calls
+                        const rnrCount = data.history.filter(row => row.status && row.status.trim().toUpperCase() === 'RNR').length;
+                        const busyCount = data.history.filter(row => row.status && row.status.trim().toLowerCase() === 'busy on another call').length;
+                        const callMeBackCount = data.history.filter(row => row.status && row.status.trim().toLowerCase() === 'call me back').length;
+                        const callNotConnectedCount = data.history.filter(row => row.status && row.status.trim().toLowerCase() === 'call not connected').length;
+                        const excludedStatuses = ['rnr', 'busy on another call', 'call me back', 'call not connected'];
+                        const connectedCallsCount = data.history.filter(row =>
+                             row.status && !excludedStatuses.includes(row.status.trim().toLowerCase())
+                        ).length;
+                        document.getElementById('callHistoryTotal').innerHTML = 
+                            `<strong>Total Calls Made:</strong> ${data.history.length} &nbsp; | &nbsp; <strong>RNR Calls:</strong> ${rnrCount} &nbsp; | &nbsp; <strong>Busy on another Call:</strong> ${busyCount} &nbsp; | &nbsp; <strong>Call me Back:</strong> ${callMeBackCount} &nbsp; | &nbsp; <strong>Call not Connected:</strong> ${callNotConnectedCount} &nbsp; | &nbsp; <strong>Connected Calls:</strong> ${connectedCallsCount}`;
+                        let table = `<div class='table-responsive'><table class='table table-bordered table-striped'><thead><tr><th>UID</th><th>Call No</th><th>Attempt</th><th>Status</th><th>CRE Name</th><th>Update TS</th></tr></thead><tbody>`;
+                        data.history.forEach(row => {
+                            table += `<tr><td>${row.uid}</td><td>${row.call_no}</td><td>${row.attempt}</td><td>${row.status}</td><td>${row.cre_name}</td><td>${row.update_ts ? row.update_ts.replace('T', ' ').slice(0, 19) : ''}</td></tr>`;
+                        });
+                        table += '</tbody></table></div>';
+                        callHistoryTableContainer.innerHTML = table;
+                    } else {
+                        document.getElementById('callHistoryTotal').innerHTML = '';
+                        callHistoryTableContainer.innerHTML = '<div class="alert alert-info">No call attempt history found for this lead.</div>';
+                    }
+                })
+                .catch(() => {
+                    document.getElementById('callHistoryTotal').innerHTML = '';
+                    callHistoryTableContainer.innerHTML = '<div class="alert alert-danger">Failed to load call attempt history.</div>';
+                });
+        });
     });
 });
 

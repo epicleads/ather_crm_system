@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+
+{% block title %}Call Attempt History - {{ lead.customer_name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="card-title">
+                        <i class="fas fa-history"></i> Call Attempt History
+                    </h4>
+                    <div class="card-tools">
+                        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-arrow-left"></i> Back to Dashboard
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Lead Information -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h5>Lead Information</h5>
+                            <table class="table table-sm">
+                                <tr>
+                                    <td><strong>UID:</strong></td>
+                                    <td>{{ lead.uid }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Customer Name:</strong></td>
+                                    <td>{{ lead.customer_name }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Mobile:</strong></td>
+                                    <td>{{ lead.customer_mobile_number }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Source:</strong></td>
+                                    <td>{{ lead.source }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>CRE:</strong></td>
+                                    <td>{{ lead.cre_name or 'Not Assigned' }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h5>Current Status</h5>
+                            <table class="table table-sm">
+                                <tr>
+                                    <td><strong>Lead Status:</strong></td>
+                                    <td>
+                                        <span class="badge badge-{% if lead.lead_status in ['Interested', 'Booked', 'Test Drive'] %}success{% elif lead.lead_status in ['Not Interested', 'Lost to Competition'] %}danger{% elif lead.lead_status in ['RNR', 'Busy on another Call', 'Call me Back'] %}warning{% else %}info{% endif %}">
+                                            {{ lead.lead_status or 'Not Set' }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Final Status:</strong></td>
+                                    <td>
+                                        <span class="badge badge-{% if lead.final_status == 'Won' %}success{% elif lead.final_status == 'Lost' %}danger{% else %}secondary{% endif %}">
+                                            {{ lead.final_status or 'Pending' }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Lead Category:</strong></td>
+                                    <td>
+                                        <span class="badge badge-{% if lead.lead_category == 'Hot' %}danger{% elif lead.lead_category == 'Warm' %}warning{% elif lead.lead_category == 'Cold' %}info{% else %}secondary{% endif %}">
+                                            {{ lead.lead_category or 'Not Set' }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Follow-up Date:</strong></td>
+                                    <td>{{ lead.follow_up_date or 'Not Set' }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Call Attempt History -->
+                    <div class="row">
+                        <div class="col-12">
+                            <h5>Call Attempt History</h5>
+                            <p><strong>Total Calls Made:</strong> {{ total_attempts }}</p>
+                            {% if call_history %}
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-hover">
+                                        <thead class="thead-dark">
+                                            <tr>
+                                                <th>Date & Time</th>
+                                                <th>Call Number</th>
+                                                <th>Attempt #</th>
+                                                <th>Status</th>
+                                                <th>CRE</th>
+                                                <th>Call Recorded</th>
+                                                <th>Follow-up Date</th>
+                                                <th>Remarks</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for attempt in call_history %}
+                                            <tr>
+                                                <td>
+                                                    <small>{{ attempt.created_at[:10] }}</small><br>
+                                                    <small class="text-muted">{{ attempt.created_at[11:19] }}</small>
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-primary">{{ attempt.call_no|title }}</span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-secondary">{{ attempt.attempt }}</span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-{% if attempt.status in ['Interested', 'Booked', 'Test Drive'] %}success{% elif attempt.status in ['Not Interested', 'Lost to Competition'] %}danger{% elif attempt.status in ['RNR', 'Busy on another Call', 'Call me Back'] %}warning{% else %}info{% endif %}">
+                                                        {{ attempt.status }}
+                                                    </span>
+                                                </td>
+                                                <td>{{ attempt.cre_name }}</td>
+                                                <td>
+                                                    {% if attempt.call_was_recorded %}
+                                                        <span class="badge badge-success">Yes</span>
+                                                    {% else %}
+                                                        <span class="badge badge-warning">No</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td>
+                                                    {% if attempt.follow_up_date %}
+                                                        <span class="badge badge-info">{{ attempt.follow_up_date }}</span>
+                                                    {% else %}
+                                                        <span class="text-muted">-</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td>
+                                                    {% if attempt.remarks %}
+                                                        <small>{{ attempt.remarks }}</small>
+                                                    {% else %}
+                                                        <span class="text-muted">-</span>
+                                                    {% endif %}
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- Summary Statistics -->
+                                <div class="row mt-4">
+                                    <div class="col-md-3">
+                                        <div class="info-box">
+                                            <span class="info-box-icon bg-info"><i class="fas fa-phone"></i></span>
+                                            <div class="info-box-content">
+                                                <span class="info-box-text">Total Attempts</span>
+                                                <span class="info-box-number">{{ call_history|length }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="info-box">
+                                            <span class="info-box-icon bg-success"><i class="fas fa-check"></i></span>
+                                            <div class="info-box-content">
+                                                <span class="info-box-text">Calls Recorded</span>
+                                                <span class="info-box-number">{{ call_history|selectattr('call_was_recorded', 'equalto', true)|list|length }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="info-box">
+                                            <span class="info-box-icon bg-warning"><i class="fas fa-clock"></i></span>
+                                            <div class="info-box-content">
+                                                <span class="info-box-text">Follow-ups Set</span>
+                                                <span class="info-box-number">{{ call_history|selectattr('follow_up_date')|list|length }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="info-box">
+                                            <span class="info-box-icon bg-primary"><i class="fas fa-users"></i></span>
+                                            <div class="info-box-content">
+                                                <span class="info-box-text">CREs Involved</span>
+                                                <span class="info-box-number">{{ call_history|map(attribute='cre_name')|unique|list|length }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            {% else %}
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle"></i> No call attempts recorded for this lead yet.
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.info-box {
+    display: block;
+    min-height: 80px;
+    background: #fff;
+    width: 100%;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.1);
+    border-radius: 2px;
+    margin-bottom: 15px;
+}
+
+.info-box-icon {
+    border-radius: 2px 0 0 2px;
+    display: block;
+    float: left;
+    height: 80px;
+    width: 80px;
+    text-align: center;
+    font-size: 40px;
+    line-height: 80px;
+    background: rgba(0,0,0,0.2);
+}
+
+.info-box-content {
+    padding: 5px 10px;
+    margin-left: 80px;
+}
+
+.info-box-text {
+    display: block;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.info-box-number {
+    display: block;
+    font-weight: bold;
+    font-size: 18px;
+}
+</style>
+{% endblock %} 
