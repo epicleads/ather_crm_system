@@ -3921,6 +3921,9 @@ def view_call_attempt_history(uid):
         history_result = supabase.table('cre_call_attempt_history').select('*').eq('uid', uid).order('created_at', desc=True).execute()
         call_history = history_result.data if history_result.data else []
         
+        # Add total_attempts
+        total_attempts = len(call_history)
+        
         # Log access
         auth_manager.log_audit_event(
             user_id=session.get('user_id'),
@@ -3933,7 +3936,8 @@ def view_call_attempt_history(uid):
         
         return render_template('call_attempt_history.html', 
                                lead=lead_data, 
-                               call_history=call_history)
+                               call_history=call_history,
+                               total_attempts=total_attempts)
         
     except Exception as e:
         flash(f'Error loading call history: {str(e)}', 'error')
