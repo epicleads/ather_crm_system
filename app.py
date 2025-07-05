@@ -270,7 +270,7 @@ def batch_insert_leads(leads_data, batch_size=100):
                 print(f"Batch {batch_num}/{total_batches}: No data returned from insert")
 
             # Small delay to prevent overwhelming the database
-            eventlet.sleep(0.1)  # CHANGED from time.sleep(0.1)
+            time.sleep(0.1)  # CHANGED from eventlet.sleep(0.1)
 
             # Force garbage collection every 10 batches
             if batch_num % 10 == 0:
@@ -530,47 +530,50 @@ def index():
 
 
 @app.route('/unified_login', methods=['POST'])
-@limiter.limit("1000 per minute")  # Now using Redis backend for rate limiting
+@limiter.limit("1000 per minute")
 def unified_login():
     start_time = time.time()
     username = request.form.get('username', '').strip()
     password = request.form.get('password', '').strip()
+    user_type = request.form.get('user_type', '').strip().lower()
 
-    t1 = time.time()
-    user_types = ['admin', 'cre', 'ps']
-    for user_type in user_types:
-        t_user = time.time()
-        success, message, user_data = auth_manager.authenticate_user(username, password, user_type)
-        print(f"[PERF] unified_login: authenticate_user({user_type}) took {time.time() - t_user:.3f} seconds")
-        if success:
-            t2 = time.time()
-            session_id = auth_manager.create_session(user_data['id'], user_type, user_data)
-            print(f"[PERF] unified_login: create_session took {time.time() - t2:.3f} seconds")
-            if session_id:
-                flash(f'Welcome! Logged in as {user_type.upper()}', 'success')
-                t3 = time.time()
-                # Redirect to appropriate dashboard
-                if user_type == 'admin':
-                    print(f"[PERF] unified_login: redirect to admin_dashboard after {time.time() - t3:.3f} seconds")
-                    print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
-                    return redirect(url_for('admin_dashboard'))
-                elif user_type == 'cre':
-                    print(f"[PERF] unified_login: redirect to cre_dashboard after {time.time() - t3:.3f} seconds")
-                    print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
-                    return redirect(url_for('cre_dashboard'))
-                elif user_type == 'ps':
-                    print(f"[PERF] unified_login: redirect to ps_dashboard after {time.time() - t3:.3f} seconds")
-                    print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
-                    return redirect(url_for('ps_dashboard'))
-            else:
-                flash('Error creating session', 'error')
-                print(f"[PERF] unified_login: session creation failed after {time.time() - t2:.3f} seconds")
+    valid_user_types = ['admin', 'cre', 'ps']
+    if user_type not in valid_user_types:
+        flash('Please select a valid role (Admin, CRE, or PS)', 'error')
+        return redirect(url_for('index'))
+
+    t_user = time.time()
+    success, message, user_data = auth_manager.authenticate_user(username, password, user_type)
+    print(f"[PERF] unified_login: authenticate_user({user_type}) took {time.time() - t_user:.3f} seconds")
+    if success:
+        t2 = time.time()
+        session_id = auth_manager.create_session(user_data['id'], user_type, user_data)
+        print(f"[PERF] unified_login: create_session took {time.time() - t2:.3f} seconds")
+        if session_id:
+            flash(f'Welcome! Logged in as {user_type.upper()}', 'success')
+            t3 = time.time()
+            # Redirect to appropriate dashboard
+            if user_type == 'admin':
+                print(f"[PERF] unified_login: redirect to admin_dashboard after {time.time() - t3:.3f} seconds")
                 print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
-                return redirect(url_for('index'))
-    print(f"[PERF] unified_login: all user_type attempts took {time.time() - t1:.3f} seconds")
-    flash('Invalid username or password', 'error')
-    print(f"[PERF] unified_login TOTAL (invalid login) took {time.time() - start_time:.3f} seconds")
-    return redirect(url_for('index'))
+                return redirect(url_for('admin_dashboard'))
+            elif user_type == 'cre':
+                print(f"[PERF] unified_login: redirect to cre_dashboard after {time.time() - t3:.3f} seconds")
+                print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
+                return redirect(url_for('cre_dashboard'))
+            elif user_type == 'ps':
+                print(f"[PERF] unified_login: redirect to ps_dashboard after {time.time() - t3:.3f} seconds")
+                print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
+                return redirect(url_for('ps_dashboard'))
+        else:
+            flash('Error creating session', 'error')
+            print(f"[PERF] unified_login: session creation failed after {time.time() - t2:.3f} seconds")
+            print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
+            return redirect(url_for('index'))
+    else:
+        flash('Invalid username or password', 'error')
+        print(f"[PERF] unified_login TOTAL (invalid login) took {time.time() - start_time:.3f} seconds")
+        return redirect(url_for('index'))
 
 
 # Keep the old login routes for backward compatibility (redirect to unified login)
@@ -1184,7 +1187,7 @@ def assign_leads_dynamic_action():
                     total_assigned += 1
                     print(f"Assigned lead {lead['uid']} to CRE {cre['name']} for source {source}")
                     if total_assigned % 100 == 0:
-                        eventlet.sleep(0.1)
+                        time.sleep(0.1)
                 except Exception as e:
                     print(f"Error assigning lead {lead['uid']}: {e}")
 
@@ -1385,11 +1388,66 @@ def toggle_ps_status(ps_id):
 @require_admin
 def manage_leads():
     try:
-        leads = safe_get_data('lead_master')
-        return render_template('manage_leads.html', leads=leads)
+        cres = safe_get_data('cre_users')
+        cre_id = request.args.get('cre_id')
+        source = request.args.get('source')
+        qualification = request.args.get('qualification', 'all')
+        date_filter = request.args.get('date_filter', 'all')
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        final_status = request.args.get('final_status', '')
+        page = int(request.args.get('page', 1))
+        per_page = 50
+        selected_cre = None
+        leads = []
+        sources = []
+        total_leads = 0
+        if cre_id:
+            # Find selected CRE
+            selected_cre = next((cre for cre in cres if str(cre.get('id')) == str(cre_id)), None)
+            # Fetch leads for this CRE
+            filters = {'cre_name': selected_cre['name']} if selected_cre else {}
+            if source:
+                filters['source'] = source
+            leads = safe_get_data('lead_master', filters)
+            # Qualification filter
+            if qualification == 'qualified':
+                leads = [lead for lead in leads if lead.get('first_call_date')]
+            elif qualification == 'unqualified':
+                leads = [lead for lead in leads if not lead.get('first_call_date')]
+            # Final status filter
+            if final_status:
+                leads = [lead for lead in leads if (lead.get('final_status') or '') == final_status]
+            # Date filtering
+            if date_filter == 'today':
+                today_str = datetime.now().strftime('%Y-%m-%d')
+                leads = [lead for lead in leads if (lead.get('cre_assigned_at') or '').startswith(today_str)]
+            elif date_filter == 'range' and start_date and end_date:
+                def in_range(ld):
+                    dt = ld.get('cre_assigned_at')
+                    if not dt:
+                        return False
+                    try:
+                        dt_val = dt[:10]
+                        return start_date <= dt_val <= end_date
+                    except Exception:
+                        return False
+                leads = [lead for lead in leads if in_range(lead)]
+            # Get all unique sources for this CRE's leads
+            sources = sorted(list(set(lead.get('source', 'Unknown') for lead in leads)))
+            # Pagination
+            total_leads = len(leads)
+            total_pages = (total_leads + per_page - 1) // per_page
+            start_idx = (page - 1) * per_page
+            end_idx = start_idx + per_page
+            leads = leads[start_idx:end_idx]
+        else:
+            total_pages = 1
+            page = 1
+        return render_template('manage_leads.html', cres=cres, selected_cre=selected_cre, leads=leads, sources=sources, selected_source=source, qualification=qualification, date_filter=date_filter, start_date=start_date, end_date=end_date, page=page, total_pages=total_pages, total_leads=total_leads, final_status=final_status)
     except Exception as e:
         flash(f'Error loading leads: {str(e)}', 'error')
-        return render_template('manage_leads.html', leads=[])
+        return render_template('manage_leads.html', cres=[], selected_cre=None, leads=[], sources=[], selected_source=None, qualification='all', date_filter='all', start_date=None, end_date=None, page=1, total_pages=1, total_leads=0, final_status='')
 
 
 @app.route('/delete_leads', methods=['POST'])
@@ -4150,17 +4208,15 @@ def source_analysis_data():
         return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/cre_call_attempt_history_json/<uid>')
-@require_cre
+@require_auth(['cre', 'admin'])
 def cre_call_attempt_history_json(uid):
     """Return call attempt history for a lead as JSON (for CRE dashboard modal)"""
     try:
         # Get all call attempt history for this lead
         history_result = supabase.table('cre_call_attempt_history').select('uid,call_no,attempt,status,cre_name,update_ts').eq('uid', uid).execute()
         history = history_result.data if history_result.data else []
-        
         # Define the order of call numbers
         call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
-        
         # Sort the history: first by call_no in ascending order, then by attempt in ascending order
         def sort_key(item):
             call_no = item.get('call_no', '')
@@ -4168,26 +4224,22 @@ def cre_call_attempt_history_json(uid):
             # Get the index of call_no in the predefined order, default to end if not found
             call_index = call_order.index(call_no) if call_no in call_order else len(call_order)
             return (call_index, attempt)
-        
         sorted_history = sorted(history, key=sort_key)
-        
         return jsonify({'success': True, 'history': sorted_history})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e), 'history': []})
 
 
 @app.route('/ps_call_attempt_history_json/<uid>')
-@require_ps
+@require_auth(['ps', 'admin'])
 def ps_call_attempt_history_json(uid):
     """Return PS call attempt history for a lead as JSON (for PS dashboard modal)"""
     try:
         # Get all PS call attempt history for this lead
         history_result = supabase.table('ps_call_attempt_history').select('uid,call_no,attempt,status,ps_name,created_at').eq('uid', uid).execute()
         history = history_result.data if history_result.data else []
-        
         # Define the order of call numbers
         call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
-        
         # Sort the history: first by call_no in ascending order, then by attempt in ascending order
         def sort_key(item):
             call_no = item.get('call_no', '')
@@ -4195,9 +4247,7 @@ def ps_call_attempt_history_json(uid):
             # Get the index of call_no in the predefined order, default to end if not found
             call_index = call_order.index(call_no) if call_no in call_order else len(call_order)
             return (call_index, attempt)
-        
         sorted_history = sorted(history, key=sort_key)
-        
         return jsonify({'success': True, 'history': sorted_history})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e), 'history': []})
@@ -4241,6 +4291,19 @@ def view_ps_call_attempt_history(uid):
     except Exception as e:
         flash(f'Error loading PS call history: {str(e)}', 'error')
         return redirect(url_for('admin_dashboard'))
+
+
+@app.route('/get_unassigned_leads_by_source')
+@require_admin
+def get_unassigned_leads_by_source():
+    source = request.args.get('source')
+    if not source:
+        return jsonify({'success': False, 'message': 'Source is required'}), 400
+    try:
+        leads = safe_get_data('lead_master', {'assigned': 'No', 'source': source})
+        return jsonify({'success': True, 'leads': leads})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 
 if __name__ == '__main__':

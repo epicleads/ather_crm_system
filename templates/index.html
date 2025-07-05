@@ -18,6 +18,17 @@
 
                 <form method="POST" action="{{ url_for('unified_login') }}" class="text-start">
                     <div class="mb-3">
+                        <label for="user_type" class="form-label">
+                            <i class="fas fa-user-tag text-muted me-2"></i>Role
+                        </label>
+                        <select class="form-select" id="user_type" name="user_type" required>
+                            <option value="" disabled selected>Select your role</option>
+                            <option value="admin">Admin</option>
+                            <option value="cre">CRE</option>
+                            <option value="ps">Product Specialist (PS)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
                         <label for="username" class="form-label">
                             <i class="fas fa-user text-muted me-2"></i>Username
                         </label>

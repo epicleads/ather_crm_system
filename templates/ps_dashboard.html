@@ -564,9 +564,9 @@
             <tbody></tbody>
           </table>
         </div>
-      </div>
+            </div>
+        </div>
     </div>
-  </div>
 </div>
 
 <style>
@@ -768,7 +768,16 @@ document.addEventListener('DOMContentLoaded', function() {
         const busy = history.filter(h => h.status && h.status.toLowerCase().includes('busy')).length;
         const callback = history.filter(h => h.status && h.status.toLowerCase().includes('call me back')).length;
         const notConnected = history.filter(h => h.status && h.status.toLowerCase().includes('not connected')).length;
-        const connected = history.filter(h => h.status && h.status.toLowerCase().includes('interested')).length;
+        const excludedStatuses = [
+            "call not connected",
+            "rnr",
+            "call me back",
+            "busy on another call"
+        ];
+        const connected = history.filter(h =>
+            h.status &&
+            !excludedStatuses.includes(h.status.trim().toLowerCase())
+        ).length;
         document.getElementById('psCallHistoryStats').innerHTML =
             `<b>Total Calls Made: ${total}</b> |
              RNR Calls: ${rnr} |
