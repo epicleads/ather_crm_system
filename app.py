@@ -449,6 +449,37 @@ def track_cre_call_attempt(uid, cre_name, call_no, lead_status, call_was_recorde
         print(f"Error tracking CRE call attempt: {e}")
 
 
+def track_ps_call_attempt(uid, ps_name, call_no, lead_status, call_was_recorded=False, follow_up_date=None, remarks=None):
+    """Track PS call attempt in the history table"""
+    try:
+        # Get the next attempt number for this call
+        attempt_result = supabase.table('ps_call_attempt_history').select('attempt').eq('uid', uid).eq('call_no', call_no).order('attempt', desc=True).limit(1).execute()
+        
+        next_attempt = 1
+        if attempt_result.data:
+            next_attempt = attempt_result.data[0]['attempt'] + 1
+
+        # Prepare attempt data
+        attempt_data = {
+            'uid': uid,
+            'call_no': call_no,
+            'attempt': next_attempt,
+            'status': lead_status,
+            'ps_name': ps_name,
+            'call_was_recorded': call_was_recorded,
+            'follow_up_date': follow_up_date,
+            'remarks': remarks
+        }
+
+        # Insert the attempt record
+        supabase.table('ps_call_attempt_history').insert(attempt_data).execute()
+        
+        print(f"Tracked PS call attempt: {uid} - {call_no} call, attempt {next_attempt}, status: {lead_status}")
+        
+    except Exception as e:
+        print(f"Error tracking PS call attempt: {e}")
+
+
 def filter_leads_by_date(leads, filter_type, date_field='created_at'):
     """Filter leads based on date range"""
     if filter_type == 'all':
@@ -2094,6 +2125,21 @@ def update_ps_lead(uid):
                 )
 
             try:
+                # Track the PS call attempt before updating the lead
+                if lead_status:
+                    # Determine if this attempt resulted in a recorded call
+                    call_was_recorded = bool(request.form.get('call_date') and request.form.get('call_remark'))
+                    # Track the attempt
+                    track_ps_call_attempt(
+                        uid=uid,
+                        ps_name=session.get('ps_name'),
+                        call_no=next_call,
+                        lead_status=lead_status,
+                        call_was_recorded=call_was_recorded,
+                        follow_up_date=follow_up_date if follow_up_date else None,
+                        remarks=call_remark if call_remark else None
+                    )
+
                 if update_data:
                     supabase.table('ps_followup_master').update(update_data).eq('lead_uid', uid).execute()
 
@@ -4128,6 +4174,74 @@ def cre_call_attempt_history_json(uid):
         return jsonify({'success': True, 'history': sorted_history})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e), 'history': []})
+
+
+@app.route('/ps_call_attempt_history_json/<uid>')
+@require_ps
+def ps_call_attempt_history_json(uid):
+    """Return PS call attempt history for a lead as JSON (for PS dashboard modal)"""
+    try:
+        # Get all PS call attempt history for this lead
+        history_result = supabase.table('ps_call_attempt_history').select('uid,call_no,attempt,status,ps_name,created_at').eq('uid', uid).execute()
+        history = history_result.data if history_result.data else []
+        
+        # Define the order of call numbers
+        call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
+        
+        # Sort the history: first by call_no in ascending order, then by attempt in ascending order
+        def sort_key(item):
+            call_no = item.get('call_no', '')
+            attempt = item.get('attempt', 0)
+            # Get the index of call_no in the predefined order, default to end if not found
+            call_index = call_order.index(call_no) if call_no in call_order else len(call_order)
+            return (call_index, attempt)
+        
+        sorted_history = sorted(history, key=sort_key)
+        
+        return jsonify({'success': True, 'history': sorted_history})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e), 'history': []})
+
+
+@app.route('/view_ps_call_attempt_history/<uid>')
+@require_admin
+def view_ps_call_attempt_history(uid):
+    """View PS call attempt history for a specific lead (Admin only)"""
+    try:
+        # Get lead data
+        lead_result = supabase.table('lead_master').select('*').eq('uid', uid).execute()
+        if not lead_result.data:
+            flash('Lead not found', 'error')
+            return redirect(url_for('admin_dashboard'))
+        
+        lead_data = lead_result.data[0]
+        
+        # Get PS call attempt history
+        history_result = supabase.table('ps_call_attempt_history').select('*').eq('uid', uid).order('created_at', desc=True).execute()
+        call_history = history_result.data if history_result.data else []
+        
+        # Add total_attempts
+        total_attempts = len(call_history)
+        
+        # Log access
+        auth_manager.log_audit_event(
+            user_id=session.get('user_id'),
+            user_type=session.get('user_type'),
+            action='PS_CALL_HISTORY_ACCESS',
+            resource='ps_call_attempt_history',
+            resource_id=uid,
+            details={'lead_uid': uid, 'history_count': len(call_history)}
+        )
+        
+        return render_template('ps_call_attempt_history.html', 
+                               lead=lead_data, 
+                               call_history=call_history,
+                               total_attempts=total_attempts)
+        
+    except Exception as e:
+        flash(f'Error loading PS call history: {str(e)}', 'error')
+        return redirect(url_for('admin_dashboard'))
+
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)
