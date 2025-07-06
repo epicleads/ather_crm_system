@@ -4572,5 +4572,93 @@ def lead_journey_report(uid):
         print(f"Error generating lead journey PDF: {e}")
         return f"Error generating PDF: {str(e)}", 500
 
+@app.route('/export_filtered_leads')
+@require_admin
+def export_filtered_leads():
+    """Export filtered leads as CSV or Excel with selected columns."""
+    import io
+    import csv
+    import openpyxl
+    from flask import send_file
+    # Get filters from query params
+    cre_id = request.args.get('cre_id')
+    source = request.args.get('source')
+    qualification = request.args.get('qualification', 'all')
+    date_filter = request.args.get('date_filter', 'all')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    final_status = request.args.get('final_status', '')
+    search_uid = request.args.get('search_uid', '').strip()
+    format_ = request.args.get('format', 'csv')
+    # Get CREs for name lookup
+    cres = safe_get_data('cre_users')
+    selected_cre = None
+    leads = []
+    if cre_id:
+        selected_cre = next((cre for cre in cres if str(cre.get('id')) == str(cre_id)), None)
+        filters = {'cre_name': selected_cre['name']} if selected_cre else {}
+        if source:
+            filters['source'] = source
+        leads = safe_get_data('lead_master', filters)
+        if search_uid:
+            leads = [lead for lead in leads if search_uid.lower() in str(lead.get('uid', '')).lower()]
+        if qualification == 'qualified':
+            leads = [lead for lead in leads if lead.get('first_call_date')]
+        elif qualification == 'unqualified':
+            leads = [lead for lead in leads if not lead.get('first_call_date')]
+        if final_status:
+            leads = [lead for lead in leads if (lead.get('final_status') or '') == final_status]
+        if date_filter == 'today':
+            today_str = datetime.now().strftime('%Y-%m-%d')
+            leads = [lead for lead in leads if (lead.get('cre_assigned_at') or '').startswith(today_str)]
+        elif date_filter == 'range' and start_date and end_date:
+            def in_range(ld):
+                dt = ld.get('cre_assigned_at')
+                if not dt:
+                    return False
+                try:
+                    dt_val = dt[:10]
+                    return start_date <= dt_val <= end_date
+                except Exception:
+                    return False
+            leads = [lead for lead in leads if in_range(lead)]
+    else:
+        all_leads = safe_get_data('lead_master')
+        if search_uid:
+            leads = [lead for lead in all_leads if search_uid.lower() in str(lead.get('uid', '')).lower()]
+        else:
+            leads = all_leads
+    # Columns to export
+    export_columns = [
+        ('uid', 'UID'),
+        ('customer_name', 'Customer Name'),
+        ('customer_mobile_number', 'Customer Mobile Number'),
+        ('source', 'Source'),
+        ('cre_name', 'CRE Name'),
+        ('ps_name', 'PS Name'),
+        ('final_status', 'Final Status')
+    ]
+    if format_ == 'excel':
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'Leads'
+        ws.append([col[1] for col in export_columns])
+        for lead in leads:
+            ws.append([lead.get(col[0], '') for col in export_columns])
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        filename = f"leads_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        return send_file(output, as_attachment=True, download_name=filename, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    else:
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([col[1] for col in export_columns])
+        for lead in leads:
+            writer.writerow([lead.get(col[0], '') for col in export_columns])
+        output.seek(0)
+        filename = f"leads_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        return send_file(io.BytesIO(output.getvalue().encode('utf-8')), as_attachment=True, download_name=filename, mimetype='text/csv')
+
 if __name__ == '__main__':
     socketio.run(app, debug=True)

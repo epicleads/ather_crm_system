@@ -28,8 +28,11 @@
         <div class="col-12 col-md-4">
             <input type="text" id="uidSearchBox" class="form-control form-control-sm me-2" placeholder="Search by UID">
         </div>
-        <div class="col-12 col-md-8 d-flex justify-content-end align-items-center">
+        <div class="col-12 col-md-8 d-flex justify-content-end align-items-center gap-2">
             <button id="bulkUnassignBtn" class="btn btn-danger" style="min-width:220px;" disabled>Bulk Unassign Selected (0)</button>
+            <!-- Export Buttons -->
+            <button id="exportCsvBtn" class="btn btn-outline-success ms-2" type="button">Export CSV</button>
+            <button id="exportExcelBtn" class="btn btn-outline-primary ms-2" type="button">Export Excel</button>
         </div>
     </div>
     <p id="showingLeadsText">Showing {{ total_leads }} leads</p>
@@ -492,6 +495,24 @@ document.addEventListener('DOMContentLoaded', function() {
             if (showingLeadsText) {
                 showingLeadsText.textContent = `Showing ${visibleCount} lead${visibleCount === 1 ? '' : 's'}`;
             }
+        });
+    }
+    // Export buttons logic
+    const exportCsvBtn = document.getElementById('exportCsvBtn');
+    const exportExcelBtn = document.getElementById('exportExcelBtn');
+    function buildExportUrl(format) {
+        const params = new URLSearchParams(window.location.search);
+        params.set('format', format);
+        return '/export_filtered_leads?' + params.toString();
+    }
+    if (exportCsvBtn) {
+        exportCsvBtn.addEventListener('click', function() {
+            window.open(buildExportUrl('csv'), '_blank');
+        });
+    }
+    if (exportExcelBtn) {
+        exportExcelBtn.addEventListener('click', function() {
+            window.open(buildExportUrl('excel'), '_blank');
         });
     }
 });
