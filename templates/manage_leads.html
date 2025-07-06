@@ -24,17 +24,20 @@
         </div>
     </div>
     <!-- Leads Table -->
+    <div class="row mb-2">
+        <div class="col-12 col-md-4">
+            <input type="text" id="uidSearchBox" class="form-control form-control-sm me-2" placeholder="Search by UID">
+        </div>
+        <div class="col-12 col-md-8 d-flex justify-content-end align-items-center">
+            <button id="bulkUnassignBtn" class="btn btn-danger" style="min-width:220px;" disabled>Bulk Unassign Selected (0)</button>
+        </div>
+    </div>
+    <p id="showingLeadsText">Showing {{ total_leads }} leads</p>
     <div class="row">
         <div class="col-12">
             {% if selected_cre %}
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <div>
-                    <strong>Showing {{ total_leads }} lead{{ total_leads != 1 and 's' or '' }}</strong>
-                </div>
-            </div>
             <div class="card mb-3">
                 <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
-                    <span><strong>Leads assigned to:</strong> {{ selected_cre.name }}</span>
                     <div class="card-header">
                         <form method="get" class="row g-2 align-items-end mb-0">
                             <input type="hidden" name="cre_id" value="{{ selected_cre.id }}">
@@ -87,7 +90,8 @@
                         </form>
                     </div>
                 </div>
-                <form id="bulkUnassignForm" method="post" action="{{ url_for('bulk_unassign_leads') }}">
+                <div id="alertPlaceholder"></div>
+                <form id="bulkUnassignForm" method="post" action="/bulk_unassign_leads">
                 <div class="card-body p-0">
                     {% if leads %}
                     <div class="table-responsive">
@@ -95,6 +99,7 @@
                             <thead>
                                 <tr>
                                     <th><input type="checkbox" id="selectAll"></th>
+                                    <th>UID</th>
                                     <th>Customer Name</th>
                                     <th>Mobile</th>
                                     <th>Qualification</th>
@@ -105,11 +110,10 @@
                                     <th></th>
                                     <th></th>
                                     <th></th>
+                                    <th></th>
                                     <th class="p-0">
                                         <div class="d-flex w-100">
                                             <div class="flex-fill text-center small" style="color:#856404; background:#fff3cd; border-radius:4px 0 0 4px;">Unassign</div>
-                                            <div class="flex-fill text-center small" style="color:#084298; background:#cfe2ff;">CRE History</div>
-                                            <div class="flex-fill text-center small" style="color:#0f5132; background:#d1e7dd; border-radius:0 4px 4px 0;">PS History</div>
                                         </div>
                                     </th>
                                 </tr>
@@ -122,6 +126,7 @@
                                         <input type="checkbox" name="uids" value="{{ lead.uid }}" class="lead-checkbox">
                                         {% endif %}
                                     </td>
+                                    <td>{{ lead.uid }}</td>
                                     <td>{{ lead.customer_name }}</td>
                                     <td>{{ lead.customer_mobile_number }}</td>
                                     <td>{% if lead.first_call_date %}Qualified{% else %}Unqualified{% endif %}</td>
@@ -136,11 +141,8 @@
                                                 <i class="fas fa-undo"></i>
                                             </button>
                                             {% endif %}
-                                            <button type="button" class="btn btn-sm btn-primary call-history-btn" data-uid="{{ lead.uid }}" title="CRE Call History">
-                                                <i class="fas fa-history"></i>
-                                            </button>
-                                            <button type="button" class="btn btn-sm btn-success ps-call-history-btn" data-uid="{{ lead.uid }}" title="PS Call History">
-                                                <i class="fas fa-history"></i>
+                                            <button type="button" class="btn btn-sm btn-info lead-journey-btn" data-uid="{{ lead.uid }}" title="View Lead Journey">
+                                                <i class="fas fa-route"></i> Journey
                                             </button>
                                         </div>
                                     </td>
@@ -148,11 +150,6 @@
                                 {% endfor %}
                             </tbody>
                         </table>
-                    </div>
-                    <div class="mt-2">
-                        <button type="submit" class="btn btn-danger btn-sm" id="bulkUnassignBtn" disabled>
-                            <i class="fas fa-undo"></i> Bulk Unassign Selected
-                        </button>
                     </div>
                     {% else %}
                     <div class="text-center py-5">
@@ -163,33 +160,17 @@
                 </div>
                 </form>
             </div>
-            <!-- Modal for Call Attempt History -->
-            <div class="modal fade" id="callHistoryModal" tabindex="-1" aria-labelledby="callHistoryModalLabel" aria-hidden="true">
-              <div class="modal-dialog modal-lg">
+            <!-- Add Lead Journey Modal -->
+            <div class="modal fade" id="leadJourneyModal" tabindex="-1" aria-labelledby="leadJourneyModalLabel" aria-hidden="true">
+              <div class="modal-dialog modal-xl">
                 <div class="modal-content">
                   <div class="modal-header">
-                    <h5 class="modal-title" id="callHistoryModalLabel">CRE Call Attempt History</h5>
+                    <h5 class="modal-title" id="leadJourneyModalLabel">Lead Journey</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                   </div>
                   <div class="modal-body">
-                    <div id="callHistoryContent">
-                      <div class="text-center"><span class="spinner-border spinner-border-sm"></span> Loading...</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <!-- Add PS Call Attempt History Modal -->
-            <div class="modal fade" id="psCallHistoryModal" tabindex="-1" aria-labelledby="psCallHistoryModalLabel" aria-hidden="true">
-              <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                  <div class="modal-header">
-                    <h5 class="modal-title" id="psCallHistoryModalLabel">PS Call Attempt History</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                  </div>
-                  <div class="modal-body">
-                    <div id="ps-call-history-content">
-                      <div class="text-center"><span class="spinner-border"></span> Loading...</div>
+                    <div id="lead-journey-content">
+                      <div class="text-center"><span class="spinner-border"></span> Loading journey...</div>
                     </div>
                   </div>
                 </div>
@@ -213,6 +194,13 @@
                     </ul>
                 </nav>
             {% endif %}
+            <!-- Add a hidden input to store all matching UIDs (up to 500) -->
+            {% set all_uids = [] %}
+            {% for lead in leads[:500] %}
+                {% set _ = all_uids.append(lead.uid) %}
+            {% endfor %}
+            <input type="hidden" id="allLeadUids" value="{{ all_uids|join(',') }}">
+            <div id="selectAllInfo" class="text-danger small" style="display:none;"></div>
             {% else %}
             <div class="alert alert-info mt-4">Select a CRE to view and manage their assigned leads.</div>
             {% endif %}
@@ -245,22 +233,79 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     // Select/Deselect all checkboxes
     const selectAll = document.getElementById('selectAll');
-    if (selectAll) {
-        selectAll.addEventListener('change', function() {
-            document.querySelectorAll('.lead-checkbox').forEach(function(cb) { cb.checked = selectAll.checked; });
-            updateBulkBtn();
+    const allLeadUidsInput = document.getElementById('allLeadUids');
+    const selectAllInfo = document.getElementById('selectAllInfo');
+    let selectedUids = [];
+    function updateBulkUnassignBtn() {
+        bulkUnassignBtn.textContent = `Bulk Unassign Selected (${selectedUids.length})`;
+        bulkUnassignBtn.disabled = selectedUids.length === 0;
+    }
+    function setCheckboxes(checked) {
+        document.querySelectorAll('tbody input[type="checkbox"]').forEach(cb => {
+            cb.checked = checked;
         });
     }
-    // Enable/disable bulk unassign button
-    function updateBulkBtn() {
-        const checked = document.querySelectorAll('.lead-checkbox:checked').length;
-        const bulkBtn = document.getElementById('bulkUnassignBtn');
-        if (bulkBtn) { bulkBtn.disabled = checked === 0; }
+    if (selectAll && allLeadUidsInput) {
+        selectAll.addEventListener('change', function() {
+            if (selectAll.checked) {
+                // Select up to 500 UIDs
+                selectedUids = allLeadUidsInput.value.split(',').filter(Boolean);
+                setCheckboxes(true);
+                updateBulkUnassignBtn();
+                if (selectedUids.length === 500) {
+                    selectAllInfo.style.display = '';
+                    selectAllInfo.textContent = 'Only the first 500 leads are selected. Unassign these, then repeat for the rest.';
+                } else {
+                    selectAllInfo.style.display = 'none';
+                }
+            } else {
+                selectedUids = [];
+                setCheckboxes(false);
+                updateBulkUnassignBtn();
+                selectAllInfo.style.display = 'none';
+            }
+        });
     }
-    document.querySelectorAll('.lead-checkbox').forEach(function(cb) {
-        cb.addEventListener('change', updateBulkBtn);
+    document.addEventListener('change', function(e) {
+        if (e.target.matches('tbody input[type="checkbox"]')) {
+            const uid = e.target.closest('tr').querySelector('td:nth-child(2)').textContent.trim();
+            if (e.target.checked) {
+                if (!selectedUids.includes(uid) && selectedUids.length < 500) selectedUids.push(uid);
+            } else {
+                selectedUids = selectedUids.filter(x => x !== uid);
+                if (selectAll) selectAll.checked = false;
+            }
+            updateBulkUnassignBtn();
+            if (selectedUids.length === 500) {
+                selectAllInfo.style.display = '';
+                selectAllInfo.textContent = 'Only the first 500 leads are selected. Unassign these, then repeat for the rest.';
+            } else {
+                selectAllInfo.style.display = 'none';
+            }
+        }
     });
-    updateBulkBtn();
+    bulkUnassignBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        if (selectedUids.length === 0) return;
+        const formData = new FormData();
+        selectedUids.forEach(uid => formData.append('uids', uid));
+        fetch('/bulk_unassign_leads', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert(data.message, 'success');
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                showAlert(data.message || 'Bulk unassign failed', 'danger');
+            }
+        })
+        .catch(() => {
+            showAlert('Bulk unassign failed. Please try again.', 'danger');
+        });
+    });
     // Unassign single lead
     document.querySelectorAll('.unassign-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
@@ -279,81 +324,176 @@ document.addEventListener('DOMContentLoaded', function() {
             form.submit();
         });
     });
-    // Bulk unassign
-    const bulkBtn = document.getElementById('bulkUnassignBtn');
-    if (bulkBtn) {
-        bulkBtn.addEventListener('click', function() {
-            if (bulkBtn.disabled) return;
-            if (!confirm('Are you sure you want to unassign selected leads?')) return;
-            const form = document.getElementById('bulkUnassignForm');
-            if (form) form.submit();
-        });
-    }
-    // Call History modal logic
-    document.querySelectorAll('.call-history-btn').forEach(function(btn) {
+    // Lead Journey modal logic
+    document.querySelectorAll('.lead-journey-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
             var uid = btn.getAttribute('data-uid');
-            var modal = new bootstrap.Modal(document.getElementById('callHistoryModal'));
-            var content = document.getElementById('callHistoryContent');
-            content.innerHTML = '<div class="text-center"><span class="spinner-border spinner-border-sm"></span> Loading...</div>';
+            var modal = new bootstrap.Modal(document.getElementById('leadJourneyModal'));
+            var content = document.getElementById('lead-journey-content');
+            content.innerHTML = '<div class="text-center"><span class="spinner-border"></span> Loading journey...</div>';
             modal.show();
-            fetch('/cre_call_attempt_history_json/' + uid)
+            fetch('/lead_journey/' + uid)
                 .then(response => response.json())
                 .then(data => {
-                    if (data.success && data.history.length > 0) {
-                        var html = '<table class="table table-bordered table-sm"><thead><tr><th>Call No</th><th>Attempt</th><th>Status</th><th>CRE Name</th><th>Timestamp</th></tr></thead><tbody>';
-                        data.history.forEach(function(attempt) {
-                            html += `<tr><td>${attempt.call_no}</td><td>${attempt.attempt}</td><td>${attempt.status}</td><td>${attempt.cre_name}</td><td>${attempt.update_ts || ''}</td></tr>`;
-                        });
-                        html += '</tbody></table>';
-                        content.innerHTML = html;
-                    } else {
-                        content.innerHTML = '<div class="alert alert-info">No call attempt history found for this lead.</div>';
-                    }
-                })
-                .catch(function() {
-                    content.innerHTML = '<div class="alert alert-danger">Failed to load call attempt history.</div>';
-                });
-        });
-    });
-    // PS Call History
-    document.querySelectorAll('.ps-call-history-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            var uid = btn.getAttribute('data-uid');
-            var modal = new bootstrap.Modal(document.getElementById('psCallHistoryModal'));
-            var content = document.getElementById('ps-call-history-content');
-            content.innerHTML = '<div class="text-center"><span class="spinner-border"></span> Loading...</div>';
-            fetch('/ps_call_attempt_history_json/' + uid)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        if (data.history.length === 0) {
-                            content.innerHTML = '<div class="alert alert-info">No PS call attempt history found for this lead.</div>';
-                        } else {
-                            var html = '<table class="table table-bordered table-sm">';
-                            html += '<thead><tr><th>Call No</th><th>Attempt</th><th>Status</th><th>PS Name</th><th>Timestamp</th></tr></thead><tbody>';
-                            data.history.forEach(function(row) {
-                                html += '<tr>' +
-                                    '<td>' + (row.call_no || '') + '</td>' +
-                                    '<td>' + (row.attempt || '') + '</td>' +
-                                    '<td>' + (row.status || '') + '</td>' +
-                                    '<td>' + (row.ps_name || '') + '</td>' +
-                                    '<td>' + (row.created_at || '') + '</td>' +
-                                    '</tr>';
+                    if (data.success && data.journey) {
+                        var j = data.journey;
+                        // Assignment History
+                        var assignmentHtml = '<h6>Assignment History</h6><ul>';
+                        if (j.assignment_history && j.assignment_history.length > 0) {
+                            j.assignment_history.forEach(function(a) {
+                                assignmentHtml += `<li><b>${a.role}:</b> ${a.name || ''} <span class='text-muted'>(${a.assigned_at || 'N/A'})</span></li>`;
                             });
-                            html += '</tbody></table>';
-                            content.innerHTML = html;
+                    } else {
+                            assignmentHtml += '<li>No assignment history.</li>';
+                        }
+                        assignmentHtml += '</ul>';
+                        // Status Timeline
+                        var statusHtml = '<h6>Status Timeline</h6><table class="table table-sm table-bordered"><thead><tr><th>By</th><th>Call No</th><th>Status/Remark</th><th>Date</th></tr></thead><tbody>';
+                        if (j.status_timeline && j.status_timeline.length > 0) {
+                            j.status_timeline.forEach(function(s) {
+                                statusHtml += `<tr><td>${s.by || ''}</td><td>${s.call_no || ''}</td><td>${s.status || s.remark || ''}</td><td>${s.date || ''}</td></tr>`;
+                            });
+                        } else {
+                            statusHtml += '<tr><td colspan="4">No status timeline.</td></tr>';
+                        }
+                        statusHtml += '</tbody></table>';
+                        // Conversation Log
+                        var convHtml = '<h6>Conversation Log</h6><table class="table table-sm table-bordered"><thead><tr><th>By</th><th>Name</th><th>Call No</th><th>Attempt</th><th>Status</th><th>Remark</th><th>Follow-up Date</th><th>Timestamp</th></tr></thead><tbody>';
+                        if (j.conversation_log && j.conversation_log.length > 0) {
+                            j.conversation_log.forEach(function(c) {
+                                convHtml += `<tr><td>${c.by || ''}</td><td>${c.name || ''}</td><td>${c.call_no || ''}</td><td>${c.attempt || ''}</td><td>${c.status || ''}</td><td>${c.remark || ''}</td><td>${c.follow_up_date || ''}</td><td>${c.timestamp || ''}</td></tr>`;
+                            });
+                        } else {
+                            convHtml += '<tr><td colspan="8">No conversation log.</td></tr>';
+                        }
+                        convHtml += '</tbody></table>';
+                        // Outcome
+                        var outcomeHtml = '<h6>Final Outcome</h6>';
+                        if (j.outcome) {
+                            outcomeHtml += `<b>Status:</b> ${j.outcome.final_status || ''}<br>`;
+                            outcomeHtml += `<b>Timestamp:</b> ${j.outcome.timestamp || ''}<br>`;
+                            if (j.outcome.reason) outcomeHtml += `<b>Reason:</b> ${j.outcome.reason}<br>`;
+                        } else {
+                            outcomeHtml += 'No outcome data.';
+                        }
+                        // Plotly placeholder
+                        var plotlyHtml = '<div id="lead-journey-charts" style="margin:20px 0;"></div>';
+                        // Download PDF button
+                        var pdfBtnHtml = `<button class="btn btn-outline-secondary mb-3" onclick="window.open('/lead_journey_report/${uid}', '_blank')"><i class='fas fa-file-pdf'></i> Download PDF Report</button>`;
+                        // Compose all
+                        content.innerHTML = pdfBtnHtml + assignmentHtml + statusHtml + convHtml + outcomeHtml + plotlyHtml;
+                        // Plotly.js charts
+                        if (window.Plotly === undefined) {
+                            var plotlyScript = document.createElement('script');
+                            plotlyScript.src = 'https://cdn.plot.ly/plotly-latest.min.js';
+                            document.head.appendChild(plotlyScript);
+                            plotlyScript.onload = function() { renderLeadJourneyCharts(j); };
+                        } else {
+                            renderLeadJourneyCharts(j);
+                        }
+                        function renderLeadJourneyCharts(journey) {
+                            var chartsDiv = document.getElementById('lead-journey-charts');
+                            if (!chartsDiv) return;
+                            chartsDiv.innerHTML = '';
+                            // Timeline chart: status changes and call attempts
+                            var timelineData = [];
+                            if (journey.status_timeline && journey.status_timeline.length > 0) {
+                                var x = journey.status_timeline.map(s => s.date || '');
+                                var y = journey.status_timeline.map(s => (s.status || s.remark || ''));
+                                var by = journey.status_timeline.map(s => s.by || '');
+                                timelineData.push({
+                                    x: x,
+                                    y: y,
+                                    text: by,
+                                    mode: 'lines+markers+text',
+                                    type: 'scatter',
+                                    name: 'Status/Remark',
+                                    textposition: 'top center',
+                                    marker: { size: 10 }
+                                });
+                                Plotly.newPlot(chartsDiv, timelineData, {
+                                    title: 'Status Timeline',
+                                    xaxis: { title: 'Date' },
+                                    yaxis: { title: 'Status/Remark' },
+                                    height: 350
+                                });
+                            }
+                            // Bar chart: call attempts by CRE and PS
+                            var creAttempts = 0, psAttempts = 0;
+                            if (journey.cre_calls) creAttempts = journey.cre_calls.length;
+                            if (journey.ps_calls) psAttempts = journey.ps_calls.length;
+                            var barDiv = document.createElement('div');
+                            barDiv.id = 'lead-journey-bar';
+                            barDiv.style.height = '300px';
+                            chartsDiv.appendChild(barDiv);
+                            Plotly.newPlot(barDiv, [{
+                                x: ['CRE', 'PS'],
+                                y: [creAttempts, psAttempts],
+                                type: 'bar',
+                                marker: { color: ['#007bff', '#28a745'] }
+                            }], {
+                                title: 'Number of Call Attempts',
+                                yaxis: { title: 'Attempts' }
+                            });
+                            // Pie chart: status distribution
+                            var statusCounts = {};
+                            if (journey.conversation_log) {
+                                journey.conversation_log.forEach(function(c) {
+                                    var s = c.status || 'Unknown';
+                                    statusCounts[s] = (statusCounts[s] || 0) + 1;
+                                });
+                            }
+                            var pieDiv = document.createElement('div');
+                            pieDiv.id = 'lead-journey-pie';
+                            pieDiv.style.height = '300px';
+                            chartsDiv.appendChild(pieDiv);
+                            var pieLabels = Object.keys(statusCounts);
+                            var pieValues = Object.values(statusCounts);
+                            Plotly.newPlot(pieDiv, [{
+                                labels: pieLabels,
+                                values: pieValues,
+                                type: 'pie',
+                                textinfo: 'label+percent',
+                                marker: { colors: Plotly.d3.schemeCategory10 }
+                            }], {
+                                title: 'Status Distribution (CRE + PS)'
+                            });
                         }
                     } else {
-                        content.innerHTML = '<div class="alert alert-danger">Failed to load PS call attempt history.</div>';
+                        content.innerHTML = '<div class="alert alert-danger">Failed to load lead journey.</div>';
                     }
                 })
                 .catch(function() {
-                    content.innerHTML = '<div class="alert alert-danger">Failed to load PS call attempt history.</div>';
+                    content.innerHTML = '<div class="alert alert-danger">Failed to load lead journey.</div>';
                 });
-            modal.show();
         });
     });
+    // Live UID search filtering
+    const uidSearchBox = document.getElementById('uidSearchBox');
+    const showingLeadsText = document.getElementById('showingLeadsText');
+    if (uidSearchBox) {
+        uidSearchBox.addEventListener('input', function() {
+            const filter = uidSearchBox.value.trim().toLowerCase();
+            const table = document.querySelector('table');
+            if (!table) return;
+            const rows = table.querySelectorAll('tbody tr');
+            let visibleCount = 0;
+            rows.forEach(row => {
+                const uidCell = row.querySelector('td:nth-child(2)');
+                if (!uidCell) return;
+                const uid = uidCell.textContent.trim().toLowerCase();
+                if (filter === '' || uid.includes(filter)) {
+                    row.style.display = '';
+                    visibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+            if (showingLeadsText) {
+                showingLeadsText.textContent = `Showing ${visibleCount} lead${visibleCount === 1 ? '' : 's'}`;
+            }
+        });
+    }
 });
 </script>
 {% endblock %} 
