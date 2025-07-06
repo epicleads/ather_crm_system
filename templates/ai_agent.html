@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+
+{% block title %}AI Agent - Ather CRM{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <!-- Left Panel - CRM Overview -->
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-database"></i> CRM Overview
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if crm_summary %}
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="text-center mb-3">
+                                <h4 class="text-primary">{{ crm_summary.total_leads }}</h4>
+                                <small class="text-muted">Total Leads</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-center mb-3">
+                                <h4 class="text-success">{{ crm_summary.won_leads }}</h4>
+                                <small class="text-muted">Won Leads</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-center mb-3">
+                                <h4 class="text-warning">{{ crm_summary.pending_leads }}</h4>
+                                <small class="text-muted">Pending</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-center mb-3">
+                                <h4 class="text-info">{{ crm_summary.conversion_rate }}%</h4>
+                                <small class="text-muted">Conversion Rate</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <h6 class="mb-3"><i class="fas fa-chart-pie"></i> Top Lead Sources</h6>
+                    {% for source, count in crm_summary.source_distribution.items() %}
+                    {% if loop.index <= 5 %}
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>{{ source }}</span>
+                        <div>
+                            <span class="badge bg-secondary me-1">{{ count }}</span>
+                            {% if crm_summary.unassigned_leads_by_source.get(source, 0) > 0 %}
+                            <span class="badge bg-warning text-dark" title="Unassigned">{{ crm_summary.unassigned_leads_by_source.get(source, 0) }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                    
+                    <hr>
+                    
+                    <h6 class="mb-3"><i class="fas fa-motorcycle"></i> Top Models</h6>
+                    {% for model, count in crm_summary.model_interest.items() %}
+                    {% if loop.index <= 3 %}
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="small">{{ (model or 'Not specified')[:20] }}...</span>
+                        <span class="badge bg-info">{{ count }}</span>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                    
+                    <hr>
+                    
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="text-center">
+                                <h6 class="text-primary">{{ crm_summary.total_cres }}</h6>
+                                <small class="text-muted">CREs</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-center">
+                                <h6 class="text-success">{{ crm_summary.total_ps }}</h6>
+                                <small class="text-muted">PS Users</small>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Panel - AI Agent Interface -->
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-gradient-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-brain"></i> AI CRM Assistant
+                    </h4>
+                    <small>Ask me anything about your CRM data and get actionable insights</small>
+                </div>
+                <div class="card-body">
+                    <!-- Question Form -->
+                    <form method="POST" id="ai-question-form">
+                        <div class="mb-3">
+                            <label for="question" class="form-label">
+                                <i class="fas fa-question-circle"></i> Ask Your Question
+                            </label>
+                            <textarea 
+                                class="form-control" 
+                                id="question" 
+                                name="question" 
+                                rows="3" 
+                                placeholder="Example: Which lead source has the highest conversion rate and why? What marketing strategies should we focus on?"
+                                required>{{ question if question else '' }}</textarea>
+                        </div>
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <button type="submit" class="btn btn-primary" id="ask-btn">
+                                <i class="fas fa-magic"></i> Generate Insight
+                            </button>
+                        </div>
+                    </form>
+                    
+                    <!-- Loading State -->
+                    <div id="loading" class="text-center mt-4" style="display: none;">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Analyzing your CRM data...</p>
+                    </div>
+                    
+                    <!-- Insight Display -->
+                    {% if insight %}
+                    <div class="mt-4">
+                        <div class="card bg-light">
+                            <div class="card-header">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-lightbulb text-warning"></i> AI Insight
+                                </h5>
+                                <small class="text-muted">Based on your current CRM data</small>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <strong>Question:</strong> {{ question }}
+                                </div>
+                                <div class="insight-content">
+                                    {{ insight|replace('\n', '<br>')|safe }}
+                                </div>
+                            </div>
+                            <div class="card-footer text-muted">
+                                <small>
+                                    <i class="fas fa-clock"></i> Generated on {{ current_time }}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Sample Questions -->
+                    <div class="mt-4">
+                        <h6 class="mb-3"><i class="fas fa-question-circle"></i> Sample Questions You Can Ask</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card border-0 bg-light">
+                                    <div class="card-body p-3">
+                                        <h6 class="card-title text-primary">Performance Analysis</h6>
+                                        <ul class="list-unstyled small">
+                                            <li>• Which CRE has the highest conversion rate?</li>
+                                            <li>• What's the performance of each branch?</li>
+                                            <li>• Which lead source converts best?</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card border-0 bg-light">
+                                    <div class="card-body p-3">
+                                        <h6 class="card-title text-success">Strategic Insights</h6>
+                                        <ul class="list-unstyled small">
+                                            <li>• What marketing strategies should we focus on?</li>
+                                            <li>• How can we improve our conversion rates?</li>
+                                            <li>• Which models are most popular?</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <div class="card border-0 bg-light">
+                                    <div class="card-body p-3">
+                                        <h6 class="card-title text-warning">Operational Insights</h6>
+                                        <ul class="list-unstyled small">
+                                            <li>• How many unassigned leads from Google?</li>
+                                            <li>• Which sources have unassigned leads?</li>
+                                            <li>• How to optimize lead assignment?</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card border-0 bg-light">
+                                    <div class="card-body p-3">
+                                        <h6 class="card-title text-info">Predictive Analysis</h6>
+                                        <ul class="list-unstyled small">
+                                            <li>• What trends should we watch?</li>
+                                            <li>• How to predict lead quality?</li>
+                                            <li>• What's the forecast for next quarter?</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('ai-question-form').addEventListener('submit', function(e) {
+    // Show loading state
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('ask-btn').disabled = true;
+    document.getElementById('ask-btn').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
+});
+
+// Add click handlers for sample questions
+document.querySelectorAll('.sample-question').forEach(function(element) {
+    element.addEventListener('click', function() {
+        document.getElementById('question').value = this.textContent;
+    });
+});
+</script>
+
+<style>
+.bg-gradient-primary {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+}
+
+.insight-content {
+    line-height: 1.6;
+    font-size: 14px;
+}
+
+.card {
+    border: none;
+    border-radius: 10px;
+}
+
+.card-header {
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+}
+
+.sample-question {
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.sample-question:hover {
+    background-color: #f8f9fa;
+    transform: translateY(-2px);
+}
+
+.spinner-border {
+    width: 3rem;
+    height: 3rem;
+}
+</style>
+{% endblock %} 

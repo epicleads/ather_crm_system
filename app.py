@@ -19,6 +19,7 @@ from collections import defaultdict, Counter
 import json
 from auth import AuthManager, require_auth, require_admin, require_cre, require_ps
 from flask_limiter import Limiter
+import google.generativeai as genai
 from flask_limiter.util import get_remote_address
 from security_verification import run_security_verification
 import time
@@ -42,7 +43,14 @@ import seaborn as sns
 from matplotlib.backends.backend_pdf import PdfPages
 
 # Load environment variables from .env file
-load_dotenv()
+import pathlib
+env_path = pathlib.Path(__file__).parent / '.env'
+load_dotenv(dotenv_path=env_path)
+
+# Debug: Check if GEMINI_API_KEY is loaded
+gemini_key = os.getenv('GEMINI_API_KEY')
+print(f"GEMINI_API_KEY found: {gemini_key is not None}")
+print(f"GEMINI_API_KEY value: {gemini_key[:10]}..." if gemini_key else "GEMINI_API_KEY value: None")
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -85,6 +93,17 @@ if not SUPABASE_KEY:
 
 app.secret_key = SECRET_KEY
 app.permanent_session_lifetime = timedelta(hours=24)
+
+# Configure Gemini AI
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY') or 'AIzaSyAxSFyTqAodi55bhGyjz_1KLxN64iomfKY'
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    # Create the model
+    gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+    print("✅ Gemini AI model initialized successfully")
+else:
+    gemini_model = None
+    print("⚠️ GEMINI_API_KEY not found in environment variables")
 
 # Initialize Supabase client
 try:
@@ -3289,6 +3308,295 @@ def analytics():
             'recent_activities': []
         }
         return render_template('analytics.html', analytics=empty_analytics)
+
+
+def get_crm_data_summary():
+    """Get comprehensive CRM data summary for AI analysis"""
+    try:
+        # Get all data
+        all_leads = safe_get_data('lead_master')
+        all_cres = safe_get_data('cre_users')
+        all_ps = safe_get_data('ps_users')
+        walkin_customers = safe_get_data('walkin_customers')
+        activity_leads = safe_get_data('activity_leads')
+        
+        # Calculate key metrics
+        total_leads = len(all_leads)
+        won_leads = len([l for l in all_leads if l.get('final_status') == 'Won'])
+        lost_leads = len([l for l in all_leads if l.get('final_status') == 'Lost'])
+        pending_leads = len([l for l in all_leads if l.get('final_status') == 'Pending'])
+        
+        # Source analysis with assignment status
+        source_counts = {}
+        unassigned_leads_by_source = {}
+        assigned_leads_by_source = {}
+        
+        for lead in all_leads:
+            source = lead.get('source') or 'Unknown'
+            source_counts[source] = source_counts.get(source, 0) + 1
+            
+            # Check assignment status
+            is_assigned = lead.get('assigned', 'No') == 'Yes' or lead.get('cre_name') or lead.get('ps_name')
+            
+            if not is_assigned:
+                unassigned_leads_by_source[source] = unassigned_leads_by_source.get(source, 0) + 1
+            else:
+                assigned_leads_by_source[source] = assigned_leads_by_source.get(source, 0) + 1
+        
+        # Lead category analysis
+        category_counts = {}
+        for lead in all_leads:
+            category = lead.get('lead_category') or 'Not categorized'
+            category_counts[category] = category_counts.get(category, 0) + 1
+        
+        # Model interest analysis
+        model_counts = {}
+        for lead in all_leads:
+            model = lead.get('model_interested') or 'Not specified'
+            model_counts[model] = model_counts.get(model, 0) + 1
+        
+        # CRE performance
+        cre_performance = {}
+        for cre in all_cres:
+            cre_name = cre.get('name')
+            cre_leads = [l for l in all_leads if l.get('cre_name') == cre_name]
+            cre_won = len([l for l in cre_leads if l.get('final_status') == 'Won'])
+            cre_performance[cre_name] = {
+                'total_leads': len(cre_leads),
+                'won_leads': cre_won,
+                'conversion_rate': round((cre_won / len(cre_leads) * 100) if cre_leads else 0, 1)
+            }
+        
+        # PS performance
+        ps_performance = {}
+        for ps in all_ps:
+            ps_name = ps.get('name')
+            ps_leads = [l for l in all_leads if l.get('ps_name') == ps_name]
+            ps_won = len([l for l in ps_leads if l.get('final_status') == 'Won'])
+            ps_performance[ps_name] = {
+                'total_leads': len(ps_leads),
+                'won_leads': ps_won,
+                'conversion_rate': round((ps_won / len(ps_leads) * 100) if ps_leads else 0, 1),
+                'branch': ps.get('branch', 'Unknown')
+            }
+        
+        # Branch performance
+        branch_performance = {}
+        for ps in all_ps:
+            branch = ps.get('branch')
+            if branch:
+                if branch not in branch_performance:
+                    branch_performance[branch] = {'total_leads': 0, 'won_leads': 0, 'ps_count': 0}
+                branch_performance[branch]['ps_count'] += 1
+        
+        for lead in all_leads:
+            ps_name = lead.get('ps_name')
+            if ps_name:
+                ps_data = next((p for p in all_ps if p.get('name') == ps_name), None)
+                if ps_data:
+                    branch = ps_data.get('branch')
+                    if branch:
+                        branch_performance[branch]['total_leads'] += 1
+                        if lead.get('final_status') == 'Won':
+                            branch_performance[branch]['won_leads'] += 1
+        
+        # Calculate branch conversion rates
+        for branch, data in branch_performance.items():
+            data['conversion_rate'] = round((data['won_leads'] / data['total_leads'] * 100) if data['total_leads'] > 0 else 0, 1)
+        
+        # Assignment analysis
+        total_assigned = sum(assigned_leads_by_source.values())
+        total_unassigned = sum(unassigned_leads_by_source.values())
+        assignment_rate = round((total_assigned / total_leads * 100) if total_leads > 0 else 0, 1)
+        
+        # Recent activity summary
+        recent_leads = sorted(all_leads, key=lambda x: x.get('created_at', ''), reverse=True)[:10]
+        
+        return {
+            'total_leads': total_leads,
+            'won_leads': won_leads,
+            'lost_leads': lost_leads,
+            'pending_leads': pending_leads,
+            'conversion_rate': round((won_leads / total_leads * 100) if total_leads > 0 else 0, 1),
+            'total_assigned': total_assigned,
+            'total_unassigned': total_unassigned,
+            'assignment_rate': assignment_rate,
+            'total_cres': len(all_cres),
+            'total_ps': len(all_ps),
+            'total_walkin_customers': len(walkin_customers),
+            'total_activity_leads': len(activity_leads),
+            'source_distribution': source_counts,
+            'unassigned_leads_by_source': unassigned_leads_by_source,
+            'assigned_leads_by_source': assigned_leads_by_source,
+            'category_distribution': category_counts,
+            'model_interest': model_counts,
+            'cre_performance': cre_performance,
+            'ps_performance': ps_performance,
+            'branch_performance': branch_performance,
+            'recent_leads': recent_leads[:5]  # Only first 5 for summary
+        }
+    except Exception as e:
+        print(f"Error getting CRM data summary: {e}")
+        return None
+
+
+def generate_ai_insight(question, crm_data):
+    """Generate AI insight using Gemini API"""
+    if not gemini_model:
+        return {"error": "AI service not configured. Please set GEMINI_API_KEY environment variable."}
+    
+    try:
+        # Create a comprehensive prompt with CRM data
+        prompt = f"""
+        You are an expert CRM analyst and business intelligence consultant for an auto retail business specializing in electric vehicles (Ather scooters). 
+        
+        You have access to the following COMPREHENSIVE CRM data:
+        
+        OVERVIEW:
+        - Total Leads: {crm_data['total_leads']}
+        - Won Leads: {crm_data['won_leads']}
+        - Lost Leads: {crm_data['lost_leads']}
+        - Pending Leads: {crm_data['pending_leads']}
+        - Overall Conversion Rate: {crm_data['conversion_rate']}%
+        - Total Assigned Leads: {crm_data['total_assigned']}
+        - Total Unassigned Leads: {crm_data['total_unassigned']}
+        - Assignment Rate: {crm_data['assignment_rate']}%
+        - Total CREs: {crm_data['total_cres']}
+        - Total Product Specialists: {crm_data['total_ps']}
+        - Walk-in Customers: {crm_data['total_walkin_customers']}
+        - Activity/Event Leads: {crm_data['total_activity_leads']}
+        
+        LEAD SOURCES (Total by Source):
+        {crm_data['source_distribution']}
+        
+        UNASSIGNED LEADS BY SOURCE (Exact Numbers):
+        {crm_data['unassigned_leads_by_source']}
+        
+        ASSIGNED LEADS BY SOURCE (Exact Numbers):
+        {crm_data['assigned_leads_by_source']}
+        
+        LEAD CATEGORIES:
+        {crm_data['category_distribution']}
+        
+        MODEL INTEREST:
+        {crm_data['model_interest']}
+        
+        CRE PERFORMANCE:
+        {crm_data['cre_performance']}
+        
+        PS PERFORMANCE:
+        {crm_data['ps_performance']}
+        
+        BRANCH PERFORMANCE:
+        {crm_data['branch_performance']}
+        
+        Question: {question}
+        
+        IMPORTANT INSTRUCTIONS:
+        1. When asked about unassigned leads from specific sources, use the "UNASSIGNED LEADS BY SOURCE" data to provide EXACT numbers
+        2. When asked about Google leads, check both "Google" and "Google(KNOW)" entries separately
+        3. For assignment-related questions, reference the assignment rate and specific numbers
+        4. Always provide specific, actionable recommendations
+        5. Use the exact data provided - don't estimate or generalize
+        
+        Please provide a comprehensive, actionable insight based on this CRM data. Include:
+        1. Direct answer with EXACT numbers from the data
+        2. Key findings and patterns
+        3. Specific recommendations for improvement
+        4. Potential actions for CRM managers and marketing heads
+        5. Metrics to track progress
+        
+        Format your response in a clear, professional manner suitable for business stakeholders.
+        """
+        
+        response = gemini_model.generate_content(prompt)
+        return {"insight": response.text}
+        
+    except Exception as e:
+        return {"error": f"Error generating AI insight: {str(e)}"}
+
+
+@app.route('/ai_agent', methods=['GET', 'POST'])
+@require_admin
+def ai_agent():
+    """AI Agent interface for CRM insights"""
+    if request.method == 'POST':
+        question = request.form.get('question', '').strip()
+        
+        if not question:
+            flash('Please enter a question', 'error')
+            return redirect(url_for('ai_agent'))
+        
+        # Get CRM data summary
+        crm_data = get_crm_data_summary()
+        if not crm_data:
+            flash('Error loading CRM data', 'error')
+            return redirect(url_for('ai_agent'))
+        
+        # Generate AI insight
+        result = generate_ai_insight(question, crm_data)
+        
+        if 'error' in result:
+            flash(result['error'], 'error')
+            return redirect(url_for('ai_agent'))
+        
+        # Log AI agent usage
+        auth_manager.log_audit_event(
+            user_id=session.get('user_id'),
+            user_type=session.get('user_type'),
+            action='AI_AGENT_QUERY',
+            resource='ai_agent',
+            details={'question': question[:100]}  # Limit details for logging
+        )
+        
+        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        return render_template('ai_agent.html', 
+                             question=question, 
+                             insight=result['insight'],
+                             crm_summary=crm_data,
+                             current_time=current_time)
+    
+    # GET request - show the AI agent interface
+    crm_data = get_crm_data_summary()
+    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    return render_template('ai_agent.html', crm_summary=crm_data, current_time=current_time)
+
+
+@app.route('/ai_agent_api', methods=['POST'])
+@require_admin
+def ai_agent_api():
+    """API endpoint for AI agent insights"""
+    try:
+        data = request.get_json()
+        question = data.get('question', '').strip()
+        
+        if not question:
+            return jsonify({'error': 'Question is required'}), 400
+        
+        # Get CRM data summary
+        crm_data = get_crm_data_summary()
+        if not crm_data:
+            return jsonify({'error': 'Error loading CRM data'}), 500
+        
+        # Generate AI insight
+        result = generate_ai_insight(question, crm_data)
+        
+        if 'error' in result:
+            return jsonify(result), 500
+        
+        # Log AI agent usage
+        auth_manager.log_audit_event(
+            user_id=session.get('user_id'),
+            user_type=session.get('user_type'),
+            action='AI_AGENT_API_QUERY',
+            resource='ai_agent_api',
+            details={'question': question[:100]}
+        )
+        
+        return jsonify({'insight': result['insight']})
+        
+    except Exception as e:
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 
 @app.route('/branch_performance/<branch_name>')
