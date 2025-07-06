@@ -11,6 +11,8 @@ Pillow==11.2.1
 requests
 pandas
 simple-salesforce==1.12.6
+matplotlib
+seaborn
 reportlab
 aiohttp
 flask-socketio
