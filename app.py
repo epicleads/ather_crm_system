@@ -3222,6 +3222,32 @@ def analytics():
         # Calculate leads growth (mock calculation)
         leads_growth = 15
 
+        # --- Campaign/Platform/Lead Count Aggregation ---
+        campaign_stats_dict = {}
+        all_leads_count = len(all_leads)
+        today_str = today.strftime('%Y-%m-%d')
+        for lead in all_leads:
+            campaign = lead.get('campaign', 'Unknown')
+            source = lead.get('source', 'Unknown')
+            # Skip if campaign is None, empty, or 'Unknown'
+            if not campaign or campaign.strip().lower() in ['none', 'unknown', '']:
+                continue
+            key = (campaign, source)
+            if key not in campaign_stats_dict:
+                campaign_stats_dict[key] = {'campaign': campaign, 'source': source, 'total_leads': 0, 'today_leads': 0}
+            campaign_stats_dict[key]['total_leads'] += 1
+            # Count today's leads using only created_at
+            lead_date = lead.get('created_at')
+            if lead_date:
+                if 'T' in lead_date:
+                    lead_date_val = lead_date.split('T')[0]
+                else:
+                    lead_date_val = lead_date
+                if lead_date_val == today_str:
+                    campaign_stats_dict[key]['today_leads'] += 1
+        campaign_stats = list(campaign_stats_dict.values())
+        # --- End Campaign/Platform/Lead Count Aggregation ---
+
         # Create analytics object that matches template expectations
         analytics = {
             'total_leads': total_leads,
@@ -3239,7 +3265,10 @@ def analytics():
             'model_interest': model_interest,
             'branch_performance': branch_performance,
             'funnel': funnel,
-            'recent_activities': recent_activities
+            'recent_activities': recent_activities,
+            # Add new campaign/platform stats
+            'campaign_stats': campaign_stats,
+            'all_leads_count': all_leads_count
         }
 
         # Log analytics access
@@ -3283,7 +3312,9 @@ def analytics():
                 'won': 0,
                 'won_percent': 0
             },
-            'recent_activities': []
+            'recent_activities': [],
+            'campaign_stats': [],
+            'all_leads_count': 0
         }
         return render_template('analytics.html', analytics=empty_analytics)
 
@@ -4054,6 +4085,7 @@ def source_analysis_data():
     try:
         start_date_str = request.args.get('start_date')
         end_date_str = request.args.get('end_date')
+        date_field = request.args.get('date_field', 'created_at')  # Allow date_field param, default to created_at
         today = datetime.now().date()
         start_date = None
         end_date = None
@@ -4072,7 +4104,7 @@ def source_analysis_data():
         all_leads = safe_get_data('lead_master')
         all_followups = safe_get_data('ps_followup_master')
         def in_date_range(lead):
-            lead_date_str = lead.get('created_at') or lead.get('date')
+            lead_date_str = lead.get(date_field) or lead.get('date')
             if not lead_date_str:
                 return True
             try:
@@ -4304,6 +4336,168 @@ def get_unassigned_leads_by_source():
         return jsonify({'success': True, 'leads': leads})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/get_cre_list')
+@require_admin
+def get_cre_list():
+    """Get list of all CREs for dropdown"""
+    try:
+        cre_result = supabase.table('cre_users').select('name').eq('is_active', True).execute()
+        cre_list = cre_result.data if cre_result.data else []
+        return jsonify({'success': True, 'cre_list': cre_list})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+
+@app.route('/cre_analysis_data')
+@require_admin
+def cre_analysis_data():
+    """Get CRE performance analysis data"""
+    try:
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        cre_name = request.args.get('cre_name')
+        date_field = request.args.get('date_field', 'created_at')  # Allow date_field param, default to created_at
+        # Get all leads
+        leads_result = supabase.table('lead_master').select('*').execute()
+        leads = leads_result.data if leads_result.data else []
+        # Get all CREs
+        cre_result = supabase.table('cre_users').select('name').eq('is_active', True).execute()
+        cres = [cre['name'] for cre in cre_result.data] if cre_result.data else []
+        # Filter by date range if provided
+        if start_date and end_date:
+            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            def in_range(lead):
+                lead_date_str = lead.get(date_field)
+                if not lead_date_str:
+                    return False
+                try:
+                    if 'T' in lead_date_str:
+                        lead_date = datetime.fromisoformat(lead_date_str.replace('Z', '+00:00')).date()
+                    else:
+                        lead_date = datetime.strptime(lead_date_str[:10], '%Y-%m-%d').date()
+                    return start_dt.date() <= lead_date <= end_dt.date()
+                except Exception:
+                    return False
+            leads = [lead for lead in leads if in_range(lead)]
+        # Filter by CRE if provided
+        if cre_name:
+            leads = [lead for lead in leads if lead.get('cre_name') == cre_name]
+            cres = [cre_name]
+        # Initialize data structure
+        data = {}
+        for cre in cres:
+            data[cre] = {
+                'calls_allocated': 0,
+                'calls_attempted': 0,
+                'calls_connected': 0,
+                'total_leads': 0,
+                'hot_leads': 0,
+                'warm_leads': 0,
+                'cold_leads': 0,
+                'callback_leads': 0,
+                'rnr_leads': 0,
+                'disconnected_calls': 0,
+                'lost_total': 0,
+                'lost_co_dealer': 0,
+                'lost_competition': 0,
+                'not_interested': 0,
+                'did_not_enquire': 0,
+                'wrong_lead': 0,
+                'rnr_lost': 0,
+                'finance_reject': 0,
+                'sales_pipeline_total': 0,
+                'closed_won': 0,
+                'pending': 0,
+                'closed_lost': 0,
+                'call_percentage': 0,
+                'interested_percentage': 0,
+                'walkin_percentage': 0,
+                'retail_percentage': 0
+            }
+        # Process leads for each CRE
+        for lead in leads:
+            assigned_cre = lead.get('cre_name')
+            if assigned_cre not in cres:
+                continue
+            cre_data = data[assigned_cre]
+            # Calls allocated
+            cre_data['calls_allocated'] += 1
+            # Calls attempted
+            attempted = any(lead.get(f'{c}_call_date') for c in ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh'])
+            if attempted:
+                cre_data['calls_attempted'] += 1
+            # Calls connected
+            call_statuses = [lead.get(f'{c}_call_status', '').lower() for c in ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']]
+            connected = any(s and s not in ['rnr', 'busy', 'busy on another call'] for s in call_statuses)
+            if connected:
+                cre_data['calls_connected'] += 1
+            # Lead status analysis
+            status = (lead.get('lead_status') or '').strip().lower()
+            if status in ['interested', 'call back', 'rnr', 'call disconnected']:
+                cre_data['total_leads'] += 1
+                if status == 'interested':
+                    cat = (lead.get('lead_category') or '').strip().lower()
+                    if cat == 'hot':
+                        cre_data['hot_leads'] += 1
+                    elif cat == 'warm':
+                        cre_data['warm_leads'] += 1
+                    elif cat == 'cold':
+                        cre_data['cold_leads'] += 1
+                elif status == 'call back':
+                    cre_data['callback_leads'] += 1
+                elif status == 'rnr':
+                    cre_data['rnr_leads'] += 1
+                elif status == 'call disconnected':
+                    cre_data['disconnected_calls'] += 1
+            # Lost leads analysis - use lead_master data directly
+            final_status = (lead.get('final_status') or '').strip().lower()
+            lead_status = (lead.get('lead_status') or '').strip().lower()
+            if final_status == 'lost':
+                cre_data['lost_total'] += 1
+                cre_data['closed_lost'] += 1
+                if lead_status == 'rnr-lost':
+                    cre_data['rnr_lost'] += 1
+                elif lead_status == 'did not enquire':
+                    cre_data['did_not_enquire'] += 1
+                elif lead_status == 'not interested':
+                    cre_data['not_interested'] += 1
+                elif lead_status == 'lost to competition':
+                    cre_data['lost_competition'] += 1
+                elif lead_status == 'lost to co-dealer':
+                    cre_data['lost_co_dealer'] += 1
+                elif lead_status == 'finance rejected':
+                    cre_data['finance_reject'] += 1
+                elif lead_status == 'wrong lead':
+                    cre_data['wrong_lead'] += 1
+            if final_status == 'won':
+                cre_data['sales_pipeline_total'] += 1
+                cre_data['closed_won'] += 1
+            if status in ['interested', 'call back', 'rnr', 'call disconnected']:
+                cre_data['pending'] += 1
+        # Calculate percentages
+        for cre in cres:
+            cre_data = data[cre]
+            allocated = cre_data['calls_allocated']
+            if allocated > 0:
+                cre_data['call_percentage'] = round((cre_data['calls_connected'] / allocated) * 100, 1)
+                cre_data['interested_percentage'] = round((cre_data['total_leads'] / allocated) * 100, 1)
+                cre_data['walkin_percentage'] = round((cre_data['pending'] / allocated) * 100, 1)
+                cre_data['retail_percentage'] = round((cre_data['closed_won'] / allocated) * 100, 1)
+        # Calculate totals
+        total_data = {}
+        if data:
+            for key in data[cres[0]].keys():
+                if isinstance(data[cres[0]][key], (int, float)):
+                    total_data[key] = sum(data[cre][key] for cre in cres)
+                else:
+                    total_data[key] = 0
+        data['Total'] = total_data
+        return jsonify({'success': True, 'data': data})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
 
 
 if __name__ == '__main__':
