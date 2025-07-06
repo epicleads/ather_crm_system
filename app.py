@@ -3355,29 +3355,85 @@ def get_crm_data_summary():
             model = lead.get('model_interested') or 'Not specified'
             model_counts[model] = model_counts.get(model, 0) + 1
         
-        # CRE performance
+        # Get call attempt history for detailed CRE analysis
+        cre_call_attempts = safe_get_data('cre_call_attempt_history')
+        
+        # CRE performance with call attempt analytics
         cre_performance = {}
         for cre in all_cres:
             cre_name = cre.get('name')
             cre_leads = [l for l in all_leads if l.get('cre_name') == cre_name]
             cre_won = len([l for l in cre_leads if l.get('final_status') == 'Won'])
+            
+            # Calculate call attempt statistics for this CRE
+            cre_calls = [c for c in cre_call_attempts if c.get('cre_name') == cre_name]
+            
+            # Count total attempts and unique leads called
+            total_attempts = len(cre_calls)
+            unique_leads_called = len(set(c.get('uid') for c in cre_calls if c.get('uid')))
+            avg_attempts_per_lead = round(total_attempts / unique_leads_called, 1) if unique_leads_called > 0 else 0
+            
+            # Count attempts by call number
+            call_distribution = {}
+            for call in cre_calls:
+                call_no = call.get('call_no', 'unknown')
+                call_distribution[call_no] = call_distribution.get(call_no, 0) + 1
+            
+            # Calculate success rate (leads that were eventually won)
+            called_lead_uids = set(c.get('uid') for c in cre_calls if c.get('uid'))
+            called_leads_won = len([l for l in cre_leads if l.get('uid') in called_lead_uids and l.get('final_status') == 'Won'])
+            call_success_rate = round((called_leads_won / unique_leads_called * 100) if unique_leads_called > 0 else 0, 1)
+            
             cre_performance[cre_name] = {
                 'total_leads': len(cre_leads),
                 'won_leads': cre_won,
-                'conversion_rate': round((cre_won / len(cre_leads) * 100) if cre_leads else 0, 1)
+                'conversion_rate': round((cre_won / len(cre_leads) * 100) if cre_leads else 0, 1),
+                'total_call_attempts': total_attempts,
+                'unique_leads_called': unique_leads_called,
+                'avg_attempts_per_lead': avg_attempts_per_lead,
+                'call_distribution': call_distribution,
+                'call_success_rate': call_success_rate
             }
         
-        # PS performance
+        # Get PS call attempt history for detailed PS analysis
+        ps_call_attempts = safe_get_data('ps_call_attempt_history')
+        
+        # PS performance with call attempt analytics
         ps_performance = {}
         for ps in all_ps:
             ps_name = ps.get('name')
             ps_leads = [l for l in all_leads if l.get('ps_name') == ps_name]
             ps_won = len([l for l in ps_leads if l.get('final_status') == 'Won'])
+            
+            # Calculate call attempt statistics for this PS
+            ps_calls = [c for c in ps_call_attempts if c.get('ps_name') == ps_name]
+            
+            # Count total attempts and unique leads called
+            total_attempts = len(ps_calls)
+            unique_leads_called = len(set(c.get('uid') for c in ps_calls if c.get('uid')))
+            avg_attempts_per_lead = round(total_attempts / unique_leads_called, 1) if unique_leads_called > 0 else 0
+            
+            # Count attempts by call number
+            call_distribution = {}
+            for call in ps_calls:
+                call_no = call.get('call_no', 'unknown')
+                call_distribution[call_no] = call_distribution.get(call_no, 0) + 1
+            
+            # Calculate success rate (leads that were eventually won)
+            called_lead_uids = set(c.get('uid') for c in ps_calls if c.get('uid'))
+            called_leads_won = len([l for l in ps_leads if l.get('uid') in called_lead_uids and l.get('final_status') == 'Won'])
+            call_success_rate = round((called_leads_won / unique_leads_called * 100) if unique_leads_called > 0 else 0, 1)
+            
             ps_performance[ps_name] = {
                 'total_leads': len(ps_leads),
                 'won_leads': ps_won,
                 'conversion_rate': round((ps_won / len(ps_leads) * 100) if ps_leads else 0, 1),
-                'branch': ps.get('branch', 'Unknown')
+                'branch': ps.get('branch', 'Unknown'),
+                'total_call_attempts': total_attempts,
+                'unique_leads_called': unique_leads_called,
+                'avg_attempts_per_lead': avg_attempts_per_lead,
+                'call_distribution': call_distribution,
+                'call_success_rate': call_success_rate
             }
         
         # Branch performance
@@ -3481,10 +3537,10 @@ def generate_ai_insight(question, crm_data):
         MODEL INTEREST:
         {crm_data['model_interest']}
         
-        CRE PERFORMANCE:
+        CRE PERFORMANCE (with Call Attempt Analytics):
         {crm_data['cre_performance']}
         
-        PS PERFORMANCE:
+        PS PERFORMANCE (with Call Attempt Analytics):
         {crm_data['ps_performance']}
         
         BRANCH PERFORMANCE:
@@ -3496,8 +3552,15 @@ def generate_ai_insight(question, crm_data):
         1. When asked about unassigned leads from specific sources, use the "UNASSIGNED LEADS BY SOURCE" data to provide EXACT numbers
         2. When asked about Google leads, check both "Google" and "Google(KNOW)" entries separately
         3. For assignment-related questions, reference the assignment rate and specific numbers
-        4. Always provide specific, actionable recommendations
-        5. Use the exact data provided - don't estimate or generalize
+        4. For call attempt questions about specific CREs or PS staff, look in the CRE_PERFORMANCE and PS_PERFORMANCE data:
+           - "total_call_attempts": Total calls made by that person
+           - "unique_leads_called": Number of different leads they called
+           - "avg_attempts_per_lead": Average calls per lead (this is the key metric for call frequency)
+           - "call_distribution": Shows pattern of 1st call, 2nd call, etc.
+           - "call_success_rate": Percentage of called leads that were eventually won
+        5. When asked about specific names (like "Bharath"), search within the CRE_PERFORMANCE or PS_PERFORMANCE data
+        6. Always provide specific, actionable recommendations
+        7. Use the exact data provided - don't estimate or generalize
         
         Please provide a comprehensive, actionable insight based on this CRM data. Include:
         1. Direct answer with EXACT numbers from the data
