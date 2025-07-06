@@ -1855,12 +1855,10 @@ def update_lead(uid):
 
         if request.method == 'POST':
             update_data = {}
-            # Always define these variables
             lead_status = request.form.get('lead_status', '')
             follow_up_date = request.form.get('follow_up_date', '')
             call_remark = request.form.get('call_remark', '')
 
-            # Always update lead_status from the form
             if lead_status:
                 update_data['lead_status'] = lead_status
 
@@ -2158,13 +2156,16 @@ def update_ps_lead(uid):
 
         if request.method == 'POST':
             update_data = {}
+            lead_status = request.form.get('lead_status', '')
+            follow_up_date = request.form.get('follow_up_date', '')
+            call_remark = request.form.get('call_remark', '')
 
             # Always update lead_status from the form
-            if request.form.get('lead_status'):
-                update_data['lead_status'] = request.form['lead_status']
+            if lead_status:
+                update_data['lead_status'] = lead_status
 
             if request.form.get('follow_up_date'):
-                update_data['follow_up_date'] = request.form['follow_up_date']
+                update_data['follow_up_date'] = follow_up_date
 
             if request.form.get('final_status'):
                 final_status = request.form['final_status']
@@ -2175,7 +2176,6 @@ def update_ps_lead(uid):
                     update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
             # Handle call dates and remarks for the next available call
-            lead_status = request.form.get('lead_status', '')
             skip_first_call_statuses = [
                 'Call not Connected',
                 'Busy on another call',
@@ -2185,9 +2185,7 @@ def update_ps_lead(uid):
             if request.form.get('call_date') and lead_status not in skip_first_call_statuses:
                 update_data[f'{next_call}_call_date'] = request.form['call_date']
 
-            if request.form.get('call_remark'):
-                lead_status = request.form.get('lead_status', '')
-                call_remark = request.form['call_remark']
+            if call_remark:
                 combined_remark = f"{lead_status}, {call_remark}"
                 update_data[f'{next_call}_call_remark'] = combined_remark
                 # Emit notification to CRE dashboard
@@ -2203,9 +2201,7 @@ def update_ps_lead(uid):
             try:
                 # Track the PS call attempt before updating the lead
                 if lead_status:
-                    # Determine if this attempt resulted in a recorded call
-                    call_was_recorded = bool(request.form.get('call_date') and request.form.get('call_remark'))
-                    # Track the attempt
+                    call_was_recorded = bool(request.form.get('call_date') and call_remark)
                     track_ps_call_attempt(
                         uid=uid,
                         ps_name=session.get('ps_name'),
