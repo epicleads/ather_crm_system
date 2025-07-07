@@ -102,21 +102,30 @@ class AuthManager:
 
     def create_session(self, user_id: int, user_type: str, user_data: dict) -> str:
         """Create secure session"""
-        session_id = secrets.token_urlsafe(32)
-        expires_at = datetime.now() + timedelta(minutes=self.session_timeout)
-
-        session_data = {
-            'session_id': session_id,
-            'user_id': user_id,
-            'user_type': user_type,
-            'ip_address': request.environ.get('REMOTE_ADDR'),
-            'user_agent': request.environ.get('HTTP_USER_AGENT', ''),
-            'expires_at': expires_at.isoformat(),
-            'is_active': True
-        }
-
         try:
-            self.supabase.table('user_sessions').insert(session_data).execute()
+            print(f"[DEBUG] create_session called - User ID: {user_id}, User Type: {user_type}")
+            session_id = secrets.token_urlsafe(32)
+            expires_at = datetime.now() + timedelta(minutes=self.session_timeout)
+            print(f"[DEBUG] Generated session ID: {session_id[:10]}...")
+            print(f"[DEBUG] Session expires at: {expires_at}")
+
+            session_data = {
+                'session_id': session_id,
+                'user_id': user_id,
+                'user_type': user_type,
+                'ip_address': request.environ.get('REMOTE_ADDR'),
+                'user_agent': request.environ.get('HTTP_USER_AGENT', ''),
+                'expires_at': expires_at.isoformat(),
+                'is_active': True
+            }
+            print(f"[DEBUG] Session data prepared: {session_data}")
+
+            try:
+                result = self.supabase.table('user_sessions').insert(session_data).execute()
+                print(f"[DEBUG] Session insert result: {result.data if result.data else 'FAILED'}")
+            except Exception as e:
+                print(f"[DEBUG] Error inserting session to database: {e}")
+                return None
 
             # Set session data
             session.permanent = True
@@ -134,9 +143,12 @@ class AuthManager:
                 session['ps_id'] = user_id
                 session['branch'] = user_data.get('branch')
 
+            print(f"[DEBUG] Flask session data set: {dict(session)}")
             return session_id
         except Exception as e:
             print(f"Error creating session: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
     def validate_session(self, session_id: str) -> bool:
@@ -192,15 +204,20 @@ class AuthManager:
     def authenticate_user(self, username: str, password: str, user_type: str) -> tuple:
         """Authenticate user with enhanced security"""
         try:
+            print(f"[DEBUG] authenticate_user called - Username: {username}, User Type: {user_type}")
+            
             # Replace the existing rate limit and logging calls with:
             try:
                 # Check rate limiting
                 ip_address = request.environ.get('REMOTE_ADDR')
+                print(f"[DEBUG] Checking rate limit for IP: {ip_address}")
                 if not self.check_rate_limit(ip_address):
+                    print(f"[DEBUG] Rate limit exceeded for IP: {ip_address}")
                     flash('Too many login attempts. Please try again later.', 'error')
                     return False, "Rate limited", None
 
                 # Log login attempt
+                print(f"[DEBUG] Logging login attempt for user: {username}")
                 self.log_login_attempt(username, user_type, False)  # Initially false, will update if successful
             except Exception as e:
                 print(f"Warning: Could not check rate limit or log attempt: {e}")
@@ -208,15 +225,20 @@ class AuthManager:
 
             # Get user data
             table_name = f"{user_type}_users"
+            print(f"[DEBUG] Querying table: {table_name} for username: {username}")
             result = self.supabase.table(table_name).select('*').eq('username', username).execute()
+            print(f"[DEBUG] Query result - Found {len(result.data) if result.data else 0} users")
 
             if not result.data:
+                print(f"[DEBUG] No user found in table {table_name} with username: {username}")
                 return False, "Invalid credentials", None
 
             user_data = result.data[0]
+            print(f"[DEBUG] User found - ID: {user_data.get('id')}, Name: {user_data.get('name')}, Active: {user_data.get('is_active', True)}")
 
             # Check if account is active
             if not user_data.get('is_active', True):
+                print(f"[DEBUG] Account is deactivated for user: {username}")
                 self.log_audit_event(
                     user_id=user_data['id'],
                     user_type=user_type,
@@ -228,35 +250,49 @@ class AuthManager:
             # Check if account is locked
             if self.is_account_locked(user_data):
                 locked_until = datetime.fromisoformat(user_data['account_locked_until'].replace('Z', '+00:00'))
+                print(f"[DEBUG] Account is locked until: {locked_until}")
                 return False, f"Account is locked until {locked_until.strftime('%Y-%m-%d %H:%M:%S')}", None
 
             # Verify password
             password_valid = False
+            print(f"[DEBUG] Checking password for user: {username}")
 
             # Check if user has new hashed password
             if user_data.get('password_hash') and user_data.get('salt'):
+                print(f"[DEBUG] Using hashed password verification")
                 password_valid = self.verify_password(password, user_data['password_hash'], user_data['salt'])
+                print(f"[DEBUG] Hashed password verification result: {password_valid}")
             else:
                 # Fallback to old plain text password (for migration)
+                print(f"[DEBUG] Using plain text password verification")
                 if user_data.get('password') == password:
                     password_valid = True
+                    print(f"[DEBUG] Plain text password match found, migrating to hashed")
                     # Migrate to hashed password
                     self.migrate_user_password(user_data['id'], user_type, password)
+                else:
+                    print(f"[DEBUG] Plain text password mismatch")
 
             if not password_valid:
+                print(f"[DEBUG] Password verification failed for user: {username}")
                 # Increment failed attempts
                 current_attempts = user_data.get('failed_login_attempts', 0)
+                print(f"[DEBUG] Current failed attempts: {current_attempts}")
                 self.increment_failed_attempts(user_data['id'], user_type, current_attempts)
 
                 remaining_attempts = self.max_login_attempts - (current_attempts + 1)
                 if remaining_attempts <= 0:
+                    print(f"[DEBUG] Account locked due to too many failed attempts")
                     return False, "Account has been locked due to too many failed attempts", None
                 else:
+                    print(f"[DEBUG] {remaining_attempts} attempts remaining")
                     return False, f"Invalid credentials. {remaining_attempts} attempts remaining", None
 
             # Successful authentication
+            print(f"[DEBUG] Password verification successful for user: {username}")
             # Replace the success logging with:
             try:
+                print(f"[DEBUG] Resetting failed attempts for user: {username}")
                 self.reset_failed_attempts(user_data['id'], user_type)
                 self.log_login_attempt(username, user_type, True)
 
@@ -266,14 +302,18 @@ class AuthManager:
                     action='LOGIN_SUCCESS',
                     details={'username': username}
                 )
+                print(f"[DEBUG] Success logging completed for user: {username}")
             except Exception as e:
                 print(f"Warning: Could not log successful authentication: {e}")
                 # Continue anyway since authentication was successful
 
+            print(f"[DEBUG] Authentication successful for user: {username}")
             return True, "Login successful", user_data
 
         except Exception as e:
             print(f"Authentication error: {e}")
+            import traceback
+            traceback.print_exc()
             return False, "Authentication error occurred", None
 
     def migrate_user_password(self, user_id: int, user_type: str, plain_password: str):

@@ -538,44 +538,79 @@ def index():
 @limiter.limit("1000 per minute")
 def unified_login():
     start_time = time.time()
+    
+    # Debug: Log environment variables
+    print(f"[DEBUG] SUPABASE_URL loaded: {SUPABASE_URL is not None}")
+    print(f"[DEBUG] SUPABASE_KEY loaded: {SUPABASE_KEY is not None}")
+    print(f"[DEBUG] SECRET_KEY loaded: {SECRET_KEY is not None}")
+    print(f"[DEBUG] SECRET_KEY length: {len(SECRET_KEY) if SECRET_KEY else 0}")
+    
+    # Debug: Log request data
     username = request.form.get('username', '').strip()
     password = request.form.get('password', '').strip()
     user_type = request.form.get('user_type', '').strip().lower()
+    
+    print(f"[DEBUG] Login attempt - Username: {username}, User Type: {user_type}, Password length: {len(password)}")
+    print(f"[DEBUG] Request IP: {request.environ.get('REMOTE_ADDR')}")
+    print(f"[DEBUG] Request User Agent: {request.environ.get('HTTP_USER_AGENT', 'Unknown')}")
 
     valid_user_types = ['admin', 'cre', 'ps']
     if user_type not in valid_user_types:
+        print(f"[DEBUG] Invalid user type: {user_type}")
         flash('Please select a valid role (Admin, CRE, or PS)', 'error')
+        return redirect(url_for('index'))
+
+    # Debug: Test Supabase connection
+    try:
+        test_result = supabase.table('admin_users').select('id').limit(1).execute()
+        print(f"[DEBUG] Supabase connection test: {'SUCCESS' if test_result.data is not None else 'FAILED'}")
+    except Exception as e:
+        print(f"[DEBUG] Supabase connection error: {e}")
+        flash('Database connection error. Please try again later.', 'error')
         return redirect(url_for('index'))
 
     t_user = time.time()
     success, message, user_data = auth_manager.authenticate_user(username, password, user_type)
+    print(f"[DEBUG] Authentication result - Success: {success}, Message: {message}")
     print(f"[PERF] unified_login: authenticate_user({user_type}) took {time.time() - t_user:.3f} seconds")
+    
     if success:
+        print(f"[DEBUG] User authenticated successfully - ID: {user_data.get('id')}, Name: {user_data.get('name')}")
         t2 = time.time()
         session_id = auth_manager.create_session(user_data['id'], user_type, user_data)
+        print(f"[DEBUG] Session creation result - Session ID: {session_id}")
         print(f"[PERF] unified_login: create_session took {time.time() - t2:.3f} seconds")
+        
         if session_id:
+            # Debug: Verify session was set
+            print(f"[DEBUG] Session data after creation: {dict(session)}")
             flash(f'Welcome! Logged in as {user_type.upper()}', 'success')
             t3 = time.time()
+            
             # Redirect to appropriate dashboard
             if user_type == 'admin':
+                print(f"[DEBUG] Redirecting to admin dashboard")
                 print(f"[PERF] unified_login: redirect to admin_dashboard after {time.time() - t3:.3f} seconds")
                 print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
                 return redirect(url_for('admin_dashboard'))
             elif user_type == 'cre':
+                print(f"[DEBUG] Redirecting to CRE dashboard")
                 print(f"[PERF] unified_login: redirect to cre_dashboard after {time.time() - t3:.3f} seconds")
                 print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
                 return redirect(url_for('cre_dashboard'))
             elif user_type == 'ps':
+                print(f"[DEBUG] Redirecting to PS dashboard")
                 print(f"[PERF] unified_login: redirect to ps_dashboard after {time.time() - t3:.3f} seconds")
                 print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
                 return redirect(url_for('ps_dashboard'))
         else:
+            print(f"[DEBUG] Session creation failed")
             flash('Error creating session', 'error')
             print(f"[PERF] unified_login: session creation failed after {time.time() - t2:.3f} seconds")
             print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
             return redirect(url_for('index'))
     else:
+        print(f"[DEBUG] Authentication failed - Message: {message}")
         flash('Invalid username or password', 'error')
         print(f"[PERF] unified_login TOTAL (invalid login) took {time.time() - start_time:.3f} seconds")
         return redirect(url_for('index'))
@@ -4994,6 +5029,149 @@ def negative_feedback_stats():
     ps_stats = aggregate('ps_call_attempt_history', 'ps_name', 'updated_at')
     return jsonify({"CRE": cre_stats, "PS": ps_stats})
 
+@app.route('/debug_auth')
+def debug_auth():
+    """Debug route to test authentication and environment variables"""
+    debug_info = {
+        'environment_variables': {
+            'SUPABASE_URL': SUPABASE_URL is not None,
+            'SUPABASE_KEY': SUPABASE_KEY is not None,
+            'SECRET_KEY': SECRET_KEY is not None,
+            'SECRET_KEY_LENGTH': len(SECRET_KEY) if SECRET_KEY else 0
+        },
+        'supabase_connection': 'Unknown',
+        'session_info': dict(session),
+        'request_info': {
+            'ip': request.environ.get('REMOTE_ADDR'),
+            'user_agent': request.environ.get('HTTP_USER_AGENT', 'Unknown')
+        }
+    }
+    
+    # Test Supabase connection
+    try:
+        test_result = supabase.table('admin_users').select('id').limit(1).execute()
+        debug_info['supabase_connection'] = 'SUCCESS' if test_result.data is not None else 'FAILED'
+        debug_info['supabase_test_data'] = test_result.data
+    except Exception as e:
+        debug_info['supabase_connection'] = f'ERROR: {str(e)}'
+    
+    return f"""
+    <h1>Authentication Debug Info</h1>
+    <pre>{debug_info}</pre>
+    <hr>
+    <h2>Test Login</h2>
+    <form method="POST" action="/test_login">
+        <label>Username: <input name="username" type="text"></label><br>
+        <label>Password: <input name="password" type="password"></label><br>
+        <label>User Type: 
+            <select name="user_type">
+                <option value="admin">Admin</option>
+                <option value="cre">CRE</option>
+                <option value="ps">PS</option>
+            </select>
+        </label><br>
+        <button type="submit">Test Login</button>
+    </form>
+    """
+
+@app.route('/test_login', methods=['POST'])
+def test_login():
+    """Test login without redirecting"""
+    username = request.form.get('username', '').strip()
+    password = request.form.get('password', '').strip()
+    user_type = request.form.get('user_type', '').strip().lower()
+    
+    print(f"[DEBUG TEST] Test login - Username: {username}, User Type: {user_type}")
+    
+    success, message, user_data = auth_manager.authenticate_user(username, password, user_type)
+    
+    result = {
+        'success': success,
+        'message': message,
+        'user_data': user_data if user_data else None,
+        'session_before': dict(session)
+    }
+    
+    if success:
+        session_id = auth_manager.create_session(user_data['id'], user_type, user_data)
+        result['session_created'] = session_id is not None
+        result['session_after'] = dict(session)
+    
+    return f"""
+    <h1>Test Login Result</h1>
+    <pre>{result}</pre>
+    <hr>
+    <a href="/debug_auth">Back to Debug</a>
+    """
+
+@app.route('/simple_admin_login', methods=['GET', 'POST'])
+def simple_admin_login():
+    """Simple admin login for debugging"""
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        
+        print(f"[SIMPLE DEBUG] Admin login attempt - Username: {username}")
+        
+        # Simple direct database check
+        try:
+            result = supabase.table('admin_users').select('*').eq('username', username).execute()
+            print(f"[SIMPLE DEBUG] Database query result: {len(result.data) if result.data else 0} users found")
+            
+            if result.data and len(result.data) > 0:
+                user_data = result.data[0]
+                print(f"[SIMPLE DEBUG] User found - ID: {user_data.get('id')}, Name: {user_data.get('name')}")
+                
+                # Check password (both hashed and plain text)
+                password_valid = False
+                
+                # Try hashed password first
+                if user_data.get('password_hash') and user_data.get('salt'):
+                    print(f"[SIMPLE DEBUG] Checking hashed password")
+                    password_valid = auth_manager.verify_password(password, user_data['password_hash'], user_data['salt'])
+                    print(f"[SIMPLE DEBUG] Hashed password result: {password_valid}")
+                
+                # Try plain text password if hashed failed
+                if not password_valid and user_data.get('password'):
+                    print(f"[SIMPLE DEBUG] Checking plain text password")
+                    password_valid = (user_data.get('password') == password)
+                    print(f"[SIMPLE DEBUG] Plain text password result: {password_valid}")
+                
+                if password_valid:
+                    print(f"[SIMPLE DEBUG] Password valid, creating session")
+                    
+                    # Simple session creation
+                    session.permanent = True
+                    session['user_id'] = user_data['id']
+                    session['user_type'] = 'admin'
+                    session['username'] = user_data.get('username')
+                    session['user_name'] = user_data.get('name', user_data.get('username'))
+                    
+                    print(f"[SIMPLE DEBUG] Session created: {dict(session)}")
+                    flash('Simple login successful!', 'success')
+                    return redirect(url_for('admin_dashboard'))
+                else:
+                    print(f"[SIMPLE DEBUG] Password invalid")
+                    flash('Invalid password', 'error')
+            else:
+                print(f"[SIMPLE DEBUG] User not found")
+                flash('User not found', 'error')
+                
+        except Exception as e:
+            print(f"[SIMPLE DEBUG] Error: {e}")
+            flash(f'Error: {str(e)}', 'error')
+    
+    return """
+    <h1>Simple Admin Login (Debug)</h1>
+    <form method="POST">
+        <label>Username: <input name="username" type="text" required></label><br><br>
+        <label>Password: <input name="password" type="password" required></label><br><br>
+        <button type="submit">Login</button>
+    </form>
+    <hr>
+    <a href="/debug_auth">Debug Auth</a> | 
+    <a href="/">Main Login</a>
+    """
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)
