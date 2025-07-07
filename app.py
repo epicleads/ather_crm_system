@@ -4899,9 +4899,25 @@ from collections import defaultdict
 def negative_feedback_stats():
     """
     Returns JSON with negative feedback stats for CRE and PS call attempts, bucketed by F1-F7 (time from today).
+    Accepts optional start_date and end_date query params (YYYY-MM-DD) to filter by updated_at.
     """
     import pytz
     from datetime import datetime, timedelta
+    # Parse date filters
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
+    start_date = None
+    end_date = None
+    if start_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        except Exception:
+            start_date = None
+    if end_date_str:
+        try:
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        except Exception:
+            end_date = None
     # Helper: bucket assignment
     def get_bucket(dt):
         now = datetime.now(pytz.UTC).date() if dt.tzinfo else datetime.now().date()
@@ -4930,12 +4946,28 @@ def negative_feedback_stats():
         # Only fetch needed columns
         result = supabase.table(table).select(f"status,{ts_col},{name_col}").execute()
         rows = result.data if result.data else []
+        # Filter by date if needed
+        filtered_rows = []
+        for row in rows:
+            ts_raw = row.get(ts_col)
+            if not ts_raw:
+                continue
+            try:
+                dt = datetime.fromisoformat(ts_raw.replace('Z', '+00:00')) if 'T' in ts_raw else datetime.strptime(ts_raw, '%Y-%m-%d %H:%M:%S')
+            except Exception:
+                continue
+            dt_date = dt.date()
+            if start_date and dt_date < start_date:
+                continue
+            if end_date and dt_date > end_date:
+                continue
+            filtered_rows.append(row)
         # Prepare: {reason: [bucket0, bucket1, ... bucket6]} (each is dict: total, percent, denom)
         stats = {reason: [dict(total=0, percent=0.0, denom=0) for _ in range(7)] for reason in NEGATIVE_REASONS}
         # For each bucket, count total and per reason
         bucket_totals = [0]*7
         bucket_reason_counts = [defaultdict(int) for _ in range(7)]
-        for row in rows:
+        for row in filtered_rows:
             status = (row.get('status') or '').strip()
             ts_raw = row.get(ts_col)
             if not ts_raw:

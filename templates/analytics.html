@@ -1221,6 +1221,14 @@
             <h5 style="color: #fff; background: #c0392b; padding: 0.75rem 1rem; border-radius: 12px 12px 0 0; font-weight: 700; letter-spacing: 1px;">
                 <i class="fas fa-thumbs-down"></i> Negative Feedback Analysis (CRE & PS Follow-ups)
             </h5>
+            <form class="d-flex align-items-center mb-3" id="negative-feedback-date-form" onsubmit="return false;">
+                <label for="nf_start_date" class="me-2 mb-0">From:</label>
+                <input type="date" id="nf_start_date" name="start_date" class="form-control form-control-sm me-2">
+                <label for="nf_end_date" class="me-2 mb-0">To:</label>
+                <input type="date" id="nf_end_date" name="end_date" class="form-control form-control-sm me-2">
+                <button type="button" class="btn btn-primary btn-sm" onclick="applyNegativeFeedbackFilter()">Apply</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm ms-2" onclick="resetNegativeFeedbackFilter()">Reset</button>
+            </form>
             <div class="table-responsive">
                 <table class="table table-bordered text-center align-middle" style="background: #fff;">
                     <thead>
@@ -1829,8 +1837,13 @@
             ctx.fill();
         }
 
-        function fetchNegativeFeedbackStats() {
-            fetch('/negative_feedback_stats')
+        function fetchNegativeFeedbackStats(params={}) {
+            let url = '/negative_feedback_stats';
+            const search = [];
+            if (params.start_date) search.push('start_date=' + encodeURIComponent(params.start_date));
+            if (params.end_date) search.push('end_date=' + encodeURIComponent(params.end_date));
+            if (search.length) url += '?' + search.join('&');
+            fetch(url)
                 .then(res => res.json())
                 .then(data => {
                     const reasons = [
@@ -1859,10 +1872,10 @@
                             td.setAttribute('data-total', cell.total);
                             td.setAttribute('data-percent', cell.percent);
                             td.setAttribute('data-denom', cell.denom);
-                            td.innerHTML = `<div class="cell-content" style="display:flex;flex-direction:column;align-items:center;justify-content:center;">
-                                <canvas class="mini-donut" data-pct="${cell.percent}"></canvas>
-                                <span class="countup" data-count="${cell.total}">${cell.total}</span>
-                                <span class="percent" data-count="${cell.percent}">${cell.percent}%</span>
+                            td.innerHTML = `<div class='cell-content' style='display:flex;flex-direction:column;align-items:center;justify-content:center;'>
+                                <canvas class='mini-donut' data-pct='${cell.percent}'></canvas>
+                                <span class='countup' data-count='${cell.total}'>${cell.total}</span>
+                                <span class='percent' data-count='${cell.percent}'>${cell.percent}%</span>
                             </div>`;
                             tr.appendChild(td);
                         }
@@ -1877,10 +1890,10 @@
                             td.setAttribute('data-total', cell.total);
                             td.setAttribute('data-percent', cell.percent);
                             td.setAttribute('data-denom', cell.denom);
-                            td.innerHTML = `<div class="cell-content" style="display:flex;flex-direction:column;align-items:center;justify-content:center;">
-                                <canvas class="mini-donut" data-pct="${cell.percent}"></canvas>
-                                <span class="countup" data-count="${cell.total}">${cell.total}</span>
-                                <span class="percent" data-count="${cell.percent}">${cell.percent}%</span>
+                            td.innerHTML = `<div class='cell-content' style='display:flex;flex-direction:column;align-items:center;justify-content:center;'>
+                                <canvas class='mini-donut' data-pct='${cell.percent}'></canvas>
+                                <span class='countup' data-count='${cell.total}'>${cell.total}</span>
+                                <span class='percent' data-count='${cell.percent}'>${cell.percent}%</span>
                             </div>`;
                             tr.appendChild(td);
                         }
@@ -1900,7 +1913,17 @@
                     console.error(err);
                 });
         }
-        document.addEventListener('DOMContentLoaded', fetchNegativeFeedbackStats);
+        function applyNegativeFeedbackFilter() {
+            const start = document.getElementById('nf_start_date').value;
+            const end = document.getElementById('nf_end_date').value;
+            fetchNegativeFeedbackStats({start_date: start, end_date: end});
+        }
+        function resetNegativeFeedbackFilter() {
+            document.getElementById('nf_start_date').value = '';
+            document.getElementById('nf_end_date').value = '';
+            fetchNegativeFeedbackStats();
+        }
+        document.addEventListener('DOMContentLoaded', function() { fetchNegativeFeedbackStats(); });
         </script>
     </div>
 
