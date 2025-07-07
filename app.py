@@ -5104,6 +5104,33 @@ def test_login():
     <a href="/debug_auth">Back to Debug</a>
     """
 
+@app.route('/check_username')
+@require_admin
+def check_username():
+    """Check if username is available"""
+    username = request.args.get('username', '').strip()
+    user_type = request.args.get('type', '').strip()  # 'cre' or 'ps'
+    
+    if not username or not user_type:
+        return jsonify({'available': False, 'message': 'Invalid request'})
+    
+    if user_type not in ['cre', 'ps']:
+        return jsonify({'available': False, 'message': 'Invalid user type'})
+    
+    try:
+        # Check in the appropriate table
+        table_name = f"{user_type}_users"
+        result = supabase.table(table_name).select('username').eq('username', username).execute()
+        
+        if result.data and len(result.data) > 0:
+            return jsonify({'available': False, 'message': 'Username already exists'})
+        else:
+            return jsonify({'available': True, 'message': 'Username is available'})
+            
+    except Exception as e:
+        print(f"Error checking username: {e}")
+        return jsonify({'available': False, 'message': 'Error checking username'})
+
 @app.route('/simple_admin_login', methods=['GET', 'POST'])
 def simple_admin_login():
     """Simple admin login for debugging"""
