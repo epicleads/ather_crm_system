@@ -3310,15 +3310,70 @@ def analytics():
         return render_template('analytics.html', analytics=empty_analytics)
 
 
+def get_assignments_for_date(target_date_str, all_leads):
+    """Get assignment data for any specific date"""
+    try:
+        # CRE assignments for the date
+        cre_assigned = [l for l in all_leads if (l.get('cre_assigned_at') or '').startswith(target_date_str)]
+        cre_count = len(cre_assigned)
+        
+        # PS assignments for the date  
+        ps_assigned = [l for l in all_leads if (l.get('ps_assigned_at') or '').startswith(target_date_str)]
+        ps_count = len(ps_assigned)
+        
+        # CRE-wise breakdown
+        cre_breakdown = {}
+        for lead in cre_assigned:
+            cre_name = lead.get('cre_name', 'Unknown')
+            cre_breakdown[cre_name] = cre_breakdown.get(cre_name, 0) + 1
+        
+        # PS-wise breakdown
+        ps_breakdown = {}
+        for lead in ps_assigned:
+            ps_name = lead.get('ps_name', 'Unknown')
+            ps_breakdown[ps_name] = ps_breakdown.get(ps_name, 0) + 1
+        
+        return {
+            'date': target_date_str,
+            'cre_count': cre_count,
+            'ps_count': ps_count,
+            'total_count': cre_count + ps_count,
+            'cre_breakdown': cre_breakdown,
+            'ps_breakdown': ps_breakdown
+        }
+    except Exception as e:
+        print(f"Error calculating assignments for {target_date_str}: {e}")
+        return {
+            'date': target_date_str,
+            'cre_count': 0,
+            'ps_count': 0,
+            'total_count': 0,
+            'cre_breakdown': {},
+            'ps_breakdown': {}
+        }
+
+
 def get_crm_data_summary():
     """Get comprehensive CRM data summary for AI analysis"""
     try:
+        print("Loading CRM data summary...")
         # Get all data
         all_leads = safe_get_data('lead_master')
+        print(f"Loaded {len(all_leads) if all_leads else 0} leads")
+        
         all_cres = safe_get_data('cre_users')
+        print(f"Loaded {len(all_cres) if all_cres else 0} CREs")
+        
         all_ps = safe_get_data('ps_users')
+        print(f"Loaded {len(all_ps) if all_ps else 0} PS users")
+        
         walkin_customers = safe_get_data('walkin_customers')
+        if walkin_customers is None:
+            walkin_customers = []  # Default to empty list if table doesn't exist
+        print(f"Loaded {len(walkin_customers)} walkin customers")
+        
         activity_leads = safe_get_data('activity_leads')
+        print(f"Loaded {len(activity_leads) if activity_leads else 0} activity leads")
         
         # Calculate key metrics
         total_leads = len(all_leads)
@@ -3465,6 +3520,93 @@ def get_crm_data_summary():
         total_unassigned = sum(unassigned_leads_by_source.values())
         assignment_rate = round((total_assigned / total_leads * 100) if total_leads > 0 else 0, 1)
         
+        # Time-based assignment analysis
+        try:
+            today_str = date.today().isoformat()
+            yesterday_str = (date.today() - timedelta(days=1)).isoformat()
+            print(f"Calculating assignments for today: {today_str} and yesterday: {yesterday_str}")
+            
+            # Today's CRE assignments
+            cre_assigned_today = [l for l in all_leads if (l.get('cre_assigned_at') or '').startswith(today_str)]
+            cre_assigned_today_count = len(cre_assigned_today)
+            print(f"CRE assignments today: {cre_assigned_today_count}")
+            
+            # Today's PS assignments  
+            ps_assigned_today = [l for l in all_leads if (l.get('ps_assigned_at') or '').startswith(today_str)]
+            ps_assigned_today_count = len(ps_assigned_today)
+            print(f"PS assignments today: {ps_assigned_today_count}")
+            
+            # Yesterday's CRE assignments
+            cre_assigned_yesterday = [l for l in all_leads if (l.get('cre_assigned_at') or '').startswith(yesterday_str)]
+            cre_assigned_yesterday_count = len(cre_assigned_yesterday)
+            print(f"CRE assignments yesterday: {cre_assigned_yesterday_count}")
+            
+            # Yesterday's PS assignments  
+            ps_assigned_yesterday = [l for l in all_leads if (l.get('ps_assigned_at') or '').startswith(yesterday_str)]
+            ps_assigned_yesterday_count = len(ps_assigned_yesterday)
+            print(f"PS assignments yesterday: {ps_assigned_yesterday_count}")
+            
+            # Total assignments today and yesterday
+            total_assigned_today = cre_assigned_today_count + ps_assigned_today_count
+            total_assigned_yesterday = cre_assigned_yesterday_count + ps_assigned_yesterday_count
+            
+            # CRE-wise assignment count for today
+            cre_assignments_today = {}
+            for lead in cre_assigned_today:
+                cre_name = lead.get('cre_name', 'Unknown')
+                cre_assignments_today[cre_name] = cre_assignments_today.get(cre_name, 0) + 1
+            
+            # PS-wise assignment count for today
+            ps_assignments_today = {}
+            for lead in ps_assigned_today:
+                ps_name = lead.get('ps_name', 'Unknown')
+                ps_assignments_today[ps_name] = ps_assignments_today.get(ps_name, 0) + 1
+            
+            # CRE-wise assignment count for yesterday
+            cre_assignments_yesterday = {}
+            for lead in cre_assigned_yesterday:
+                cre_name = lead.get('cre_name', 'Unknown')
+                cre_assignments_yesterday[cre_name] = cre_assignments_yesterday.get(cre_name, 0) + 1
+            
+            # PS-wise assignment count for yesterday
+            ps_assignments_yesterday = {}
+            for lead in ps_assigned_yesterday:
+                ps_name = lead.get('ps_name', 'Unknown')
+                ps_assignments_yesterday[ps_name] = ps_assignments_yesterday.get(ps_name, 0) + 1
+            
+            # Recent assignment activity (last 7 days)
+            week_ago = (date.today() - timedelta(days=7)).isoformat()
+            recent_cre_assignments = [l for l in all_leads if (l.get('cre_assigned_at') or '') >= week_ago]
+            recent_ps_assignments = [l for l in all_leads if (l.get('ps_assigned_at') or '') >= week_ago]
+            
+            # Calculate assignments for recent dates (last 30 days for flexibility)
+            recent_dates_assignments = {}
+            for days_back in range(0, 30):  # Last 30 days including today
+                check_date = (date.today() - timedelta(days=days_back)).isoformat()
+                date_assignments = get_assignments_for_date(check_date, all_leads)
+                if date_assignments['total_count'] > 0:  # Only store dates with assignments
+                    recent_dates_assignments[check_date] = date_assignments
+            
+            print(f"Assignment calculations completed successfully for {len(recent_dates_assignments)} dates with assignments")
+        except Exception as assignment_error:
+            print(f"Error in assignment calculations: {assignment_error}")
+            # Set default values if assignment calculation fails
+            today_str = date.today().isoformat()
+            yesterday_str = (date.today() - timedelta(days=1)).isoformat()
+            cre_assigned_today_count = 0
+            ps_assigned_today_count = 0
+            total_assigned_today = 0
+            cre_assignments_today = {}
+            ps_assignments_today = {}
+            cre_assigned_yesterday_count = 0
+            ps_assigned_yesterday_count = 0
+            total_assigned_yesterday = 0
+            cre_assignments_yesterday = {}
+            ps_assignments_yesterday = {}
+            recent_cre_assignments = []
+            recent_ps_assignments = []
+            recent_dates_assignments = {}
+        
         # Recent activity summary
         recent_leads = sorted(all_leads, key=lambda x: x.get('created_at', ''), reverse=True)[:10]
         
@@ -3489,10 +3631,33 @@ def get_crm_data_summary():
             'cre_performance': cre_performance,
             'ps_performance': ps_performance,
             'branch_performance': branch_performance,
-            'recent_leads': recent_leads[:5]  # Only first 5 for summary
+            'recent_leads': recent_leads[:5],  # Only first 5 for summary
+            # Today's assignment data
+            'cre_assigned_today_count': cre_assigned_today_count,
+            'ps_assigned_today_count': ps_assigned_today_count,
+            'total_assigned_today': total_assigned_today,
+            'cre_assignments_today': cre_assignments_today,
+            'ps_assignments_today': ps_assignments_today,
+            'today_date': today_str,
+            # Yesterday's assignment data
+            'cre_assigned_yesterday_count': cre_assigned_yesterday_count,
+            'ps_assigned_yesterday_count': ps_assigned_yesterday_count,
+            'total_assigned_yesterday': total_assigned_yesterday,
+            'cre_assignments_yesterday': cre_assignments_yesterday,
+            'ps_assignments_yesterday': ps_assignments_yesterday,
+            'yesterday_date': yesterday_str,
+            # Weekly assignment data
+            'recent_cre_assignments_week': len(recent_cre_assignments),
+            'recent_ps_assignments_week': len(recent_ps_assignments),
+            # Flexible date assignment data (last 30 days)
+            'recent_dates_assignments': recent_dates_assignments
         }
+        print("✅ CRM data summary generated successfully")
+        return data
     except Exception as e:
-        print(f"Error getting CRM data summary: {e}")
+        print(f"❌ Error getting CRM data summary: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -3521,6 +3686,27 @@ def generate_ai_insight(question, crm_data):
         - Total Product Specialists: {crm_data['total_ps']}
         - Walk-in Customers: {crm_data['total_walkin_customers']}
         - Activity/Event Leads: {crm_data['total_activity_leads']}
+        
+        TODAY'S ASSIGNMENT ACTIVITY (Date: {crm_data['today_date']}):
+        - Total Leads Assigned Today: {crm_data['total_assigned_today']}
+        - CRE Assignments Today: {crm_data['cre_assigned_today_count']}
+        - PS Assignments Today: {crm_data['ps_assigned_today_count']}
+        - CRE-wise Assignments Today: {crm_data['cre_assignments_today']}
+        - PS-wise Assignments Today: {crm_data['ps_assignments_today']}
+        
+        YESTERDAY'S ASSIGNMENT ACTIVITY (Date: {crm_data['yesterday_date']}):
+        - Total Leads Assigned Yesterday: {crm_data['total_assigned_yesterday']}
+        - CRE Assignments Yesterday: {crm_data['cre_assigned_yesterday_count']}
+        - PS Assignments Yesterday: {crm_data['ps_assigned_yesterday_count']}
+        - CRE-wise Assignments Yesterday: {crm_data['cre_assignments_yesterday']}
+        - PS-wise Assignments Yesterday: {crm_data['ps_assignments_yesterday']}
+        
+        WEEKLY ASSIGNMENT ACTIVITY:
+        - CRE Assignments This Week: {crm_data['recent_cre_assignments_week']}
+        - PS Assignments This Week: {crm_data['recent_ps_assignments_week']}
+        
+        FLEXIBLE DATE ASSIGNMENT DATA (Last 30 Days):
+        {crm_data['recent_dates_assignments']}
         
         LEAD SOURCES (Total by Source):
         {crm_data['source_distribution']}
@@ -3552,15 +3738,33 @@ def generate_ai_insight(question, crm_data):
         1. When asked about unassigned leads from specific sources, use the "UNASSIGNED LEADS BY SOURCE" data to provide EXACT numbers
         2. When asked about Google leads, check both "Google" and "Google(KNOW)" entries separately
         3. For assignment-related questions, reference the assignment rate and specific numbers
-        4. For call attempt questions about specific CREs or PS staff, look in the CRE_PERFORMANCE and PS_PERFORMANCE data:
+        4. For TODAY'S ASSIGNMENT questions (leads assigned today), use the "TODAY'S ASSIGNMENT ACTIVITY" section:
+           - "Total Leads Assigned Today": Combined CRE + PS assignments for today
+           - "CRE Assignments Today": How many leads were assigned to CREs today
+           - "PS Assignments Today": How many leads were assigned to PS today
+           - "CRE-wise Assignments Today": Individual CRE assignment counts for today
+           - "PS-wise Assignments Today": Individual PS assignment counts for today
+                 5. For YESTERDAY'S ASSIGNMENT questions (leads assigned yesterday), use the "YESTERDAY'S ASSIGNMENT ACTIVITY" section:
+            - "Total Leads Assigned Yesterday": Combined CRE + PS assignments for yesterday
+            - "CRE Assignments Yesterday": How many leads were assigned to CREs yesterday
+            - "PS Assignments Yesterday": How many leads were assigned to PS yesterday
+            - "CRE-wise Assignments Yesterday": Individual CRE assignment counts for yesterday
+            - "PS-wise Assignments Yesterday": Individual PS assignment counts for yesterday
+                  6. For ANY SPECIFIC DATE ASSIGNMENT questions (e.g., "July 5th", "2025-07-05", "last Monday"), use the "FLEXIBLE DATE ASSIGNMENT DATA":
+            - This contains assignment data for any date in the last 30 days
+            - Each date entry has: date, cre_count, ps_count, total_count, cre_breakdown, ps_breakdown
+            - Look for the exact date (YYYY-MM-DD format) in the data
+            - If the date exists, provide the exact numbers; if not, state "No assignments found for that date"
+         7. For call attempt questions about specific CREs or PS staff, look in the CRE_PERFORMANCE and PS_PERFORMANCE data:
            - "total_call_attempts": Total calls made by that person
            - "unique_leads_called": Number of different leads they called
            - "avg_attempts_per_lead": Average calls per lead (this is the key metric for call frequency)
            - "call_distribution": Shows pattern of 1st call, 2nd call, etc.
            - "call_success_rate": Percentage of called leads that were eventually won
-        5. When asked about specific names (like "Bharath"), search within the CRE_PERFORMANCE or PS_PERFORMANCE data
-        6. Always provide specific, actionable recommendations
-        7. Use the exact data provided - don't estimate or generalize
+         8. When asked about specific names (like "Bharath"), search within the CRE_PERFORMANCE or PS_PERFORMANCE data
+         9. Always provide specific, actionable recommendations
+         10. Use the exact data provided - don't estimate or generalize
+         11. When asked about time-based questions (any date, today, yesterday, this week), use the appropriate date-specific data sections
         
         Please provide a comprehensive, actionable insight based on this CRM data. Include:
         1. Direct answer with EXACT numbers from the data
