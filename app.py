@@ -1171,72 +1171,125 @@ def assign_leads_dynamic_action():
         if not assignments:
             return jsonify({'success': False, 'message': 'No assignments provided'}), 400
 
-        # Fetch all unassigned leads in batches
-        all_unassigned = []
-        batch_size = 1000
-        offset = 0
-        while True:
-            result = supabase.table('lead_master').select('*').eq('assigned', 'No').range(offset, offset + batch_size - 1).execute()
-            batch = result.data or []
-            all_unassigned.extend(batch)
-            if len(batch) < batch_size:
-                break
-            offset += batch_size
+        print(f"Processing {len(assignments)} assignments")
 
-        leads_by_source = {}
-        for lead in all_unassigned:
-            source = lead.get('source', 'Unknown')
-            leads_by_source.setdefault(source, []).append(lead)
-
+        # Fetch fresh unassigned leads for each source being assigned
         total_assigned = 0
+        successful_assignments = []
+        assignment_errors = []
 
-        for assignment in assignments:
+        # Process assignments one by one to avoid race conditions
+        for i, assignment in enumerate(assignments):
             cre_id = assignment.get('cre_id')
             source = assignment.get('source')
-            quantity = assignment.get('quantity')
+            quantity = int(assignment.get('quantity', 0))
 
-            if not cre_id or not source or not quantity:
+            print(f"Processing assignment {i+1}/{len(assignments)}: CRE {cre_id}, Source {source}, Quantity {quantity}")
+
+            if not cre_id or not source or quantity <= 0:
+                assignment_errors.append(f"Invalid assignment data: {assignment}")
                 continue
 
             # Get CRE details
-            cre_data = supabase.table('cre_users').select('*').eq('id', cre_id).execute()
-            if not cre_data.data:
+            cre_result = supabase.table('cre_users').select('*').eq('id', cre_id).execute()
+            if not cre_result.data:
+                assignment_errors.append(f"CRE not found with ID: {cre_id}")
                 continue
 
-            cre = cre_data.data[0]
-            leads = leads_by_source.get(source, [])
+            cre = cre_result.data[0]
+            cre_name = cre['name']
 
-            if not leads:
-                print(f"No unassigned leads found for source {source}")
+            # Fetch current unassigned leads for this specific source
+            # Use limit and order to get deterministic results
+            leads_result = supabase.table('lead_master').select('uid, source').eq('assigned', 'No').eq('source', source).limit(quantity * 2).execute()
+            
+            available_leads = leads_result.data or []
+            
+            if len(available_leads) < quantity:
+                assignment_errors.append(f"Only {len(available_leads)} leads available for {source}, requested {quantity}")
+                quantity = len(available_leads)  # Assign what's available
+            
+            if quantity == 0:
+                assignment_errors.append(f"No unassigned leads available for source: {source}")
                 continue
 
-            random.shuffle(leads)
-            leads_to_assign = leads[:quantity]
-            leads_by_source[source] = leads[quantity:]  # Remove assigned leads
-
+            # Take only the exact number requested
+            leads_to_assign = available_leads[:quantity]
+            
+            # Assign leads one by one with verification
+            assigned_this_batch = 0
+            batch_errors = []
+            
             for lead in leads_to_assign:
+                uid = lead['uid']
+                
+                # Double-check the lead is still unassigned before updating
+                check_result = supabase.table('lead_master').select('assigned').eq('uid', uid).execute()
+                if not check_result.data or check_result.data[0]['assigned'] != 'No':
+                    batch_errors.append(f"Lead {uid} already assigned")
+                    continue
+                
+                # Update the lead
                 update_data = {
-                    'cre_name': cre['name'],
+                    'cre_name': cre_name,
                     'assigned': 'Yes',
                     'cre_assigned_at': datetime.now().isoformat()
-
                 }
 
                 try:
-                    supabase.table('lead_master').update(update_data).eq('uid', lead['uid']).execute()
-                    total_assigned += 1
-                    print(f"Assigned lead {lead['uid']} to CRE {cre['name']} for source {source}")
-                    if total_assigned % 100 == 0:
-                        time.sleep(0.1)
+                    update_result = supabase.table('lead_master').update(update_data).eq('uid', uid).eq('assigned', 'No').execute()
+                    
+                    if update_result.data:  # Successfully updated
+                        assigned_this_batch += 1
+                        total_assigned += 1
+                        print(f"✓ Assigned lead {uid} to CRE {cre_name} for source {source}")
+                    else:
+                        batch_errors.append(f"Failed to update lead {uid} (may have been assigned elsewhere)")
+                        
                 except Exception as e:
-                    print(f"Error assigning lead {lead['uid']}: {e}")
+                    batch_errors.append(f"Error assigning lead {uid}: {str(e)}")
+
+            successful_assignments.append({
+                'cre_name': cre_name,
+                'source': source,
+                'requested': quantity,
+                'assigned': assigned_this_batch
+            })
+            
+            if batch_errors:
+                assignment_errors.extend(batch_errors)
+            
+            print(f"Assigned {assigned_this_batch}/{quantity} leads from {source} to {cre_name}")
+            
+            # Small delay to prevent overwhelming the database
+            if i < len(assignments) - 1:  # Don't delay after the last assignment
+                time.sleep(0.1)
+
+        # Prepare response message
+        success_msg = f"Total {total_assigned} leads assigned successfully"
+        
+        if successful_assignments:
+            success_msg += "\n\nAssignment Details:"
+            for assignment in successful_assignments:
+                success_msg += f"\n• {assignment['cre_name']}: {assignment['assigned']}/{assignment['requested']} leads from {assignment['source']}"
+        
+        if assignment_errors:
+            success_msg += f"\n\nWarnings: {len(assignment_errors)} issues encountered"
+            print("Assignment errors:", assignment_errors)
 
         print(f"Total leads assigned: {total_assigned}")
-        return jsonify({'success': True, 'message': f'Total {total_assigned} leads assigned successfully'})
+        return jsonify({
+            'success': True, 
+            'message': success_msg,
+            'total_assigned': total_assigned,
+            'successful_assignments': successful_assignments,
+            'errors': assignment_errors[:10]  # Limit error list in response
+        })
 
     except Exception as e:
-        print(f"Error in dynamic lead assignment: {e}")
-        return jsonify({'success': False, 'message': str(e)}), 500
+        error_msg = f"Error in dynamic lead assignment: {str(e)}"
+        print(error_msg)
+        return jsonify({'success': False, 'message': error_msg}), 500
 @app.route('/add_cre', methods=['GET', 'POST'])
 @require_admin
 def add_cre():
