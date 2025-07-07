@@ -738,7 +738,7 @@
             </a>
         </div>
 
-        <!-- Filter Buttons -->
+        <!-- Restore the old Time Period filter buttons -->
         <div class="filter-buttons">
             <h5 style="color: var(--airbnb-gray-700); font-weight: 600; margin-bottom: 1rem;">Time Period:</h5>
             <a href="{{ url_for('analytics', period='7') }}" class="btn filter-btn">Last 7 Days</a>
@@ -1924,6 +1924,15 @@
             fetchNegativeFeedbackStats();
         }
         document.addEventListener('DOMContentLoaded', function() { fetchNegativeFeedbackStats(); });
+
+        document.getElementById('analytics-date-form').addEventListener('submit', function(e) {
+            var start = document.getElementById('analytics_start_date').value;
+            var end = document.getElementById('analytics_end_date').value;
+            if (!start && !end) {
+                window.location.href = this.action; // reload as Live
+                e.preventDefault();
+            }
+        });
         </script>
     </div>
 
