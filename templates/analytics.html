@@ -1215,37 +1215,39 @@
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Branch Details Modal -->
-    <div class="modal fade" id="branchDetailsModal" tabindex="-1" aria-labelledby="branchDetailsModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-xl">
-            <div class="modal-content">
-                <div class="modal-header" style="background: var(--airbnb-blue); color: var(--airbnb-white);">
-                    <h5 class="modal-title" id="branchDetailsModalLabel">
-                        <i class="fas fa-building"></i> <span id="branchName"></span> - PS Performance
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="filter: invert(1);"></button>
-                </div>
-                <div class="modal-body">
-                    <div id="branchDetailsContent">
-                        <div class="text-center py-4">
-                            <div class="spinner-border" style="color: var(--airbnb-red);" role="status">
-                                <span class="visually-hidden">Loading...</span>
-                            </div>
-                            <p class="mt-2" style="color: var(--airbnb-gray-600);">Loading PS performance data...</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <!-- Negative Feedback Analysis Section -->
+        <div class="table-container mt-5" id="negative-feedback-section">
+            <h5 style="color: #fff; background: #c0392b; padding: 0.75rem 1rem; border-radius: 12px 12px 0 0; font-weight: 700; letter-spacing: 1px;">
+                <i class="fas fa-thumbs-down"></i> Negative Feedback Analysis (CRE & PS Follow-ups)
+            </h5>
+            <div class="table-responsive">
+                <table class="table table-bordered text-center align-middle" style="background: #fff;">
+                    <thead>
+                        <tr style="background: #e74c3c; color: #fff;">
+                            <th rowspan="3" style="vertical-align: middle; min-width: 180px;">Negative Feedback</th>
+                            <th colspan="14" style="font-size: 1.1em;">Follow-up Number</th>
+                        </tr>
+                        <tr>
+                            <th colspan="7" style="border-right: 3px solid #c0392b; background: linear-gradient(90deg, #e74c3c 60%, #f8d7da 100%); color: #fff;">CRE</th>
+                            <th colspan="7" style="background: linear-gradient(90deg, #2980b9 60%, #d6eaff 100%); color: #fff;">PS</th>
+                        </tr>
+                        <tr style="background: #fbeee6; color: #c0392b; font-size: 0.95em;">
+                            <th>F1</th><th>F2</th><th>F3</th><th>F4</th><th>F5</th><th>F6</th><th>F7</th>
+                            <th>F1</th><th>F2</th><th>F3</th><th>F4</th><th>F5</th><th>F6</th><th>F7</th>
+                        </tr>
+                    </thead>
+                    <tbody id="negative-feedback-tbody">
+                        <!-- JS will populate rows here -->
+                    </tbody>
+                </table>
+                <div class="mt-2" style="font-size: 0.95em; color: #888;">
+                    <i class="fas fa-info-circle"></i> <b>Note:</b> Each cell shows the number and percentage of negative feedbacks received at that follow-up, out of all leads that reached that follow-up. Table updates live as data changes.
                 </div>
             </div>
         </div>
-    </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
+        <script>
         // Define metricCell function at the top so it's always available
         function metricCell(val, pct, cls) {
             return `<div class='metric-cell ${cls}' data-pct='${pct}'>
@@ -1804,6 +1806,131 @@
             fetchSourceAnalysis();
             fetchCreAnalysis();
         });
-    </script>
+
+        // Mini donut chart renderer
+        function renderMiniDonut(canvas, percent, color) {
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const size = 32;
+            canvas.width = size;
+            canvas.height = size;
+            ctx.clearRect(0, 0, size, size);
+            // Background
+            ctx.beginPath();
+            ctx.arc(size/2, size/2, size/2-2, 0, 2*Math.PI);
+            ctx.fillStyle = '#f2f2f2';
+            ctx.fill();
+            // Foreground arc
+            ctx.beginPath();
+            ctx.moveTo(size/2, size/2);
+            ctx.arc(size/2, size/2, size/2-4, -Math.PI/2, -Math.PI/2 + 2*Math.PI*(percent/100), false);
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+        }
+
+        function fetchNegativeFeedbackStats() {
+            fetch('/negative_feedback_stats')
+                .then(res => res.json())
+                .then(data => {
+                    const reasons = [
+                        'Discount Issue', 'Delayed', 'Lost to Competition', 'Finance Rejected',
+                        'Dropped', 'Lost to Co-Dealer', 'RNR', 'Not Interested', 'Call Disconnected'
+                    ];
+                    const tbody = document.getElementById('negative-feedback-tbody');
+                    tbody.innerHTML = '';
+                    reasons.forEach(reason => {
+                        const tr = document.createElement('tr');
+                        tr.style.background = (reasons.indexOf(reason) % 2 === 0) ? '#fff5f5' : '#fbeee6';
+                        const tdReason = document.createElement('td');
+                        tdReason.style.fontWeight = '600';
+                        tdReason.style.textAlign = 'left';
+                        tdReason.style.color = '#c0392b';
+                        tdReason.textContent = reason;
+                        tr.appendChild(tdReason);
+                        // CRE buckets
+                        for (let i = 0; i < 7; i++) {
+                            const cell = data.CRE[reason][i];
+                            const td = document.createElement('td');
+                            td.className = 'cre-cell';
+                            td.setAttribute('data-role', 'CRE');
+                            td.setAttribute('data-reason', reason);
+                            td.setAttribute('data-fup', 'F'+(i+1));
+                            td.setAttribute('data-total', cell.total);
+                            td.setAttribute('data-percent', cell.percent);
+                            td.setAttribute('data-denom', cell.denom);
+                            td.innerHTML = `<div class="cell-content" style="display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                                <canvas class="mini-donut" data-pct="${cell.percent}"></canvas>
+                                <span class="countup" data-count="${cell.total}">${cell.total}</span>
+                                <span class="percent" data-count="${cell.percent}">${cell.percent}%</span>
+                            </div>`;
+                            tr.appendChild(td);
+                        }
+                        // PS buckets
+                        for (let i = 0; i < 7; i++) {
+                            const cell = data.PS[reason][i];
+                            const td = document.createElement('td');
+                            td.className = 'ps-cell';
+                            td.setAttribute('data-role', 'PS');
+                            td.setAttribute('data-reason', reason);
+                            td.setAttribute('data-fup', 'F'+(i+1));
+                            td.setAttribute('data-total', cell.total);
+                            td.setAttribute('data-percent', cell.percent);
+                            td.setAttribute('data-denom', cell.denom);
+                            td.innerHTML = `<div class="cell-content" style="display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                                <canvas class="mini-donut" data-pct="${cell.percent}"></canvas>
+                                <span class="countup" data-count="${cell.total}">${cell.total}</span>
+                                <span class="percent" data-count="${cell.percent}">${cell.percent}%</span>
+                            </div>`;
+                            tr.appendChild(td);
+                        }
+                        tbody.appendChild(tr);
+                    });
+                    // Render mini donuts after DOM update
+                    setTimeout(() => {
+                        document.querySelectorAll('.mini-donut').forEach(canvas => {
+                            const pct = parseFloat(canvas.getAttribute('data-pct')) || 0;
+                            const color = canvas.closest('td').classList.contains('cre-cell') ? '#e74c3c' : '#2980b9';
+                            renderMiniDonut(canvas, pct, color);
+                        });
+                    }, 100);
+                })
+                .catch(err => {
+                    document.getElementById('negative-feedback-tbody').innerHTML = `<tr><td colspan='15' class='text-center'>Error loading data</td></tr>`;
+                    console.error(err);
+                });
+        }
+        document.addEventListener('DOMContentLoaded', fetchNegativeFeedbackStats);
+        </script>
+    </div>
+
+    <!-- Branch Details Modal -->
+    <div class="modal fade" id="branchDetailsModal" tabindex="-1" aria-labelledby="branchDetailsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header" style="background: var(--airbnb-blue); color: var(--airbnb-white);">
+                    <h5 class="modal-title" id="branchDetailsModalLabel">
+                        <i class="fas fa-building"></i> <span id="branchName"></span> - PS Performance
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="filter: invert(1);"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="branchDetailsContent">
+                        <div class="text-center py-4">
+                            <div class="spinner-border" style="color: var(--airbnb-red);" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2" style="color: var(--airbnb-gray-600);">Loading PS performance data...</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
