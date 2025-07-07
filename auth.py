@@ -109,11 +109,16 @@ class AuthManager:
             print(f"[DEBUG] Generated session ID: {session_id[:10]}...")
             print(f"[DEBUG] Session expires at: {expires_at}")
 
+            # Get real client IP when available
+            client_ip = request.headers.get('X-Forwarded-For', request.environ.get('REMOTE_ADDR', '127.0.0.1'))
+            if ',' in client_ip:  # Handle multiple IPs in X-Forwarded-For
+                client_ip = client_ip.split(',')[0].strip()
+            
             session_data = {
                 'session_id': session_id,
                 'user_id': user_id,
                 'user_type': user_type,
-                'ip_address': request.environ.get('REMOTE_ADDR'),
+                'ip_address': client_ip,
                 'user_agent': request.environ.get('HTTP_USER_AGENT', ''),
                 'expires_at': expires_at.isoformat(),
                 'is_active': True
@@ -208,8 +213,10 @@ class AuthManager:
             
             # Replace the existing rate limit and logging calls with:
             try:
-                # Check rate limiting
-                ip_address = request.environ.get('REMOTE_ADDR')
+                # Check rate limiting - use real client IP when available
+                ip_address = request.headers.get('X-Forwarded-For', request.environ.get('REMOTE_ADDR', '127.0.0.1'))
+                if ',' in ip_address:  # Handle multiple IPs in X-Forwarded-For
+                    ip_address = ip_address.split(',')[0].strip()
                 print(f"[DEBUG] Checking rate limit for IP: {ip_address}")
                 if not self.check_rate_limit(ip_address):
                     print(f"[DEBUG] Rate limit exceeded for IP: {ip_address}")
@@ -550,13 +557,18 @@ class AuthManager:
                         resource: str = None, resource_id: str = None, details: dict = None):
         """Log audit event"""
         try:
+            # Get real client IP when available
+            client_ip = request.headers.get('X-Forwarded-For', request.environ.get('REMOTE_ADDR', '127.0.0.1'))
+            if ',' in client_ip:  # Handle multiple IPs in X-Forwarded-For
+                client_ip = client_ip.split(',')[0].strip()
+            
             audit_data = {
                 'user_id': user_id,
                 'user_type': user_type,
                 'action': action,
                 'resource': resource,
                 'resource_id': resource_id,
-                'ip_address': request.environ.get('REMOTE_ADDR'),
+                'ip_address': client_ip,
                 'user_agent': request.environ.get('HTTP_USER_AGENT', ''),
                 'details': details or {},
                 'timestamp': datetime.now().isoformat()
@@ -569,8 +581,13 @@ class AuthManager:
     def log_login_attempt(self, username: str, user_type: str, success: bool):
         """Log login attempt for rate limiting"""
         try:
+            # Get real client IP when available
+            client_ip = request.headers.get('X-Forwarded-For', request.environ.get('REMOTE_ADDR', '127.0.0.1'))
+            if ',' in client_ip:  # Handle multiple IPs in X-Forwarded-For
+                client_ip = client_ip.split(',')[0].strip()
+            
             attempt_data = {
-                'ip_address': request.environ.get('REMOTE_ADDR'),
+                'ip_address': client_ip,
                 'username': username,
                 'user_type': user_type,
                 'success': success,
@@ -585,12 +602,20 @@ class AuthManager:
         """Check if IP is rate limited"""
         t_start = time.time()
         print(f"[PERF] check_rate_limit: start for {ip_address}")
+        
+        # For Render deployment: Use more lenient rate limiting
+        # because all requests appear to come from 127.0.0.1
+        if ip_address == '127.0.0.1':
+            print(f"[DEBUG] Skipping rate limit for localhost/render IP: {ip_address}")
+            print(f"[PERF] check_rate_limit: TOTAL took {time.time() - t_start:.3f} seconds")
+            return True
+        
         try:
             since = datetime.now() - timedelta(minutes=time_window)
             t_query_start = time.time()
             result = self.supabase.table('login_attempts').select('id').eq('ip_address', ip_address).gte('timestamp', since.isoformat()).execute()
             print(f"[PERF] check_rate_limit: Supabase query took {time.time() - t_query_start:.3f} seconds")
-            if len(result.data) > 20:  # Max 20 attempts per 15 minutes
+            if len(result.data) > 100:  # Increased limit to 100 attempts per 15 minutes
                 print(f"[PERF] check_rate_limit: rate limited (found {len(result.data)} attempts)")
                 print(f"[PERF] check_rate_limit: TOTAL took {time.time() - t_start:.3f} seconds")
                 return False
