@@ -4891,5 +4891,77 @@ def cre_analysis_data():
         return jsonify({'success': False, 'message': str(e)})
 
 
+# --- Negative Feedback Analysis API ---
+from collections import defaultdict
+
+@app.route('/negative_feedback_stats')
+@require_admin
+def negative_feedback_stats():
+    """
+    Returns JSON with negative feedback stats for CRE and PS call attempts, bucketed by F1-F7 (time from today).
+    """
+    import pytz
+    from datetime import datetime, timedelta
+    # Helper: bucket assignment
+    def get_bucket(dt):
+        now = datetime.now(pytz.UTC).date() if dt.tzinfo else datetime.now().date()
+        delta = (now - dt.date()).days
+        if delta == 0:
+            return 'F1'
+        elif delta == 1:
+            return 'F2'
+        elif delta <= 3:
+            return 'F3'
+        elif delta <= 7:
+            return 'F4'
+        elif delta <= 14:
+            return 'F5'
+        elif delta <= 30:
+            return 'F6'
+        else:
+            return 'F7'
+    # Negative feedback reasons to show (can be customized)
+    NEGATIVE_REASONS = [
+        'Discount Issue', 'Delayed', 'Lost to Competition', 'Finance Rejected',
+        'Dropped', 'Lost to Co-Dealer', 'RNR', 'Not Interested', 'Call Disconnected'
+    ]
+    # Helper: aggregate for a table
+    def aggregate(table, name_col, ts_col):
+        # Only fetch needed columns
+        result = supabase.table(table).select(f"status,{ts_col},{name_col}").execute()
+        rows = result.data if result.data else []
+        # Prepare: {reason: [bucket0, bucket1, ... bucket6]} (each is dict: total, percent, denom)
+        stats = {reason: [dict(total=0, percent=0.0, denom=0) for _ in range(7)] for reason in NEGATIVE_REASONS}
+        # For each bucket, count total and per reason
+        bucket_totals = [0]*7
+        bucket_reason_counts = [defaultdict(int) for _ in range(7)]
+        for row in rows:
+            status = (row.get('status') or '').strip()
+            ts_raw = row.get(ts_col)
+            if not ts_raw:
+                continue
+            try:
+                dt = datetime.fromisoformat(ts_raw.replace('Z', '+00:00')) if 'T' in ts_raw else datetime.strptime(ts_raw, '%Y-%m-%d %H:%M:%S')
+            except Exception:
+                continue
+            bucket_idx = int(get_bucket(dt)[1]) - 1  # F1->0, F2->1, ...
+            if bucket_idx < 0 or bucket_idx > 6:
+                continue
+            bucket_totals[bucket_idx] += 1
+            if status in NEGATIVE_REASONS:
+                bucket_reason_counts[bucket_idx][status] += 1
+        # Fill stats
+        for i in range(7):
+            denom = bucket_totals[i]
+            for reason in NEGATIVE_REASONS:
+                count = bucket_reason_counts[i][reason]
+                percent = (count/denom*100) if denom else 0.0
+                stats[reason][i] = dict(total=count, percent=round(percent,1), denom=denom)
+        return stats
+    cre_stats = aggregate('cre_call_attempt_history', 'cre_name', 'update_ts')
+    ps_stats = aggregate('ps_call_attempt_history', 'ps_name', 'updated_at')
+    return jsonify({"CRE": cre_stats, "PS": ps_stats})
+
+
 if __name__ == '__main__':
     socketio.run(app, debug=True)
