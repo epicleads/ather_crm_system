@@ -538,44 +538,79 @@ def index():
 @limiter.limit("1000 per minute")
 def unified_login():
     start_time = time.time()
+    
+    # Debug: Log environment variables
+    print(f"[DEBUG] SUPABASE_URL loaded: {SUPABASE_URL is not None}")
+    print(f"[DEBUG] SUPABASE_KEY loaded: {SUPABASE_KEY is not None}")
+    print(f"[DEBUG] SECRET_KEY loaded: {SECRET_KEY is not None}")
+    print(f"[DEBUG] SECRET_KEY length: {len(SECRET_KEY) if SECRET_KEY else 0}")
+    
+    # Debug: Log request data
     username = request.form.get('username', '').strip()
     password = request.form.get('password', '').strip()
     user_type = request.form.get('user_type', '').strip().lower()
+    
+    print(f"[DEBUG] Login attempt - Username: {username}, User Type: {user_type}, Password length: {len(password)}")
+    print(f"[DEBUG] Request IP: {request.environ.get('REMOTE_ADDR')}")
+    print(f"[DEBUG] Request User Agent: {request.environ.get('HTTP_USER_AGENT', 'Unknown')}")
 
     valid_user_types = ['admin', 'cre', 'ps']
     if user_type not in valid_user_types:
+        print(f"[DEBUG] Invalid user type: {user_type}")
         flash('Please select a valid role (Admin, CRE, or PS)', 'error')
+        return redirect(url_for('index'))
+
+    # Debug: Test Supabase connection
+    try:
+        test_result = supabase.table('admin_users').select('id').limit(1).execute()
+        print(f"[DEBUG] Supabase connection test: {'SUCCESS' if test_result.data is not None else 'FAILED'}")
+    except Exception as e:
+        print(f"[DEBUG] Supabase connection error: {e}")
+        flash('Database connection error. Please try again later.', 'error')
         return redirect(url_for('index'))
 
     t_user = time.time()
     success, message, user_data = auth_manager.authenticate_user(username, password, user_type)
+    print(f"[DEBUG] Authentication result - Success: {success}, Message: {message}")
     print(f"[PERF] unified_login: authenticate_user({user_type}) took {time.time() - t_user:.3f} seconds")
+    
     if success:
+        print(f"[DEBUG] User authenticated successfully - ID: {user_data.get('id')}, Name: {user_data.get('name')}")
         t2 = time.time()
         session_id = auth_manager.create_session(user_data['id'], user_type, user_data)
+        print(f"[DEBUG] Session creation result - Session ID: {session_id}")
         print(f"[PERF] unified_login: create_session took {time.time() - t2:.3f} seconds")
+        
         if session_id:
+            # Debug: Verify session was set
+            print(f"[DEBUG] Session data after creation: {dict(session)}")
             flash(f'Welcome! Logged in as {user_type.upper()}', 'success')
             t3 = time.time()
+            
             # Redirect to appropriate dashboard
             if user_type == 'admin':
+                print(f"[DEBUG] Redirecting to admin dashboard")
                 print(f"[PERF] unified_login: redirect to admin_dashboard after {time.time() - t3:.3f} seconds")
                 print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
                 return redirect(url_for('admin_dashboard'))
             elif user_type == 'cre':
+                print(f"[DEBUG] Redirecting to CRE dashboard")
                 print(f"[PERF] unified_login: redirect to cre_dashboard after {time.time() - t3:.3f} seconds")
                 print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
                 return redirect(url_for('cre_dashboard'))
             elif user_type == 'ps':
+                print(f"[DEBUG] Redirecting to PS dashboard")
                 print(f"[PERF] unified_login: redirect to ps_dashboard after {time.time() - t3:.3f} seconds")
                 print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
                 return redirect(url_for('ps_dashboard'))
         else:
+            print(f"[DEBUG] Session creation failed")
             flash('Error creating session', 'error')
             print(f"[PERF] unified_login: session creation failed after {time.time() - t2:.3f} seconds")
             print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
             return redirect(url_for('index'))
     else:
+        print(f"[DEBUG] Authentication failed - Message: {message}")
         flash('Invalid username or password', 'error')
         print(f"[PERF] unified_login TOTAL (invalid login) took {time.time() - start_time:.3f} seconds")
         return redirect(url_for('index'))
@@ -3225,6 +3260,73 @@ def analytics():
         # Calculate leads growth (mock calculation)
         leads_growth = 15
 
+        # --- Campaign/Platform/Lead Count Aggregation ---
+        campaign_stats_dict = {}
+        all_leads_count = len(all_leads)
+        today_str = today.strftime('%Y-%m-%d')
+        # Prepare date range for filtering
+        def in_range(ts):
+            if not ts:
+                return False
+            try:
+                if 'T' in ts:
+                    d = datetime.fromisoformat(ts.replace('Z', '+00:00')).date()
+                else:
+                    d = datetime.strptime(ts[:10], '%Y-%m-%d').date()
+            except Exception:
+                return False
+            if start_date and end_date:
+                return start_date <= d <= end_date
+            elif start_date:
+                return d >= start_date
+            else:
+                return True
+        for lead in all_leads:
+            campaign = lead.get('campaign', 'Unknown')
+            source = lead.get('source', 'Unknown')
+            if not campaign or campaign.strip().lower() in ['none', 'unknown', '']:
+                continue
+            key = (campaign, source)
+            if key not in campaign_stats_dict:
+                campaign_stats_dict[key] = {
+                    'campaign': campaign,
+                    'source': source,
+                    'total_leads': 0,
+                    'today_leads': 0,
+                    'lost_leads': 0,
+                    'pending_leads': 0,
+                    'won_leads': 0
+                }
+            # Total leads: filter by created_at
+            if in_range(lead.get('created_at')):
+                campaign_stats_dict[key]['total_leads'] += 1
+            # Today's leads: only by created_at
+            lead_date = lead.get('created_at')
+            if lead_date:
+                if 'T' in lead_date:
+                    lead_date_val = lead_date.split('T')[0]
+                else:
+                    lead_date_val = lead_date
+                if lead_date_val == today_str:
+                    campaign_stats_dict[key]['today_leads'] += 1
+            # Lost leads: filter by lost_timestamp and final_status
+            if (lead.get('final_status') or '').strip().lower() == 'lost' and in_range(lead.get('lost_timestamp')):
+                campaign_stats_dict[key]['lost_leads'] += 1
+            # Won leads: filter by won_timestamp and final_status
+            if (lead.get('final_status') or '').strip().lower() == 'won' and in_range(lead.get('won_timestamp')):
+                campaign_stats_dict[key]['won_leads'] += 1
+            # Pending leads: filter by created_at and final_status
+            if (lead.get('final_status') or '').strip().lower() == 'pending' and in_range(lead.get('created_at')):
+                campaign_stats_dict[key]['pending_leads'] += 1
+        # Calculate conversion rate for each campaign
+        campaign_stats = []
+        for row in campaign_stats_dict.values():
+            total = row['total_leads']
+            won = row['won_leads']
+            row['conversion_rate'] = round((won / total * 100) if total > 0 else 0, 1)
+            campaign_stats.append(row)
+        # --- End Campaign/Platform/Lead Count Aggregation ---
+
         # Create analytics object that matches template expectations
         analytics = {
             'total_leads': total_leads,
@@ -3242,7 +3344,10 @@ def analytics():
             'model_interest': model_interest,
             'branch_performance': branch_performance,
             'funnel': funnel,
-            'recent_activities': recent_activities
+            'recent_activities': recent_activities,
+            # Add new campaign/platform stats
+            'campaign_stats': campaign_stats,
+            'all_leads_count': all_leads_count
         }
 
         # Log analytics access
@@ -3286,7 +3391,9 @@ def analytics():
                 'won': 0,
                 'won_percent': 0
             },
-            'recent_activities': []
+            'recent_activities': [],
+            'campaign_stats': [],
+            'all_leads_count': 0
         }
         return render_template('analytics.html', analytics=empty_analytics)
 
@@ -4057,6 +4164,7 @@ def source_analysis_data():
     try:
         start_date_str = request.args.get('start_date')
         end_date_str = request.args.get('end_date')
+        date_field = request.args.get('date_field', 'created_at')  # Allow date_field param, default to created_at
         today = datetime.now().date()
         start_date = None
         end_date = None
@@ -4075,7 +4183,7 @@ def source_analysis_data():
         all_leads = safe_get_data('lead_master')
         all_followups = safe_get_data('ps_followup_master')
         def in_date_range(lead):
-            lead_date_str = lead.get('created_at') or lead.get('date')
+            lead_date_str = lead.get(date_field) or lead.get('date')
             if not lead_date_str:
                 return True
             try:
@@ -4655,6 +4763,415 @@ def export_filtered_leads():
         output.seek(0)
         filename = f"leads_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         return send_file(io.BytesIO(output.getvalue().encode('utf-8')), as_attachment=True, download_name=filename, mimetype='text/csv')
+
+@app.route('/get_cre_list')
+@require_admin
+def get_cre_list():
+    """Get list of all CREs for dropdown"""
+    try:
+        cre_result = supabase.table('cre_users').select('name').eq('is_active', True).execute()
+        cre_list = cre_result.data if cre_result.data else []
+        return jsonify({'success': True, 'cre_list': cre_list})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+
+@app.route('/cre_analysis_data')
+@require_admin
+def cre_analysis_data():
+    """Get CRE performance analysis data"""
+    try:
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        cre_name = request.args.get('cre_name')
+        date_field = request.args.get('date_field', 'created_at')  # Allow date_field param, default to created_at
+        # Get all leads
+        leads_result = supabase.table('lead_master').select('*').execute()
+        leads = leads_result.data if leads_result.data else []
+        # Get all CREs
+        cre_result = supabase.table('cre_users').select('name').eq('is_active', True).execute()
+        cres = [cre['name'] for cre in cre_result.data] if cre_result.data else []
+        # Filter by date range if provided
+        if start_date and end_date:
+            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            def in_range(lead):
+                lead_date_str = lead.get(date_field)
+                if not lead_date_str:
+                    return False
+                try:
+                    if 'T' in lead_date_str:
+                        lead_date = datetime.fromisoformat(lead_date_str.replace('Z', '+00:00')).date()
+                    else:
+                        lead_date = datetime.strptime(lead_date_str[:10], '%Y-%m-%d').date()
+                    return start_dt.date() <= lead_date <= end_dt.date()
+                except Exception:
+                    return False
+            leads = [lead for lead in leads if in_range(lead)]
+        # Filter by CRE if provided
+        if cre_name:
+            leads = [lead for lead in leads if lead.get('cre_name') == cre_name]
+            cres = [cre_name]
+        # Initialize data structure
+        data = {}
+        for cre in cres:
+            data[cre] = {
+                'calls_allocated': 0,
+                'calls_attempted': 0,
+                'calls_connected': 0,
+                'total_leads': 0,
+                'hot_leads': 0,
+                'warm_leads': 0,
+                'cold_leads': 0,
+                'callback_leads': 0,
+                'rnr_leads': 0,
+                'disconnected_calls': 0,
+                'lost_total': 0,
+                'lost_co_dealer': 0,
+                'lost_competition': 0,
+                'not_interested': 0,
+                'did_not_enquire': 0,
+                'wrong_lead': 0,
+                'rnr_lost': 0,
+                'finance_reject': 0,
+                'sales_pipeline_total': 0,
+                'closed_won': 0,
+                'pending': 0,
+                'closed_lost': 0,
+                'call_percentage': 0,
+                'interested_percentage': 0,
+                'walkin_percentage': 0,
+                'retail_percentage': 0
+            }
+        # Process leads for each CRE
+        for lead in leads:
+            assigned_cre = lead.get('cre_name')
+            if assigned_cre not in cres:
+                continue
+            cre_data = data[assigned_cre]
+            # Calls allocated
+            cre_data['calls_allocated'] += 1
+            # Calls attempted
+            attempted = any(lead.get(f'{c}_call_date') for c in ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh'])
+            if attempted:
+                cre_data['calls_attempted'] += 1
+            # Calls connected
+            call_statuses = [lead.get(f'{c}_call_status', '').lower() for c in ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']]
+            connected = any(s and s not in ['rnr', 'busy', 'busy on another call'] for s in call_statuses)
+            if connected:
+                cre_data['calls_connected'] += 1
+            # Lead status analysis
+            status = (lead.get('lead_status') or '').strip().lower()
+            if status in ['interested', 'call back', 'rnr', 'call disconnected']:
+                cre_data['total_leads'] += 1
+                if status == 'interested':
+                    cat = (lead.get('lead_category') or '').strip().lower()
+                    if cat == 'hot':
+                        cre_data['hot_leads'] += 1
+                    elif cat == 'warm':
+                        cre_data['warm_leads'] += 1
+                    elif cat == 'cold':
+                        cre_data['cold_leads'] += 1
+                elif status == 'call back':
+                    cre_data['callback_leads'] += 1
+                elif status == 'rnr':
+                    cre_data['rnr_leads'] += 1
+                elif status == 'call disconnected':
+                    cre_data['disconnected_calls'] += 1
+            # Lost leads analysis - use lead_master data directly
+            final_status = (lead.get('final_status') or '').strip().lower()
+            lead_status = (lead.get('lead_status') or '').strip().lower()
+            if final_status == 'lost':
+                cre_data['lost_total'] += 1
+                cre_data['closed_lost'] += 1
+                if lead_status == 'rnr-lost':
+                    cre_data['rnr_lost'] += 1
+                elif lead_status == 'did not enquire':
+                    cre_data['did_not_enquire'] += 1
+                elif lead_status == 'not interested':
+                    cre_data['not_interested'] += 1
+                elif lead_status == 'lost to competition':
+                    cre_data['lost_competition'] += 1
+                elif lead_status == 'lost to co-dealer':
+                    cre_data['lost_co_dealer'] += 1
+                elif lead_status == 'finance rejected':
+                    cre_data['finance_reject'] += 1
+                elif lead_status == 'wrong lead':
+                    cre_data['wrong_lead'] += 1
+            if final_status == 'won':
+                cre_data['sales_pipeline_total'] += 1
+                cre_data['closed_won'] += 1
+            if status in ['interested', 'call back', 'rnr', 'call disconnected']:
+                cre_data['pending'] += 1
+        # Calculate percentages
+        for cre in cres:
+            cre_data = data[cre]
+            allocated = cre_data['calls_allocated']
+            if allocated > 0:
+                cre_data['call_percentage'] = round((cre_data['calls_connected'] / allocated) * 100, 1)
+                cre_data['interested_percentage'] = round((cre_data['total_leads'] / allocated) * 100, 1)
+                cre_data['walkin_percentage'] = round((cre_data['pending'] / allocated) * 100, 1)
+                cre_data['retail_percentage'] = round((cre_data['closed_won'] / allocated) * 100, 1)
+        # Calculate totals
+        total_data = {}
+        if data:
+            for key in data[cres[0]].keys():
+                if isinstance(data[cres[0]][key], (int, float)):
+                    total_data[key] = sum(data[cre][key] for cre in cres)
+                else:
+                    total_data[key] = 0
+        data['Total'] = total_data
+        return jsonify({'success': True, 'data': data})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+
+# --- Negative Feedback Analysis API ---
+from collections import defaultdict
+
+@app.route('/negative_feedback_stats')
+@require_admin
+def negative_feedback_stats():
+    """
+    Returns JSON with negative feedback stats for CRE and PS call attempts, bucketed by F1-F7 (time from today).
+    Accepts optional start_date and end_date query params (YYYY-MM-DD) to filter by updated_at.
+    """
+    import pytz
+    from datetime import datetime, timedelta
+    # Parse date filters
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
+    start_date = None
+    end_date = None
+    if start_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        except Exception:
+            start_date = None
+    if end_date_str:
+        try:
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        except Exception:
+            end_date = None
+    # Helper: bucket assignment
+    def get_bucket(dt):
+        now = datetime.now(pytz.UTC).date() if dt.tzinfo else datetime.now().date()
+        delta = (now - dt.date()).days
+        if delta == 0:
+            return 'F1'
+        elif delta == 1:
+            return 'F2'
+        elif delta <= 3:
+            return 'F3'
+        elif delta <= 7:
+            return 'F4'
+        elif delta <= 14:
+            return 'F5'
+        elif delta <= 30:
+            return 'F6'
+        else:
+            return 'F7'
+    # Negative feedback reasons to show (can be customized)
+    NEGATIVE_REASONS = [
+        'Discount Issue', 'Delayed', 'Lost to Competition', 'Finance Rejected',
+        'Dropped', 'Lost to Co-Dealer', 'RNR', 'Not Interested', 'Call Disconnected'
+    ]
+    # Helper: aggregate for a table
+    def aggregate(table, name_col, ts_col):
+        # Only fetch needed columns
+        result = supabase.table(table).select(f"status,{ts_col},{name_col}").execute()
+        rows = result.data if result.data else []
+        # Filter by date if needed
+        filtered_rows = []
+        for row in rows:
+            ts_raw = row.get(ts_col)
+            if not ts_raw:
+                continue
+            try:
+                dt = datetime.fromisoformat(ts_raw.replace('Z', '+00:00')) if 'T' in ts_raw else datetime.strptime(ts_raw, '%Y-%m-%d %H:%M:%S')
+            except Exception:
+                continue
+            dt_date = dt.date()
+            if start_date and dt_date < start_date:
+                continue
+            if end_date and dt_date > end_date:
+                continue
+            filtered_rows.append(row)
+        # Prepare: {reason: [bucket0, bucket1, ... bucket6]} (each is dict: total, percent, denom)
+        stats = {reason: [dict(total=0, percent=0.0, denom=0) for _ in range(7)] for reason in NEGATIVE_REASONS}
+        # For each bucket, count total and per reason
+        bucket_totals = [0]*7
+        bucket_reason_counts = [defaultdict(int) for _ in range(7)]
+        for row in filtered_rows:
+            status = (row.get('status') or '').strip()
+            ts_raw = row.get(ts_col)
+            if not ts_raw:
+                continue
+            try:
+                dt = datetime.fromisoformat(ts_raw.replace('Z', '+00:00')) if 'T' in ts_raw else datetime.strptime(ts_raw, '%Y-%m-%d %H:%M:%S')
+            except Exception:
+                continue
+            bucket_idx = int(get_bucket(dt)[1]) - 1  # F1->0, F2->1, ...
+            if bucket_idx < 0 or bucket_idx > 6:
+                continue
+            bucket_totals[bucket_idx] += 1
+            if status in NEGATIVE_REASONS:
+                bucket_reason_counts[bucket_idx][status] += 1
+        # Fill stats
+        for i in range(7):
+            denom = bucket_totals[i]
+            for reason in NEGATIVE_REASONS:
+                count = bucket_reason_counts[i][reason]
+                percent = (count/denom*100) if denom else 0.0
+                stats[reason][i] = dict(total=count, percent=round(percent,1), denom=denom)
+        return stats
+    cre_stats = aggregate('cre_call_attempt_history', 'cre_name', 'update_ts')
+    ps_stats = aggregate('ps_call_attempt_history', 'ps_name', 'updated_at')
+    return jsonify({"CRE": cre_stats, "PS": ps_stats})
+
+@app.route('/debug_auth')
+def debug_auth():
+    """Debug route to test authentication and environment variables"""
+    debug_info = {
+        'environment_variables': {
+            'SUPABASE_URL': SUPABASE_URL is not None,
+            'SUPABASE_KEY': SUPABASE_KEY is not None,
+            'SECRET_KEY': SECRET_KEY is not None,
+            'SECRET_KEY_LENGTH': len(SECRET_KEY) if SECRET_KEY else 0
+        },
+        'supabase_connection': 'Unknown',
+        'session_info': dict(session),
+        'request_info': {
+            'ip': request.environ.get('REMOTE_ADDR'),
+            'user_agent': request.environ.get('HTTP_USER_AGENT', 'Unknown')
+        }
+    }
+    
+    # Test Supabase connection
+    try:
+        test_result = supabase.table('admin_users').select('id').limit(1).execute()
+        debug_info['supabase_connection'] = 'SUCCESS' if test_result.data is not None else 'FAILED'
+        debug_info['supabase_test_data'] = test_result.data
+    except Exception as e:
+        debug_info['supabase_connection'] = f'ERROR: {str(e)}'
+    
+    return f"""
+    <h1>Authentication Debug Info</h1>
+    <pre>{debug_info}</pre>
+    <hr>
+    <h2>Test Login</h2>
+    <form method="POST" action="/test_login">
+        <label>Username: <input name="username" type="text"></label><br>
+        <label>Password: <input name="password" type="password"></label><br>
+        <label>User Type: 
+            <select name="user_type">
+                <option value="admin">Admin</option>
+                <option value="cre">CRE</option>
+                <option value="ps">PS</option>
+            </select>
+        </label><br>
+        <button type="submit">Test Login</button>
+    </form>
+    """
+
+@app.route('/test_login', methods=['POST'])
+def test_login():
+    """Test login without redirecting"""
+    username = request.form.get('username', '').strip()
+    password = request.form.get('password', '').strip()
+    user_type = request.form.get('user_type', '').strip().lower()
+    
+    print(f"[DEBUG TEST] Test login - Username: {username}, User Type: {user_type}")
+    
+    success, message, user_data = auth_manager.authenticate_user(username, password, user_type)
+    
+    result = {
+        'success': success,
+        'message': message,
+        'user_data': user_data if user_data else None,
+        'session_before': dict(session)
+    }
+    
+    if success:
+        session_id = auth_manager.create_session(user_data['id'], user_type, user_data)
+        result['session_created'] = session_id is not None
+        result['session_after'] = dict(session)
+    
+    return f"""
+    <h1>Test Login Result</h1>
+    <pre>{result}</pre>
+    <hr>
+    <a href="/debug_auth">Back to Debug</a>
+    """
+
+@app.route('/simple_admin_login', methods=['GET', 'POST'])
+def simple_admin_login():
+    """Simple admin login for debugging"""
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        
+        print(f"[SIMPLE DEBUG] Admin login attempt - Username: {username}")
+        
+        # Simple direct database check
+        try:
+            result = supabase.table('admin_users').select('*').eq('username', username).execute()
+            print(f"[SIMPLE DEBUG] Database query result: {len(result.data) if result.data else 0} users found")
+            
+            if result.data and len(result.data) > 0:
+                user_data = result.data[0]
+                print(f"[SIMPLE DEBUG] User found - ID: {user_data.get('id')}, Name: {user_data.get('name')}")
+                
+                # Check password (both hashed and plain text)
+                password_valid = False
+                
+                # Try hashed password first
+                if user_data.get('password_hash') and user_data.get('salt'):
+                    print(f"[SIMPLE DEBUG] Checking hashed password")
+                    password_valid = auth_manager.verify_password(password, user_data['password_hash'], user_data['salt'])
+                    print(f"[SIMPLE DEBUG] Hashed password result: {password_valid}")
+                
+                # Try plain text password if hashed failed
+                if not password_valid and user_data.get('password'):
+                    print(f"[SIMPLE DEBUG] Checking plain text password")
+                    password_valid = (user_data.get('password') == password)
+                    print(f"[SIMPLE DEBUG] Plain text password result: {password_valid}")
+                
+                if password_valid:
+                    print(f"[SIMPLE DEBUG] Password valid, creating session")
+                    
+                    # Simple session creation
+                    session.permanent = True
+                    session['user_id'] = user_data['id']
+                    session['user_type'] = 'admin'
+                    session['username'] = user_data.get('username')
+                    session['user_name'] = user_data.get('name', user_data.get('username'))
+                    
+                    print(f"[SIMPLE DEBUG] Session created: {dict(session)}")
+                    flash('Simple login successful!', 'success')
+                    return redirect(url_for('admin_dashboard'))
+                else:
+                    print(f"[SIMPLE DEBUG] Password invalid")
+                    flash('Invalid password', 'error')
+            else:
+                print(f"[SIMPLE DEBUG] User not found")
+                flash('User not found', 'error')
+                
+        except Exception as e:
+            print(f"[SIMPLE DEBUG] Error: {e}")
+            flash(f'Error: {str(e)}', 'error')
+    
+    return """
+    <h1>Simple Admin Login (Debug)</h1>
+    <form method="POST">
+        <label>Username: <input name="username" type="text" required></label><br><br>
+        <label>Password: <input name="password" type="password" required></label><br><br>
+        <button type="submit">Login</button>
+    </form>
+    <hr>
+    <a href="/debug_auth">Debug Auth</a> | 
+    <a href="/">Main Login</a>
+    """
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)
