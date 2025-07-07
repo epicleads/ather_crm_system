@@ -790,6 +790,14 @@
             <h5 style="color: var(--airbnb-red); font-weight: 600; margin-bottom: 1rem;">
                 <i class="fas fa-bullhorn" style="color: var(--airbnb-red);"></i> Campaign & Platform Lead Counts
             </h5>
+            <form class="d-flex align-items-center mb-3" method="get" action="{{ url_for('analytics') }}">
+                <label for="campaign_start_date" class="me-2 mb-0">From:</label>
+                <input type="date" id="campaign_start_date" name="start_date" class="form-control form-control-sm me-2" value="{{ request.args.get('start_date', '') }}">
+                <label for="campaign_end_date" class="me-2 mb-0">To:</label>
+                <input type="date" id="campaign_end_date" name="end_date" class="form-control form-control-sm me-2" value="{{ request.args.get('end_date', '') }}">
+                <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+                <a href="{{ url_for('analytics') }}" class="btn btn-outline-secondary btn-sm ms-2">Reset</a>
+            </form>
             <div class="mb-2" style="color: var(--airbnb-gray-600); font-size: 1rem;">
                 <strong>Total Leads in Database:</strong> {{ analytics.all_leads_count }}
             </div>
@@ -801,6 +809,10 @@
                             <th>Platform (Source)</th>
                             <th>Total Leads</th>
                             <th>Today's Leads</th>
+                            <th>Lost</th>
+                            <th>Pending</th>
+                            <th>Won</th>
+                            <th>Conversion Rate</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -811,10 +823,21 @@
                                     <td>{{ row.source }}</td>
                                     <td>{{ row.total_leads }}</td>
                                     <td>{{ row.today_leads }}</td>
+                                    <td>{{ row.lost_leads }}</td>
+                                    <td>{{ row.pending_leads }}</td>
+                                    <td>{{ row.won_leads }}</td>
+                                    <td>
+                                        {% if row.total_leads > 0 %}
+                                            <span style="font-weight:600;">{{ row.conversion_rate }}%</span>
+                                            <span class="text-muted small">({{ row.won_leads }}/{{ row.total_leads }})</span>
+                                        {% else %}
+                                            0% (0/0)
+                                        {% endif %}
+                                    </td>
                                 </tr>
                             {% endfor %}
                         {% else %}
-                            <tr><td colspan="4" class="text-center">No campaign/platform data available.</td></tr>
+                            <tr><td colspan="8" class="text-center">No campaign/platform data available.</td></tr>
                         {% endif %}
                     </tbody>
                 </table>

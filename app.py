@@ -3229,17 +3229,43 @@ def analytics():
         campaign_stats_dict = {}
         all_leads_count = len(all_leads)
         today_str = today.strftime('%Y-%m-%d')
+        # Prepare date range for filtering
+        def in_range(ts):
+            if not ts:
+                return False
+            try:
+                if 'T' in ts:
+                    d = datetime.fromisoformat(ts.replace('Z', '+00:00')).date()
+                else:
+                    d = datetime.strptime(ts[:10], '%Y-%m-%d').date()
+            except Exception:
+                return False
+            if start_date and end_date:
+                return start_date <= d <= end_date
+            elif start_date:
+                return d >= start_date
+            else:
+                return True
         for lead in all_leads:
             campaign = lead.get('campaign', 'Unknown')
             source = lead.get('source', 'Unknown')
-            # Skip if campaign is None, empty, or 'Unknown'
             if not campaign or campaign.strip().lower() in ['none', 'unknown', '']:
                 continue
             key = (campaign, source)
             if key not in campaign_stats_dict:
-                campaign_stats_dict[key] = {'campaign': campaign, 'source': source, 'total_leads': 0, 'today_leads': 0}
-            campaign_stats_dict[key]['total_leads'] += 1
-            # Count today's leads using only created_at
+                campaign_stats_dict[key] = {
+                    'campaign': campaign,
+                    'source': source,
+                    'total_leads': 0,
+                    'today_leads': 0,
+                    'lost_leads': 0,
+                    'pending_leads': 0,
+                    'won_leads': 0
+                }
+            # Total leads: filter by created_at
+            if in_range(lead.get('created_at')):
+                campaign_stats_dict[key]['total_leads'] += 1
+            # Today's leads: only by created_at
             lead_date = lead.get('created_at')
             if lead_date:
                 if 'T' in lead_date:
@@ -3248,7 +3274,22 @@ def analytics():
                     lead_date_val = lead_date
                 if lead_date_val == today_str:
                     campaign_stats_dict[key]['today_leads'] += 1
-        campaign_stats = list(campaign_stats_dict.values())
+            # Lost leads: filter by lost_timestamp and final_status
+            if (lead.get('final_status') or '').strip().lower() == 'lost' and in_range(lead.get('lost_timestamp')):
+                campaign_stats_dict[key]['lost_leads'] += 1
+            # Won leads: filter by won_timestamp and final_status
+            if (lead.get('final_status') or '').strip().lower() == 'won' and in_range(lead.get('won_timestamp')):
+                campaign_stats_dict[key]['won_leads'] += 1
+            # Pending leads: filter by created_at and final_status
+            if (lead.get('final_status') or '').strip().lower() == 'pending' and in_range(lead.get('created_at')):
+                campaign_stats_dict[key]['pending_leads'] += 1
+        # Calculate conversion rate for each campaign
+        campaign_stats = []
+        for row in campaign_stats_dict.values():
+            total = row['total_leads']
+            won = row['won_leads']
+            row['conversion_rate'] = round((won / total * 100) if total > 0 else 0, 1)
+            campaign_stats.append(row)
         # --- End Campaign/Platform/Lead Count Aggregation ---
 
         # Create analytics object that matches template expectations
