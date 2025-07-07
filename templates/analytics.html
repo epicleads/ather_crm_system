@@ -592,6 +592,120 @@
             padding-top: 0.3rem;
             padding-bottom: 0.3rem;
         }
+
+        /* CRE Analysis Table Styling */
+        #cre-analysis-table th, #cre-analysis-table td {
+            border: 2px solid #e0e0e0 !important;
+            text-align: center;
+            vertical-align: middle;
+            padding: 0.5rem;
+        }
+        #cre-analysis-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+        }
+        #cre-analysis-table tr.total-row td {
+            background: #f7f7f7;
+            font-weight: bold;
+        }
+        #cre-analysis-table td:first-child {
+            text-align: left;
+            font-weight: 600;
+        }
+        #cre-analysis-table th[colspan="3"] {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        
+        /* Header styling for new columns */
+        #cre-analysis-table tr:first-child th:nth-child(20) {
+            background: #e8f5e9;
+            color: #2e7d32;
+            font-weight: bold;
+        }
+        
+        #cre-analysis-table tr:first-child th:nth-child(21),
+        #cre-analysis-table tr:first-child th:nth-child(22) {
+            background: #fff8e1;
+            color: #f57f17;
+        }
+        
+        #cre-analysis-table tr:first-child th:nth-child(23) {
+            background: #ffebee;
+            color: #c62828;
+        }
+        
+        #cre-analysis-table tr:first-child th:nth-child(24),
+        #cre-analysis-table tr:first-child th:nth-child(25),
+        #cre-analysis-table tr:first-child th:nth-child(26),
+        #cre-analysis-table tr:first-child th:nth-child(27) {
+            background: #e0f2f1;
+            color: #00695c;
+        }
+        /* Highlight specific columns */
+        #cre-analysis-table td:nth-child(2),
+        #cre-analysis-table td:nth-child(3),
+        #cre-analysis-table td:nth-child(4) {
+            background-color: #e3f2fd;
+            color: #1976d2;
+        }
+        #cre-analysis-table td:nth-child(5),
+        #cre-analysis-table td:nth-child(6),
+        #cre-analysis-table td:nth-child(7),
+        #cre-analysis-table td:nth-child(8) {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+        #cre-analysis-table td:nth-child(9),
+        #cre-analysis-table td:nth-child(10),
+        #cre-analysis-table td:nth-child(11) {
+            background-color: #fff8e1;
+            color: #f57f17;
+        }
+        #cre-analysis-table td:nth-child(12),
+        #cre-analysis-table td:nth-child(13),
+        #cre-analysis-table td:nth-child(14),
+        #cre-analysis-table td:nth-child(15),
+        #cre-analysis-table td:nth-child(16) {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+        
+        /* Additional columns styling */
+        #cre-analysis-table td:nth-child(17),
+        #cre-analysis-table td:nth-child(18),
+        #cre-analysis-table td:nth-child(19) {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+        
+        #cre-analysis-table td:nth-child(20),
+        #cre-analysis-table td:nth-child(21) {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+            font-weight: bold;
+        }
+        
+        #cre-analysis-table td:nth-child(22) {
+            background-color: #fff8e1;
+            color: #f57f17;
+        }
+        
+        #cre-analysis-table td:nth-child(23) {
+            background-color: #ffebee;
+            color: #c62828;
+            font-weight: bold;
+        }
+        
+        /* Percentage columns */
+        #cre-analysis-table td:nth-child(24),
+        #cre-analysis-table td:nth-child(25),
+        #cre-analysis-table td:nth-child(26),
+        #cre-analysis-table td:nth-child(27) {
+            background-color: #e0f2f1;
+            color: #00695c;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -668,6 +782,65 @@
                         <i class="fas fa-user-tie"></i> Active CREs
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Campaign/Platform/Lead Count Table -->
+        <div class="table-container mb-4">
+            <h5 style="color: var(--airbnb-red); font-weight: 600; margin-bottom: 1rem;">
+                <i class="fas fa-bullhorn" style="color: var(--airbnb-red);"></i> Campaign & Platform Lead Counts
+            </h5>
+            <form class="d-flex align-items-center mb-3" method="get" action="{{ url_for('analytics') }}">
+                <label for="campaign_start_date" class="me-2 mb-0">From:</label>
+                <input type="date" id="campaign_start_date" name="start_date" class="form-control form-control-sm me-2" value="{{ request.args.get('start_date', '') }}">
+                <label for="campaign_end_date" class="me-2 mb-0">To:</label>
+                <input type="date" id="campaign_end_date" name="end_date" class="form-control form-control-sm me-2" value="{{ request.args.get('end_date', '') }}">
+                <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+                <a href="{{ url_for('analytics') }}" class="btn btn-outline-secondary btn-sm ms-2">Reset</a>
+            </form>
+            <div class="mb-2" style="color: var(--airbnb-gray-600); font-size: 1rem;">
+                <strong>Total Leads in Database:</strong> {{ analytics.all_leads_count }}
+            </div>
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover">
+                    <thead>
+                        <tr>
+                            <th>Campaign Name</th>
+                            <th>Platform (Source)</th>
+                            <th>Total Leads</th>
+                            <th>Today's Leads</th>
+                            <th>Lost</th>
+                            <th>Pending</th>
+                            <th>Won</th>
+                            <th>Conversion Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if analytics.campaign_stats and analytics.campaign_stats|length > 0 %}
+                            {% for row in analytics.campaign_stats %}
+                                <tr>
+                                    <td>{{ row.campaign }}</td>
+                                    <td>{{ row.source }}</td>
+                                    <td>{{ row.total_leads }}</td>
+                                    <td>{{ row.today_leads }}</td>
+                                    <td>{{ row.lost_leads }}</td>
+                                    <td>{{ row.pending_leads }}</td>
+                                    <td>{{ row.won_leads }}</td>
+                                    <td>
+                                        {% if row.total_leads > 0 %}
+                                            <span style="font-weight:600;">{{ row.conversion_rate }}%</span>
+                                            <span class="text-muted small">({{ row.won_leads }}/{{ row.total_leads }})</span>
+                                        {% else %}
+                                            0% (0/0)
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr><td colspan="8" class="text-center">No campaign/platform data available.</td></tr>
+                        {% endif %}
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -943,6 +1116,104 @@
                     </tbody>
                 </table>
             </div>
+
+            <!-- CRE Performance Metrics Table (moved inside this container) -->
+            <div class="mt-5" id="cre-analysis-section">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 style="color: var(--airbnb-red); font-weight: 600; margin-bottom: 0;">
+                        <i class="fas fa-headset" style="color: var(--airbnb-red);"></i> CRE Performance Metrics
+                    </h5>
+                    <div class="d-flex align-items-center">
+                        <form class="d-flex align-items-center me-3" id="cre-analysis-date-form" onsubmit="return false;">
+                            <label for="cre_start_date" class="me-2 mb-0">From:</label>
+                            <input type="date" id="cre_start_date" name="start_date" class="form-control form-control-sm me-2">
+                            <label for="cre_end_date" class="me-2 mb-0">To:</label>
+                            <input type="date" id="cre_end_date" name="end_date" class="form-control form-control-sm me-2">
+                            <label for="cre_filter" class="me-2 mb-0">CRE:</label>
+                            <select id="cre_filter" class="form-select form-select-sm me-2" style="width: auto;">
+                                <option value="">All CREs</option>
+                                <!-- CRE options will be populated dynamically -->
+                            </select>
+                            <button type="button" class="btn btn-primary btn-sm" onclick="fetchCreAnalysis()">Apply</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm ms-2" onclick="resetCreAnalysis()">Reset</button>
+                        </form>
+                        <a href="{{ url_for('static', filename='CRE Analysis table.csv') }}" class="btn btn-success btn-sm" download>
+                            <i class="fas fa-download"></i> Download CSV
+                        </a>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-bordered" id="cre-analysis-table">
+                        <thead>
+                            <tr>
+                                <th rowspan="2">CRE Name</th>
+                                <th>Calls Allocated</th>
+                                <th>Calls Attempted</th>
+                                <th>Calls Connected</th>
+                                <th>Total</th>
+                                <th colspan="3">Interested</th>
+                                <th>Call Back</th>
+                                <th>RNR</th>
+                                <th>Call Disconnected</th>
+                                <th>Total</th>
+                                <th>Lost to Co-Dealer</th>
+                                <th>Lost to Competition</th>
+                                <th>Not Interested</th>
+                                <th>Did not Enquire</th>
+                                <th>Wrong Lead</th>
+                                <th>RNR-LOST</th>
+                                <th>Finance Reject</th>
+                                <th>Sales Pipeline</th>
+                                <th>Closed Won</th>
+                                <th>Pending</th>
+                                <th>Closed Lost</th>
+                                <th>Call%</th>
+                                <th>Interested%</th>
+                                <th>Walkin%</th>
+                                <th>Retail%</th>
+                            </tr>
+                            <tr>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th>Hot</th>
+                                <th>Warm</th>
+                                <th>Cold</th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th>Total</th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="cre-analysis-tbody">
+                            <tr>
+                                <td colspan="27" class="text-center">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p class="mt-2">Loading live data from database...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -981,6 +1252,179 @@
                 <span class='metric-number'>${val}</span>
                 <span class='metric-percent'>${pct}%</span>
             </div>`;
+        }
+
+        // Function to populate CRE dropdown
+        function populateCreDropdown() {
+            console.log('Fetching CRE list from database...');
+            fetch('/get_cre_list')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log('CRE list received:', data.cre_list);
+                        const dropdown = document.getElementById('cre_filter');
+                        // Clear existing options except the first one
+                        while (dropdown.options.length > 1) {
+                            dropdown.remove(1);
+                        }
+                        
+                        // Add CRE options
+                        data.cre_list.forEach(cre => {
+                            const option = document.createElement('option');
+                            option.value = cre.name;
+                            option.textContent = cre.name;
+                            dropdown.appendChild(option);
+                        });
+                    } else {
+                        console.error('Failed to fetch CRE list:', data.message);
+                    }
+                })
+                .catch(err => {
+                    console.error('Error fetching CRE list:', err);
+                    // Add error handling UI
+                    const dropdown = document.getElementById('cre_filter');
+                    const option = document.createElement('option');
+                    option.value = '';
+                    option.textContent = 'Error loading CREs';
+                    option.disabled = true;
+                    dropdown.appendChild(option);
+                });
+        }
+
+        // Update fetchCreAnalysis to include CRE filter
+        function fetchCreAnalysis() {
+            const startDate = document.getElementById('cre_start_date').value;
+            const endDate = document.getElementById('cre_end_date').value;
+            const creFilter = document.getElementById('cre_filter').value;
+            
+            // Show loading spinner
+            document.getElementById('cre-analysis-tbody').innerHTML = `
+                <tr>
+                    <td colspan="27" class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Loading live data from database...</p>
+                    </td>
+                </tr>
+            `;
+            
+            // Build query parameters
+            let params = new URLSearchParams();
+            if (startDate) params.append('start_date', startDate);
+            if (endDate) params.append('end_date', endDate);
+            if (creFilter) params.append('cre_name', creFilter);
+            
+            fetch(`/cre_analysis_data?${params.toString()}`)
+                .then(response => response.json())
+                .then(res => {
+                    if (!res.success) {
+                        document.getElementById('cre-analysis-tbody').innerHTML = `<tr><td colspan='27' class='text-center'>${res.message}</td></tr>`;
+                        return;
+                    }
+                    console.log("CRE data received from database:", res.data);
+                    updateCreAnalysisTable(res.data);
+                })
+                .catch(err => {
+                    document.getElementById('cre-analysis-tbody').innerHTML = `<tr><td colspan='27' class='text-center'>Error loading data from database</td></tr>`;
+                    console.error("Error fetching CRE data:", err);
+                });
+        }
+
+        // Reset function should also reset the CRE dropdown
+        function resetCreAnalysis() {
+            document.getElementById('cre_start_date').value = '';
+            document.getElementById('cre_end_date').value = '';
+            document.getElementById('cre_filter').value = '';
+            fetchCreAnalysis();
+        }
+        
+        function updateCreAnalysisTable(data) {
+            if (!data) {
+                document.getElementById('cre-analysis-tbody').innerHTML = `
+                    <tr>
+                        <td colspan="27" class="text-center">
+                            <div class="alert alert-danger">
+                                <i class="fas fa-exclamation-triangle"></i> Error loading data from database
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            let html = '';
+            const cres = Object.keys(data).filter(name => name !== 'Total');
+            cres.forEach(cre => {
+                const d = data[cre];
+                html += `<tr>
+                    <td>${cre}</td>
+                    <td>${d.calls_allocated || 0}</td>
+                    <td>${d.calls_attempted || 0}</td>
+                    <td>${d.calls_connected || 0}</td>
+                    <td>${d.total_leads || 0}</td>
+                    <td>${d.hot_leads || 0}</td>
+                    <td>${d.warm_leads || 0}</td>
+                    <td>${d.cold_leads || 0}</td>
+                    <td>${d.callback_leads || 0}</td>
+                    <td>${d.rnr_leads || 0}</td>
+                    <td>${d.disconnected_calls || 0}</td>
+                    <td>${d.lost_total || 0}</td>
+                    <td>${d.lost_co_dealer || 0}</td>
+                    <td>${d.lost_competition || 0}</td>
+                    <td>${d.not_interested || 0}</td>
+                    <td>${d.did_not_enquire || 0}</td>
+                    <td>${d.wrong_lead || 0}</td>
+                    <td>${d.rnr_lost || 0}</td>
+                    <td>${d.finance_reject || 0}</td>
+                    <td>${d.sales_pipeline_total || 0}</td>
+                    <td>${d.closed_won || 0}</td>
+                    <td>${d.pending || 0}</td>
+                    <td>${d.closed_lost || 0}</td>
+                    <td>${d.call_percentage || 0}%</td>
+                    <td>${d.interested_percentage || 0}%</td>
+                    <td>${d.walkin_percentage || 0}%</td>
+                    <td>${d.retail_percentage || 0}%</td>
+                </tr>`;
+            });
+            // Add totals row with correct percentage calculation (out of 100%)
+            if (data.Total) {
+                const t = data.Total;
+                // Calculate percentages out of 100%
+                const callPct = t.calls_allocated ? ((t.calls_connected / t.calls_allocated) * 100).toFixed(1) : 0;
+                const interestedPct = t.calls_allocated ? ((t.total_leads / t.calls_allocated) * 100).toFixed(1) : 0;
+                const walkinPct = t.calls_allocated ? ((t.pending / t.calls_allocated) * 100).toFixed(1) : 0;
+                const retailPct = t.calls_allocated ? ((t.closed_won / t.calls_allocated) * 100).toFixed(1) : 0;
+                html += `<tr class="total-row">
+                    <td>Total</td>
+                    <td>${t.calls_allocated || 0}</td>
+                    <td>${t.calls_attempted || 0}</td>
+                    <td>${t.calls_connected || 0}</td>
+                    <td>${t.total_leads || 0}</td>
+                    <td>${t.hot_leads || 0}</td>
+                    <td>${t.warm_leads || 0}</td>
+                    <td>${t.cold_leads || 0}</td>
+                    <td>${t.callback_leads || 0}</td>
+                    <td>${t.rnr_leads || 0}</td>
+                    <td>${t.disconnected_calls || 0}</td>
+                    <td>${t.lost_total || 0}</td>
+                    <td>${t.lost_co_dealer || 0}</td>
+                    <td>${t.lost_competition || 0}</td>
+                    <td>${t.not_interested || 0}</td>
+                    <td>${t.did_not_enquire || 0}</td>
+                    <td>${t.wrong_lead || 0}</td>
+                    <td>${t.rnr_lost || 0}</td>
+                    <td>${t.finance_reject || 0}</td>
+                    <td>${t.sales_pipeline_total || 0}</td>
+                    <td>${t.closed_won || 0}</td>
+                    <td>${t.pending || 0}</td>
+                    <td>${t.closed_lost || 0}</td>
+                    <td>${callPct}%</td>
+                    <td>${interestedPct}%</td>
+                    <td>${walkinPct}%</td>
+                    <td>${retailPct}%</td>
+                </tr>`;
+            }
+            document.getElementById('cre-analysis-tbody').innerHTML = html;
         }
 
         // Source Distribution Bar Chart
@@ -1355,7 +1799,11 @@
             fetchSourceAnalysis();
         }
 
-        document.addEventListener('DOMContentLoaded', fetchSourceAnalysis);
+        document.addEventListener('DOMContentLoaded', function() {
+            populateCreDropdown();
+            fetchSourceAnalysis();
+            fetchCreAnalysis();
+        });
     </script>
 </body>
 </html>

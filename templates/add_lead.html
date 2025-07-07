@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+
+{% block title %}Add New Lead - Ather CRM{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2><i class="fas fa-plus text-success"></i> Add New Lead</h2>
+                <p class="text-muted">Fill in the details to add a new lead</p>
+            </div>
+            <div>
+                <a href="{{ url_for('cre_dashboard') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="card shadow">
+    <div class="card-header">
+        <h5>Lead Information</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="addLeadForm">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="customer_name" class="form-label">Customer Name</label>
+                        <input type="text" class="form-control" id="customer_name" name="customer_name" required>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="customer_mobile_number" class="form-label">Mobile Number</label>
+                        <input type="text" class="form-control" id="customer_mobile_number" name="customer_mobile_number" required maxlength="15">
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="source" class="form-label">Source</label>
+                        <select class="form-select" id="source" name="source" required>
+                            <option value="">Select Source</option>
+                            <option value="Knowlarity">Knowlarity</option>
+                            <option value="Google(Knowlarity)">Google(Knowlarity)</option>
+                            <option value="Meta(Knowlarity )">Meta(Knowlarity)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="lead_status" class="form-label">Lead Status <span class="text-danger">*</span></label>
+                        <select class="form-select" id="lead_status" name="lead_status" required>
+                            <option value="">Select Status</option>
+                            <option value="Busy on another Call">Busy on another Call</option>
+                            <option value="RNR">RNR</option>
+                            <option value="Call me Back">Call me Back</option>
+                            <option value="Interested">Interested</option>
+                            <option value="Not Interested">Not Interested</option>
+                            <option value="Did Not Inquire">Did Not Inquire</option>
+                            <option value="Lost to Competition">Lost to Competition</option>
+                            <option value="Lost to Co Dealer">Lost to Co Dealer</option>
+                            <option value="Call Disconnected">Call Disconnected</option>
+                            <option value="Lead Already Assigned">Lead Already Assigned</option>
+                            <option value="Wrong Number">Wrong Number</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="lead_category" class="form-label">Lead Category</label>
+                        <select class="form-select" id="lead_category" name="lead_category">
+                            <option value="">Select Category</option>
+                            <option value="Hot">Hot</option>
+                            <option value="Cold">Cold</option>
+                            <option value="Warm">Warm</option>
+                            <option value="Not Interested">Not Interested</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="model_type" class="form-label">Model Type</label>
+                        <select class="form-select" id="model_type" onchange="updateModels()">
+                            <option value="">Select Model Type</option>
+                            <option value="rizta">Rizta</option>
+                            <option value="450x">450X</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="model_interested" class="form-label">Model Interested</label>
+                        <select class="form-select" id="model_interested" name="model_interested">
+                            <option value="">Select Model</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="branch" class="form-label">Branch</label>
+                        <select class="form-select" id="branch" name="branch" onchange="updatePS()">
+                            <option value="">Select Branch</option>
+                            {% for branch in branches %}
+                            <option value="{{ branch }}">{{ branch }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="ps_name" class="form-label">Product Specialist</label>
+                        <select class="form-select" id="ps_name" name="ps_name">
+                            <option value="">Select PS</option>
+                            <option value="">Unassigned</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="final_status" class="form-label">Final Status</label>
+                        <select class="form-select" id="final_status" name="final_status">
+                            <option value="Pending">Pending</option>
+                            <option value="Won">Won</option>
+                            <option value="Lost">Lost</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="follow_up_date" class="form-label">Follow-up Date</label>
+                        <input type="datetime-local" class="form-control" id="follow_up_date" name="follow_up_date">
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="mb-3">
+                        <label for="remark" class="form-label">Remark</label>
+                        <textarea class="form-control" id="remark" name="remark" rows="3" placeholder="Enter any remarks..."></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                <a href="{{ url_for('cre_dashboard') }}" class="btn btn-secondary me-md-2">
+                    <i class="fas fa-arrow-left"></i> Back
+                </a>
+                <button type="submit" class="btn btn-success">
+                    <i class="fas fa-save"></i> Add Lead
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+// Model arrays
+const riztaModels = [
+    'Rizta S Mono (2.9 kWh)',
+    'Rizta S Super Matte (2.9 kWh)',
+    'Rizta Z Mono (2.9 kWh)',
+    'Rizta Z Duo (2.9 kWh)',
+    'Rizta Z Super Matte (2.9 kWh)',
+    'Rizta Z Mono (3.7 kWh)',
+    'Rizta Z Duo (3.7 kWh)',
+    'Rizta Z Super Matte (3.7 kWh)'
+];
+const x450Models = [
+    '450 X (2.9 kWh)',
+    '450 X (3.7 kWh)',
+    '450 X (2.9 kWh) Pro Pack',
+    '450 X (3.7 kWh) Pro Pack',
+    '450 Apex STD'
+];
+const psUsers = [
+    {% for ps in ps_users %}
+    {
+        name: "{{ ps.name }}",
+        branch: "{{ ps.branch }}"
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+];
+function updateModels() {
+    const modelType = document.getElementById('model_type').value;
+    const modelSelect = document.getElementById('model_interested');
+    const currentValue = modelSelect.value;
+    modelSelect.innerHTML = '<option value="">Select Model</option>';
+    let models = [];
+    if (modelType === 'rizta') {
+        models = riztaModels;
+    } else if (modelType === '450x') {
+        models = x450Models;
+    }
+    models.forEach(model => {
+        const option = document.createElement('option');
+        option.value = model;
+        option.textContent = model;
+        if (model === currentValue) {
+            option.selected = true;
+        }
+        modelSelect.appendChild(option);
+    });
+}
+function updatePS() {
+    const selectedBranch = document.getElementById('branch').value;
+    const psSelect = document.getElementById('ps_name');
+    const currentValue = psSelect.value;
+    psSelect.innerHTML = '<option value="">Select PS</option><option value="">Unassigned</option>';
+    const filteredPS = psUsers.filter(ps => ps.branch === selectedBranch);
+    filteredPS.forEach(ps => {
+        const option = document.createElement('option');
+        option.value = ps.name;
+        option.textContent = ps.name;
+        if (ps.name === currentValue) {
+            option.selected = true;
+        }
+        psSelect.appendChild(option);
+    });
+}
+document.addEventListener('DOMContentLoaded', function() {
+    // Set minimum date for follow-up to today
+    const today = new Date().toISOString().slice(0, 16);
+    const followUpDate = document.getElementById('follow_up_date');
+    if (followUpDate) followUpDate.min = today;
+});
+</script>
+{% endblock %} 
