@@ -179,8 +179,8 @@
                 </div>
                 <div class="row mt-2">
                     <div class="col-12">
-                        <small class="text-white-50">
-                            <i class="fas fa-info-circle"></i> Note: Pending cases are always shown live, regardless of date filter
+                        <small class="text-dark">
+                            <i class="fas fa-info-circle"></i> Note: Pending cases and Total Leads Handled are always shown live when no date filter is applied
                         </small>
                     </div>
                 </div>
@@ -221,9 +221,9 @@
     <div class="col-md-3">
         <div class="card analytics-card bg-success text-white">
             <div class="card-body text-center">
-                <div class="stats-number" id="conversionRate">{{ analytics.cre_overall_stats.conversion_rate }}%</div>
+                <div class="stats-number" id="conversionRateLive">{{ analytics.cre_live_stats.conversion_rate }}%</div>
                 <div class="stats-label">Conversion Rate</div>
-                <small class="text-white-50">Date Filtered</small>
+                <small class="text-white-50">Live Rate</small>
             </div>
         </div>
     </div>
@@ -235,7 +235,7 @@
         <div class="card analytics-card">
             <div class="card-header bg-success text-white">
                 <h5 class="mb-0"><i class="fas fa-chart-pie"></i> Your Platform-wise Performance</h5>
-                <small class="text-white-50">Won/Lost cases are date filtered • Pending cases are live</small>
+                <small class="text-white-50">Won/Lost cases are date filtered • Pending/Assigned/Conversion Rate are live</small>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
@@ -255,15 +255,15 @@
                             <tr>
                                 <td><strong>{{ platform }}</strong></td>
                                 <td><span class="badge bg-success">{{ data.won }}</span></td>
-                                <td><span class="badge bg-warning">{{ data.pending_live }}</span></td>
+                                <td><span class="badge bg-warning">{{ analytics.cre_platform_conversion_live[platform].pending_live }}</span></td>
                                 <td><span class="badge bg-danger">{{ data.lost }}</span></td>
-                                <td>{{ data.assigned }}</td>
+                                <td>{{ analytics.cre_platform_conversion_live[platform].assigned }}</td>
                                 <td>
                                     <span class="
-                                        {% if data.conversion_rate >= 20 %}conversion-rate-high
-                                        {% elif data.conversion_rate >= 10 %}conversion-rate-medium
+                                        {% if analytics.cre_platform_conversion_live[platform].conversion_rate >= 20 %}conversion-rate-high
+                                        {% elif analytics.cre_platform_conversion_live[platform].conversion_rate >= 10 %}conversion-rate-medium
                                         {% else %}conversion-rate-low{% endif %}">
-                                        {{ data.conversion_rate }}%
+                                        {{ analytics.cre_platform_conversion_live[platform].conversion_rate }}%
                                     </span>
                                 </td>
                             </tr>
@@ -294,7 +294,7 @@
                                 <th>🏆 Won</th>
                                 <th>🕓 Pending</th>
                                 <th>❌ Lost</th>
-                                <th>Total Cases</th>
+                                <th>Total Leads Handled</th>
                             </tr>
                         </thead>
                         <tbody id="leaderboard-table-body">
@@ -314,7 +314,7 @@
                                 <td><span class="badge bg-success">{{ stats.won }}</span></td>
                                 <td><span class="badge bg-warning">{{ stats.pending_live }}</span></td>
                                 <td><span class="badge bg-danger">{{ stats.lost }}</span></td>
-                                <td><strong>{{ stats.won + stats.pending_live + stats.lost }}</strong></td>
+                                <td><strong>{{ stats.total_leads_handled }}</strong></td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -336,19 +336,25 @@ document.addEventListener('DOMContentLoaded', function() {
     applyFilter.addEventListener('click', function() {
         const fromDateValue = fromDate.value;
         const toDateValue = toDate.value;
-        
-        // Check if from date is before to date
+        // Robust date validation
+        if (fromDateValue && isNaN(Date.parse(fromDateValue))) {
+            alert('Invalid From Date format. Please use the date picker.');
+            fromDate.focus();
+            return;
+        }
+        if (toDateValue && isNaN(Date.parse(toDateValue))) {
+            alert('Invalid To Date format. Please use the date picker.');
+            toDate.focus();
+            return;
+        }
         if (fromDateValue && toDateValue) {
             const fromDateObj = new Date(fromDateValue);
             const toDateObj = new Date(toDateValue);
-            
             if (fromDateObj > toDateObj) {
                 alert('From Date must be before or equal to To Date');
                 return;
             }
         }
-        
-        // Apply filter even if no dates provided (will show all data)
         updateAnalytics(fromDateValue, toDateValue);
     });
     
@@ -387,8 +393,8 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 if (data.success) {
                     updateOverallStats(data.cre_overall_stats);
-                    updateLeaderboard(data.all_cre_leaderboard);
-                    updateConversionTable(data.cre_platform_conversion);
+                    updateLeaderboard(data.top_5_leaderboard);
+                    updateConversionTable(data.cre_platform_conversion, data.cre_platform_conversion_live);
                     hideLoadingState();
                 } else {
                     console.error('Error loading analytics data:', data.error);
@@ -444,9 +450,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function updateOverallStats(stats) {
         document.getElementById('totalWon').textContent = stats.won;
-        // Note: totalPendingLive is not updated here as it's always live
+        // Note: totalPendingLive and conversionRateLive are not updated here as they're always live
         document.getElementById('totalLost').textContent = stats.lost;
-        document.getElementById('conversionRate').textContent = stats.conversion_rate + '%';
     }
     
     function updateLeaderboard(leaderboardData) {
@@ -456,15 +461,12 @@ document.addEventListener('DOMContentLoaded', function() {
             leaderboardData.forEach(([cre_name, stats], index) => {
                 const isCurrentUser = cre_name === '{{ analytics.current_cre }}';
                 const isTopRank = index === 0;
-                const totalCases = stats.won + stats.pending_live + stats.lost;
-                
                 let rowClass = '';
                 if (isCurrentUser) {
                     rowClass = 'current-user-row';
                 } else if (isTopRank) {
                     rowClass = 'leaderboard-rank-1';
                 }
-                
                 html += `
                     <tr ${rowClass ? `class="${rowClass}"` : ''}>
                         <td>
@@ -477,7 +479,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <td><span class="badge bg-success">${stats.won}</span></td>
                         <td><span class="badge bg-warning">${stats.pending_live}</span></td>
                         <td><span class="badge bg-danger">${stats.lost}</span></td>
-                        <td><strong>${totalCases}</strong></td>
+                        <td><strong>${stats.total_leads_handled}</strong></td>
                     </tr>
                 `;
             });
@@ -485,26 +487,26 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    function updateConversionTable(conversionData) {
+    function updateConversionTable(conversionData, conversionDataLive) {
         const tableBody = document.getElementById('conversion-table-body');
         if (tableBody) {
             let html = '';
             Object.entries(conversionData).forEach(([platform, data]) => {
+                const live = conversionDataLive[platform] || {};
                 let rateClass = 'conversion-rate-low';
-                if (data.conversion_rate >= 20) {
+                if ((live.conversion_rate || 0) >= 20) {
                     rateClass = 'conversion-rate-high';
-                } else if (data.conversion_rate >= 10) {
+                } else if ((live.conversion_rate || 0) >= 10) {
                     rateClass = 'conversion-rate-medium';
                 }
-                
                 html += `
                     <tr>
                         <td><strong>${platform}</strong></td>
                         <td><span class="badge bg-success">${data.won}</span></td>
-                        <td><span class="badge bg-warning">${data.pending_live}</span></td>
+                        <td><span class="badge bg-warning">${live.pending_live || 0}</span></td>
                         <td><span class="badge bg-danger">${data.lost}</span></td>
-                        <td>${data.assigned}</td>
-                        <td><span class="${rateClass}">${data.conversion_rate}%</span></td>
+                        <td>${live.assigned || 0}</td>
+                        <td><span class="${rateClass}">${live.conversion_rate || 0}%</span></td>
                     </tr>
                 `;
             });
