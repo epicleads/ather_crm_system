@@ -151,6 +151,7 @@
                         <select class="form-select" id="lead_status" name="lead_status" required>
                             <option value="" disabled {% if not lead.lead_status %}selected{% endif %}>Select Lead Status</option>
                             <option value="Call not Connected" {% if lead.lead_status == 'Call not Connected' %}selected{% endif %}>Call not Connected</option>
+                            <option value="Interested" {% if lead.lead_status == 'Interested' %}selected{% endif %}>Interested</option>
                             <option value="Retailed" {% if lead.lead_status == 'Retailed' %}selected{% endif %}>Retailed</option>
                             <option value="Discount Issue" {% if lead.lead_status == 'Discount Issue' %}selected{% endif %}>Discount Issue</option>
                             <option value="Delayed" {% if lead.lead_status == 'Delayed' %}selected{% endif %}>Delayed</option>

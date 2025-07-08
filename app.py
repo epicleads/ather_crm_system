@@ -5233,5 +5233,375 @@ def simple_admin_login():
     <a href="/">Main Login</a>
     """
 
+@app.route('/cre_analytics')
+@require_cre
+def cre_analytics():
+    try:
+        # Get current CRE name from session
+        current_cre = session.get('cre_name')
+        
+        # Get all CRE users with their active status (for leaderboard)
+        cre_users = safe_get_data('cre_users')
+        active_cre_users = [cre for cre in cre_users if cre.get('is_active', True)]
+        
+        # Get all leads data
+        all_leads = safe_get_data('lead_master')
+        
+        # Helper function to parse timestamps
+        def parse_timestamp(timestamp_str):
+            if not timestamp_str:
+                return None
+            try:
+                if 'T' in timestamp_str:
+                    return datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                elif ' ' in timestamp_str:
+                    return datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+                else:
+                    return datetime.strptime(timestamp_str, '%Y-%m-%d')
+            except:
+                return None
+        
+        def get_cre_platform_conversion_live():
+            platform_data = {}
+            for lead in all_leads:
+                if lead.get('cre_name') == current_cre:
+                    platform = lead.get('source', 'Unknown')
+                    if platform not in platform_data:
+                        platform_data[platform] = {
+                            'won': 0,
+                            'pending_live': 0,
+                            'lost': 0,
+                            'assigned': 0
+                        }
+                    if lead.get('cre_assigned_at'):
+                        platform_data[platform]['assigned'] += 1
+                    if lead.get('final_status') == 'Won':
+                        platform_data[platform]['won'] += 1
+                    elif lead.get('final_status') == 'Pending':
+                        platform_data[platform]['pending_live'] += 1
+                    elif lead.get('final_status') == 'Lost' or lead.get('lost_timestamp'):
+                        platform_data[platform]['lost'] += 1
+            for platform in platform_data:
+                all_won = len([lead for lead in all_leads 
+                              if lead.get('cre_name') == current_cre 
+                              and (lead.get('source') or 'Unknown') == platform
+                              and lead.get('final_status') == 'Won'])
+                assigned = platform_data[platform]['assigned']
+                conversion_rate = (all_won / assigned * 100) if assigned > 0 else 0
+                platform_data[platform]['conversion_rate'] = round(conversion_rate, 2)
+            return platform_data
+
+        def get_top_5_cre_leaderboard():
+            cre_performance = {}
+            for cre in active_cre_users:
+                cre_name = cre.get('name')
+                if cre_name:
+                    cre_performance[cre_name] = {
+                        'won': 0,
+                        'pending_live': 0,
+                        'lost': 0,
+                        'total_leads_handled': 0
+                    }
+            for lead in all_leads:
+                cre_name = lead.get('cre_name')
+                if cre_name in cre_performance:
+                    if lead.get('cre_assigned_at'):
+                        cre_performance[cre_name]['total_leads_handled'] += 1
+                    if lead.get('final_status') == 'Won':
+                        cre_performance[cre_name]['won'] += 1
+                    elif lead.get('final_status') == 'Pending':
+                        cre_performance[cre_name]['pending_live'] += 1
+                    elif lead.get('final_status') == 'Lost' or lead.get('lost_timestamp'):
+                        cre_performance[cre_name]['lost'] += 1
+            sorted_cre = sorted(cre_performance.items(), key=lambda x: x[1]['won'], reverse=True)[:5]
+            return sorted_cre
+        
+        # Calculate platform-wise conversion rates for logged-in CRE
+        def get_cre_platform_conversion():
+            platform_data = {}
+            
+            for lead in all_leads:
+                if lead.get('cre_name') == current_cre:
+                    platform = lead.get('source', 'Unknown')
+                    if platform not in platform_data:
+                        platform_data[platform] = {
+                            'won': 0,
+                            'pending_live': 0,
+                            'lost': 0,
+                            'assigned': 0
+                        }
+                    
+                    if lead.get('cre_assigned_at'):
+                        platform_data[platform]['assigned'] += 1
+                    
+                    if lead.get('final_status') == 'Won':
+                        platform_data[platform]['won'] += 1
+                    elif lead.get('final_status') == 'Pending':
+                        # Pending is always live, not date filtered
+                        platform_data[platform]['pending_live'] += 1
+                    elif lead.get('final_status') == 'Lost' or lead.get('lost_timestamp'):
+                        platform_data[platform]['lost'] += 1
+            
+            # Calculate conversion rates (always live - use all won cases, not date filtered)
+            for platform in platform_data:
+                # Count all won cases for this platform (live data)
+                all_won = len([lead for lead in all_leads 
+                              if lead.get('cre_name') == current_cre 
+                              and (lead.get('source') or 'Unknown') == platform
+                              and lead.get('final_status') == 'Won'])
+                assigned = platform_data[platform]['assigned']
+                conversion_rate = (all_won / assigned * 100) if assigned > 0 else 0
+                platform_data[platform]['conversion_rate'] = round(conversion_rate, 2)
+            
+            return platform_data
+        
+        # Get overall stats for logged-in CRE
+        def get_cre_overall_stats():
+            cre_leads = [lead for lead in all_leads if lead.get('cre_name') == current_cre]
+            total_won = len([lead for lead in cre_leads if lead.get('final_status') == 'Won'])
+            total_lost = len([lead for lead in cre_leads if lead.get('final_status') == 'Lost' or lead.get('lost_timestamp')])
+            total_assigned = len([lead for lead in cre_leads if lead.get('cre_assigned_at')])
+            
+            overall_rate = (total_won / total_assigned * 100) if total_assigned > 0 else 0
+            return {
+                'won': total_won,
+                'lost': total_lost,
+                'assigned': total_assigned,
+                'conversion_rate': round(overall_rate, 2)
+            }
+        
+        # Get live stats for logged-in CRE (pending and conversion rate always live)
+        def get_cre_live_stats():
+            cre_leads = [lead for lead in all_leads if lead.get('cre_name') == current_cre]
+            total_pending = len([lead for lead in cre_leads if lead.get('final_status') == 'Pending'])
+            total_won_live = len([lead for lead in cre_leads if lead.get('final_status') == 'Won'])
+            total_assigned = len([lead for lead in cre_leads if lead.get('cre_assigned_at')])
+            
+            live_conversion_rate = (total_won_live / total_assigned * 100) if total_assigned > 0 else 0
+            
+            return {
+                'pending': total_pending,
+                'conversion_rate': round(live_conversion_rate, 2)
+            }
+        
+        # Prepare data for template
+        analytics_data = {
+            'current_cre': current_cre,
+            'top_5_leaderboard': get_top_5_cre_leaderboard(),
+            'cre_platform_conversion': get_cre_platform_conversion(),
+            'cre_platform_conversion_live': get_cre_platform_conversion_live(),
+            'cre_overall_stats': get_cre_overall_stats(),
+            'cre_live_stats': get_cre_live_stats()
+        }
+        
+        return render_template('cre_analytics.html', analytics=analytics_data)
+        
+    except Exception as e:
+        flash(f'Error loading CRE analytics: {str(e)}', 'error')
+        return redirect(url_for('cre_dashboard'))
+
+
+@app.route('/cre_analytics_data')
+@require_cre
+def cre_analytics_data():
+    """API endpoint to get filtered analytics data"""
+    try:
+        # Get filter parameters
+        from_date_str = request.args.get('from_date')
+        to_date_str = request.args.get('to_date')
+        
+        # Get current CRE name from session
+        current_cre = session.get('cre_name')
+        
+        # Get all leads data
+        all_leads = safe_get_data('lead_master')
+        cre_users = safe_get_data('cre_users')
+        active_cre_users = [cre for cre in cre_users if cre.get('is_active', True)]
+        
+        # Helper function to parse timestamps
+        def parse_timestamp(timestamp_str):
+            if not timestamp_str:
+                return None
+            try:
+                if 'T' in timestamp_str:
+                    return datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                elif ' ' in timestamp_str:
+                    return datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+                else:
+                    return datetime.strptime(timestamp_str, '%Y-%m-%d')
+            except:
+                return None
+        
+        # Helper function to parse date from HTML5 date input (yyyy-mm-dd format)
+        def parse_date_input(date_str):
+            if not date_str:
+                return None
+            try:
+                return datetime.strptime(date_str, '%Y-%m-%d').date()
+            except:
+                return None
+        
+        # Helper function to check if date is within filter range
+        def is_within_date_filter(target_date):
+            if not target_date:
+                return True  # Include records without dates if no filter
+            
+            if not from_date_str or not to_date_str:
+                return True  # No date filter applied
+            
+            target_date_obj = target_date.date() if isinstance(target_date, datetime) else target_date
+            from_date_obj = parse_date_input(from_date_str)
+            to_date_obj = parse_date_input(to_date_str)
+            
+            if not from_date_obj or not to_date_obj:
+                return True  # Invalid date format, include all
+            
+            return from_date_obj <= target_date_obj <= to_date_obj
+        
+        # Get filtered leaderboard for all active CREs
+        def get_filtered_all_cre_leaderboard():
+            cre_performance = {}
+            for cre in active_cre_users:
+                cre_name = cre.get('name')
+                if cre_name:
+                    cre_performance[cre_name] = {
+                        'won': 0,
+                        'pending_live': 0,
+                        'lost': 0,
+                        'total_leads_handled': 0
+                    }
+            
+            # Apply date filter to total_leads_handled based on cre_assigned_at timestamp
+            for lead in all_leads:
+                cre_name = lead.get('cre_name')
+                if cre_name in cre_performance:
+                    if lead.get('cre_assigned_at'):
+                        assigned_date = parse_timestamp(lead.get('cre_assigned_at'))
+                        if is_within_date_filter(assigned_date):
+                            cre_performance[cre_name]['total_leads_handled'] += 1
+                    if lead.get('final_status') == 'Pending':
+                        cre_performance[cre_name]['pending_live'] += 1
+            
+            for lead in all_leads:
+                cre_name = lead.get('cre_name')
+                if cre_name in cre_performance:
+                    if lead.get('final_status') == 'Won':
+                        won_date = parse_timestamp(lead.get('won_timestamp'))
+                        if is_within_date_filter(won_date):
+                            cre_performance[cre_name]['won'] += 1
+                    elif lead.get('final_status') == 'Lost' or lead.get('lost_timestamp'):
+                        lost_date = parse_timestamp(lead.get('lost_timestamp')) or parse_timestamp(lead.get('won_timestamp'))
+                        if is_within_date_filter(lost_date):
+                            cre_performance[cre_name]['lost'] += 1
+            sorted_cre = sorted(cre_performance.items(), key=lambda x: x[1]['won'], reverse=True)
+            return sorted_cre
+        
+        # Get filtered platform conversion data for logged-in CRE
+        def get_filtered_cre_platform_conversion():
+            platform_data = {}
+            for lead in all_leads:
+                if lead.get('cre_name') == current_cre:
+                    platform = lead.get('source', 'Unknown')
+                    if platform not in platform_data:
+                        platform_data[platform] = {
+                            'won': 0,
+                            'pending_live': 0,
+                            'lost': 0,
+                            'assigned': 0
+                        }
+                    if lead.get('cre_assigned_at'):
+                        platform_data[platform]['assigned'] += 1
+                    if lead.get('final_status') == 'Won':
+                        won_date = parse_timestamp(lead.get('won_timestamp'))
+                        if is_within_date_filter(won_date):
+                            platform_data[platform]['won'] += 1
+                    elif lead.get('final_status') == 'Pending':
+                        platform_data[platform]['pending_live'] += 1
+                    elif lead.get('final_status') == 'Lost' or lead.get('lost_timestamp'):
+                        lost_date = parse_timestamp(lead.get('lost_timestamp')) or parse_timestamp(lead.get('won_timestamp'))
+                        if is_within_date_filter(lost_date):
+                            platform_data[platform]['lost'] += 1
+            # Calculate conversion rates (always live - use all won cases, not date filtered)
+            for platform in platform_data:
+                # Count all won cases for this platform (live data)
+                all_won = len([lead for lead in all_leads 
+                              if lead.get('cre_name') == current_cre 
+                              and (lead.get('source') or 'Unknown') == platform
+                              and lead.get('final_status') == 'Won'])
+                assigned = platform_data[platform]['assigned']
+                conversion_rate = (all_won / assigned * 100) if assigned > 0 else 0
+                platform_data[platform]['conversion_rate'] = round(conversion_rate, 2)
+            return platform_data
+        
+        # Get filtered overall stats for logged-in CRE
+        def get_filtered_cre_overall_stats():
+            cre_leads = [lead for lead in all_leads if lead.get('cre_name') == current_cre]
+            
+            total_won = 0
+            total_lost = 0
+            total_assigned = len([lead for lead in cre_leads if lead.get('cre_assigned_at')])
+            
+            for lead in cre_leads:
+                if lead.get('final_status') == 'Won':
+                    won_date = parse_timestamp(lead.get('won_timestamp'))
+                    if is_within_date_filter(won_date):
+                        total_won += 1
+                elif lead.get('final_status') == 'Lost' or lead.get('lost_timestamp'):
+                    lost_date = parse_timestamp(lead.get('lost_timestamp')) or parse_timestamp(lead.get('won_timestamp'))
+                    if is_within_date_filter(lost_date):
+                        total_lost += 1
+            
+            overall_rate = (total_won / total_assigned * 100) if total_assigned > 0 else 0
+            return {
+                'won': total_won,
+                'lost': total_lost,
+                'assigned': total_assigned,
+                'conversion_rate': round(overall_rate, 2)
+            }
+        
+        # Get live platform conversion data for logged-in CRE (not affected by date filter)
+        def get_cre_platform_conversion_live():
+            platform_data = {}
+            for lead in all_leads:
+                if lead.get('cre_name') == current_cre:
+                    platform = lead.get('source', 'Unknown')
+                    if platform not in platform_data:
+                        platform_data[platform] = {
+                            'won': 0,
+                            'pending': 0,
+                            'lost': 0,
+                            'assigned': 0
+                        }
+                    if lead.get('cre_assigned_at'):
+                        platform_data[platform]['assigned'] += 1
+                    if lead.get('final_status') == 'Won':
+                        platform_data[platform]['won'] += 1
+                    elif lead.get('final_status') == 'Pending':
+                        platform_data[platform]['pending'] += 1
+                    elif lead.get('final_status') == 'Lost':
+                        platform_data[platform]['lost'] += 1
+            for platform in platform_data:
+                assigned = platform_data[platform]['assigned']
+                won = platform_data[platform]['won']
+                conversion_rate = (won / assigned * 100) if assigned > 0 else 0
+                platform_data[platform]['conversion_rate'] = round(conversion_rate, 2)
+            return platform_data
+        
+        return jsonify({
+            'success': True,
+            'from_date': from_date_str,
+            'to_date': to_date_str,
+            'top_5_leaderboard': get_filtered_all_cre_leaderboard()[:5],
+            'cre_platform_conversion': get_filtered_cre_platform_conversion(),
+            'cre_platform_conversion_live': get_cre_platform_conversion_live(),
+            'cre_overall_stats': get_filtered_cre_overall_stats()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
 if __name__ == '__main__':
     socketio.run(app, debug=True)
