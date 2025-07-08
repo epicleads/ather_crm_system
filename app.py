@@ -1858,24 +1858,16 @@ def cre_dashboard():
         print(f"[PERF] cre_dashboard: won/lost_leads filter took {time.time() - t5:.3f} seconds")
 
         # --- Walk-in Follow-up Section ---
-        t6 = time.time()
-        walkin_followups = []
-        try:
-            walkin_followups = [lead for lead in safe_get_data('walkin_data', {'walkin_cre_name': cre_name, 'walkin_followup_date': str(today)})]
-        except Exception as e:
-            walkin_followups = []
-        print(f"[PERF] cre_dashboard: walkin_followups fetch/filter took {time.time() - t6:.3f} seconds")
 
-        t7 = time.time()
+        t6 = time.time()
         result = render_template('cre_dashboard.html',
                                pending_leads=pending_leads,
                                todays_followups=todays_followups,
                                attended_leads=attended_leads,
                                assigned_to_ps=assigned_to_ps,
                                won_leads=won_leads,
-                               lost_leads=lost_leads,
-                               walkin_followups=walkin_followups)
-        print(f"[PERF] cre_dashboard: render_template took {time.time() - t7:.3f} seconds")
+                               lost_leads=lost_leads)
+        print(f"[PERF] cre_dashboard: render_template took {time.time() - t6:.3f} seconds")
         print(f"[PERF] cre_dashboard TOTAL took {time.time() - start_time:.3f} seconds")
         return result
     except Exception as e:
@@ -2925,18 +2917,6 @@ def walkin_customers():
             }
 
             # --- Walk-in Follow-up Assignment Logic ---
-            cres = safe_get_data('cre_users')
-            cre_names = [cre['name'] for cre in cres]
-            tomorrow = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
-            cre_followup_counts = {cre: 0 for cre in cre_names}
-            existing_followups = safe_get_data('walkin_data', {'walkin_followup_date': tomorrow})
-            for lead in existing_followups:
-                cre = lead.get('walkin_cre_name')
-                if cre in cre_followup_counts:
-                    cre_followup_counts[cre] += 1
-            assigned_cre = min(cre_followup_counts, key=cre_followup_counts.get) if cre_followup_counts else None
-            walkin_data['walkin_cre_name'] = assigned_cre
-            walkin_data['walkin_followup_date'] = tomorrow
 
             # Insert walk-in data into the database
             result = supabase.table('walkin_data').insert(walkin_data).execute()
