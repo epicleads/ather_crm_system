@@ -345,6 +345,7 @@
                                 <option value="Lost">Lost</option>
                                 <option value="Pending">Pending</option>
                             </select>
+                            <small class="form-text text-muted">Final status will be automatically set based on lead status selection</small>
                         </div>
                     </div>
                 </div>
@@ -646,7 +647,9 @@ function handleLeadStatusChange() {
                 }
                 break;
 
+            case 'Not Interested':
             case 'Lost to Competition':
+            case 'Lost to Co Dealer':
             case 'Finance Rejected':
             case 'Dropped':
                 // Show call details, record call and set final status to Lost
