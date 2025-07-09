@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Walk-in Customer Form</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    :root {
+      --primary-color: #4CAF50;
+      --background: #f9fafb;
+      --card-bg: #ffffff;
+      --text-color: #1f2937;
+      --border-color: #e5e7eb;
+      --input-bg: #f3f4f6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--background);
+      margin: 0;
+      padding: 30px;
+      color: var(--text-color);
+    }
+    .container {
+      max-width: 960px;
+      margin: auto;
+      background-color: var(--card-bg);
+      padding: 40px;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+    }
+    h2 {
+      text-align: center;
+      margin-bottom: 40px;
+      font-size: 28px;
+      font-weight: 600;
+    }
+    .form-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+    .form-group {
+      flex: 1 1 250px;
+      display: flex;
+      flex-direction: column;
+    }
+    .form-group label {
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      padding: 12px;
+      background-color: var(--input-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      font-size: 14px;
+    }
+    .form-group textarea {
+      resize: vertical;
+    }
+    .submit-btn {
+      text-align: center;
+      margin-top: 30px;
+    }
+    .submit-btn button {
+      background-color: var(--primary-color);
+      color: #fff;
+      padding: 14px 36px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    .submit-btn button:hover {
+      background-color: #3e9e44;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Walk-in Customer Registration</h2>
+    <form method="POST" action="{{ url_for('walkin') }}">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="psName">Product Specialist</label>
+          <select id="psName" name="psName"> <!-- ✅ -->
+            <option value="">Select</option>
+            <option>Manishanth</option>
+            <option>Sharat</option>
+            <option>Omer</option>
+            <option>Jaisre</option>
+            <option>Suresh</option>
+            <option>Mohammed Amir</option>
+            <option>Prem Kumar</option>
+            <option>Jaffar</option>
+            <option>Gulam</option>
+            <option>Mekela Pramilla</option>
+            <option>Mohammed Mustafa</option>
+            <option>Mohammed Ali Khan</option>
+            <option>Pavan Kalyan</option>
+            <option>N Vinay Kumar</option>
+            <option>Mohan</option>
+            <option>Mangalapelly Nikhil</option>
+            <option>Syed AmeenUllah</option>
+            <option>Venkata Balaji Meda</option>
+            <option>Praveen Kandi</option>
+            <option>Mohammed Waseem</option>
+            <option>Mohd Sohail</option>
+            <option>Masoom Munawar</option>
+            <option>Kiran Kumar Kudali</option>
+            <option>Jyothika S</option>
+            <option>Nikhitha</option>
+            <option>Gandla Rajashaker Mudiraj</option>
+            <option>Gandi Mohan</option>
+            <option>Kola Saileesha</option>
+            <option>TV RajaShekar</option>
+            <option>R Swathantra Kumar</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="executiveMobile">Executive Mobile Number</label>
+          <input type="tel" id="executiveMobile" name="executiveMobile"> <!-- ✅ -->
+        </div>
+        <div class="form-group">
+          <label for="date">Date</label>
+          <input type="date" id="date" name="date"> <!-- ✅ -->
+        </div>
+        <div class="form-group">
+          <label for="branch">Branch Location</label>
+          <select id="branch" name="branch"> <!-- ✅ -->
+            <option value="">Select</option>
+            <option>Somajiguda</option>
+            <option>Attapur</option>
+            <option>Kompally</option>
+            <option>Tolichowki</option>
+            <option>Malakpet</option>
+            <option>Vanasthalipuram</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="customerName">Customer Full Name</label>
+          <input type="text" id="customerName" name="customerName"> <!-- ✅ -->
+        </div>
+        <div class="form-group">
+          <label for="customerMobile">Customer Mobile Number</label>
+          <input type="tel" id="customerMobile" name="customerMobile"> <!-- ✅ -->
+        </div>
+        <div class="form-group">
+          <label for="email">Email Address</label>
+          <input type="email" id="email" name="email"> <!-- ✅ -->
+        </div>
+        <div class="form-group">
+          <label for="address">Residential Address</label>
+          <textarea id="address" name="address" rows="2"></textarea> <!-- ✅ -->
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="age">Customer Age</label>
+          <input type="number" id="age" name="age"> <!-- ✅ -->
+        </div>
+        <div class="form-group">
+          <label for="occupation">Occupation</label>
+          <input type="text" id="occupation" name="occupation"> <!-- ✅ -->
+        </div>
+        <div class="form-group">
+          <label for="vehicleUsedBy">Who will use the vehicle?</label>
+          <input type="text" id="vehicleUsedBy" name="vehicleUsedBy"> <!-- ✅ -->
+        </div>
+        <div class="form-group">
+          <label for="travelDistance">Daily travel distance (in km)</label>
+          <input type="text" id="travelDistance" name="travelDistance"> <!-- ✅ -->
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="model">Model Interested</label>
+          <select id="model" name="model"> <!-- ✅ -->
+            <option value="">Select</option>
+            <option>Rizta S Mono (2.9 kWh)</option>
+            <option>Rizta S Super Matte (2.9 kWh)</option>
+            <option>Rizta Z Mono (2.9 kWh)</option>
+            <option>Rizta Z Duo (2.9 kWh)</option>
+            <option>Rizta Z Super Matte (2.9 kWh)</option>
+            <option>Rizta Z Mono (3.7 kWh)</option>
+            <option>Rizta Z Duo (3.7 kWh)</option>
+            <option>Rizta Z Super Matte (3.7 kWh)</option>
+            <option>450 X (2.9 kWh)</option>
+            <option>450 X (3.7 kWh)</option>
+            <option>450 X (2.9 kWh) Pro Pack</option>
+            <option>450 X (3.7 kWh) Pro Pack</option>
+            <option>450 Apex STD</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="color">Preferred Color</label>
+          <select id="color" name="color"> <!-- ✅ -->
+            <option value="">Select</option>
+            <option>Pangong Blue (Rizta)</option>
+            <option>Pangong Blue Duo (Rizta)</option>
+            <option>Alphonso Yellow Duo (Rizta)</option>
+            <option>Cardamom Green Duo (Rizta)</option>
+            <option>Deccan Grey Duo (Rizta)</option>
+            <option>Deccan Grey (Rizta)</option>
+            <option>Siachen White (Rizta)</option>
+            <option>Stealth Blue (450s/x)</option>
+            <option>Cosmic Black (450s/x)</option>
+            <option>Still White (450s/x)</option>
+            <option>Space Grey (450s/x)</option>
+            <option>Hyper Sand (450x)</option>
+            <option>True Red (450x)</option>
+            <option>Lunar Grey (450x)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="leadSource">Lead Source</label>
+          <select id="leadSource" name="leadSource"> <!-- ✅ -->
+            <option>Walk-in</option>
+            <option>Referral</option>
+            <option>Digital Lead</option>
+            <option>Tele</option>
+            <option>Affiliate</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="leadCategory">Lead Category</label>
+          <select id="leadCategory" name="leadCategory"> <!-- ✅ -->
+            <option>Hot</option>
+            <option>Warm</option>
+            <option>Cold</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="purchaseType">Purchase Type</label>
+          <select id="purchaseType" name="purchaseType"> <!-- ✅ -->
+            <option>Finance</option>
+            <option>Cash</option>
+            <option>Credit Card</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="proPack">Pro Pack (if opted)</label>
+          <input type="text" id="proPack" name="proPack"> <!-- ✅ -->
+        </div>
+        <div class="form-group">
+          <label for="accessories">Preferred Accessories (if any)</label>
+          <textarea id="accessories" name="accessories" rows="2"></textarea> <!-- ✅ -->
+        </div>
+        <div class="form-group">
+          <label for="expectedDate">Expected Delivery Date</label>
+          <input type="date" id="expectedDate" name="expectedDate"> <!-- ✅ -->
+        </div>
+      </div>
+
+      <div class="submit-btn">
+        <button type="submit">Submit & Download Quotation</button>
+      </div>
+
+    </form>
+    
+</div>
+</div>
+<script>
+  const modelData = {
+    "Rizta S Mono (2.9 kWh)": { price: "₹114,841.00", proPack: "17000" },
+    "Rizta S Super Matte (2.9 kWh)": { price: "₹116,841.00", proPack: "18000" },
+    "Rizta Z Mono (2.9 kWh)": { price: "₹129,841.00", proPack: "20000" },
+    "Rizta Z Duo (2.9 kWh)": { price: "₹130,841.00", proPack: "17000" },
+    "Rizta Z Super Matte (2.9 kWh)": { price: "₹131,841.00", proPack: "18000" },
+    "Rizta Z Mono (3.7 kWh)": { price: "₹149,842.00", proPack: "20000" },
+    "Rizta Z Duo (3.7 kWh)": { price: "₹150,842.00", proPack: "17000" },
+    "Rizta Z Super Matte (3.7 kWh)": { price: "₹151,842.00", proPack: "18000" },
+    "450 X (2.9 kWh)": { price: "₹149,047.00", proPack: "20000" },
+    "450 X (3.7 kWh)": { price: "₹159,046.00", proPack: "17000" },
+    "450 X (2.9 kWh) Pro Pack": { price: "₹166,047.00", proPack: "18000" },
+    "450 X (3.7 kWh) Pro Pack": { price: "₹179,046.00", proPack: "20000" },
+    "450 Apex STD": { price: "₹189,841.00", proPack: "0" }
+  };
+
+  const modelSelect = document.getElementById("model");
+  const proPackInput = document.getElementById("proPack");
+
+  const priceDisplay = document.createElement("div");
+  priceDisplay.id = "priceDisplay";
+  priceDisplay.style.marginTop = "10px";
+  priceDisplay.style.fontWeight = "bold";
+  modelSelect.parentNode.appendChild(priceDisplay);
+
+  modelSelect.addEventListener("change", () => {
+  const selectedModel = modelSelect.value.trim();
+  const quotationSection = document.getElementById("quotation");
+  const priceCell = document.getElementById("priceCell");
+  const proPackCell = document.getElementById("proPackCell");
+  const grandTotalCell = document.getElementById("grandTotalCell");
+
+  if (modelData[selectedModel]) {
+    const priceText = modelData[selectedModel].price.replace(/[₹,]/g, '');
+    const proPackText = modelData[selectedModel].proPack.replace(/[₹,]/g, '');
+
+    const base = parseInt(priceText) || 0;
+    const pro = parseInt(proPackText) || 0;
+
+    const total = base - 5000 + pro + 1000 + 5500 + 2000 + 6000 + 2500;
+
+    // Show price on form
+    priceDisplay.textContent = `Price: ₹${base.toLocaleString("en-IN")}`;
+    proPackInput.value = pro;
+
+    
+  } else {
+    priceDisplay.textContent = "";
+    proPackInput.value = "";
+    quotationSection.style.display = "none";
+  }
+    });
+
+</script>
+ 
+</body>
+
+</html>

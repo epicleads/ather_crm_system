@@ -1,0 +1,869 @@
+{% extends "base.html" %}
+
+{% block title %}Update Lead - Ather CRM{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2><i class="fas fa-edit text-primary"></i> Update Lead - {{ lead.uid }}</h2>
+                <p class="text-muted">Customer: {{ lead.customer_name }} | Mobile: {{ lead.customer_mobile_number }}</p>
+            </div>
+            <div>
+                <a href="{{ url_for('cre_dashboard') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Call Progress Indicator -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h6><i class="fas fa-phone"></i> Call Progress</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% set call_names = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh'] %}
+                    {% for call in call_names %}
+                    <div class="col">
+                        <div class="text-center">
+                            {% if call in completed_calls %}
+                                <div class="badge bg-success mb-2 w-100">
+                                    <i class="fas fa-check"></i> {{ 'Qualifying' if call == 'first' else call.title() }}
+                                </div>
+                                <small class="text-muted d-block">{{ lead[call + '_call_date'] or 'No date' }}</small>
+                            {% elif call == next_call %}
+                                <div class="badge bg-warning mb-2 w-100">
+                                    <i class="fas fa-clock"></i> {{ 'Qualifying' if call == 'first' else call.title() }}
+                                </div>
+                                <small class="text-muted d-block">Next Call</small>
+                            {% else %}
+                                <div class="badge bg-secondary mb-2 w-100">
+                                    <i class="fas fa-minus"></i> {{ 'Qualifying' if call == 'first' else call.title() }}
+                                </div>
+                                <small class="text-muted d-block">Pending</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow">
+    <div class="card-header">
+        <h5>Lead Information</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="leadUpdateForm">
+    <!-- Always visible fields for first call -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label for="customer_name" class="form-label">Customer Name</label>
+                <input type="text" class="form-control" id="customer_name" name="customer_name" value="{{ lead.customer_name }}" required>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label class="form-label">Mobile Number</label>
+                <input type="text" class="form-control" value="{{ lead.customer_mobile_number }}" readonly>
+            </div>
+        </div>
+    </div>
+
+    {% if next_call == 'first' %}
+    <div class="row">
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label for="source" class="form-label">Source</label>
+                <select class="form-select" id="source" name="source">
+                    <option value="{{ lead.source or '' }}">{{ lead.source or 'Select Source' }}</option>
+                    <option value="Google">Google</option>
+                    <option value="Meta">Meta</option>
+                    <option value="Affiliate">Affiliate</option>
+                    <option value="Know">Know</option>
+                    <option value="Whatsapp">Whatsapp</option>
+                    <option value="Tele">Tele</option>
+                </select>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label for="lead_status" class="form-label">Lead Status <span class="text-danger">*</span></label>
+                <select class="form-select" id="lead_status" name="lead_status" onchange="handleLeadStatusChange()" required>
+                    <option value="">Select Status</option>
+                    <option value="Busy on another Call" {{ 'selected' if lead.lead_status == 'Busy on another Call' else '' }}>Busy on another Call</option>
+                    <option value="RNR" {{ 'selected' if lead.lead_status == 'RNR' else '' }}>RNR</option>
+                    <option value="Call me Back" {{ 'selected' if lead.lead_status == 'Call me Back' else '' }}>Call me Back</option>
+                    <option value="Interested" {{ 'selected' if lead.lead_status == 'Interested' else '' }}>Interested</option>
+                    <option value="Not Interested" {{ 'selected' if lead.lead_status == 'Not Interested' else '' }}>Not Interested</option>
+                    <option value="Did Not Inquire" {{ 'selected' if lead.lead_status == 'Did Not Inquire' else '' }}>Did Not Inquire</option>
+                    <option value="Lost to Competition" {{ 'selected' if lead.lead_status == 'Lost to Competition' else '' }}>Lost to Competition</option>
+                    <option value="Lost to Co Dealer" {{ 'selected' if lead.lead_status == 'Lost to Co Dealer' else '' }}>Lost to Co Dealer</option>
+                    <option value="Call Disconnected" {{ 'selected' if lead.lead_status == 'Call Disconnected' else '' }}>Call Disconnected</option>
+                    <option value="Lead Already Assigned" {{ 'selected' if lead.lead_status == 'Lead Already Assigned' else '' }}>Lead Already Assigned</option>
+                    <option value="Wrong Number" {{ 'selected' if lead.lead_status == 'Wrong Number' else '' }}>Wrong Number</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="row">
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label for="source" class="form-label">Source</label>
+                <select class="form-select" id="source" name="source">
+                    <option value="{{ lead.source or '' }}">{{ lead.source or 'Select Source' }}</option>
+                    <option value="Google">Google</option>
+                    <option value="Meta">Meta</option>
+                    <option value="Affiliate">Affiliate</option>
+                    <option value="Know">Know</option>
+                    <option value="Whatsapp">Whatsapp</option>
+                    <option value="Tele">Tele</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Follow-up date section (visible for "Call me Back" and "Interested" for first call) -->
+    {% if next_call == 'first' %}
+    <div id="followup-section" class="row" style="display: none;">
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label for="follow_up_date" class="form-label">Follow-up Date <span class="text-danger">*</span></label>
+                <input type="datetime-local" class="form-control" id="follow_up_date" name="follow_up_date" value="{{ lead.follow_up_date[:16] if lead.follow_up_date else '' }}">
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Extended options section (visible only for "Interested" for first call) -->
+    {% if next_call == 'first' %}
+    <div id="extended-options" style="display: none;">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label for="lead_category" class="form-label">Lead Category</label>
+                    <select class="form-select" id="lead_category" name="lead_category">
+                        <option value="{{ lead.lead_category or '' }}">{{ lead.lead_category or 'Select Category' }}</option>
+                        <option value="Hot">Hot</option>
+                        <option value="Cold">Cold</option>
+                        <option value="Warm">Warm</option>
+                        <option value="Not Interested">Not Interested</option>
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label for="model_type" class="form-label">Model Type</label>
+                    <select class="form-select" id="model_type" onchange="updateModels()">
+                        <option value="">Select Model Type</option>
+                        <option value="rizta">Rizta</option>
+                        <option value="450x">450X</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label for="model_interested" class="form-label">Model Interested</label>
+                    <select class="form-select" id="model_interested" name="model_interested">
+                        <option value="{{ lead.model_interested or '' }}">{{ lead.model_interested or 'Select Model' }}</option>
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label for="branch" class="form-label">Branch</label>
+                    <select class="form-select" id="branch" name="branch" onchange="updatePS()">
+                        <option value="{{ lead.branch or '' }}">{{ lead.branch or 'Select Branch' }}</option>
+                        {% for branch in branches %}
+                        <option value="{{ branch }}">{{ branch }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label for="ps_name" class="form-label">Product Specialist</label>
+                    <select class="form-select" id="ps_name" name="ps_name">
+                        <option value="{{ lead.ps_name or '' }}">{{ lead.ps_name or 'Select PS' }}</option>
+                        <option value="">Unassigned</option>
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label for="final_status" class="form-label">Final Status</label>
+                    <select class="form-select" id="final_status" name="final_status">
+                        <option value="{{ lead.final_status or 'Pending' }}">{{ lead.final_status or 'Pending' }}</option>
+                        <option value="Won">Won</option>
+                        <option value="Lost">Lost</option>
+                        <option value="Pending">Pending</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <!-- For nth calls, show all lead qualification fields -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label for="lead_category" class="form-label">Lead Category</label>
+                <select class="form-select" id="lead_category" name="lead_category">
+                    <option value="{{ lead.lead_category or '' }}">{{ lead.lead_category or 'Select Category' }}</option>
+                    <option value="Hot">Hot</option>
+                    <option value="Cold">Cold</option>
+                    <option value="Warm">Warm</option>
+                    <option value="Not Interested">Not Interested</option>
+                </select>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label for="model_type" class="form-label">Model Type</label>
+                <select class="form-select" id="model_type" onchange="updateModels()">
+                    <option value="">Select Model Type</option>
+                    <option value="rizta">Rizta</option>
+                    <option value="450x">450X</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label for="model_interested" class="form-label">Model Interested</label>
+                <select class="form-select" id="model_interested" name="model_interested">
+                    <option value="{{ lead.model_interested or '' }}">{{ lead.model_interested or 'Select Model' }}</option>
+                </select>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label for="branch" class="form-label">Branch</label>
+                <select class="form-select" id="branch" name="branch" onchange="updatePS()">
+                    <option value="{{ lead.branch or '' }}">{{ lead.branch or 'Select Branch' }}</option>
+                    {% for branch in branches %}
+                    <option value="{{ branch }}">{{ branch }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label for="ps_name" class="form-label">Product Specialist</label>
+                <select class="form-select" id="ps_name" name="ps_name">
+                    <option value="{{ lead.ps_name or '' }}">{{ lead.ps_name or 'Select PS' }}</option>
+                    <option value="">Unassigned</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Call details section -->
+    <div id="call-details-section" style="display: none;">
+        <div class="card mt-3 mb-3 border-0 shadow-sm">
+            <div class="card-header text-white d-flex align-items-center" style="background-color: #f59e0b; border-radius: 0.5rem 0.5rem 0 0;">
+                <i class="fas fa-phone me-2"></i>
+                <h6 class="mb-0">{{ 'Qualifying' if next_call == 'first' else next_call.title() }} Call Details</h6>
+            </div>
+            <div class="card-body bg-light" style="border-radius: 0 0 0.5rem 0.5rem;">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="call_date" class="form-label fw-semibold">{{ 'Qualifying' if next_call == 'first' else next_call.title() }} Call Date <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control border-2" id="call_date" name="call_date" value="{{ lead[next_call + '_call_date'] or today }}" style="font-size: 1rem; padding: 0.75rem;">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="call_remark" class="form-label fw-semibold">{{ 'Qualifying' if next_call == 'first' else next_call.title() }} Call Remark <span class="text-danger">*</span></label>
+                            <textarea class="form-control border-2" id="call_remark" name="call_remark" rows="4" placeholder="Enter call details and customer response..." required style="font-size: 1rem; resize: vertical;">{{ lead[next_call + '_remark'] or '' }}</textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lead Status, Follow-up Date, and Final Status for nth calls (not first call) -->
+                {% if next_call != 'first' %}
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="lead_status" class="form-label">Lead Status <span class="text-danger">*</span></label>
+                            <select class="form-select" id="lead_status" name="lead_status" onchange="handleLeadStatusChange()" required>
+                                <option value="">Select Status</option>
+                                <option value="Call not Connected" {{ 'selected' if lead.lead_status == 'Call not Connected' else '' }}>Call not Connected</option>
+                                <option value="Busy on another Call" {{ 'selected' if lead.lead_status == 'Busy on another Call' else '' }}>Busy on another Call</option>
+                                <option value="RNR" {{ 'selected' if lead.lead_status == 'RNR' else '' }}>RNR</option>
+                                <option value="Call me Back" {{ 'selected' if lead.lead_status == 'Call me Back' else '' }}>Call me Back</option>
+                                <option value="Retailed" {{ 'selected' if lead.lead_status == 'Retailed' else '' }}>Retailed</option>
+                                <option value="Discount Issue" {{ 'selected' if lead.lead_status == 'Discount Issue' else '' }}>Discount Issue</option>
+                                <option value="Delayed" {{ 'selected' if lead.lead_status == 'Delayed' else '' }}>Delayed</option>
+                                <option value="Booked" {{ 'selected' if lead.lead_status == 'Booked' else '' }}>Booked</option>
+                                <option value="Test Drive" {{ 'selected' if lead.lead_status == 'Test Drive' else '' }}>Test Drive</option>
+                                <option value="Talked to PS" {{ 'selected' if lead.lead_status == 'Talked to PS' else '' }}>Talked to PS</option>
+                                <option value="Lost to Competition" {{ 'selected' if lead.lead_status == 'Lost to Competition' else '' }}>Lost to Competition</option>
+                                <option value="Finance Rejected" {{ 'selected' if lead.lead_status == 'Finance Rejected' else '' }}>Finance Rejected</option>
+                                <option value="Dropped" {{ 'selected' if lead.lead_status == 'Dropped' else '' }}>Dropped</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="follow_up_date" class="form-label">Follow-up Date</label>
+                            <input type="datetime-local" class="form-control" id="follow_up_date" name="follow_up_date" value="{{ lead.follow_up_date[:16] if lead.follow_up_date else '' }}">
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="final_status" class="form-label">Final Status</label>
+                            <select class="form-select" id="final_status" name="final_status">
+                                <option value="{{ lead.final_status or 'Pending' }}">{{ lead.final_status or 'Pending' }}</option>
+                                <option value="Won">Won</option>
+                                <option value="Lost">Lost</option>
+                                <option value="Pending">Pending</option>
+                            </select>
+                            <small class="form-text text-muted">Final status will be automatically set based on lead status selection</small>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Previous Call Summary (only show if not first call) -->
+    {% if next_call != 'first' %}
+    <div class="card mt-3 mb-3 border-0 shadow-sm">
+        <div class="card-header text-white d-flex align-items-center" style="background-color: #6366f1; border-radius: 0.5rem 0.5rem 0 0;">
+            <i class="fas fa-history me-2"></i>
+            <h6 class="mb-0">Previous Call Summary</h6>
+        </div>
+        <div class="card-body bg-light" style="border-radius: 0 0 0.5rem 0.5rem;">
+            {% set call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh'] %}
+            {% for call in call_order %}
+                {% if call in completed_calls %}
+                <div class="row mb-3 pb-3 border-bottom">
+                    <div class="col-md-2">
+                        <div class="badge bg-success">
+                            <i class="fas fa-check me-1"></i>{{ call.title() }} Call
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <small class="text-muted">Date:</small>
+                        <div class="fw-semibold">{{ lead[call + '_call_date'] or 'Not recorded' }}</div>
+                    </div>
+                    <div class="col-md-7">
+                        <small class="text-muted">Remark:</small>
+                        <div class="fw-semibold">{{ lead[call + '_remark'] or 'No remark' }}</div>
+                    </div>
+                </div>
+                {% endif %}
+            {% endfor %}
+
+            <!-- Current Lead Status -->
+            <div class="row mt-3 pt-3 border-top">
+                <div class="col-md-12">
+                    <small class="text-muted">Current Lead Status:</small>
+                    <div class="fw-semibold">
+                        {% if lead.lead_status %}
+                            <span class="badge bg-info">{{ lead.lead_status }}</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Not Set</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- PS Previous Call Summary (Read-only) -->
+    {% if ps_call_summary %}
+    <div class="card mt-4">
+        <div class="card-header bg-info text-white">
+            <h6><i class="fas fa-user"></i> PS Previous Call Summary</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                {% for call, summary in ps_call_summary.items() %}
+                    {% if summary.date or summary.remark %}
+                    <div class="col-md-6 mb-3">
+                        <div class="border rounded p-3">
+                            <h6 class="text-primary">{{ call.title() }} Call</h6>
+                            <p class="mb-1"><strong>Date:</strong> {{ summary.date or 'Not recorded' }}</p>
+                            <p class="mb-0"><strong>Remark:</strong> {{ summary.remark or 'No remarks' }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Hidden fields for call tracking -->
+    <input type="hidden" id="should_record_call" name="should_record_call" value="false">
+
+    <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+        <a href="{{ url_for('cre_dashboard') }}" class="btn btn-secondary me-md-2">
+            <i class="fas fa-arrow-left"></i> Back
+        </a>
+        <button type="submit" class="btn btn-primary">
+            <i class="fas fa-save"></i> Update Lead
+        </button>
+    </div>
+</form>
+    </div>
+</div>
+
+<script>
+// Define model arrays
+const riztaModels = [
+    'Rizta S Mono (2.9 kWh)',
+    'Rizta S Super Matte (2.9 kWh)',
+    'Rizta Z Mono (2.9 kWh)',
+    'Rizta Z Duo (2.9 kWh)',
+    'Rizta Z Super Matte (2.9 kWh)',
+    'Rizta Z Mono (3.7 kWh)',
+    'Rizta Z Duo (3.7 kWh)',
+    'Rizta Z Super Matte (3.7 kWh)'
+];
+
+const x450Models = [
+    '450 X (2.9 kWh)',
+    '450 X (3.7 kWh)',
+    '450 X (2.9 kWh) Pro Pack',
+    '450 X (3.7 kWh) Pro Pack',
+    '450 Apex STD'
+];
+
+// Convert PS users data to JavaScript
+const psUsers = [
+    {% for ps in ps_users %}
+    {
+        name: "{{ ps.name }}",
+        branch: "{{ ps.branch }}"
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+];
+
+// Get current call from template
+const currentCall = "{{ next_call }}";
+
+function handleLeadStatusChange() {
+    const leadStatus = document.getElementById('lead_status').value;
+    const followupSection = document.getElementById('followup-section');
+    const callDetailsSection = document.getElementById('call-details-section');
+    const extendedOptions = document.getElementById('extended-options');
+    const shouldRecordCall = document.getElementById('should_record_call');
+    const followupDate = document.getElementById('follow_up_date');
+    const callDate = document.getElementById('call_date');
+    const callRemark = document.getElementById('call_remark');
+    const finalStatus = document.getElementById('final_status');
+
+    // Reset all sections and requirements
+    if (followupSection) {
+        followupSection.style.display = 'none';
+        if (followupDate) followupDate.required = false;
+    }
+    if (callDetailsSection) {
+        callDetailsSection.style.display = 'none';
+        if (callDate) callDate.required = false;
+        if (callRemark) callRemark.required = false;
+    }
+    if (extendedOptions) {
+        extendedOptions.style.display = 'none';
+    }
+
+    // Reset hidden fields
+    shouldRecordCall.value = 'false';
+
+    // Handle first call logic
+    if (currentCall === 'first') {
+        switch(leadStatus) {
+            case 'Busy on another Call':
+            case 'RNR':
+            case 'Call me Back':
+                // For these statuses, NO call is recorded - lead stays fresh
+                // Only show follow-up date for "Call me Back"
+                if (leadStatus === 'Call me Back' && followupSection) {
+                    followupSection.style.display = 'block';
+                    if (followupDate) followupDate.required = true;
+                }
+                // Explicitly set shouldRecordCall to false to ensure no call is recorded
+                shouldRecordCall.value = 'false';
+                // Clear call date and remark fields to prevent them from being submitted
+                if (callDate) callDate.value = '';
+                if (callRemark) callRemark.value = '';
+                break;
+
+            case 'Interested':
+                // Show follow-up date and all extended options, record call
+                if (followupSection) {
+                    followupSection.style.display = 'block';
+                    if (followupDate) followupDate.required = true;
+                }
+                if (extendedOptions) {
+                    extendedOptions.style.display = 'block';
+                }
+                if (callDetailsSection) {
+                    callDetailsSection.style.display = 'block';
+                    if (callDate) callDate.required = true;
+                    if (callRemark) callRemark.required = true;
+                }
+                shouldRecordCall.value = 'true';
+
+                // Set default values
+                if (callDate && !callDate.value) {
+                    callDate.value = new Date().toISOString().split('T')[0];
+                }
+                if (callRemark && !callRemark.value.trim()) {
+                    callRemark.value = `Customer showed interest`;
+                }
+                break;
+
+            case 'Not Interested':
+            case 'Did Not Inquire':
+            case 'Lost to Competition':
+            case 'Lost to Co Dealer':
+            case 'Wrong Number':
+                // Record call and set final status to Lost
+                if (callDetailsSection) {
+                    callDetailsSection.style.display = 'block';
+                    if (callDate) callDate.required = true;
+                    if (callRemark) callRemark.required = true;
+                }
+                shouldRecordCall.value = 'true';
+
+                // Set default values
+                if (callDate && !callDate.value) {
+                    callDate.value = new Date().toISOString().split('T')[0];
+                }
+                if (callRemark && !callRemark.value.trim()) {
+                    callRemark.value = `Customer response: ${leadStatus}`;
+                }
+                if (finalStatus) {
+                    finalStatus.value = 'Lost';
+                }
+                break;
+
+            case 'Call Disconnected':
+                // For call disconnected, NO call is recorded - lead stays fresh
+                // No additional fields shown, no call recorded
+                shouldRecordCall.value = 'false';
+                // Clear call date and remark fields to prevent them from being submitted
+                if (callDate) callDate.value = '';
+                if (callRemark) callRemark.value = '';
+                break;
+
+            default:
+                // No status selected
+                break;
+        }
+    } else {
+        // Handle nth call logic (existing logic for subsequent calls)
+        // For nth calls, always show call details section since Lead Status is inside it
+        if (currentCall !== 'first' && callDetailsSection) {
+            callDetailsSection.style.display = 'block';
+        }
+        switch(leadStatus) {
+            case 'Call not Connected':
+            case 'Busy on another Call':
+            case 'RNR':
+            case 'Call me Back':
+                // For these statuses, NO call is recorded - lead stays fresh
+                // Only show follow-up date for "Call me Back"
+                if (leadStatus === 'Call me Back' && followupSection) {
+                    followupSection.style.display = 'block';
+                    if (followupDate) followupDate.required = true;
+                }
+                // Explicitly set shouldRecordCall to false to ensure no call is recorded
+                shouldRecordCall.value = 'false';
+                // Clear call date and remark fields to prevent them from being submitted
+                if (callDate) callDate.value = '';
+                if (callRemark) callRemark.value = '';
+                break;
+
+            case 'Retailed':
+            case 'Booked':
+                // Show call details, record call and set final status to Won
+                if (callDetailsSection) callDetailsSection.style.display = 'block';
+                if (callDate) callDate.required = true;
+                if (callRemark) callRemark.required = true;
+                shouldRecordCall.value = 'true';
+
+                // Set default values
+                if (callDate && !callDate.value) {
+                    callDate.value = new Date().toISOString().split('T')[0];
+                }
+                if (callRemark && !callRemark.value.trim()) {
+                    callRemark.value = `Customer status: ${leadStatus}`;
+                }
+                if (finalStatus) {
+                    finalStatus.value = 'Won';
+                }
+                break;
+
+            case 'Discount Issue':
+            case 'Delayed':
+            case 'Test Drive':
+            case 'Talked to PS':
+                // Show call details, follow-up date, and record call
+                if (callDetailsSection) callDetailsSection.style.display = 'block';
+                if (followupDate) followupDate.required = true;
+                if (callDate) callDate.required = true;
+                if (callRemark) callRemark.required = true;
+                shouldRecordCall.value = 'true';
+
+                // Set default values
+                if (callDate && !callDate.value) {
+                    callDate.value = new Date().toISOString().split('T')[0];
+                }
+                if (callRemark && !callRemark.value.trim()) {
+                    callRemark.value = `Customer status: ${leadStatus}`;
+                }
+                break;
+
+            case 'Not Interested':
+            case 'Lost to Competition':
+            case 'Lost to Co Dealer':
+            case 'Finance Rejected':
+            case 'Dropped':
+                // Show call details, record call and set final status to Lost
+                if (callDetailsSection) callDetailsSection.style.display = 'block';
+                if (callDate) callDate.required = true;
+                if (callRemark) callRemark.required = true;
+                shouldRecordCall.value = 'true';
+
+                // Set default values
+                if (callDate && !callDate.value) {
+                    callDate.value = new Date().toISOString().split('T')[0];
+                }
+                if (callRemark && !callRemark.value.trim()) {
+                    callRemark.value = `Customer status: ${leadStatus}`;
+                }
+                if (finalStatus) {
+                    finalStatus.value = 'Lost';
+                }
+                break;
+
+            default:
+                // No status selected
+                break;
+        }
+    }
+}
+
+function updateModels() {
+    const modelType = document.getElementById('model_type').value;
+    const modelSelect = document.getElementById('model_interested');
+
+    // Clear existing options except the current one
+    const currentValue = modelSelect.value;
+    modelSelect.innerHTML = '<option value="">Select Model</option>';
+
+    let models = [];
+    if (modelType === 'rizta') {
+        models = riztaModels;
+    } else if (modelType === '450x') {
+        models = x450Models;
+    }
+
+    models.forEach(model => {
+        const option = document.createElement('option');
+        option.value = model;
+        option.textContent = model;
+        if (model === currentValue) {
+            option.selected = true;
+        }
+        modelSelect.appendChild(option);
+    });
+}
+
+function updatePS() {
+    const selectedBranch = document.getElementById('branch').value;
+    const psSelect = document.getElementById('ps_name');
+
+    // Store current value
+    const currentValue = psSelect.value;
+
+    // Clear existing options
+    psSelect.innerHTML = '<option value="">Select PS</option><option value="">Unassigned</option>';
+
+    // Filter PS users by branch
+    const filteredPS = psUsers.filter(ps => ps.branch === selectedBranch);
+
+    filteredPS.forEach(ps => {
+        const option = document.createElement('option');
+        option.value = ps.name;
+        option.textContent = ps.name;
+        if (ps.name === currentValue) {
+            option.selected = true;
+        }
+        psSelect.appendChild(option);
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Set minimum date for follow-up and call date to today
+    const today = new Date().toISOString().slice(0, 16);
+    const followUpDate = document.getElementById('follow_up_date');
+    const callDate = document.getElementById('call_date');
+
+    if (followUpDate) followUpDate.min = today;
+    if (callDate) callDate.min = new Date().toISOString().split('T')[0];
+
+    // Initialize model dropdown based on current selection
+    const currentModel = "{{ lead.model_interested or '' }}";
+    if (currentModel) {
+        if (riztaModels.includes(currentModel)) {
+            document.getElementById('model_type').value = 'rizta';
+            updateModels();
+        } else if (x450Models.includes(currentModel)) {
+            document.getElementById('model_type').value = '450x';
+            updateModels();
+        }
+    }
+
+    // Initialize PS dropdown based on current branch
+    const currentBranch = "{{ lead.branch or '' }}";
+    if (currentBranch) {
+        updatePS();
+    }
+
+    // Initialize form state based on current lead status
+    handleLeadStatusChange();
+
+    // Form validation and submission
+    document.getElementById('leadUpdateForm').addEventListener('submit', function(e) {
+        const leadStatus = document.getElementById('lead_status').value;
+        const followupDate = document.getElementById('follow_up_date');
+        const callDate = document.getElementById('call_date');
+        const callRemark = document.getElementById('call_remark');
+        const shouldRecordCall = document.getElementById('should_record_call').value;
+
+        // Validate required fields based on status
+        if (!leadStatus) {
+            e.preventDefault();
+            alert('Please select a Lead Status');
+            document.getElementById('lead_status').focus();
+            return false;
+        }
+
+        // Validation for first call
+        if (currentCall === 'first') {
+            // For "Call me Back", only follow-up date is required
+            if (leadStatus === 'Call me Back' && followupDate && !followupDate.value) {
+                e.preventDefault();
+                alert('Please select a Follow-up Date');
+                followupDate.focus();
+                return false;
+            }
+
+            // For "Busy on another Call" and "RNR", no additional validation needed
+            // These will only update lead_status, no call recorded
+
+            // For "Call Disconnected", no additional validation needed
+            // This will only update lead_status, no call recorded (lead stays fresh)
+
+            // For "Interested", validate follow-up date and call details
+            if (leadStatus === 'Interested') {
+                if (followupDate && !followupDate.value) {
+                    e.preventDefault();
+                    alert('Please select a Follow-up Date');
+                    followupDate.focus();
+                    return false;
+                }
+                if (callDate && !callDate.value) {
+                    e.preventDefault();
+                    alert('Please select the Call Date');
+                    callDate.focus();
+                    return false;
+                }
+                if (callRemark && !callRemark.value.trim()) {
+                    e.preventDefault();
+                    alert('Please enter the Call Remark');
+                    callRemark.focus();
+                    return false;
+                }
+            }
+
+            // For negative responses, validate call details
+            if ((leadStatus === 'Not Interested' || leadStatus === 'Did Not Inquire' || leadStatus === 'Lost to Competition' || leadStatus === 'Lost to Co Dealer' || leadStatus === 'Wrong Number')) {
+                if (callDate && !callDate.value) {
+                    e.preventDefault();
+                    alert('Please select the Call Date');
+                    callDate.focus();
+                    return false;
+                }
+                if (callRemark && !callRemark.value.trim()) {
+                    e.preventDefault();
+                    alert('Please enter the Call Remark');
+                    callRemark.focus();
+                    return false;
+                }
+            }
+        } else {
+            // Validation for nth calls (existing logic)
+            if ((leadStatus === 'Discount Issue' || leadStatus === 'Delayed' || leadStatus === 'Test Drive' || leadStatus === 'Talked to PS') && followupDate && !followupDate.value) {
+                e.preventDefault();
+                alert('Please select a Follow-up Date');
+                followupDate.focus();
+                return false;
+            }
+
+            if ((leadStatus === 'Retailed' || leadStatus === 'Booked' || leadStatus === 'Discount Issue' || leadStatus === 'Delayed' || leadStatus === 'Test Drive' || leadStatus === 'Talked to PS' || leadStatus === 'Lost to Competition' || leadStatus === 'Finance Rejected' || leadStatus === 'Dropped')) {
+                if (callDate && !callDate.value) {
+                    e.preventDefault();
+                    alert('Please select the Call Date');
+                    callDate.focus();
+                    return false;
+                }
+
+                if (callRemark && !callRemark.value.trim()) {
+                    e.preventDefault();
+                    alert('Please enter the Call Remark');
+                    callRemark.focus();
+                    return false;
+                }
+            }
+        }
+
+        // Show loading state
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Updating...';
+        submitBtn.disabled = true;
+
+        // Re-enable after 10 seconds as fallback
+        setTimeout(() => {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }, 10000);
+    });
+});
+</script>
+{% endblock %}

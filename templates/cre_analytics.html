@@ -1,0 +1,518 @@
+{% extends "base.html" %}
+
+{% block title %}CRE Analytics - Ather CRM{% endblock %}
+
+{% block extra_css %}
+<style>
+    .analytics-card {
+        transition: all 0.3s ease;
+        border-radius: 12px;
+        margin-bottom: 25px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .analytics-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+    }
+    
+    .filter-section {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 30px;
+    }
+    
+    .stats-number {
+        font-size: 2.5em;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    
+    .stats-label {
+        font-size: 0.9em;
+        opacity: 0.9;
+    }
+    
+    .table-responsive {
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .table {
+        margin-bottom: 0;
+    }
+    
+    .table th {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 15px 20px;
+        font-weight: 600;
+        text-align: center;
+    }
+    
+    .table td {
+        padding: 15px 20px;
+        vertical-align: middle;
+        border-color: #e9ecef;
+        text-align: center;
+    }
+    
+    .table-striped tbody tr:nth-of-type(odd) {
+        background-color: rgba(0,123,255,0.05);
+    }
+    
+    .current-cre-highlight {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        border-radius: 8px;
+        padding: 10px 15px;
+        margin-bottom: 20px;
+        text-align: center;
+    }
+    
+    .leaderboard-rank-1 {
+        background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+        color: #333;
+        font-weight: bold;
+    }
+    
+    .current-user-row {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%) !important;
+        color: white !important;
+        font-weight: bold;
+    }
+    
+    .current-user-row td {
+        color: white !important;
+    }
+    
+    .date-inputs {
+        background: rgba(255,255,255,0.1);
+        border-radius: 8px;
+        padding: 15px;
+    }
+    
+    .conversion-rate-high {
+        color: #28a745;
+        font-weight: bold;
+    }
+    
+    .conversion-rate-medium {
+        color: #ffc107;
+        font-weight: bold;
+    }
+    
+    .conversion-rate-low {
+        color: #dc3545;
+        font-weight: bold;
+    }
+    
+    .trophy-icon {
+        font-size: 1.2em;
+        color: #ffd700;
+        margin-right: 5px;
+    }
+    
+    .error-message {
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        color: #721c24;
+        padding: 10px;
+        border-radius: 5px;
+        margin: 10px 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2><i class="fas fa-chart-line text-primary"></i> CRE Analytics Dashboard</h2>
+                <p class="text-muted">Performance insights and metrics for {{ analytics.current_cre }}</p>
+            </div>
+            <div>
+                <a href="{{ url_for('cre_dashboard') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Current CRE Highlight -->
+<div class="current-cre-highlight">
+    <h5 class="mb-0"><i class="fas fa-user-circle"></i> Analytics for: {{ analytics.current_cre }}</h5>
+</div>
+
+<!-- Date Filter -->
+<div class="filter-section">
+    <div class="row">
+        <div class="col-12">
+            <h5 class="mb-3"><i class="fas fa-calendar-alt"></i> Date Filter for Won/Lost Cases</h5>
+            
+            <div class="date-inputs">
+                <div class="row">
+                    <div class="col-md-4">
+                        <label class="form-label text-white">From Date:</label>
+                        <input type="date" class="form-control" id="fromDate" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label text-white">To Date:</label>
+                        <input type="date" class="form-control" id="toDate" />
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <div class="w-100">
+                            <button class="btn btn-success me-2" id="applyFilter">
+                                <i class="fas fa-search"></i> Apply Filter
+                            </button>
+                            <button class="btn btn-warning" id="clearFilter">
+                                <i class="fas fa-times"></i> Clear Filter
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-12">
+                        <small class="text-dark">
+                            <i class="fas fa-info-circle"></i> Note: Pending cases and Total Leads Handled are always shown live when no date filter is applied
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Overall Stats for Current CRE -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card analytics-card bg-primary text-white">
+            <div class="card-body text-center">
+                <div class="stats-number" id="totalWon">{{ analytics.cre_overall_stats.won }}</div>
+                <div class="stats-label">🏆 Won Cases</div>
+                <small class="text-white-50">Date Filtered</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card analytics-card bg-info text-white">
+            <div class="card-body text-center">
+                <div class="stats-number" id="totalPendingLive">{{ analytics.cre_live_stats.pending }}</div>
+                <div class="stats-label">🕓 Pending Cases</div>
+                <small class="text-white-50">Live Count</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card analytics-card bg-danger text-white">
+            <div class="card-body text-center">
+                <div class="stats-number" id="totalLost">{{ analytics.cre_overall_stats.lost }}</div>
+                <div class="stats-label">❌ Lost Cases</div>
+                <small class="text-white-50">Date Filtered</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card analytics-card bg-success text-white">
+            <div class="card-body text-center">
+                <div class="stats-number" id="conversionRateLive">{{ analytics.cre_live_stats.conversion_rate }}%</div>
+                <div class="stats-label">Conversion Rate</div>
+                <small class="text-white-50">Live Rate</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Platform-wise Performance Table -->
+<div class="row mb-5">
+    <div class="col-12">
+        <div class="card analytics-card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-chart-pie"></i> Your Platform-wise Performance</h5>
+                <small class="text-white-50">Won/Lost cases are date filtered • Pending/Assigned/Conversion Rate are live</small>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Platform</th>
+                                <th>🏆 Won</th>
+                                <th>🕓 Pending</th>
+                                <th>❌ Lost</th>
+                                <th>Assigned</th>
+                                <th>Conversion Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody id="conversion-table-body">
+                            {% for platform, data in analytics.cre_platform_conversion.items() %}
+                            <tr>
+                                <td><strong>{{ platform }}</strong></td>
+                                <td><span class="badge bg-success">{{ data.won }}</span></td>
+                                <td><span class="badge bg-warning">{{ analytics.cre_platform_conversion_live[platform].pending_live }}</span></td>
+                                <td><span class="badge bg-danger">{{ data.lost }}</span></td>
+                                <td>{{ analytics.cre_platform_conversion_live[platform].assigned }}</td>
+                                <td>
+                                    <span class="
+                                        {% if analytics.cre_platform_conversion_live[platform].conversion_rate >= 20 %}conversion-rate-high
+                                        {% elif analytics.cre_platform_conversion_live[platform].conversion_rate >= 10 %}conversion-rate-medium
+                                        {% else %}conversion-rate-low{% endif %}">
+                                        {{ analytics.cre_platform_conversion_live[platform].conversion_rate }}%
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CRE Leaderboard Table -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card analytics-card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-trophy"></i> Top 5 CRE Performance Leaderboard</h5>
+                <small class="text-white-50">Won/Lost cases are date filtered • Pending cases are live</small>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>CRE Name</th>
+                                <th>🏆 Won</th>
+                                <th>🕓 Pending</th>
+                                <th>❌ Lost</th>
+                                <th>Total Leads Handled</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaderboard-table-body">
+                            {% for cre_name, stats in analytics.top_5_leaderboard %}
+                            <tr {% if cre_name == analytics.current_cre %}class="current-user-row"{% elif loop.index == 1 %}class="leaderboard-rank-1"{% endif %}>
+                                <td>
+                                    {% if loop.index == 1 %}
+                                        <i class="fas fa-trophy trophy-icon"></i>{{ loop.index }}
+                                    {% else %}
+                                        {{ loop.index }}
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <strong>{{ cre_name }}</strong>
+                                    {% if cre_name == analytics.current_cre %}<small>(You)</small>{% endif %}
+                                </td>
+                                <td><span class="badge bg-success">{{ stats.won }}</span></td>
+                                <td><span class="badge bg-warning">{{ stats.pending_live }}</span></td>
+                                <td><span class="badge bg-danger">{{ stats.lost }}</span></td>
+                                <td><strong>{{ stats.total_leads_handled }}</strong></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const fromDate = document.getElementById('fromDate');
+    const toDate = document.getElementById('toDate');
+    const applyFilter = document.getElementById('applyFilter');
+    const clearFilter = document.getElementById('clearFilter');
+    
+    // Apply filter
+    applyFilter.addEventListener('click', function() {
+        const fromDateValue = fromDate.value;
+        const toDateValue = toDate.value;
+        // Robust date validation
+        if (fromDateValue && isNaN(Date.parse(fromDateValue))) {
+            alert('Invalid From Date format. Please use the date picker.');
+            fromDate.focus();
+            return;
+        }
+        if (toDateValue && isNaN(Date.parse(toDateValue))) {
+            alert('Invalid To Date format. Please use the date picker.');
+            toDate.focus();
+            return;
+        }
+        if (fromDateValue && toDateValue) {
+            const fromDateObj = new Date(fromDateValue);
+            const toDateObj = new Date(toDateValue);
+            if (fromDateObj > toDateObj) {
+                alert('From Date must be before or equal to To Date');
+                return;
+            }
+        }
+        updateAnalytics(fromDateValue, toDateValue);
+    });
+    
+    // Clear filter
+    clearFilter.addEventListener('click', function() {
+        fromDate.value = '';
+        toDate.value = '';
+        updateAnalytics('', '');
+    });
+    
+    // Enter key support
+    fromDate.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            applyFilter.click();
+        }
+    });
+    
+    toDate.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            applyFilter.click();
+        }
+    });
+    
+    function updateAnalytics(fromDateValue, toDateValue) {
+        // Show loading state
+        showLoadingState();
+        
+        // Build query parameters
+        const params = new URLSearchParams();
+        if (fromDateValue) params.append('from_date', fromDateValue);
+        if (toDateValue) params.append('to_date', toDateValue);
+        
+        // Make AJAX call
+        fetch(`/cre_analytics_data?${params}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateOverallStats(data.cre_overall_stats);
+                    updateLeaderboard(data.top_5_leaderboard);
+                    updateConversionTable(data.cre_platform_conversion, data.cre_platform_conversion_live);
+                    hideLoadingState();
+                } else {
+                    console.error('Error loading analytics data:', data.error);
+                    showError('Error loading analytics data: ' + data.error);
+                    hideLoadingState();
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showError('Network error occurred. Please check your connection and try again.');
+                hideLoadingState();
+            });
+    }
+    
+    function showLoadingState() {
+        const cards = document.querySelectorAll('.analytics-card .card-body');
+        cards.forEach(card => {
+            if (!card.querySelector('.loading-spinner')) {
+                const spinner = document.createElement('div');
+                spinner.className = 'loading-spinner text-center';
+                spinner.innerHTML = '<i class="fas fa-spinner fa-spin fa-2x"></i><br><small>Loading...</small>';
+                card.appendChild(spinner);
+            }
+        });
+    }
+    
+    function hideLoadingState() {
+        const spinners = document.querySelectorAll('.loading-spinner');
+        spinners.forEach(spinner => spinner.remove());
+    }
+    
+    function showError(message) {
+        // Remove existing error messages
+        const existingErrors = document.querySelectorAll('.error-message');
+        existingErrors.forEach(error => error.remove());
+        
+        // Create new error message
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'error-message';
+        errorDiv.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ' + message;
+        
+        // Insert after the filter section
+        const filterSection = document.querySelector('.filter-section');
+        filterSection.parentNode.insertBefore(errorDiv, filterSection.nextSibling);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (errorDiv.parentNode) {
+                errorDiv.parentNode.removeChild(errorDiv);
+            }
+        }, 5000);
+    }
+    
+    function updateOverallStats(stats) {
+        document.getElementById('totalWon').textContent = stats.won;
+        // Note: totalPendingLive and conversionRateLive are not updated here as they're always live
+        document.getElementById('totalLost').textContent = stats.lost;
+    }
+    
+    function updateLeaderboard(leaderboardData) {
+        const tableBody = document.getElementById('leaderboard-table-body');
+        if (tableBody) {
+            let html = '';
+            leaderboardData.forEach(([cre_name, stats], index) => {
+                const isCurrentUser = cre_name === '{{ analytics.current_cre }}';
+                const isTopRank = index === 0;
+                let rowClass = '';
+                if (isCurrentUser) {
+                    rowClass = 'current-user-row';
+                } else if (isTopRank) {
+                    rowClass = 'leaderboard-rank-1';
+                }
+                html += `
+                    <tr ${rowClass ? `class="${rowClass}"` : ''}>
+                        <td>
+                            ${isTopRank ? '<i class="fas fa-trophy trophy-icon"></i>' : ''}${index + 1}
+                        </td>
+                        <td>
+                            <strong>${cre_name}</strong>
+                            ${isCurrentUser ? '<small>(You)</small>' : ''}
+                        </td>
+                        <td><span class="badge bg-success">${stats.won}</span></td>
+                        <td><span class="badge bg-warning">${stats.pending_live}</span></td>
+                        <td><span class="badge bg-danger">${stats.lost}</span></td>
+                        <td><strong>${stats.total_leads_handled}</strong></td>
+                    </tr>
+                `;
+            });
+            tableBody.innerHTML = html;
+        }
+    }
+    
+    function updateConversionTable(conversionData, conversionDataLive) {
+        const tableBody = document.getElementById('conversion-table-body');
+        if (tableBody) {
+            let html = '';
+            Object.entries(conversionData).forEach(([platform, data]) => {
+                const live = conversionDataLive[platform] || {};
+                let rateClass = 'conversion-rate-low';
+                if ((live.conversion_rate || 0) >= 20) {
+                    rateClass = 'conversion-rate-high';
+                } else if ((live.conversion_rate || 0) >= 10) {
+                    rateClass = 'conversion-rate-medium';
+                }
+                html += `
+                    <tr>
+                        <td><strong>${platform}</strong></td>
+                        <td><span class="badge bg-success">${data.won}</span></td>
+                        <td><span class="badge bg-warning">${live.pending_live || 0}</span></td>
+                        <td><span class="badge bg-danger">${data.lost}</span></td>
+                        <td>${live.assigned || 0}</td>
+                        <td><span class="${rateClass}">${live.conversion_rate || 0}%</span></td>
+                    </tr>
+                `;
+            });
+            tableBody.innerHTML = html;
+        }
+    }
+});
+</script>
+{% endblock %} 

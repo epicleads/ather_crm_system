@@ -1,0 +1,483 @@
+{% extends "base.html" %}
+
+{% block title %}Security Audit -  CRM{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2><i class="fas fa-shield-alt text-primary"></i> Security Audit Dashboard</h2>
+                <p class="text-muted">Comprehensive security verification and monitoring</p>
+            </div>
+            <div>
+                <button class="btn btn-primary me-2" onclick="runSecurityAudit()">
+                    <i class="fas fa-play"></i> Run Security Audit
+                </button>
+                <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </a>
+            </div>
+        </div>
+
+        <!-- Security Score Overview -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <div class="security-score-circle" id="overallScore">
+                            <span class="score-text">--</span>
+                        </div>
+                        <h6 class="mt-3">Overall Security Score</h6>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-9">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="fas fa-info-circle"></i> Security Status Summary</h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="securitySummary">
+                            <p class="text-muted">Click "Run Security Audit" to generate security report</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Security Categories -->
+        <div class="row" id="securityCategories">
+            <!-- Categories will be populated by JavaScript -->
+        </div>
+
+        <!-- Audit Results -->
+        <div class="card mt-4" id="auditResults" style="display: none;">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="fas fa-clipboard-list"></i> Detailed Audit Results</h6>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Category</th>
+                                <th>Status</th>
+                                <th>Score</th>
+                                <th>Issues</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="auditResultsBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recommendations -->
+        <div class="card mt-4" id="recommendationsCard" style="display: none;">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="fas fa-lightbulb"></i> Security Recommendations</h6>
+            </div>
+            <div class="card-body">
+                <div id="recommendationsList">
+                </div>
+            </div>
+        </div>
+
+        <!-- Security Checklist -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="fas fa-tasks"></i> Security Implementation Checklist</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Authentication & Authorization</h6>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="check1">
+                            <label class="form-check-label" for="check1">
+                                Password hashing with bcrypt
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="check2">
+                            <label class="form-check-label" for="check2">
+                                Account lockout after failed attempts
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="check3">
+                            <label class="form-check-label" for="check3">
+                                Session management with expiration
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="check4">
+                            <label class="form-check-label" for="check4">
+                                Role-based access control
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Security Monitoring</h6>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="check5">
+                            <label class="form-check-label" for="check5">
+                                Comprehensive audit logging
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="check6">
+                            <label class="form-check-label" for="check6">
+                                Rate limiting on login endpoints
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="check7">
+                            <label class="form-check-label" for="check7">
+                                Password reset functionality
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="check8">
+                            <label class="form-check-label" for="check8">
+                                Security tables properly configured
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.security-score-circle {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    position: relative;
+    background: conic-gradient(#28a745 0deg, #28a745 0deg, #e9ecef 0deg, #e9ecef 360deg);
+}
+
+.score-text {
+    font-size: 24px;
+    font-weight: bold;
+    color: #333;
+}
+
+.security-category-card {
+    transition: transform 0.2s;
+}
+
+.security-category-card:hover {
+    transform: translateY(-2px);
+}
+
+.status-badge {
+    font-size: 0.8em;
+}
+
+.progress-thin {
+    height: 8px;
+}
+</style>
+
+<script>
+let auditData = null;
+
+function runSecurityAudit() {
+    const button = document.querySelector('button[onclick="runSecurityAudit()"]');
+    const originalText = button.innerHTML;
+    button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Running Audit...';
+    button.disabled = true;
+
+    fetch('/run_security_audit', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            auditData = data.results;
+            displayAuditResults(data.results);
+        } else {
+            alert('Error running security audit: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error running security audit');
+    })
+    .finally(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+
+function displayAuditResults(results) {
+    // Update overall score
+    updateSecurityScore(results.overall_score);
+
+    // Update security summary
+    updateSecuritySummary(results);
+
+    // Display security categories
+    displaySecurityCategories(results);
+
+    // Display detailed results
+    displayDetailedResults(results);
+
+    // Display recommendations
+    displayRecommendations(results.recommendations);
+
+    // Update checklist
+    updateSecurityChecklist(results);
+}
+
+function updateSecurityScore(score) {
+    const scoreElement = document.getElementById('overallScore');
+    const scoreText = scoreElement.querySelector('.score-text');
+    scoreText.textContent = score;
+
+    // Update circle color based on score
+    let color = '#dc3545'; // Red
+    if (score >= 80) color = '#28a745'; // Green
+    else if (score >= 60) color = '#ffc107'; // Yellow
+    else if (score >= 40) color = '#fd7e14'; // Orange
+
+    const percentage = (score / 100) * 360;
+    scoreElement.style.background = `conic-gradient(${color} 0deg, ${color} ${percentage}deg, #e9ecef ${percentage}deg, #e9ecef 360deg)`;
+}
+
+function updateSecuritySummary(results) {
+    const summaryElement = document.getElementById('securitySummary');
+    const passCount = Object.values(results).filter(item =>
+        typeof item === 'object' && item.status === 'PASS'
+    ).length;
+    const totalCount = Object.values(results).filter(item =>
+        typeof item === 'object' && item.status
+    ).length;
+
+    summaryElement.innerHTML = `
+        <div class="row">
+            <div class="col-md-4">
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-check-circle text-success fa-2x me-3"></i>
+                    <div>
+                        <h5 class="mb-0">${passCount}</h5>
+                        <small class="text-muted">Checks Passed</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-exclamation-triangle text-warning fa-2x me-3"></i>
+                    <div>
+                        <h5 class="mb-0">${totalCount - passCount}</h5>
+                        <small class="text-muted">Issues Found</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-clock text-info fa-2x me-3"></i>
+                    <div>
+                        <h5 class="mb-0">${new Date(results.timestamp).toLocaleString()}</h5>
+                        <small class="text-muted">Last Audit</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function displaySecurityCategories(results) {
+    const categoriesElement = document.getElementById('securityCategories');
+    const categories = [
+        { key: 'database_security', name: 'Database Security', icon: 'database' },
+        { key: 'password_security', name: 'Password Security', icon: 'key' },
+        { key: 'session_management', name: 'Session Management', icon: 'user-clock' },
+        { key: 'authentication_system', name: 'Authentication', icon: 'lock' },
+        { key: 'audit_logging', name: 'Audit Logging', icon: 'clipboard-list' },
+        { key: 'rate_limiting', name: 'Rate Limiting', icon: 'tachometer-alt' },
+        { key: 'user_permissions', name: 'User Permissions', icon: 'users-cog' },
+        { key: 'security_tables', name: 'Security Tables', icon: 'table' }
+    ];
+
+    categoriesElement.innerHTML = categories.map(category => {
+        const data = results[category.key];
+        if (!data) return '';
+
+        const statusClass = data.status === 'PASS' ? 'success' : 'danger';
+        const statusIcon = data.status === 'PASS' ? 'check' : 'times';
+
+        return `
+            <div class="col-md-3 mb-3">
+                <div class="card security-category-card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-${category.icon} fa-2x text-${statusClass} mb-3"></i>
+                        <h6>${category.name}</h6>
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                            <span class="badge bg-${statusClass}">
+                                <i class="fas fa-${statusIcon}"></i> ${data.status}
+                            </span>
+                            <span class="text-muted">${Math.round(data.score)}%</span>
+                        </div>
+                        <div class="progress progress-thin mt-2">
+                            <div class="progress-bar bg-${statusClass}" style="width: ${data.score}%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function displayDetailedResults(results) {
+    const resultsElement = document.getElementById('auditResults');
+    const tbody = document.getElementById('auditResultsBody');
+
+    const categories = [
+        'database_security', 'password_security', 'session_management',
+        'authentication_system', 'audit_logging', 'rate_limiting',
+        'user_permissions', 'security_tables'
+    ];
+
+    tbody.innerHTML = categories.map(category => {
+        const data = results[category];
+        if (!data) return '';
+
+        const statusClass = data.status === 'PASS' ? 'success' : 'danger';
+        const issuesCount = data.issues ? data.issues.length : 0;
+
+        return `
+            <tr>
+                <td>${category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</td>
+                <td><span class="badge bg-${statusClass}">${data.status}</span></td>
+                <td>${Math.round(data.score)}%</td>
+                <td>${issuesCount}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-info" onclick="showCategoryDetails('${category}')">
+                        <i class="fas fa-eye"></i> View
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    resultsElement.style.display = 'block';
+}
+
+function displayRecommendations(recommendations) {
+    const recommendationsElement = document.getElementById('recommendationsList');
+    const card = document.getElementById('recommendationsCard');
+
+    if (recommendations && recommendations.length > 0) {
+        recommendationsElement.innerHTML = recommendations.map(rec => `
+            <div class="alert alert-warning d-flex align-items-center">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <span>${rec}</span>
+            </div>
+        `).join('');
+        card.style.display = 'block';
+    } else {
+        recommendationsElement.innerHTML = `
+            <div class="alert alert-success d-flex align-items-center">
+                <i class="fas fa-check-circle me-2"></i>
+                <span>🎉 Excellent! No security recommendations at this time.</span>
+            </div>
+        `;
+        card.style.display = 'block';
+    }
+}
+
+function updateSecurityChecklist(results) {
+    const checks = {
+        'check1': results.password_security?.checks?.bcrypt_hashing,
+        'check2': results.authentication_system?.checks?.account_lockout,
+        'check3': results.session_management?.checks?.session_expiration,
+        'check4': results.user_permissions?.checks?.role_separation,
+        'check5': results.audit_logging?.checks?.comprehensive_logging,
+        'check6': results.rate_limiting?.checks?.ip_tracking,
+        'check7': results.authentication_system?.checks?.password_reset,
+        'check8': results.security_tables?.status === 'PASS'
+    };
+
+    Object.entries(checks).forEach(([checkId, passed]) => {
+        const checkbox = document.getElementById(checkId);
+        if (checkbox) {
+            checkbox.checked = passed;
+            checkbox.disabled = true;
+        }
+    });
+}
+
+function showCategoryDetails(category) {
+    if (!auditData || !auditData[category]) return;
+
+    const data = auditData[category];
+    let content = `
+        <h6>${category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</h6>
+        <p><strong>Status:</strong> <span class="badge bg-${data.status === 'PASS' ? 'success' : 'danger'}">${data.status}</span></p>
+        <p><strong>Score:</strong> ${Math.round(data.score)}%</p>
+    `;
+
+    if (data.checks) {
+        content += '<h6>Checks:</h6><ul>';
+        Object.entries(data.checks).forEach(([check, passed]) => {
+            content += `<li><i class="fas fa-${passed ? 'check text-success' : 'times text-danger'}"></i> ${check.replace('_', ' ')}</li>`;
+        });
+        content += '</ul>';
+    }
+
+    if (data.issues && data.issues.length > 0) {
+        content += '<h6>Issues:</h6><ul>';
+        data.issues.forEach(issue => {
+            content += `<li class="text-danger">${issue}</li>`;
+        });
+        content += '</ul>';
+    }
+
+    // Create modal
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Security Category Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">${content}</div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+
+    modal.addEventListener('hidden.bs.modal', () => {
+        document.body.removeChild(modal);
+    });
+}
+
+// Auto-run audit on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Uncomment to auto-run audit
+    // runSecurityAudit();
+});
+</script>
+{% endblock %}

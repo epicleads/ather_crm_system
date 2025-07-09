@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Data - Ather CRM{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h4><i class="fas fa-upload"></i> Upload Lead Data</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="source" class="form-label">Data Source</label>
+                        <select class="form-select" id="source" name="source" required>
+                            <option value="">Select Source</option>
+                            <option value="Google">Google</option>
+                            <option value="Meta">Meta</option>
+                            <option value="Affiliate">Affiliate</option>
+                            <option value="Know">Know</option>
+                            <option value="Whatsapp">Whatsapp</option>
+                            <option value="Tele">Tele</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="file" class="form-label">Upload File (CSV/Excel)</label>
+                        <input type="file" class="form-control" id="file" name="file" accept=".csv,.xlsx,.xls" required>
+                        <div class="form-text">
+                            File must contain columns: date, customer_name, customer_mobile_number
+                        </div>
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-upload"></i> Upload Data
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add this after the existing upload form card -->
+<div class="row justify-content-center mt-4">
+    <div class="col-md-8">
+        <div class="card border-success">
+            <div class="card-body text-center">
+                <h5 class="card-title text-success">
+                    <i class="fas fa-arrow-right"></i> Next Step: Assign Leads
+                </h5>
+                <p class="card-text text-muted">
+                    After uploading data, you can assign the leads to your CRE team members.
+                </p>
+                <a href="{{ url_for('assign_leads') }}" class="btn btn-success">
+                    <i class="fas fa-tasks"></i> Go to Assign Leads
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

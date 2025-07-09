@@ -1,0 +1,351 @@
+{% extends "base.html" %}
+
+{% block title %}Security Settings -  CRM{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2><i class="fas fa-shield-alt text-primary"></i> Security Settings</h2>
+                <p class="text-muted">Manage your account security and privacy</p>
+            </div>
+            <div>
+                {% if session.user_type == 'admin' %}
+                    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Dashboard
+                    </a>
+                {% elif session.user_type == 'cre' %}
+                    <a href="{{ url_for('cre_dashboard') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Dashboard
+                    </a>
+                {% elif session.user_type == 'ps' %}
+                    <a href="{{ url_for('ps_dashboard') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Dashboard
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Password Change Section -->
+        <div class="card mb-4">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="fas fa-key"></i> Change Password</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('change_password') }}" id="passwordForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="current_password" class="form-label">Current Password</label>
+                                <input type="password" class="form-control" id="current_password" name="current_password" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="new_password" class="form-label">New Password</label>
+                                <div class="input-group">
+                                    <input type="password" class="form-control" id="new_password" name="new_password" required minlength="8">
+                                    <button class="btn btn-outline-secondary" type="button" id="toggleNewPassword">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                                <div class="password-strength mt-2">
+                                    <div class="progress" style="height: 5px;">
+                                        <div class="progress-bar" id="strengthBar" style="width: 0%"></div>
+                                    </div>
+                                    <small id="strengthText" class="text-muted">Password strength: Weak</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="confirm_password" class="form-label">Confirm New Password</label>
+                                <input type="password" class="form-control" id="confirm_password" name="confirm_password" required minlength="8">
+                                <div class="invalid-feedback" id="passwordMismatch" style="display: none;">
+                                    Passwords do not match
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 d-flex align-items-end">
+                            <div class="mb-3">
+                                <button type="submit" class="btn btn-warning" id="changePasswordBtn" disabled>
+                                    <i class="fas fa-save"></i> Change Password
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Password Requirements:</strong> At least 8 characters with uppercase, lowercase, number, and special character.
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Active Sessions Section -->
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-desktop"></i> Active Sessions</h5>
+            </div>
+            <div class="card-body">
+                {% if sessions %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Device/Browser</th>
+                                <th>IP Address</th>
+                                <th>Last Activity</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sess in sessions %}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-{{ 'mobile-alt' if 'Mobile' in sess.user_agent else 'desktop' }} text-muted me-2"></i>
+                                        <div>
+                                            <small class="text-muted">{{ sess.user_agent[:50] }}...</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>{{ sess.ip_address }}</td>
+                                <td>{{ sess.last_activity[:16] if sess.last_activity else 'Unknown' }}</td>
+                                <td>
+                                    {% if sess.session_id == session.session_id %}
+                                        <span class="badge bg-success">Current Session</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Active</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if sess.session_id != session.session_id %}
+                                        <button class="btn btn-sm btn-outline-danger" onclick="terminateSession('{{ sess.session_id }}')">
+                                            <i class="fas fa-times"></i> Terminate
+                                        </button>
+                                    {% else %}
+                                        <span class="text-muted">Current</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-3">
+                    <button class="btn btn-outline-danger" onclick="terminateAllSessions()">
+                        <i class="fas fa-sign-out-alt"></i> Terminate All Other Sessions
+                    </button>
+                </div>
+                {% else %}
+                <div class="text-center py-3">
+                    <i class="fas fa-desktop fa-2x text-muted mb-2"></i>
+                    <p class="text-muted">No active sessions found</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Security Log Section -->
+        <div class="card">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0"><i class="fas fa-history"></i> Recent Security Activity</h5>
+            </div>
+            <div class="card-body">
+                {% if audit_logs %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Action</th>
+                                <th>IP Address</th>
+                                <th>Timestamp</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in audit_logs %}
+                            <tr>
+                                <td>
+                                    <span class="badge bg-{{ 'success' if 'SUCCESS' in log.action else 'warning' if 'FAILED' in log.action else 'info' }}">
+                                        {{ log.action.replace('_', ' ').title() }}
+                                    </span>
+                                </td>
+                                <td>{{ log.ip_address or 'Unknown' }}</td>
+                                <td>{{ log.timestamp[:16] if log.timestamp else 'Unknown' }}</td>
+                                <td>
+                                    {% if log.details %}
+                                        <small class="text-muted">{{ log.details | truncate(50) }}</small>
+                                    {% else %}
+                                        <small class="text-muted">No details</small>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-3">
+                    <i class="fas fa-history fa-2x text-muted mb-2"></i>
+                    <p class="text-muted">No security activity found</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const newPasswordInput = document.getElementById('new_password');
+    const confirmPasswordInput = document.getElementById('confirm_password');
+    const toggleNewPasswordBtn = document.getElementById('toggleNewPassword');
+    const strengthBar = document.getElementById('strengthBar');
+    const strengthText = document.getElementById('strengthText');
+    const changePasswordBtn = document.getElementById('changePasswordBtn');
+    const passwordMismatch = document.getElementById('passwordMismatch');
+
+    // Toggle password visibility
+    toggleNewPasswordBtn.addEventListener('click', function() {
+        const type = newPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+        newPasswordInput.setAttribute('type', type);
+
+        const icon = this.querySelector('i');
+        icon.classList.toggle('fa-eye');
+        icon.classList.toggle('fa-eye-slash');
+    });
+
+    // Password strength checker
+    function checkPasswordStrength(password) {
+        let strength = 0;
+
+        if (password.length >= 8) strength += 1;
+        if (/[a-z]/.test(password)) strength += 1;
+        if (/[A-Z]/.test(password)) strength += 1;
+        if (/[0-9]/.test(password)) strength += 1;
+        if (/[^A-Za-z0-9]/.test(password)) strength += 1;
+
+        return strength;
+    }
+
+    newPasswordInput.addEventListener('input', function() {
+        const password = this.value;
+        const strength = checkPasswordStrength(password);
+
+        // Update strength bar
+        const percentage = (strength / 5) * 100;
+        strengthBar.style.width = percentage + '%';
+
+        if (strength <= 2) {
+            strengthBar.className = 'progress-bar bg-danger';
+            strengthText.textContent = 'Password strength: Weak';
+            strengthText.className = 'text-danger';
+        } else if (strength <= 3) {
+            strengthBar.className = 'progress-bar bg-warning';
+            strengthText.textContent = 'Password strength: Medium';
+            strengthText.className = 'text-warning';
+        } else if (strength <= 4) {
+            strengthBar.className = 'progress-bar bg-info';
+            strengthText.textContent = 'Password strength: Good';
+            strengthText.className = 'text-info';
+        } else {
+            strengthBar.className = 'progress-bar bg-success';
+            strengthText.textContent = 'Password strength: Strong';
+            strengthText.className = 'text-success';
+        }
+
+        checkFormValidity();
+    });
+
+    confirmPasswordInput.addEventListener('input', checkFormValidity);
+
+    function checkFormValidity() {
+        const password = newPasswordInput.value;
+        const confirmPassword = confirmPasswordInput.value;
+        const strength = checkPasswordStrength(password);
+
+        const passwordsMatch = password === confirmPassword;
+        const strongEnough = strength >= 5;
+
+        if (confirmPassword && !passwordsMatch) {
+            passwordMismatch.style.display = 'block';
+            confirmPasswordInput.classList.add('is-invalid');
+        } else {
+            passwordMismatch.style.display = 'none';
+            confirmPasswordInput.classList.remove('is-invalid');
+        }
+
+        changePasswordBtn.disabled = !(passwordsMatch && strongEnough && password.length > 0);
+    }
+
+    document.getElementById('passwordForm').addEventListener('submit', function(e) {
+        const submitBtn = document.getElementById('changePasswordBtn');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Changing...';
+        submitBtn.disabled = true;
+
+        // Re-enable after 10 seconds as fallback
+        setTimeout(() => {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }, 10000);
+    });
+});
+
+function terminateSession(sessionId) {
+    if (confirm('Are you sure you want to terminate this session?')) {
+        fetch('/terminate_session', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({session_id: sessionId})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error terminating session: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error terminating session');
+        });
+    }
+}
+
+function terminateAllSessions() {
+    if (confirm('Are you sure you want to terminate all other sessions? You will remain logged in on this device.')) {
+        fetch('/terminate_all_sessions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error terminating sessions: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error terminating sessions');
+        });
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block title %}Add PS - CRM{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-info text-white">
+                <h4><i class="fas fa-user-tie"></i> Add Product Specialist</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="name" class="form-label">Full Name</label>
+                                <input type="text" class="form-control" id="name" name="name" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="branch" class="form-label">Branch</label>
+                                <select class="form-select" id="branch" name="branch" required>
+                                    <option value="">Select Branch</option>
+                                    {% for branch in branches %}
+                                    <option value="{{ branch }}">{{ branch }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="phone" class="form-label">Phone Number</label>
+                                <input type="tel" class="form-control" id="phone" name="phone" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="email" class="form-label">Official Email</label>
+                                <input type="email" class="form-control" id="email" name="email" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="username" class="form-label">Username</label>
+                                <input type="text" class="form-control" id="username" name="username" required>
+                                <div id="username-feedback" class="mt-1"></div>
+                                <div id="username-spinner" class="mt-1" style="display: none;">
+                                    <small class="text-muted">
+                                        <i class="fas fa-spinner fa-spin"></i> Checking availability...
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="password" class="form-label">Password</label>
+                                <input type="password" class="form-control" id="password" name="password" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-info" id="submit-btn">
+                            <i class="fas fa-user-tie"></i> Add Product Specialist
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const usernameInput = document.getElementById('username');
+    const usernameFeedback = document.getElementById('username-feedback');
+    const usernameSpinner = document.getElementById('username-spinner');
+    const submitBtn = document.getElementById('submit-btn');
+    
+    let checkTimeout;
+    let isUsernameAvailable = false;
+    
+    usernameInput.addEventListener('input', function() {
+        const username = this.value.trim();
+        
+        // Clear previous timeout
+        clearTimeout(checkTimeout);
+        
+        // Clear feedback
+        usernameFeedback.innerHTML = '';
+        usernameSpinner.style.display = 'none';
+        
+        // Reset submit button
+        submitBtn.disabled = false;
+        isUsernameAvailable = false;
+        
+        if (username.length < 3) {
+            if (username.length > 0) {
+                usernameFeedback.innerHTML = '<small class="text-warning"><i class="fas fa-exclamation-triangle"></i> Username must be at least 3 characters</small>';
+                submitBtn.disabled = true;
+            }
+            return;
+        }
+        
+        // Show loading spinner
+        usernameSpinner.style.display = 'block';
+        
+        // Debounce the API call
+        checkTimeout = setTimeout(() => {
+            checkUsernameAvailability(username);
+        }, 500);
+    });
+    
+    function checkUsernameAvailability(username) {
+        fetch(`/check_username?username=${encodeURIComponent(username)}&type=ps`)
+            .then(response => response.json())
+            .then(data => {
+                usernameSpinner.style.display = 'none';
+                
+                if (data.available) {
+                    usernameFeedback.innerHTML = '<small class="text-success"><i class="fas fa-check-circle"></i> Username is available</small>';
+                    isUsernameAvailable = true;
+                    submitBtn.disabled = false;
+                } else {
+                    usernameFeedback.innerHTML = `<small class="text-danger"><i class="fas fa-times-circle"></i> ${data.message}</small>`;
+                    isUsernameAvailable = false;
+                    submitBtn.disabled = true;
+                }
+            })
+            .catch(error => {
+                console.error('Error checking username:', error);
+                usernameSpinner.style.display = 'none';
+                usernameFeedback.innerHTML = '<small class="text-warning"><i class="fas fa-exclamation-triangle"></i> Error checking username</small>';
+                submitBtn.disabled = true;
+            });
+    }
+    
+    // Prevent form submission if username is not available
+    document.querySelector('form').addEventListener('submit', function(e) {
+        const username = usernameInput.value.trim();
+        
+        if (username.length < 3) {
+            e.preventDefault();
+            alert('Username must be at least 3 characters long');
+            return;
+        }
+        
+        if (!isUsernameAvailable) {
+            e.preventDefault();
+            alert('Please choose an available username');
+            return;
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,21 @@
+Flask==2.3.3
+supabase==1.0.4
+python-dotenv==1.0.0
+openpyxl==3.1.2
+bcrypt==4.0.1
+Flask-Limiter==3.5.0
+pyotp==2.9.0
+qrcode==7.4.2
+gunicorn
+Pillow==11.2.1
+requests
+pandas
+simple-salesforce==1.12.6
+matplotlib
+seaborn
+reportlab
+aiohttp
+flask-socketio
+# For production use, eventlet is recommended for async workers
+# (if using gevent, you can add gevent instead)
+eventlet

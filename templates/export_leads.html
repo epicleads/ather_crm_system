@@ -1,0 +1,879 @@
+{% extends "base.html" %}
+
+{% block title %}Export Leads - Ather CRM{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12 d-flex justify-content-between align-items-center">
+        <div>
+            <h2 class="mb-0"><i class="fas fa-download text-primary"></i> Export Leads</h2>
+            <p class="text-muted">View and export leads by status or category</p>
+        </div>
+        <div class="btn-group">
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Date Range Filter Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-primary">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-calendar-alt"></i> Export by Date Range</h5>
+            </div>
+            <div class="card-body">
+                <div class="row align-items-end">
+                    <div class="col-md-3">
+                        <label for="startDate" class="form-label">From Date</label>
+                        <input type="date" class="form-control" id="startDate" name="start_date">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="endDate" class="form-label">To Date</label>
+                        <input type="date" class="form-control" id="endDate" name="end_date">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="dateField" class="form-label">Date Field</label>
+                        <select class="form-select" id="dateField" name="date_field">
+                            <option value="date">Lead Date</option>
+                            <option value="first_call_date">First Call Date</option>
+                            <option value="follow_up_date">Follow Up Date</option>
+                            <option value="created_at">Created Date</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-primary w-100" onclick="loadLeadsByDateRange()">
+                            <i class="fas fa-search"></i> Filter by Date Range
+                        </button>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="btn-group" role="group">
+                            <button class="btn btn-outline-secondary btn-sm" onclick="setDateRange('today')">Today</button>
+                            <button class="btn btn-outline-secondary btn-sm" onclick="setDateRange('week')">This Week</button>
+                            <button class="btn btn-outline-secondary btn-sm" onclick="setDateRange('month')">This Month</button>
+                            <button class="btn btn-outline-secondary btn-sm" onclick="setDateRange('quarter')">This Quarter</button>
+                            <button class="btn btn-outline-secondary btn-sm" onclick="setDateRange('year')">This Year</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filter Cards -->
+<div class="row mb-4">
+    <div class="col-12">
+        <h4 class="mb-3"><i class="fas fa-filter"></i> Filter by Final Status</h4>
+    </div>
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="airbnb-card airbnb-card-success">
+            <div class="airbnb-icon">
+                <i class="fas fa-trophy"></i>
+            </div>
+            <h6 class="airbnb-title">Won Leads</h6>
+            <p class="airbnb-count">{{ won_count }} leads</p>
+            <button class="airbnb-btn airbnb-btn-success" onclick="loadLeads('final_status', 'Won')">
+                <i class="fas fa-eye"></i> View Won Leads
+            </button>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="airbnb-card airbnb-card-danger">
+            <div class="airbnb-icon">
+                <i class="fas fa-times"></i>
+            </div>
+            <h6 class="airbnb-title">Lost Leads</h6>
+            <p class="airbnb-count">{{ lost_count }} leads</p>
+            <button class="airbnb-btn airbnb-btn-danger" onclick="loadLeads('final_status', 'Lost')">
+                <i class="fas fa-eye"></i> View Lost Leads
+            </button>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="airbnb-card airbnb-card-warning">
+            <div class="airbnb-icon">
+                <i class="fas fa-clock"></i>
+            </div>
+            <h6 class="airbnb-title">Pending Leads</h6>
+            <p class="airbnb-count">{{ pending_count }} leads</p>
+            <button class="airbnb-btn airbnb-btn-warning" onclick="loadLeads('final_status', 'Pending')">
+                <i class="fas fa-eye"></i> View Pending Leads
+            </button>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="airbnb-card airbnb-card-info">
+            <div class="airbnb-icon">
+                <i class="fas fa-hourglass-half"></i>
+            </div>
+            <h6 class="airbnb-title">In Progress</h6>
+            <p class="airbnb-count">{{ in_progress_count }} leads</p>
+            <button class="airbnb-btn airbnb-btn-info" onclick="loadLeads('final_status', 'In Progress')">
+                <i class="fas fa-eye"></i> View In Progress
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <h4 class="mb-3"><i class="fas fa-thermometer-half"></i> Filter by Lead Category</h4>
+    </div>
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="airbnb-card airbnb-card-danger">
+            <div class="airbnb-icon">
+                <i class="fas fa-fire"></i>
+            </div>
+            <h6 class="airbnb-title">Hot Leads</h6>
+            <p class="airbnb-count">{{ hot_count }} leads</p>
+            <button class="airbnb-btn airbnb-btn-danger" onclick="loadLeads('lead_category', 'Hot')">
+                <i class="fas fa-eye"></i> View Hot Leads
+            </button>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="airbnb-card airbnb-card-warning">
+            <div class="airbnb-icon">
+                <i class="fas fa-sun"></i>
+            </div>
+            <h6 class="airbnb-title">Warm Leads</h6>
+            <p class="airbnb-count">{{ warm_count }} leads</p>
+            <button class="airbnb-btn airbnb-btn-warning" onclick="loadLeads('lead_category', 'Warm')">
+                <i class="fas fa-eye"></i> View Warm Leads
+            </button>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="airbnb-card airbnb-card-info">
+            <div class="airbnb-icon">
+                <i class="fas fa-snowflake"></i>
+            </div>
+            <h6 class="airbnb-title">Cold Leads</h6>
+            <p class="airbnb-count">{{ cold_count }} leads</p>
+            <button class="airbnb-btn airbnb-btn-info" onclick="loadLeads('lead_category', 'Cold')">
+                <i class="fas fa-eye"></i> View Cold Leads
+            </button>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="airbnb-card airbnb-card-secondary">
+            <div class="airbnb-icon">
+                <i class="fas fa-ban"></i>
+            </div>
+            <h6 class="airbnb-title">Not Interested</h6>
+            <p class="airbnb-count">{{ not_interested_count }} leads</p>
+            <button class="airbnb-btn airbnb-btn-secondary" onclick="loadLeads('lead_category', 'Not Interested')">
+                <i class="fas fa-eye"></i> View Not Interested
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Results Section -->
+<div id="resultsSection" style="display: none;">
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0" id="resultsTitle">
+                <i class="fas fa-list"></i> Filtered Results
+            </h5>
+            <div>
+                <button class="btn btn-success btn-sm" id="exportBtn" onclick="exportToCSV()">
+                    <i class="fas fa-download"></i> Export to CSV
+                </button>
+                <button class="btn btn-secondary btn-sm" onclick="clearResults()">
+                    <i class="fas fa-times"></i> Clear
+                </button>
+            </div>
+        </div>
+
+        <!-- Pagination Controls -->
+        <div class="card-body border-bottom">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <div class="d-flex align-items-center">
+                        <label for="rowsPerPage" class="form-label me-2 mb-0">Show:</label>
+                        <select class="form-select form-select-sm" id="rowsPerPage" style="width: auto;" onchange="changeRowsPerPage()">
+                            <option value="10">10 rows</option>
+                            <option value="25">25 rows</option>
+                            <option value="50">50 rows</option>
+                            <option value="100">100 rows</option>
+                            <option value="all">All rows</option>
+                        </select>
+                        <span class="ms-3 text-muted" id="showingInfo">Showing 0 of 0 entries</span>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <nav aria-label="Table pagination">
+                        <ul class="pagination pagination-sm justify-content-end mb-0" id="pagination">
+                            <!-- Pagination will be generated here -->
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0" id="resultsTable">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>UID</th>
+                            <th>Date</th>
+                            <th>Customer Name</th>
+                            <th>Mobile</th>
+                            <th>Source</th>
+                            <th>CRE Name</th>
+                            <th>PS Name</th>
+                            <th>Lead Category</th>
+                            <th>Model Interested</th>
+                            <th>Branch</th>
+                            <th>Lead Status</th>
+                            <th>Final Status</th>
+                            <th>Follow Up Date</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsTableBody">
+                        <!-- Results will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer">
+            <div class="d-flex justify-content-between align-items-center">
+                <span class="text-muted">
+                    Total Records: <strong id="totalRecords">0</strong>
+                </span>
+                <div>
+                    <small class="text-muted">Click "Export to CSV" to download the filtered data</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Spinner -->
+<div id="loadingSpinner" class="text-center" style="display: none;">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <p class="mt-2">Loading leads...</p>
+</div>
+
+<style>
+/* Airbnb-style Cards */
+.airbnb-card {
+    background: var(--airbnb-white);
+    border: 1px solid var(--airbnb-gray-200);
+    border-radius: var(--airbnb-border-radius);
+    padding: 1.5rem 1rem;
+    text-align: center;
+    transition: all 0.3s ease;
+    box-shadow: var(--airbnb-shadow);
+    position: relative;
+    overflow: hidden;
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.airbnb-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--airbnb-shadow-hover);
+}
+
+.airbnb-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--accent-color);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.airbnb-card:hover::before {
+    opacity: 1;
+}
+
+.airbnb-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1rem;
+    background: var(--accent-color);
+    color: var(--airbnb-white);
+    font-size: 1.5rem;
+}
+
+.airbnb-title {
+    color: var(--accent-color);
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    font-size: 1rem;
+}
+
+.airbnb-count {
+    color: var(--airbnb-gray-600);
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+    font-weight: 400;
+}
+
+.airbnb-btn {
+    background: var(--accent-color);
+    color: var(--airbnb-white);
+    border: none;
+    border-radius: var(--airbnb-border-radius);
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    width: 100%;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.airbnb-btn:hover {
+    background: var(--accent-color-hover);
+    transform: translateY(-1px);
+    color: var(--airbnb-white);
+}
+
+/* Color variants */
+.airbnb-card-success {
+    --accent-color: var(--airbnb-green);
+    --accent-color-hover: #00B3A6;
+}
+
+.airbnb-card-danger {
+    --accent-color: var(--airbnb-red);
+    --accent-color-hover: var(--airbnb-red-dark);
+}
+
+.airbnb-card-warning {
+    --accent-color: var(--airbnb-yellow);
+    --accent-color-hover: #E6A200;
+}
+
+.airbnb-card-info {
+    --accent-color: var(--airbnb-blue);
+    --accent-color-hover: #006B75;
+}
+
+.airbnb-card-secondary {
+    --accent-color: var(--airbnb-gray-500);
+    --accent-color-hover: #5A5A5A;
+}
+
+.airbnb-btn-success { background: var(--airbnb-green); }
+.airbnb-btn-success:hover { background: #00B3A6; }
+.airbnb-btn-danger { background: var(--airbnb-red); }
+.airbnb-btn-danger:hover { background: var(--airbnb-red-dark); }
+.airbnb-btn-warning { background: var(--airbnb-yellow); color: var(--airbnb-white); }
+.airbnb-btn-warning:hover { background: #E6A200; color: var(--airbnb-white); }
+.airbnb-btn-info { background: var(--airbnb-blue); }
+.airbnb-btn-info:hover { background: #006B75; }
+.airbnb-btn-secondary { background: var(--airbnb-gray-500); }
+.airbnb-btn-secondary:hover { background: #5A5A5A; }
+
+/* Results section styling */
+.card {
+    transition: transform 0.2s ease;
+    border: 1px solid var(--airbnb-gray-200);
+    border-radius: var(--airbnb-border-radius);
+    box-shadow: var(--airbnb-shadow);
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--airbnb-shadow-hover);
+}
+
+#resultsSection {
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.table th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--airbnb-gray-800);
+    color: var(--airbnb-white);
+    border-color: var(--airbnb-gray-700);
+}
+
+.table-hover tbody tr:hover {
+    background-color: var(--airbnb-gray-50);
+}
+
+.pagination {
+    margin-bottom: 0;
+}
+
+.form-select-sm {
+    min-width: 120px;
+    border-color: var(--airbnb-gray-300);
+    border-radius: var(--airbnb-border-radius);
+}
+
+.form-select-sm:focus {
+    border-color: var(--airbnb-red);
+    box-shadow: 0 0 0 0.2rem rgba(255, 56, 92, 0.25);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .airbnb-card {
+        min-height: 180px;
+        padding: 1.25rem 0.75rem;
+    }
+
+    .airbnb-icon {
+        width: 50px;
+        height: 50px;
+        font-size: 1.25rem;
+    }
+
+    .airbnb-title {
+        font-size: 0.9rem;
+    }
+
+    .airbnb-count {
+        font-size: 0.8rem;
+    }
+
+    .airbnb-btn {
+        font-size: 0.8rem;
+        padding: 0.6rem 0.8rem;
+    }
+}
+</style>
+
+<script>
+let currentFilter = null;
+let currentValue = null;
+let currentData = [];
+let currentPage = 1;
+let rowsPerPage = 10;
+let isDateRangeFilter = false;
+let dateRangeParams = {};
+
+// Date range functions
+function setDateRange(period) {
+    const today = new Date();
+    const startDate = document.getElementById('startDate');
+    const endDate = document.getElementById('endDate');
+
+    endDate.value = today.toISOString().split('T')[0];
+
+    switch(period) {
+        case 'today':
+            startDate.value = today.toISOString().split('T')[0];
+            break;
+        case 'week':
+            const weekStart = new Date(today);
+            weekStart.setDate(today.getDate() - today.getDay());
+            startDate.value = weekStart.toISOString().split('T')[0];
+            break;
+        case 'month':
+            const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+            startDate.value = monthStart.toISOString().split('T')[0];
+            break;
+        case 'quarter':
+            const quarterStart = new Date(today.getFullYear(), Math.floor(today.getMonth() / 3) * 3, 1);
+            startDate.value = quarterStart.toISOString().split('T')[0];
+            break;
+        case 'year':
+            const yearStart = new Date(today.getFullYear(), 0, 1);
+            startDate.value = yearStart.toISOString().split('T')[0];
+            break;
+    }
+}
+
+function loadLeadsByDateRange() {
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+    const dateField = document.getElementById('dateField').value;
+
+    if (!startDate || !endDate) {
+        showAlert('warning', 'Please select both start and end dates');
+        return;
+    }
+
+    if (new Date(startDate) > new Date(endDate)) {
+        showAlert('warning', 'Start date cannot be after end date');
+        return;
+    }
+
+    isDateRangeFilter = true;
+    dateRangeParams = {
+        start_date: startDate,
+        end_date: endDate,
+        date_field: dateField
+    };
+
+    // Show loading spinner
+    document.getElementById('loadingSpinner').style.display = 'block';
+    document.getElementById('resultsSection').style.display = 'none';
+
+    // Make API call
+    const params = new URLSearchParams(dateRangeParams);
+    fetch(`{{ url_for('get_leads_by_date_range') }}?${params}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayResults(data.leads, 'date_range', `${startDate} to ${endDate} (${dateField})`);
+            } else {
+                showAlert('error', data.message || 'Error loading leads');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showAlert('error', 'An error occurred while loading leads');
+        })
+        .finally(() => {
+            document.getElementById('loadingSpinner').style.display = 'none';
+        });
+}
+
+function loadLeads(filterType, filterValue) {
+    currentFilter = filterType;
+    currentValue = filterValue;
+    isDateRangeFilter = false;
+
+    // Show loading spinner
+    document.getElementById('loadingSpinner').style.display = 'block';
+    document.getElementById('resultsSection').style.display = 'none';
+
+    // Make API call
+    fetch(`{{ url_for('get_filtered_leads') }}?filter_type=${filterType}&filter_value=${encodeURIComponent(filterValue)}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayResults(data.leads, filterType, filterValue);
+            } else {
+                showAlert('error', data.message || 'Error loading leads');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showAlert('error', 'An error occurred while loading leads');
+        })
+        .finally(() => {
+            document.getElementById('loadingSpinner').style.display = 'none';
+        });
+}
+
+function displayResults(leads, filterType, filterValue) {
+    currentData = leads;
+    currentPage = 1;
+
+    // Update title
+    const title = document.getElementById('resultsTitle');
+    let displayName;
+    if (filterType === 'date_range') {
+        displayName = 'Date Range';
+    } else {
+        displayName = filterType === 'final_status' ? 'Final Status' : 'Lead Category';
+    }
+    title.innerHTML = `<i class="fas fa-list"></i> ${displayName}: ${filterValue} (${leads.length} records)`;
+
+    // Reset pagination
+    document.getElementById('rowsPerPage').value = '10';
+    rowsPerPage = 10;
+
+    // Display paginated results
+    displayPaginatedResults();
+
+    // Show results section
+    document.getElementById('resultsSection').style.display = 'block';
+
+    // Scroll to results
+    document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+}
+
+function displayPaginatedResults() {
+    const tbody = document.getElementById('resultsTableBody');
+    tbody.innerHTML = '';
+
+    if (currentData.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="13" class="text-center py-4">
+                    <i class="fas fa-inbox fa-2x text-muted mb-2"></i>
+                    <p class="text-muted">No leads found</p>
+                </td>
+            </tr>
+        `;
+        updatePaginationInfo(0, 0, 0);
+        return;
+    }
+
+    // Calculate pagination
+    const totalRecords = currentData.length;
+    const totalPages = rowsPerPage === 'all' ? 1 : Math.ceil(totalRecords / rowsPerPage);
+
+    // Get current page data
+    let startIndex, endIndex, pageData;
+    if (rowsPerPage === 'all') {
+        startIndex = 0;
+        endIndex = totalRecords;
+        pageData = currentData;
+    } else {
+        startIndex = (currentPage - 1) * rowsPerPage;
+        endIndex = Math.min(startIndex + rowsPerPage, totalRecords);
+        pageData = currentData.slice(startIndex, endIndex);
+    }
+
+    // Populate table
+    pageData.forEach(lead => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td><span class="badge bg-primary">${lead.uid || ''}</span></td>
+            <td>${lead.date || ''}</td>
+            <td>${lead.customer_name || ''}</td>
+            <td>${lead.customer_mobile_number || ''}</td>
+            <td><span class="badge bg-secondary">${lead.source || ''}</span></td>
+            <td>${lead.cre_name || 'Unassigned'}</td>
+            <td>${lead.ps_name || 'Not Assigned'}</td>
+            <td>
+                ${lead.lead_category ?
+                    `<span class="badge ${getCategoryBadgeClass(lead.lead_category)}">${lead.lead_category}</span>` :
+                    'Not specified'
+                }
+            </td>
+            <td>${lead.model_interested || 'Not specified'}</td>
+            <td>${lead.branch || 'Not specified'}</td>
+            <td>${lead.lead_status || 'Pending'}</td>
+            <td>
+                <span class="badge ${getStatusBadgeClass(lead.final_status)}">${lead.final_status || 'Pending'}</span>
+            </td>
+            <td>${lead.follow_up_date || ''}</td>
+        `;
+        tbody.appendChild(row);
+    });
+
+    // Update pagination info and controls
+    updatePaginationInfo(startIndex + 1, endIndex, totalRecords);
+    updatePaginationControls(totalPages);
+}
+
+function updatePaginationInfo(start, end, total) {
+    document.getElementById('showingInfo').textContent = `Showing ${start} to ${end} of ${total} entries`;
+    document.getElementById('totalRecords').textContent = total;
+}
+
+function updatePaginationControls(totalPages) {
+    const pagination = document.getElementById('pagination');
+    pagination.innerHTML = '';
+
+    if (totalPages <= 1 || rowsPerPage === 'all') {
+        return;
+    }
+
+    // Previous button
+    const prevLi = document.createElement('li');
+    prevLi.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
+    prevLi.innerHTML = `<a class="page-link" href="#" onclick="changePage(${currentPage - 1})">Previous</a>`;
+    pagination.appendChild(prevLi);
+
+    // Page numbers
+    const startPage = Math.max(1, currentPage - 2);
+    const endPage = Math.min(totalPages, currentPage + 2);
+
+    if (startPage > 1) {
+        const firstLi = document.createElement('li');
+        firstLi.className = 'page-item';
+        firstLi.innerHTML = '<a class="page-link" href="#" onclick="changePage(1)">1</a>';
+        pagination.appendChild(firstLi);
+
+        if (startPage > 2) {
+            const ellipsisLi = document.createElement('li');
+            ellipsisLi.className = 'page-item disabled';
+            ellipsisLi.innerHTML = '<span class="page-link">...</span>';
+            pagination.appendChild(ellipsisLi);
+        }
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+        const li = document.createElement('li');
+        li.className = `page-item ${i === currentPage ? 'active' : ''}`;
+        li.innerHTML = `<a class="page-link" href="#" onclick="changePage(${i})">${i}</a>`;
+        pagination.appendChild(li);
+    }
+
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            const ellipsisLi = document.createElement('li');
+            ellipsisLi.className = 'page-item disabled';
+            ellipsisLi.innerHTML = '<span class="page-link">...</span>';
+            pagination.appendChild(ellipsisLi);
+        }
+
+        const lastLi = document.createElement('li');
+        lastLi.className = 'page-item';
+        lastLi.innerHTML = `<a class="page-link" href="#" onclick="changePage(${totalPages})">${totalPages}</a>`;
+        pagination.appendChild(lastLi);
+    }
+
+    // Next button
+    const nextLi = document.createElement('li');
+    nextLi.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
+    nextLi.innerHTML = `<a class="page-link" href="#" onclick="changePage(${currentPage + 1})">Next</a>`;
+    pagination.appendChild(nextLi);
+}
+
+function changePage(page) {
+    if (page < 1 || (rowsPerPage !== 'all' && page > Math.ceil(currentData.length / rowsPerPage))) {
+        return;
+    }
+    currentPage = page;
+    displayPaginatedResults();
+}
+
+function changeRowsPerPage() {
+    const select = document.getElementById('rowsPerPage');
+    rowsPerPage = select.value === 'all' ? 'all' : parseInt(select.value);
+    currentPage = 1;
+    displayPaginatedResults();
+}
+
+function getCategoryBadgeClass(category) {
+    switch(category?.toLowerCase()) {
+        case 'hot': return 'bg-danger';
+        case 'warm': return 'bg-warning';
+        case 'cold': return 'bg-info';
+        case 'not interested': return 'bg-secondary';
+        default: return 'bg-light text-dark';
+    }
+}
+
+function getStatusBadgeClass(status) {
+    switch(status?.toLowerCase()) {
+        case 'won': return 'bg-success';
+        case 'lost': return 'bg-danger';
+        case 'in progress': return 'bg-info';
+        case 'pending': return 'bg-warning';
+        default: return 'bg-secondary';
+    }
+}
+
+function exportToCSV() {
+    if (!currentData || currentData.length === 0) {
+        showAlert('warning', 'No data to export');
+        return;
+    }
+
+    // Show loading state
+    const exportBtn = document.getElementById('exportBtn');
+    const originalText = exportBtn.innerHTML;
+    exportBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Exporting...';
+    exportBtn.disabled = true;
+
+    let url;
+    let params;
+
+    if (isDateRangeFilter) {
+        params = new URLSearchParams(dateRangeParams);
+        url = `{{ url_for('export_leads_by_date_csv') }}?${params}`;
+    } else {
+        params = new URLSearchParams({
+            filter_type: currentFilter,
+            filter_value: currentValue
+        });
+        url = `{{ url_for('export_leads_csv') }}?${params}`;
+    }
+
+    fetch(url)
+        .then(response => {
+            if (response.ok) {
+                return response.blob();
+            }
+            throw new Error('Export failed');
+        })
+        .then(blob => {
+            // Create download link
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+
+            let filename;
+            if (isDateRangeFilter) {
+                filename = `leads_date_range_${dateRangeParams.start_date}_to_${dateRangeParams.end_date}_${new Date().toISOString().split('T')[0]}.csv`;
+            } else {
+                filename = `leads_${currentFilter}_${currentValue}_${new Date().toISOString().split('T')[0]}.csv`;
+            }
+
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            showAlert('success', 'Export completed successfully');
+        })
+        .catch(error => {
+            console.error('Export error:', error);
+            showAlert('error', 'Export failed. Please try again.');
+        })
+        .finally(() => {
+            exportBtn.innerHTML = originalText;
+            exportBtn.disabled = false;
+        });
+}
+
+function clearResults() {
+    document.getElementById('resultsSection').style.display = 'none';
+    currentFilter = null;
+    currentValue = null;
+    currentData = [];
+    isDateRangeFilter = false;
+    dateRangeParams = {};
+    currentPage = 1;
+    rowsPerPage = 10;
+}
+
+function showAlert(type, message) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'danger'} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'warning' ? 'exclamation-triangle' : 'exclamation-triangle'}"></i>
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    const container = document.querySelector('.container-main');
+    container.insertBefore(alertDiv, container.firstChild);
+
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+
+// Set default date to today
+document.addEventListener('DOMContentLoaded', function() {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('endDate').value = today;
+});
+</script>
+{% endblock %}
