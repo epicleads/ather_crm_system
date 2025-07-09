@@ -1986,13 +1986,25 @@ def update_lead(uid):
             if follow_up_date:
                 update_data['follow_up_date'] = follow_up_date
 
-            if request.form.get('final_status'):
-                final_status = request.form['final_status']
-                update_data['final_status'] = final_status
-                if final_status == 'Won':
-                    update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                elif final_status == 'Lost':
-                    update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            # Auto-set final status based on lead status
+            won_statuses = []  # CRE doesn't have Retailed/Booked statuses
+            lost_statuses = ['Not Interested', 'Lost to Competition', 'Lost to Co Dealer']
+            
+            # Determine final status based on lead status
+            if lead_status in won_statuses:
+                final_status = 'Won'
+            elif lead_status in lost_statuses:
+                final_status = 'Lost'
+            else:
+                # For other statuses, use the form value or default to Pending
+                final_status = request.form.get('final_status', 'Pending')
+            
+            # Always update final status based on the determined value
+            update_data['final_status'] = final_status
+            if final_status == 'Won':
+                update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            elif final_status == 'Lost':
+                update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
             # Handle call dates and remarks - only record for actual conversations
             if request.form.get('call_date') and call_remark:
@@ -2247,13 +2259,25 @@ def update_ps_lead(uid):
             if request.form.get('follow_up_date'):
                 update_data['follow_up_date'] = follow_up_date
 
-            if request.form.get('final_status'):
-                final_status = request.form['final_status']
-                update_data['final_status'] = final_status
-                if final_status == 'Won':
-                    update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                elif final_status == 'Lost':
-                    update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            # Auto-set final status based on lead status
+            won_statuses = ['Retailed', 'Booked']
+            lost_statuses = ['Not Interested', 'Lost to Competition', 'Lost to codealer', 'Dropped']
+            
+            # Determine final status based on lead status
+            if lead_status in won_statuses:
+                final_status = 'Won'
+            elif lead_status in lost_statuses:
+                final_status = 'Lost'
+            else:
+                # For other statuses, use the form value or default to Pending
+                final_status = request.form.get('final_status', 'Pending')
+            
+            # Always update final status based on the determined value
+            update_data['final_status'] = final_status
+            if final_status == 'Won':
+                update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            elif final_status == 'Lost':
+                update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
             # Handle call dates and remarks for the next available call
             skip_first_call_statuses = [
@@ -2296,15 +2320,13 @@ def update_ps_lead(uid):
                     supabase.table('ps_followup_master').update(update_data).eq('lead_uid', uid).execute()
 
                     # Also update the main lead table final status
-                    if request.form.get('final_status'):
-                        final_status = request.form['final_status']
-                        main_update_data = {'final_status': final_status}
-                        if final_status == 'Won':
-                            main_update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                        elif final_status == 'Lost':
-                            main_update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    main_update_data = {'final_status': final_status}
+                    if final_status == 'Won':
+                        main_update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    elif final_status == 'Lost':
+                        main_update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-                        supabase.table('lead_master').update(main_update_data).eq('uid', uid).execute()
+                    supabase.table('lead_master').update(main_update_data).eq('uid', uid).execute()
 
                     # Log PS lead update
                     auth_manager.log_audit_event(
