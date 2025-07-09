@@ -3,6 +3,34 @@
 {% block title %}Manage Vehicles - Admin Dashboard{% endblock %}
 
 {% block content %}
+<style>
+    .compact-table th, .compact-table td {
+        font-size: 0.92rem;
+        padding: 0.35rem 0.5rem;
+        vertical-align: middle;
+    }
+    .compact-table th {
+        background: #f8f9fa;
+    }
+    .compact-table .table-icon {
+        font-size: 1rem;
+    }
+    .table-filter-input {
+        width: 100%;
+        font-size: 0.92rem;
+        padding: 0.15rem 0.3rem;
+        margin-bottom: 2px;
+        border-radius: 4px;
+        border: 1px solid #e0e0e0;
+    }
+    @media (max-width: 991px) {
+        .compact-table th, .compact-table td {
+            font-size: 0.88rem;
+            padding: 0.25rem 0.3rem;
+        }
+    }
+</style>
+
 <div class="container-fluid">
     <div class="row">
         <div class="col-12">
@@ -249,18 +277,27 @@
         <div class="col-md-6">
             <div class="card shadow">
                 <div class="card-header bg-warning text-dark">
-                    <h5><i class="fas fa-palette"></i> Color Options</h5>
+                    <h5 style="font-size:1.1rem"><i class="fas fa-palette table-icon"></i> Color Options</h5>
                 </div>
                 <div class="card-body">
                     {% if colors %}
                     <div class="table-responsive">
-                        <table class="table table-sm">
+                        <table class="table table-sm compact-table" id="colorOptionsTable">
                             <thead class="table-light">
                                 <tr>
-                                    <th>Vehicle</th>
-                                    <th>Model</th>
-                                    <th>Color</th>
-                                    <th>Action</th>
+                                    <th>
+                                        <input class="table-filter-input" type="text" placeholder="Vehicle" onkeyup="filterTable('colorOptionsTable', 0, this.value)">
+                                        Vehicle
+                                    </th>
+                                    <th>
+                                        <input class="table-filter-input" type="text" placeholder="Model" onkeyup="filterTable('colorOptionsTable', 1, this.value)">
+                                        Model
+                                    </th>
+                                    <th>
+                                        <input class="table-filter-input" type="text" placeholder="Color" onkeyup="filterTable('colorOptionsTable', 2, this.value)">
+                                        Color
+                                    </th>
+                                    <th style="width: 1%"></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -272,8 +309,8 @@
                                         <span class="badge bg-warning">{{ color.color_name }}</span>
                                     </td>
                                     <td>
-                                        <button class="btn btn-sm btn-danger" onclick="deleteColor({{ color.id }}, '{{ color.color_name }}')">
-                                            <i class="fas fa-trash"></i>
+                                        <button class="btn btn-sm btn-danger" style="font-size:0.95rem;padding:2px 7px;" onclick="deleteColor({{ color.id }}, '{{ color.color_name }}')">
+                                            <i class="fas fa-trash table-icon"></i>
                                         </button>
                                     </td>
                                 </tr>
@@ -283,7 +320,7 @@
                     </div>
                     {% else %}
                     <div class="text-center text-muted">
-                        <i class="fas fa-palette fa-3x mb-3"></i>
+                        <i class="fas fa-palette fa-2x mb-2"></i>
                         <p>No color options found.</p>
                     </div>
                     {% endif %}
@@ -294,19 +331,31 @@
         <div class="col-md-6">
             <div class="card shadow">
                 <div class="card-header bg-info text-white">
-                    <h5><i class="fas fa-battery-full"></i> Battery Capacities</h5>
+                    <h5 style="font-size:1.1rem"><i class="fas fa-battery-full table-icon"></i> Battery Capacities</h5>
                 </div>
                 <div class="card-body">
                     {% if batteries %}
                     <div class="table-responsive">
-                        <table class="table table-sm">
+                        <table class="table table-sm compact-table" id="batteryCapacitiesTable">
                             <thead class="table-light">
                                 <tr>
-                                    <th>Vehicle</th>
-                                    <th>Model</th>
-                                    <th>Color</th>
-                                    <th>Capacity</th>
-                                    <th>Action</th>
+                                    <th>
+                                        <input class="table-filter-input" type="text" placeholder="Vehicle" onkeyup="filterTable('batteryCapacitiesTable', 0, this.value)">
+                                        Vehicle
+                                    </th>
+                                    <th>
+                                        <input class="table-filter-input" type="text" placeholder="Model" onkeyup="filterTable('batteryCapacitiesTable', 1, this.value)">
+                                        Model
+                                    </th>
+                                    <th>
+                                        <input class="table-filter-input" type="text" placeholder="Color" onkeyup="filterTable('batteryCapacitiesTable', 2, this.value)">
+                                        Color
+                                    </th>
+                                    <th>
+                                        <input class="table-filter-input" type="text" placeholder="Capacity" onkeyup="filterTable('batteryCapacitiesTable', 3, this.value)">
+                                        Capacity
+                                    </th>
+                                    <th style="width: 1%"></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -319,8 +368,8 @@
                                         <span class="badge bg-info">{{ battery.capacity_kwh }} kWh</span>
                                     </td>
                                     <td>
-                                        <button class="btn btn-sm btn-danger" onclick="deleteBattery({{ battery.id }}, '{{ battery.capacity_kwh }} kWh')">
-                                            <i class="fas fa-trash"></i>
+                                        <button class="btn btn-sm btn-danger" style="font-size:0.95rem;padding:2px 7px;" onclick="deleteBattery({{ battery.id }}, '{{ battery.capacity_kwh }} kWh')">
+                                            <i class="fas fa-trash table-icon"></i>
                                         </button>
                                     </td>
                                 </tr>
@@ -330,7 +379,7 @@
                     </div>
                     {% else %}
                     <div class="text-center text-muted">
-                        <i class="fas fa-battery-full fa-3x mb-3"></i>
+                        <i class="fas fa-battery-full fa-2x mb-2"></i>
                         <p>No battery capacities found.</p>
                     </div>
                     {% endif %}
@@ -805,6 +854,20 @@ function showNotification(title, message, type) {
     
     const bsToast = new bootstrap.Toast(toast);
     bsToast.show();
+}
+
+// Table column filter function
+function filterTable(tableId, colIdx, filterValue) {
+    const table = document.getElementById(tableId);
+    const filter = filterValue.toLowerCase();
+    const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+    for (let i = 0; i < rows.length; i++) {
+        const cell = rows[i].getElementsByTagName('td')[colIdx];
+        if (cell) {
+            const txtValue = cell.textContent || cell.innerText;
+            rows[i].style.display = txtValue.toLowerCase().indexOf(filter) > -1 ? '' : 'none';
+        }
+    }
 }
 </script>
 {% endblock %} 
