@@ -5840,5 +5840,95 @@ def get_colors(model_id):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+# --- Duplicate Prevention Insert Functions ---
+
+def add_vehicle(vehicle_name):
+    exists = supabase.table('vehicles').select('id').eq('vehicle_name', vehicle_name).execute()
+    if exists.data:
+        print("Row ignored: Duplicate entry already exists for vehicles")
+        return False
+    supabase.table('vehicles').insert({'vehicle_name': vehicle_name}).execute()
+    print("Entry Added: Vehicle")
+    return True
+
+def add_model(vehicle_id, model_name):
+    exists = supabase.table('models').select('id').eq('vehicle_id', vehicle_id).eq('model_name', model_name).execute()
+    if exists.data:
+        print("Row ignored: Duplicate entry already exists for models")
+        return False
+    supabase.table('models').insert({'vehicle_id': vehicle_id, 'model_name': model_name}).execute()
+    print("Entry Added: Model")
+    return True
+
+def add_color_option(vehicle_id, model_id, color_name):
+    exists = supabase.table('color_options').select('id').eq('vehicle_id', vehicle_id).eq('model_id', model_id).eq('color_name', color_name).execute()
+    if exists.data:
+        print("Row ignored: Duplicate entry already exists for color_options")
+        return False
+    supabase.table('color_options').insert({'vehicle_id': vehicle_id, 'model_id': model_id, 'color_name': color_name}).execute()
+    print("Entry Added: Color Option")
+    return True
+
+def add_battery_capacity(vehicle_id, model_id, color_id, capacity_kwh):
+    exists = supabase.table('battery_capacities').select('id').eq('vehicle_id', vehicle_id).eq('model_id', model_id).eq('color_id', color_id).eq('capacity_kwh', capacity_kwh).execute()
+    if exists.data:
+        print("Row ignored: Duplicate entry already exists for battery_capacities")
+        return False
+    supabase.table('battery_capacities').insert({'vehicle_id': vehicle_id, 'model_id': model_id, 'color_id': color_id, 'capacity_kwh': capacity_kwh}).execute()
+    print("Entry Added: Battery Capacity")
+    return True
+
+# --- End Duplicate Prevention Insert Functions ---
+
+# --- Fast Batch Insert Functions ---
+
+def fast_batch_insert_vehicles(vehicle_names):
+    rows = [{'vehicle_name': name} for name in vehicle_names]
+    result = supabase.table('vehicles').insert(rows, upsert=False).execute()
+    inserted_count = len(result.data) if result.data else 0
+    skipped_count = len(vehicle_names) - inserted_count
+    return inserted_count, skipped_count
+
+def fast_batch_insert_models(vehicle_id, model_names):
+    rows = [{'vehicle_id': vehicle_id, 'model_name': name} for name in model_names]
+    result = supabase.table('models').insert(rows, upsert=False).execute()
+    inserted_count = len(result.data) if result.data else 0
+    skipped_count = len(model_names) - inserted_count
+    return inserted_count, skipped_count
+
+def fast_batch_insert_colors(vehicle_id, model_id, color_names):
+    rows = [{'vehicle_id': vehicle_id, 'model_id': model_id, 'color_name': name} for name in color_names]
+    result = supabase.table('color_options').insert(rows, upsert=False).execute()
+    inserted_count = len(result.data) if result.data else 0
+    skipped_count = len(color_names) - inserted_count
+    return inserted_count, skipped_count
+
+def fast_batch_insert_batteries(vehicle_id, model_id, color_id, capacities):
+    rows = [{'vehicle_id': vehicle_id, 'model_id': model_id, 'color_id': color_id, 'capacity_kwh': cap} for cap in capacities]
+    result = supabase.table('battery_capacities').insert(rows, upsert=False).execute()
+    inserted_count = len(result.data) if result.data else 0
+    skipped_count = len(capacities) - inserted_count
+    return inserted_count, skipped_count
+
+# --- Example endpoint for models ---
+from flask import request, jsonify
+
+@app.route('/batch_add_models', methods=['POST'])
+def batch_add_models():
+    vehicle_id = request.json['vehicle_id']
+    model_names = request.json['model_names']
+    inserted, skipped = fast_batch_insert_models(vehicle_id, model_names)
+    if inserted == 0:
+        message = "❌ No new data inserted — all rows were duplicates."
+        status = "error"
+    else:
+        message = f"✅ {inserted} rows inserted successfully"
+        if skipped > 0:
+            message += f"<br>⚠️ {skipped} duplicate rows skipped"
+        status = "success"
+    return jsonify({'success': True, 'message': message, 'status': status})
+
+# --- End Fast Batch Insert Functions ---
+
 if __name__ == '__main__':
     socketio.run(app, debug=True)
