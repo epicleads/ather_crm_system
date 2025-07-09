@@ -1,0 +1,873 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Vehicles - Admin Dashboard{% endblock %}
+
+{% block content %}
+<style>
+    .compact-table th, .compact-table td {
+        font-size: 0.92rem;
+        padding: 0.35rem 0.5rem;
+        vertical-align: middle;
+    }
+    .compact-table th {
+        background: #f8f9fa;
+    }
+    .compact-table .table-icon {
+        font-size: 1rem;
+    }
+    .table-filter-input {
+        width: 100%;
+        font-size: 0.92rem;
+        padding: 0.15rem 0.3rem;
+        margin-bottom: 2px;
+        border-radius: 4px;
+        border: 1px solid #e0e0e0;
+    }
+    @media (max-width: 991px) {
+        .compact-table th, .compact-table td {
+            font-size: 0.88rem;
+            padding: 0.25rem 0.3rem;
+        }
+    }
+</style>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2><i class="fas fa-car text-primary"></i> Vehicle Management</h2>
+                    <p class="text-muted">Manage vehicles, models, colors, and battery capacities</p>
+                </div>
+                <div>
+                    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Vehicle Section -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h5><i class="fas fa-plus"></i> Add New Vehicle</h5>
+                </div>
+                <div class="card-body">
+                    <form id="addVehicleForm">
+                        <div class="mb-3">
+                            <label for="vehicle_name" class="form-label">Vehicle Name</label>
+                            <input type="text" class="form-control" id="vehicle_name" name="vehicle_name" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Add Vehicle
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header bg-success text-white">
+                    <h5><i class="fas fa-plus"></i> Add New Model</h5>
+                </div>
+                <div class="card-body">
+                    <form id="addModelForm">
+                        <div class="mb-3">
+                            <label for="model_vehicle_id" class="form-label">Vehicle</label>
+                            <select class="form-select" id="model_vehicle_id" name="vehicle_id" required>
+                                <option value="">Select Vehicle</option>
+                                {% for vehicle in vehicles %}
+                                <option value="{{ vehicle.id }}">{{ vehicle.vehicle_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="model_name" class="form-label">Model Name</label>
+                            <input type="text" class="form-control" id="model_name" name="model_name" required>
+                        </div>
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-plus"></i> Add Model
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Color and Battery Section -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header bg-warning text-dark">
+                    <h5><i class="fas fa-palette"></i> Add Color Option</h5>
+                </div>
+                <div class="card-body">
+                    <form id="addColorForm">
+                        <div class="mb-3">
+                            <label for="color_vehicle_id" class="form-label">Vehicle</label>
+                            <select class="form-select" id="color_vehicle_id" name="vehicle_id" required>
+                                <option value="">Select Vehicle</option>
+                                {% for vehicle in vehicles %}
+                                <option value="{{ vehicle.id }}">{{ vehicle.vehicle_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="color_model_id" class="form-label">Models (Multiple Selection)</label>
+                            <div class="border rounded p-3" id="color_models_container">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="select_all_models" onchange="toggleAllModels()">
+                                    <label class="form-check-label" for="select_all_models">
+                                        <strong>Select All Models</strong>
+                                    </label>
+                                </div>
+                                <hr>
+                                <div id="color_models_list">
+                                    <!-- Models will be loaded here dynamically -->
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="color_name" class="form-label">Color Name</label>
+                            <input type="text" class="form-control" id="color_name" name="color_name" 
+                                   placeholder="Enter color name (e.g., Lunar Grey, Indium Blue)" required>
+                            <!-- <small class="form-text text-muted">Note: Indium Blue is only available for APEX model</small> -->
+                        </div>
+                        <button type="submit" class="btn btn-warning">
+                            <i class="fas fa-plus"></i> Add Color
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header bg-info text-white">
+                    <h5><i class="fas fa-battery-full"></i> Add Battery Capacity</h5>
+                </div>
+                <div class="card-body">
+                    <form id="addBatteryForm">
+                        <div class="mb-3">
+                            <label for="battery_vehicle_id" class="form-label">Vehicle</label>
+                            <select class="form-select" id="battery_vehicle_id" name="vehicle_id" required>
+                                <option value="">Select Vehicle</option>
+                                {% for vehicle in vehicles %}
+                                <option value="{{ vehicle.id }}">{{ vehicle.vehicle_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="battery_model_id" class="form-label">Models (Multiple Selection)</label>
+                            <div class="border rounded p-3" id="battery_models_container">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="select_all_battery_models" onchange="toggleAllBatteryModels()">
+                                    <label class="form-check-label" for="select_all_battery_models">
+                                        <strong>Select All Models</strong>
+                                    </label>
+                                </div>
+                                <hr>
+                                <div id="battery_models_list">
+                                    <!-- Models will be loaded here dynamically -->
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="battery_color_id" class="form-label">Colors (Multiple Selection)</label>
+                            <div class="border rounded p-3" id="battery_colors_container">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="select_all_colors" onchange="toggleAllColors()">
+                                    <label class="form-check-label" for="select_all_colors">
+                                        <strong>Select All Colors</strong>
+                                    </label>
+                                </div>
+                                <hr>
+                                <div id="battery_colors_list">
+                                    <!-- Colors will be loaded here dynamically -->
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="capacity_kwh" class="form-label">Battery Capacity (kWh)</label>
+                            <input type="number" class="form-control" id="capacity_kwh" name="capacity_kwh" step="0.1" min="0" required>
+                        </div>
+                        <button type="submit" class="btn btn-info">
+                            <i class="fas fa-plus"></i> Add Battery Capacity
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vehicles List -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h5><i class="fas fa-list"></i> Vehicles & Models</h5>
+                </div>
+                <div class="card-body">
+                    {% if vehicles %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Vehicle</th>
+                                    <th>Models</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for vehicle in vehicles %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ vehicle.vehicle_name }}</strong>
+                                    </td>
+                                    <td>
+                                        {% set vehicle_models = models | selectattr("vehicle_id", "equalto", vehicle.id) | list %}
+                                        {% if vehicle_models %}
+                                        <div class="row">
+                                            {% for model in vehicle_models %}
+                                            <div class="col-md-6 mb-2">
+                                                <div class="card border">
+                                                    <div class="card-body p-2">
+                                                        <div class="d-flex justify-content-between align-items-center">
+                                                            <span class="badge bg-success">{{ model.model_name }}</span>
+                                                            <button class="btn btn-sm btn-danger" onclick="deleteModel({{ model.id }}, '{{ model.model_name }}')">
+                                                                <i class="fas fa-trash"></i>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                        {% else %}
+                                        <span class="text-muted">No models</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-danger" onclick="deleteVehicle({{ vehicle.id }}, '{{ vehicle.vehicle_name }}')">
+                                            <i class="fas fa-trash"></i> Delete Vehicle
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted">
+                        <i class="fas fa-car fa-3x mb-3"></i>
+                        <p>No vehicles found. Add your first vehicle above.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Colors and Batteries List -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header bg-warning text-dark">
+                    <h5 style="font-size:1.1rem"><i class="fas fa-palette table-icon"></i> Color Options</h5>
+                </div>
+                <div class="card-body">
+                    {% if colors %}
+                    <div class="table-responsive">
+                        <table class="table table-sm compact-table" id="colorOptionsTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>
+                                        <input class="table-filter-input" type="text" placeholder="Vehicle" onkeyup="filterTable('colorOptionsTable', 0, this.value)">
+                                        Vehicle
+                                    </th>
+                                    <th>
+                                        <input class="table-filter-input" type="text" placeholder="Model" onkeyup="filterTable('colorOptionsTable', 1, this.value)">
+                                        Model
+                                    </th>
+                                    <th>
+                                        <input class="table-filter-input" type="text" placeholder="Color" onkeyup="filterTable('colorOptionsTable', 2, this.value)">
+                                        Color
+                                    </th>
+                                    <th style="width: 1%"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for color in colors %}
+                                <tr>
+                                    <td>{{ color.models.vehicles.vehicle_name }}</td>
+                                    <td>{{ color.models.model_name }}</td>
+                                    <td>
+                                        <span class="badge bg-warning">{{ color.color_name }}</span>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-danger" style="font-size:0.95rem;padding:2px 7px;" onclick="deleteColor({{ color.id }}, '{{ color.color_name }}')">
+                                            <i class="fas fa-trash table-icon"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted">
+                        <i class="fas fa-palette fa-2x mb-2"></i>
+                        <p>No color options found.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header bg-info text-white">
+                    <h5 style="font-size:1.1rem"><i class="fas fa-battery-full table-icon"></i> Battery Capacities</h5>
+                </div>
+                <div class="card-body">
+                    {% if batteries %}
+                    <div class="table-responsive">
+                        <table class="table table-sm compact-table" id="batteryCapacitiesTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>
+                                        <input class="table-filter-input" type="text" placeholder="Vehicle" onkeyup="filterTable('batteryCapacitiesTable', 0, this.value)">
+                                        Vehicle
+                                    </th>
+                                    <th>
+                                        <input class="table-filter-input" type="text" placeholder="Model" onkeyup="filterTable('batteryCapacitiesTable', 1, this.value)">
+                                        Model
+                                    </th>
+                                    <th>
+                                        <input class="table-filter-input" type="text" placeholder="Color" onkeyup="filterTable('batteryCapacitiesTable', 2, this.value)">
+                                        Color
+                                    </th>
+                                    <th>
+                                        <input class="table-filter-input" type="text" placeholder="Capacity" onkeyup="filterTable('batteryCapacitiesTable', 3, this.value)">
+                                        Capacity
+                                    </th>
+                                    <th style="width: 1%"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for battery in batteries %}
+                                <tr>
+                                    <td>{{ battery.color_options.models.vehicles.vehicle_name }}</td>
+                                    <td>{{ battery.color_options.models.model_name }}</td>
+                                    <td>{{ battery.color_options.color_name }}</td>
+                                    <td>
+                                        <span class="badge bg-info">{{ battery.capacity_kwh }} kWh</span>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-danger" style="font-size:0.95rem;padding:2px 7px;" onclick="deleteBattery({{ battery.id }}, '{{ battery.capacity_kwh }} kWh')">
+                                            <i class="fas fa-trash table-icon"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted">
+                        <i class="fas fa-battery-full fa-2x mb-2"></i>
+                        <p>No battery capacities found.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container for Notifications -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="notificationToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header">
+            <strong class="me-auto" id="toastTitle">Notification</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <div class="toast-body" id="toastMessage">
+        </div>
+    </div>
+</div>
+
+<script>
+// Initialize form handlers
+document.addEventListener('DOMContentLoaded', function() {
+    // Add Vehicle Form
+    document.getElementById('addVehicleForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        
+        fetch('/add_vehicle', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Success', data.message, 'success');
+                this.reset();
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showNotification('Error', data.error, 'error');
+            }
+        })
+        .catch(error => {
+            showNotification('Error', 'An error occurred while adding vehicle', 'error');
+        });
+    });
+
+    // Add Model Form
+    document.getElementById('addModelForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        
+        fetch('/add_model', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Success', data.message, 'success');
+                this.reset();
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showNotification('Error', data.error, 'error');
+            }
+        })
+        .catch(error => {
+            showNotification('Error', 'An error occurred while adding model', 'error');
+        });
+    });
+
+    // Add Color Form
+    document.getElementById('addColorForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Get selected models
+        const selectedModels = Array.from(document.querySelectorAll('#color_models_list .model-checkbox:checked'))
+            .map(checkbox => checkbox.value);
+        
+        if (selectedModels.length === 0) {
+            showNotification('Error', 'Please select at least one model', 'error');
+            return;
+        }
+        
+        const colorName = document.getElementById('color_name').value;
+        if (!colorName) {
+            showNotification('Error', 'Please select a color', 'error');
+            return;
+        }
+        
+        // Add color to each selected model
+        const promises = selectedModels.map(modelId => {
+            const formData = new FormData();
+            formData.append('model_id', modelId);
+            formData.append('color_name', colorName);
+            
+            return fetch('/add_color', {
+                method: 'POST',
+                body: formData
+            }).then(response => response.json());
+        });
+        
+        Promise.all(promises)
+            .then(results => {
+                const successCount = results.filter(result => result.success).length;
+                const errorCount = results.length - successCount;
+                
+                if (errorCount === 0) {
+                    showNotification('Success', `Color "${colorName}" added to ${successCount} model(s) successfully`, 'success');
+                    this.reset();
+                    document.getElementById('color_models_list').innerHTML = '';
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showNotification('Warning', `Color added to ${successCount} model(s), but failed for ${errorCount} model(s)`, 'error');
+                }
+            })
+            .catch(error => {
+                showNotification('Error', 'An error occurred while adding colors', 'error');
+            });
+    });
+
+    // Add Battery Form
+    document.getElementById('addBatteryForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Get selected colors
+        const selectedColors = Array.from(document.querySelectorAll('#battery_colors_list .color-checkbox:checked'))
+            .map(checkbox => checkbox.value);
+        
+        if (selectedColors.length === 0) {
+            showNotification('Error', 'Please select at least one color', 'error');
+            return;
+        }
+        
+        const capacityKwh = document.getElementById('capacity_kwh').value;
+        if (!capacityKwh) {
+            showNotification('Error', 'Please enter battery capacity', 'error');
+            return;
+        }
+        
+        // Add battery capacity to each selected color
+        const promises = selectedColors.map(colorId => {
+            const formData = new FormData();
+            formData.append('color_id', colorId);
+            formData.append('capacity_kwh', capacityKwh);
+            
+            return fetch('/add_battery', {
+                method: 'POST',
+                body: formData
+            }).then(response => response.json());
+        });
+        
+        Promise.all(promises)
+            .then(results => {
+                const successCount = results.filter(result => result.success).length;
+                const errorCount = results.length - successCount;
+                
+                if (errorCount === 0) {
+                    showNotification('Success', `Battery capacity ${capacityKwh} kWh added to ${successCount} color(s) successfully`, 'success');
+                    this.reset();
+                    document.getElementById('battery_models_list').innerHTML = '';
+                    document.getElementById('battery_colors_list').innerHTML = '';
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showNotification('Warning', `Battery capacity added to ${successCount} color(s), but failed for ${errorCount} color(s)`, 'error');
+                }
+            })
+            .catch(error => {
+                showNotification('Error', 'An error occurred while adding battery capacities', 'error');
+            });
+    });
+
+    // Setup vehicle change handlers for dynamic model loading
+    setupVehicleChangeHandlers();
+    
+});
+
+// Setup vehicle change handlers
+function setupVehicleChangeHandlers() {
+    const colorVehicleSelect = document.getElementById('color_vehicle_id');
+    const batteryVehicleSelect = document.getElementById('battery_vehicle_id');
+    
+    if (colorVehicleSelect) {
+        colorVehicleSelect.addEventListener('change', function() {
+            loadModelsForVehicleMultiple(this.value, 'color_models_list');
+        });
+    }
+    
+    if (batteryVehicleSelect) {
+        batteryVehicleSelect.addEventListener('change', function() {
+            loadModelsForVehicleMultiple(this.value, 'battery_models_list');
+        });
+    }
+}
+
+// Load models for multiple selection
+function loadModelsForVehicleMultiple(vehicleId, targetContainerId) {
+    if (!vehicleId) {
+        document.getElementById(targetContainerId).innerHTML = '<p class="text-muted">Select a vehicle first</p>';
+        return;
+    }
+    
+    fetch(`/get_models/${vehicleId}`)
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById(targetContainerId);
+            container.innerHTML = '';
+            
+            if (data.success && data.models) {
+                data.models.forEach(model => {
+                    const div = document.createElement('div');
+                    div.className = 'form-check';
+                    div.innerHTML = `
+                        <input class="form-check-input model-checkbox" type="checkbox" 
+                               id="model_${model.id}" value="${model.id}" name="model_ids[]">
+                        <label class="form-check-label" for="model_${model.id}">
+                            ${model.model_name}
+                        </label>
+                    `;
+                    container.appendChild(div);
+                });
+            } else {
+                container.innerHTML = '<p class="text-muted">No models found for this vehicle</p>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading models:', error);
+            document.getElementById(targetContainerId).innerHTML = '<p class="text-danger">Error loading models</p>';
+        });
+}
+
+// Toggle all models for color form
+function toggleAllModels() {
+    const selectAllCheckbox = document.getElementById('select_all_models');
+    const modelCheckboxes = document.querySelectorAll('#color_models_list .model-checkbox');
+    
+    modelCheckboxes.forEach(checkbox => {
+        checkbox.checked = selectAllCheckbox.checked;
+    });
+}
+
+// Toggle all models for battery form
+function toggleAllBatteryModels() {
+    const selectAllCheckbox = document.getElementById('select_all_battery_models');
+    const modelCheckboxes = document.querySelectorAll('#battery_models_list .model-checkbox');
+    
+    modelCheckboxes.forEach(checkbox => {
+        checkbox.checked = selectAllCheckbox.checked;
+    });
+    
+    // Load colors for selected models
+    loadColorsForSelectedModels();
+}
+
+// Toggle all colors
+function toggleAllColors() {
+    const selectAllCheckbox = document.getElementById('select_all_colors');
+    const colorCheckboxes = document.querySelectorAll('#battery_colors_list .color-checkbox');
+    
+    colorCheckboxes.forEach(checkbox => {
+        checkbox.checked = selectAllCheckbox.checked;
+    });
+}
+
+// Load colors for selected models
+function loadColorsForSelectedModels() {
+    const selectedModels = Array.from(document.querySelectorAll('#battery_models_list .model-checkbox:checked'))
+        .map(checkbox => checkbox.value);
+
+    if (selectedModels.length === 0) {
+        document.getElementById('battery_colors_list').innerHTML = '<p class="text-muted">Select models first</p>';
+        return;
+    }
+
+    // Load colors for all selected models
+    Promise.all(selectedModels.map(modelId =>
+        fetch(`/get_colors/${modelId}`).then(response => response.json())
+    )).then(results => {
+        const colorMap = new Map(); // key: color_name, value: {id, color_name}
+        results.forEach(result => {
+            if (result.success && result.colors) {
+                result.colors.forEach(color => {
+                    // Only add if this color name hasn't been added yet
+                    if (!colorMap.has(color.color_name)) {
+                        colorMap.set(color.color_name, color);
+                    }
+                });
+            }
+        });
+
+        const container = document.getElementById('battery_colors_list');
+        container.innerHTML = '';
+
+        if (colorMap.size > 0) {
+            colorMap.forEach(color => {
+                const div = document.createElement('div');
+                div.className = 'form-check';
+                div.innerHTML = `
+                    <input class="form-check-input color-checkbox" type="checkbox" 
+                           id="color_${color.id}" value="${color.id}" name="color_ids[]">
+                    <label class="form-check-label" for="color_${color.id}">
+                        ${color.color_name}
+                    </label>
+                `;
+                container.appendChild(div);
+            });
+        } else {
+            container.innerHTML = '<p class="text-muted">No colors found for selected models</p>';
+        }
+    }).catch(error => {
+        console.error('Error loading colors:', error);
+        document.getElementById('battery_colors_list').innerHTML = '<p class="text-danger">Error loading colors</p>';
+    });
+}
+
+// Add event listeners for model selection changes
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('model-checkbox') && e.target.closest('#battery_models_list')) {
+        loadColorsForSelectedModels();
+    }
+});
+
+// Load models for a specific vehicle
+function loadModelsForVehicle(vehicleId, targetSelectId) {
+    if (!vehicleId) {
+        document.getElementById(targetSelectId).innerHTML = '<option value="">Select Model</option>';
+        return;
+    }
+    
+    fetch(`/get_models/${vehicleId}`)
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById(targetSelectId);
+            select.innerHTML = '<option value="">Select Model</option>';
+            
+            if (data.success && data.models) {
+                data.models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = model.model_name;
+                    select.appendChild(option);
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error loading models:', error);
+        });
+}
+
+// Load colors for a specific model
+function loadColorsForModel(modelId, targetSelectId) {
+    if (!modelId) {
+        document.getElementById(targetSelectId).innerHTML = '<option value="">Select Color</option>';
+        return;
+    }
+    
+    fetch(`/get_colors/${modelId}`)
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById(targetSelectId);
+            select.innerHTML = '<option value="">Select Color</option>';
+            
+            if (data.success && data.colors) {
+                data.colors.forEach(color => {
+                    const option = document.createElement('option');
+                    option.value = color.id;
+                    option.textContent = color.color_name;
+                    select.appendChild(option);
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error loading colors:', error);
+        });
+}
+
+
+
+// Delete functions
+function deleteVehicle(vehicleId, vehicleName) {
+    if (confirm(`Are you sure you want to delete the vehicle "${vehicleName}"? This will also delete all associated models, colors, and battery capacities.`)) {
+        fetch(`/delete_vehicle/${vehicleId}`, {
+            method: 'DELETE'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Success', data.message, 'success');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showNotification('Error', data.error, 'error');
+            }
+        })
+        .catch(error => {
+            showNotification('Error', 'An error occurred while deleting vehicle', 'error');
+        });
+    }
+}
+
+function deleteModel(modelId, modelName) {
+    if (confirm(`Are you sure you want to delete the model "${modelName}"? This will also delete all associated colors and battery capacities.`)) {
+        fetch(`/delete_model/${modelId}`, {
+            method: 'DELETE'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Success', data.message, 'success');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showNotification('Error', data.error, 'error');
+            }
+        })
+        .catch(error => {
+            showNotification('Error', 'An error occurred while deleting model', 'error');
+        });
+    }
+}
+
+function deleteColor(colorId, colorName) {
+    if (confirm(`Are you sure you want to delete the color "${colorName}"? This will also delete all associated battery capacities.`)) {
+        fetch(`/delete_color/${colorId}`, {
+            method: 'DELETE'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Success', data.message, 'success');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showNotification('Error', data.error, 'error');
+            }
+        })
+        .catch(error => {
+            showNotification('Error', 'An error occurred while deleting color', 'error');
+        });
+    }
+}
+
+function deleteBattery(batteryId, batteryName) {
+    if (confirm(`Are you sure you want to delete the battery capacity "${batteryName}"?`)) {
+        fetch(`/delete_battery/${batteryId}`, {
+            method: 'DELETE'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Success', data.message, 'success');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showNotification('Error', data.error, 'error');
+            }
+        })
+        .catch(error => {
+            showNotification('Error', 'An error occurred while deleting battery capacity', 'error');
+        });
+    }
+}
+
+// Show notification toast
+function showNotification(title, message, type) {
+    const toast = document.getElementById('notificationToast');
+    const toastTitle = document.getElementById('toastTitle');
+    const toastMessage = document.getElementById('toastMessage');
+    
+    toastTitle.textContent = title;
+    toastMessage.textContent = message;
+    
+    // Set toast color based on type
+    toast.className = `toast ${type === 'success' ? 'bg-success text-white' : 'bg-danger text-white'}`;
+    
+    const bsToast = new bootstrap.Toast(toast);
+    bsToast.show();
+}
+
+// Table column filter function
+function filterTable(tableId, colIdx, filterValue) {
+    const table = document.getElementById(tableId);
+    const filter = filterValue.toLowerCase();
+    const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+    for (let i = 0; i < rows.length; i++) {
+        const cell = rows[i].getElementsByTagName('td')[colIdx];
+        if (cell) {
+            const txtValue = cell.textContent || cell.innerText;
+            rows[i].style.display = txtValue.toLowerCase().indexOf(filter) > -1 ? '' : 'none';
+        }
+    }
+}
+</script>
+{% endblock %} 

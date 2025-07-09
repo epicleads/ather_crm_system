@@ -5625,5 +5625,310 @@ def cre_analytics_data():
             'error': str(e)
         })
 
+# Vehicle Management Routes
+@app.route('/manage_vehicles')
+@require_admin
+def manage_vehicles():
+    """Vehicle management page for admin"""
+    try:
+        # Get all vehicles with their models, colors, and battery capacities
+        vehicles_data = supabase.table('vehicles').select('*').order('vehicle_name').execute()
+        
+        # Get all models with their vehicle info
+        models_data = supabase.table('models').select('*, vehicles(vehicle_name)').order('model_name').execute()
+        
+        # Get all color options with their model info
+        colors_data = supabase.table('color_options').select('*, models(model_name, vehicles(vehicle_name))').order('color_name').execute()
+        
+        # Get all battery capacities with their color info
+        batteries_data = supabase.table('battery_capacities').select('*, color_options(color_name, models(model_name, vehicles(vehicle_name)))').order('capacity_kwh').execute()
+        
+        return render_template('manage_vehicles.html', 
+                             vehicles=vehicles_data.data,
+                             models=models_data.data,
+                             colors=colors_data.data,
+                             batteries=batteries_data.data)
+    except Exception as e:
+        flash(f'Error loading vehicle data: {str(e)}', 'error')
+        return render_template('manage_vehicles.html', 
+                             vehicles=[], models=[], colors=[], batteries=[])
+
+@app.route('/add_vehicle', methods=['POST'])
+@require_admin
+def add_vehicle():
+    """Add a new vehicle"""
+    try:
+        vehicle_name = request.form.get('vehicle_name', '').strip()
+        if not vehicle_name:
+            return jsonify({'success': False, 'error': 'Vehicle name is required'})
+        
+        # Check if vehicle already exists
+        existing = supabase.table('vehicles').select('id').eq('vehicle_name', vehicle_name).execute()
+        if existing.data:
+            return jsonify({'success': False, 'error': 'Vehicle already exists'})
+        
+        # Insert new vehicle
+        result = supabase.table('vehicles').insert({'vehicle_name': vehicle_name}).execute()
+        
+        return jsonify({'success': True, 'message': 'Vehicle added successfully', 'vehicle': result.data[0]})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/add_model', methods=['POST'])
+@require_admin
+def add_model():
+    """Add a new model to a vehicle"""
+    try:
+        vehicle_id = request.form.get('vehicle_id')
+        model_name = request.form.get('model_name', '').strip()
+        
+        if not vehicle_id or not model_name:
+            return jsonify({'success': False, 'error': 'Vehicle and model name are required'})
+        
+        # Check if model already exists for this vehicle
+        existing = supabase.table('models').select('id').eq('vehicle_id', vehicle_id).eq('model_name', model_name).execute()
+        if existing.data:
+            return jsonify({'success': False, 'error': 'Model already exists for this vehicle'})
+        
+        # Insert new model
+        result = supabase.table('models').insert({
+            'vehicle_id': vehicle_id,
+            'model_name': model_name
+        }).execute()
+        
+        return jsonify({'success': True, 'message': 'Model added successfully', 'model': result.data[0]})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/add_color', methods=['POST'])
+@require_admin
+def add_color():
+    """Add a new color option to a model"""
+    try:
+        model_id = request.form.get('model_id')
+        color_name = request.form.get('color_name', '').strip()
+        
+        if not model_id or not color_name:
+            return jsonify({'success': False, 'error': 'Model and color name are required'})
+        
+        # Get model name to check for Indium Blue constraint
+        model_data = supabase.table('models').select('model_name').eq('id', model_id).execute()
+        if not model_data.data:
+            return jsonify({'success': False, 'error': 'Model not found'})
+        
+        model_name = model_data.data[0]['model_name']
+        
+        # Validate Indium Blue constraint - only available for APEX model
+        if color_name == 'Indium Blue' and model_name != 'APEX':
+            return jsonify({'success': False, 'error': 'Indium Blue is only available for APEX model'})
+        
+        # Check if color already exists for this model
+        existing = supabase.table('color_options').select('id').eq('model_id', model_id).eq('color_name', color_name).execute()
+        if existing.data:
+            return jsonify({'success': False, 'error': 'Color already exists for this model'})
+        
+        # Insert new color
+        result = supabase.table('color_options').insert({
+            'model_id': model_id,
+            'color_name': color_name
+        }).execute()
+        
+        return jsonify({'success': True, 'message': 'Color added successfully', 'color': result.data[0]})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/add_battery', methods=['POST'])
+@require_admin
+def add_battery():
+    """Add a new battery capacity to a color option"""
+    try:
+        color_id = request.form.get('color_id')
+        capacity_kwh = request.form.get('capacity_kwh')
+        
+        if not color_id or not capacity_kwh:
+            return jsonify({'success': False, 'error': 'Color and battery capacity are required'})
+        
+        try:
+            capacity_kwh = float(capacity_kwh)
+        except ValueError:
+            return jsonify({'success': False, 'error': 'Invalid battery capacity format'})
+        
+        # Check if battery capacity already exists for this color
+        existing = supabase.table('battery_capacities').select('id').eq('color_id', color_id).eq('capacity_kwh', capacity_kwh).execute()
+        if existing.data:
+            return jsonify({'success': False, 'error': 'Battery capacity already exists for this color'})
+        
+        # Insert new battery capacity
+        result = supabase.table('battery_capacities').insert({
+            'color_id': color_id,
+            'capacity_kwh': capacity_kwh
+        }).execute()
+        
+        return jsonify({'success': True, 'message': 'Battery capacity added successfully', 'battery': result.data[0]})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/delete_vehicle/<int:vehicle_id>', methods=['DELETE'])
+@require_admin
+def delete_vehicle(vehicle_id):
+    """Delete a vehicle and all its related data"""
+    try:
+        # Delete vehicle (cascade will handle models, colors, and batteries)
+        supabase.table('vehicles').delete().eq('id', vehicle_id).execute()
+        return jsonify({'success': True, 'message': 'Vehicle deleted successfully'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/delete_model/<int:model_id>', methods=['DELETE'])
+@require_admin
+def delete_model(model_id):
+    """Delete a model and all its related data"""
+    try:
+        # Delete model (cascade will handle colors and batteries)
+        supabase.table('models').delete().eq('id', model_id).execute()
+        return jsonify({'success': True, 'message': 'Model deleted successfully'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/delete_color/<int:color_id>', methods=['DELETE'])
+@require_admin
+def delete_color(color_id):
+    """Delete a color option"""
+    try:
+        supabase.table('color_options').delete().eq('id', color_id).execute()
+        return jsonify({'success': True, 'message': 'Color deleted successfully'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/delete_battery/<int:battery_id>', methods=['DELETE'])
+@require_admin
+def delete_battery(battery_id):
+    """Delete a battery capacity"""
+    try:
+        supabase.table('battery_capacities').delete().eq('id', battery_id).execute()
+        return jsonify({'success': True, 'message': 'Battery capacity deleted successfully'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/get_vehicles')
+@require_admin
+def get_vehicles():
+    """Get all vehicles for dropdown"""
+    try:
+        vehicles = supabase.table('vehicles').select('id, vehicle_name').order('vehicle_name').execute()
+        return jsonify({'success': True, 'vehicles': vehicles.data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/get_models/<int:vehicle_id>')
+@require_admin
+def get_models(vehicle_id):
+    """Get all models for a specific vehicle"""
+    try:
+        models = supabase.table('models').select('id, model_name').eq('vehicle_id', vehicle_id).order('model_name').execute()
+        return jsonify({'success': True, 'models': models.data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/get_colors/<int:model_id>')
+@require_admin
+def get_colors(model_id):
+    """Get all colors for a specific model"""
+    try:
+        colors = supabase.table('color_options').select('id, color_name').eq('model_id', model_id).order('color_name').execute()
+        return jsonify({'success': True, 'colors': colors.data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+# --- Duplicate Prevention Insert Functions ---
+
+def add_vehicle(vehicle_name):
+    exists = supabase.table('vehicles').select('id').eq('vehicle_name', vehicle_name).execute()
+    if exists.data:
+        print("Row ignored: Duplicate entry already exists for vehicles")
+        return False
+    supabase.table('vehicles').insert({'vehicle_name': vehicle_name}).execute()
+    print("Entry Added: Vehicle")
+    return True
+
+def add_model(vehicle_id, model_name):
+    exists = supabase.table('models').select('id').eq('vehicle_id', vehicle_id).eq('model_name', model_name).execute()
+    if exists.data:
+        print("Row ignored: Duplicate entry already exists for models")
+        return False
+    supabase.table('models').insert({'vehicle_id': vehicle_id, 'model_name': model_name}).execute()
+    print("Entry Added: Model")
+    return True
+
+def add_color_option(vehicle_id, model_id, color_name):
+    exists = supabase.table('color_options').select('id').eq('vehicle_id', vehicle_id).eq('model_id', model_id).eq('color_name', color_name).execute()
+    if exists.data:
+        print("Row ignored: Duplicate entry already exists for color_options")
+        return False
+    supabase.table('color_options').insert({'vehicle_id': vehicle_id, 'model_id': model_id, 'color_name': color_name}).execute()
+    print("Entry Added: Color Option")
+    return True
+
+def add_battery_capacity(vehicle_id, model_id, color_id, capacity_kwh):
+    exists = supabase.table('battery_capacities').select('id').eq('vehicle_id', vehicle_id).eq('model_id', model_id).eq('color_id', color_id).eq('capacity_kwh', capacity_kwh).execute()
+    if exists.data:
+        print("Row ignored: Duplicate entry already exists for battery_capacities")
+        return False
+    supabase.table('battery_capacities').insert({'vehicle_id': vehicle_id, 'model_id': model_id, 'color_id': color_id, 'capacity_kwh': capacity_kwh}).execute()
+    print("Entry Added: Battery Capacity")
+    return True
+
+# --- End Duplicate Prevention Insert Functions ---
+
+# --- Fast Batch Insert Functions ---
+
+def fast_batch_insert_vehicles(vehicle_names):
+    rows = [{'vehicle_name': name} for name in vehicle_names]
+    result = supabase.table('vehicles').insert(rows, upsert=False).execute()
+    inserted_count = len(result.data) if result.data else 0
+    skipped_count = len(vehicle_names) - inserted_count
+    return inserted_count, skipped_count
+
+def fast_batch_insert_models(vehicle_id, model_names):
+    rows = [{'vehicle_id': vehicle_id, 'model_name': name} for name in model_names]
+    result = supabase.table('models').insert(rows, upsert=False).execute()
+    inserted_count = len(result.data) if result.data else 0
+    skipped_count = len(model_names) - inserted_count
+    return inserted_count, skipped_count
+
+def fast_batch_insert_colors(vehicle_id, model_id, color_names):
+    rows = [{'vehicle_id': vehicle_id, 'model_id': model_id, 'color_name': name} for name in color_names]
+    result = supabase.table('color_options').insert(rows, upsert=False).execute()
+    inserted_count = len(result.data) if result.data else 0
+    skipped_count = len(color_names) - inserted_count
+    return inserted_count, skipped_count
+
+def fast_batch_insert_batteries(vehicle_id, model_id, color_id, capacities):
+    rows = [{'vehicle_id': vehicle_id, 'model_id': model_id, 'color_id': color_id, 'capacity_kwh': cap} for cap in capacities]
+    result = supabase.table('battery_capacities').insert(rows, upsert=False).execute()
+    inserted_count = len(result.data) if result.data else 0
+    skipped_count = len(capacities) - inserted_count
+    return inserted_count, skipped_count
+
+# --- Example endpoint for models ---
+from flask import request, jsonify
+
+@app.route('/batch_add_models', methods=['POST'])
+def batch_add_models():
+    vehicle_id = request.json['vehicle_id']
+    model_names = request.json['model_names']
+    inserted, skipped = fast_batch_insert_models(vehicle_id, model_names)
+    if inserted == 0:
+        message = "❌ No new data inserted — all rows were duplicates."
+        status = "error"
+    else:
+        message = f"✅ {inserted} rows inserted successfully"
+        if skipped > 0:
+            message += f"<br>⚠️ {skipped} duplicate rows skipped"
+        status = "success"
+    return jsonify({'success': True, 'message': message, 'status': status})
+
+# --- End Fast Batch Insert Functions ---
+
 if __name__ == '__main__':
     socketio.run(app, debug=True)
