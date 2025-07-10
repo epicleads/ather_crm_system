@@ -5711,24 +5711,22 @@ def add_color():
         if not model_id or not color_name:
             return jsonify({'success': False, 'error': 'Model and color name are required'})
         
-        # Get model name to check for Indium Blue constraint
-        model_data = supabase.table('models').select('model_name').eq('id', model_id).execute()
+        # Get model details to get vehicle_id
+        model_data = supabase.table('models').select('vehicle_id, model_name').eq('id', model_id).execute()
         if not model_data.data:
             return jsonify({'success': False, 'error': 'Model not found'})
         
-        model_name = model_data.data[0]['model_name']
+        model_info = model_data.data[0]
+        vehicle_id = model_info['vehicle_id']
         
-        # Validate Indium Blue constraint - only available for APEX model
-        if color_name == 'Indium Blue' and model_name != 'APEX':
-            return jsonify({'success': False, 'error': 'Indium Blue is only available for APEX model'})
-        
-        # Check if color already exists for this model
-        existing = supabase.table('color_options').select('id').eq('model_id', model_id).eq('color_name', color_name).execute()
+        # Check if color already exists for this vehicle and model combination
+        existing = supabase.table('color_options').select('id').eq('vehicle_id', vehicle_id).eq('model_id', model_id).eq('color_name', color_name).execute()
         if existing.data:
             return jsonify({'success': False, 'error': 'Color already exists for this model'})
         
-        # Insert new color
+        # Insert new color with vehicle_id and model_id
         result = supabase.table('color_options').insert({
+            'vehicle_id': vehicle_id,
             'model_id': model_id,
             'color_name': color_name
         }).execute()
@@ -5753,13 +5751,24 @@ def add_battery():
         except ValueError:
             return jsonify({'success': False, 'error': 'Invalid battery capacity format'})
         
+        # Get color details to get vehicle_id and model_id
+        color_data = supabase.table('color_options').select('vehicle_id, model_id').eq('id', color_id).execute()
+        if not color_data.data:
+            return jsonify({'success': False, 'error': 'Color not found'})
+        
+        color_info = color_data.data[0]
+        vehicle_id = color_info['vehicle_id']
+        model_id = color_info['model_id']
+        
         # Check if battery capacity already exists for this color
-        existing = supabase.table('battery_capacities').select('id').eq('color_id', color_id).eq('capacity_kwh', capacity_kwh).execute()
+        existing = supabase.table('battery_capacities').select('id').eq('vehicle_id', vehicle_id).eq('model_id', model_id).eq('color_id', color_id).eq('capacity_kwh', capacity_kwh).execute()
         if existing.data:
             return jsonify({'success': False, 'error': 'Battery capacity already exists for this color'})
         
         # Insert new battery capacity
         result = supabase.table('battery_capacities').insert({
+            'vehicle_id': vehicle_id,
+            'model_id': model_id,
             'color_id': color_id,
             'capacity_kwh': capacity_kwh
         }).execute()
