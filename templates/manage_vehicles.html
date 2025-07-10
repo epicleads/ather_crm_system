@@ -135,7 +135,6 @@
                             <label for="color_name" class="form-label">Color Name</label>
                             <input type="text" class="form-control" id="color_name" name="color_name" 
                                    placeholder="Enter color name (e.g., Lunar Grey, Indium Blue)" required>
-                            <!-- <small class="form-text text-muted">Note: Indium Blue is only available for APEX model</small> -->
                         </div>
                         <button type="submit" class="btn btn-warning">
                             <i class="fas fa-plus"></i> Add Color
@@ -162,19 +161,11 @@
                             </select>
                         </div>
                         <div class="mb-3">
-                            <label for="battery_model_id" class="form-label">Models (Multiple Selection)</label>
-                            <div class="border rounded p-3" id="battery_models_container">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="select_all_battery_models" onchange="toggleAllBatteryModels()">
-                                    <label class="form-check-label" for="select_all_battery_models">
-                                        <strong>Select All Models</strong>
-                                    </label>
-                                </div>
-                                <hr>
-                                <div id="battery_models_list">
-                                    <!-- Models will be loaded here dynamically -->
-                                </div>
-                            </div>
+                            <label for="battery_model_id" class="form-label">Model</label>
+                            <select class="form-select" id="battery_model_id" name="model_id" required>
+                                <option value="">Select Model</option>
+                                <!-- Models will be loaded here dynamically -->
+                            </select>
                         </div>
                         <div class="mb-3">
                             <label for="battery_color_id" class="form-label">Colors (Multiple Selection)</label>
@@ -505,47 +496,69 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add Battery Form
     document.getElementById('addBatteryForm').addEventListener('submit', function(e) {
         e.preventDefault();
-        
-        // Get selected colors
         const selectedColors = Array.from(document.querySelectorAll('#battery_colors_list .color-checkbox:checked'))
             .map(checkbox => checkbox.value);
-        
         if (selectedColors.length === 0) {
             showNotification('Error', 'Please select at least one color', 'error');
             return;
         }
-        
         const capacityKwh = document.getElementById('capacity_kwh').value;
         if (!capacityKwh) {
             showNotification('Error', 'Please enter battery capacity', 'error');
             return;
         }
-        
+        // Get selected vehicle/model/color names for display
+        const vehicleSelect = document.getElementById('battery_vehicle_id');
+        const modelSelect = document.getElementById('battery_model_id');
+        const vehicleName = vehicleSelect.options[vehicleSelect.selectedIndex].text;
+        const modelName = modelSelect.options[modelSelect.selectedIndex].text;
+        const colorIdToName = {};
+        document.querySelectorAll('#battery_colors_list .color-checkbox').forEach(cb => {
+            colorIdToName[cb.value] = cb.parentElement.querySelector('label').innerText.trim();
+        });
         // Add battery capacity to each selected color
         const promises = selectedColors.map(colorId => {
             const formData = new FormData();
             formData.append('color_id', colorId);
             formData.append('capacity_kwh', capacityKwh);
-            
             return fetch('/add_battery', {
                 method: 'POST',
                 body: formData
-            }).then(response => response.json());
+            }).then(response => response.json().then(data => ({...data, colorId})));
         });
-        
         Promise.all(promises)
             .then(results => {
-                const successCount = results.filter(result => result.success).length;
-                const errorCount = results.length - successCount;
-                
-                if (errorCount === 0) {
-                    showNotification('Success', `Battery capacity ${capacityKwh} kWh added to ${successCount} color(s) successfully`, 'success');
+                const successRows = [];
+                const failedRows = [];
+                results.forEach(result => {
+                    const colorName = colorIdToName[result.colorId] || '';
+                    if (result.success) {
+                        successRows.push({vehicleName, modelName, colorName, capacityKwh});
+                        // Add row to table
+                        const table = document.getElementById('batteryCapacitiesTable').getElementsByTagName('tbody')[0];
+                        const row = table.insertRow();
+                        row.innerHTML = `
+                            <td>${vehicleName}</td>
+                            <td>${modelName}</td>
+                            <td>${colorName}</td>
+                            <td><span class="badge bg-info">${capacityKwh} kWh</span></td>
+                            <td><button class="btn btn-sm btn-danger" style="font-size:0.95rem;padding:2px 7px;" onclick="deleteBattery('${result.battery?.id || ''}', '${capacityKwh} kWh')"><i class="fas fa-trash table-icon"></i></button></td>
+                        `;
+                    } else {
+                        failedRows.push({vehicleName, modelName, colorName, capacityKwh, error: result.error});
+                    }
+                });
+                if (successRows.length > 0) {
+                    showNotification('Success', `Battery capacity ${capacityKwh} kWh added to ${successRows.length} color(s) successfully`, 'success');
                     this.reset();
-                    document.getElementById('battery_models_list').innerHTML = '';
                     document.getElementById('battery_colors_list').innerHTML = '';
-                    setTimeout(() => location.reload(), 1500);
-                } else {
-                    showNotification('Warning', `Battery capacity added to ${successCount} color(s), but failed for ${errorCount} color(s)`, 'error');
+                }
+                if (failedRows.length > 0) {
+                    let msg = 'Failed to add battery capacity for the following rows:\n';
+                    failedRows.forEach(row => {
+                        msg += `Vehicle: ${row.vehicleName}, Model: ${row.modelName}, Color: ${row.colorName}, Capacity: ${row.capacityKwh} kWh. Error: ${row.error}\n`;
+                    });
+                    alert(msg);
                 }
             })
             .catch(error => {
@@ -553,7 +566,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     });
 
-    // Setup vehicle change handlers for dynamic model loading
+    // Setup vehicle change handlers
     setupVehicleChangeHandlers();
     
 });
@@ -562,20 +575,26 @@ document.addEventListener('DOMContentLoaded', function() {
 function setupVehicleChangeHandlers() {
     const colorVehicleSelect = document.getElementById('color_vehicle_id');
     const batteryVehicleSelect = document.getElementById('battery_vehicle_id');
-    
     if (colorVehicleSelect) {
         colorVehicleSelect.addEventListener('change', function() {
             loadModelsForVehicleMultiple(this.value, 'color_models_list');
         });
     }
-    
     if (batteryVehicleSelect) {
         batteryVehicleSelect.addEventListener('change', function() {
-            loadModelsForVehicleMultiple(this.value, 'battery_models_list');
+            loadModelsForVehicleDropdown(this.value, 'battery_model_id');
+            // Clear colors when vehicle changes
+            document.getElementById('battery_colors_list').innerHTML = '<p class="text-muted">Select a model first</p>';
+        });
+    }
+    // When model changes, load colors
+    const batteryModelSelect = document.getElementById('battery_model_id');
+    if (batteryModelSelect) {
+        batteryModelSelect.addEventListener('change', function() {
+            loadColorsForSelectedModel();
         });
     }
 }
-
 // Load models for multiple selection
 function loadModelsForVehicleMultiple(vehicleId, targetContainerId) {
     if (!vehicleId) {
@@ -612,6 +631,25 @@ function loadModelsForVehicleMultiple(vehicleId, targetContainerId) {
         });
 }
 
+// Load models for single dropdown
+function loadModelsForVehicleDropdown(vehicleId, selectId) {
+    const select = document.getElementById(selectId);
+    select.innerHTML = '<option value="">Select Model</option>';
+    if (!vehicleId) return;
+    fetch(`/get_models/${vehicleId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.models) {
+                data.models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = model.model_name;
+                    select.appendChild(option);
+                });
+            }
+        });
+}
+
 // Toggle all models for color form
 function toggleAllModels() {
     const selectAllCheckbox = document.getElementById('select_all_models');
@@ -620,19 +658,6 @@ function toggleAllModels() {
     modelCheckboxes.forEach(checkbox => {
         checkbox.checked = selectAllCheckbox.checked;
     });
-}
-
-// Toggle all models for battery form
-function toggleAllBatteryModels() {
-    const selectAllCheckbox = document.getElementById('select_all_battery_models');
-    const modelCheckboxes = document.querySelectorAll('#battery_models_list .model-checkbox');
-    
-    modelCheckboxes.forEach(checkbox => {
-        checkbox.checked = selectAllCheckbox.checked;
-    });
-    
-    // Load colors for selected models
-    loadColorsForSelectedModels();
 }
 
 // Toggle all colors
@@ -645,61 +670,44 @@ function toggleAllColors() {
     });
 }
 
-// Load colors for selected models
-function loadColorsForSelectedModels() {
-    const selectedModels = Array.from(document.querySelectorAll('#battery_models_list .model-checkbox:checked'))
-        .map(checkbox => checkbox.value);
-
-    if (selectedModels.length === 0) {
-        document.getElementById('battery_colors_list').innerHTML = '<p class="text-muted">Select models first</p>';
+// Load colors for selected model (single)
+function loadColorsForSelectedModel() {
+    const modelId = document.getElementById('battery_model_id').value;
+    const container = document.getElementById('battery_colors_list');
+    if (!modelId) {
+        container.innerHTML = '<p class="text-muted">Select a model first</p>';
         return;
     }
-
-    // Load colors for all selected models
-    Promise.all(selectedModels.map(modelId =>
-        fetch(`/get_colors/${modelId}`).then(response => response.json())
-    )).then(results => {
-        const colorMap = new Map(); // key: color_name, value: {id, color_name}
-        results.forEach(result => {
-            if (result.success && result.colors) {
+    fetch(`/get_colors/${modelId}`)
+        .then(response => response.json())
+        .then(result => {
+            container.innerHTML = '';
+            if (result.success && result.colors && result.colors.length > 0) {
                 result.colors.forEach(color => {
-                    // Only add if this color name hasn't been added yet
-                    if (!colorMap.has(color.color_name)) {
-                        colorMap.set(color.color_name, color);
-                    }
+                    const div = document.createElement('div');
+                    div.className = 'form-check';
+                    div.innerHTML = `
+                        <input class="form-check-input color-checkbox" type="checkbox" 
+                               id="color_${color.id}" value="${color.id}" name="color_ids[]">
+                        <label class="form-check-label" for="color_${color.id}">
+                            ${color.color_name}
+                        </label>
+                    `;
+                    container.appendChild(div);
                 });
+            } else {
+                container.innerHTML = '<p class="text-muted">No colors found for selected model</p>';
             }
+        })
+        .catch(error => {
+            container.innerHTML = '<p class="text-danger">Error loading colors</p>';
         });
-
-        const container = document.getElementById('battery_colors_list');
-        container.innerHTML = '';
-
-        if (colorMap.size > 0) {
-            colorMap.forEach(color => {
-                const div = document.createElement('div');
-                div.className = 'form-check';
-                div.innerHTML = `
-                    <input class="form-check-input color-checkbox" type="checkbox" 
-                           id="color_${color.id}" value="${color.id}" name="color_ids[]">
-                    <label class="form-check-label" for="color_${color.id}">
-                        ${color.color_name}
-                    </label>
-                `;
-                container.appendChild(div);
-            });
-        } else {
-            container.innerHTML = '<p class="text-muted">No colors found for selected models</p>';
-        }
-    }).catch(error => {
-        console.error('Error loading colors:', error);
-        document.getElementById('battery_colors_list').innerHTML = '<p class="text-danger">Error loading colors</p>';
-    });
 }
 
 // Add event listeners for model selection changes
 document.addEventListener('change', function(e) {
-    if (e.target.classList.contains('model-checkbox') && e.target.closest('#battery_models_list')) {
-        loadColorsForSelectedModels();
+    if (e.target.classList.contains('model-checkbox') && e.target.closest('#color_models_list')) {
+        // Handle color form model selection changes if needed
     }
 });
 

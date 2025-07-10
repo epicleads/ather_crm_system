@@ -71,12 +71,9 @@ The system follows this hierarchical structure:
 - 2.9 kWh
 - 3.9 kWh
 
-## Color Constraints
+## Color Management
 
-**Indium Blue** is exclusively available only for the **APEX** model. The system includes:
-- **Backend Validation**: Server-side validation prevents adding Indium Blue to non-APEX models
-- **Frontend Validation**: UI dynamically shows/hides Indium Blue option based on selected model
-- **User Feedback**: Clear error messages when attempting to add Indium Blue to wrong model
+The system allows flexible color management where any color can be added to any model. This provides maximum flexibility for future vehicle and model configurations.
 
 ## Setup Instructions
 
@@ -101,7 +98,7 @@ The vehicle management system has been integrated into the existing Flask applic
 - `/manage_vehicles` - Main vehicle management page
 - `/add_vehicle` - Add new vehicle
 - `/add_model` - Add new model to vehicle
-- `/add_color` - Add color option to model (with Indium Blue validation)
+- `/add_color` - Add color option to model
 - `/add_battery` - Add battery capacity to color option
 - `/delete_vehicle/<id>` - Delete vehicle
 - `/delete_model/<id>` - Delete model
@@ -131,16 +128,16 @@ The vehicle management system has been integrated into the existing Flask applic
 - Color selection for battery capacities
 - Real-time updates when data changes
 
-#### Color Constraint System
-- **Indium Blue Validation**: Only available for APEX model
-- **Dynamic UI**: Indium Blue option shows/hides based on model selection
-- **Backend Protection**: Server-side validation prevents invalid combinations
-- **User Feedback**: Clear error messages for constraint violations
+#### Flexible Color Management
+- **Universal Color Support**: Any color can be added to any model
+- **Dynamic UI**: Color options are dynamically loaded based on model selection
+- **Backend Protection**: Server-side validation prevents duplicate entries
+- **User Feedback**: Clear error messages for validation issues
 
 #### Data Validation
 - Prevents duplicate entries
 - Required field validation
-- Color constraint validation
+- Color validation
 - Proper error handling and user feedback
 
 ### 4. Sample Data
@@ -148,7 +145,7 @@ The vehicle management system has been integrated into the existing Flask applic
 The schema includes comprehensive sample data for testing:
 - **Vehicle**: 450
 - **Models**: 450 S LR, 450 X LR, 450 X HR, APEX
-- **Colors**: Lunar Grey, Space Grey, Still White, True Red, Cosmic Black, Hyper Sand, Stealth Blue, Indium Blue (APEX only)
+- **Colors**: Lunar Grey, Space Grey, Still White, True Red, Cosmic Black, Hyper Sand, Stealth Blue, Indium Blue
 - **Battery Capacities**: 2.9 kWh, 3.9 kWh (distributed across all color combinations)
 
 ### 5. Usage Instructions
@@ -171,7 +168,7 @@ The schema includes comprehensive sample data for testing:
 
 4. **Add Colors to Models**:
    - Select vehicle and model from dropdowns
-   - Choose color from the dropdown (Indium Blue only shows for APEX)
+   - Enter color name in the text field
    - Click "Add Color"
 
 5. **Add Battery Capacities to Colors**:
@@ -196,18 +193,18 @@ The system allows for complex vehicle configurations like:
 | 450 | APEX | Indium Blue | 2.9 |
 | 450 | APEX | Indium Blue | 3.9 |
 
-### 7. Color Constraint Rules
+### 7. Color Management Rules
 
-- **Indium Blue**: Only available for APEX model
-- **All Other Colors**: Available for all models (450 S LR, 450 X LR, 450 X HR, APEX)
-- **Validation**: Both frontend and backend validation ensure constraints are enforced
+- **Universal Color Support**: Any color can be added to any model
+- **Flexible Configuration**: Colors are not restricted to specific models
+- **Validation**: Backend validation prevents duplicate entries and ensures data integrity
 
 ### 8. Security Features
 
 - All routes require admin authentication
 - CSRF protection through Flask forms
 - Input validation and sanitization
-- Color constraint validation
+- Color validation
 - Confirmation dialogs for deletions
 - Proper error handling and user feedback
 
