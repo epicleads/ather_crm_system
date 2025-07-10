@@ -1,26 +1,22 @@
 name: Daily Script Runner
-
 on:
   schedule:
-    - cron: '30 18 * * *'  # 12:00 AM IST (18:30 UTC)
+    - cron: '30 18 * * *'  # 12:00 AM IST (18:30 UTC) - Daily
+    - cron: '*/15 * * * *'  # Every 15 minutes - For Meta script
   workflow_dispatch:
-
 jobs:
-  run-scripts:
+  run-daily-scripts:
     runs-on: ubuntu-latest
-
+    if: github.event.schedule == '30 18 * * *' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - name: Install dependencies
         run: pip install -r requirements.txt
-
       - name: Run knowlaritytosupabase.py
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -28,7 +24,6 @@ jobs:
           KNOW_SR_KEY: ${{ secrets.KNOW_SR_KEY }}
           KNOW_X_API_KEY: ${{ secrets.KNOW_X_API_KEY }}
         run: python knowlaritytosupabase.py
-
  #     - name: Run syncsalesforcetosupabase.py
  #       env:
  #         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -37,7 +32,26 @@ jobs:
  #         SF_PASSWORD: ${{ secrets.SF_PASSWORD }}
  #         SF_SECURITY_TOKEN: ${{ secrets.SF_SECURITY_TOKEN }}
  #       run: python syncsalesforcetosupabase.py
+      - name: Run metatosupabase.py
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          META_PAGE_ACCESS_TOKEN: ${{ secrets.META_PAGE_ACCESS_TOKEN }}
+          PAGE_ID: ${{ secrets.PAGE_ID }}
+        run: python metatosupabase.py
 
+  run-meta-script:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '*/15 * * * *'
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
       - name: Run metatosupabase.py
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
