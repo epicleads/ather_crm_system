@@ -83,13 +83,13 @@
                 <div class="col-md-4">
                     <div class="mb-3">
                         <label class="form-label">Source</label>
-                        <input type="text" class="form-control" value="{{ lead.source }}" readonly>
+                        <input type="text" class="form-control" value="Walk-in" readonly>
                     </div>
                 </div>
                 <div class="col-md-4">
                     <div class="mb-3">
                         <label class="form-label">CRE Name</label>
-                        <input type="text" class="form-control" value="{{ lead.cre_name }}" readonly>
+                        <input type="text" class="form-control" value="{{ lead.cre_name if lead.cre_name else '' }}" readonly>
                     </div>
                 </div>
                 <div class="col-md-4">
@@ -151,7 +151,6 @@
                         <select class="form-select" id="lead_status" name="lead_status" required>
                             <option value="" disabled {% if not lead.lead_status %}selected{% endif %}>Select Lead Status</option>
                             <option value="Call not Connected" {% if lead.lead_status == 'Call not Connected' %}selected{% endif %}>Call not Connected</option>
-                            <option value="Interested" {% if lead.lead_status == 'Interested' %}selected{% endif %}>Interested</option>
                             <option value="Retailed" {% if lead.lead_status == 'Retailed' %}selected{% endif %}>Retailed</option>
                             <option value="Discount Issue" {% if lead.lead_status == 'Discount Issue' %}selected{% endif %}>Discount Issue</option>
                             <option value="Delayed" {% if lead.lead_status == 'Delayed' %}selected{% endif %}>Delayed</option>
@@ -177,12 +176,10 @@
                     <div class="mb-3">
                         <label for="final_status" class="form-label">Final Status</label>
                         <select class="form-select" id="final_status" name="final_status" required>
-                            <option value="{{ lead.final_status }}">{{ lead.final_status }}</option>
-                            <option value="Won">Won</option>
-                            <option value="Lost">Lost</option>
-                            <option value="Pending">Pending</option>
+                            <option value="Pending" {% if lead.final_status == 'Pending' or not lead.final_status %}selected{% endif %}>Pending</option>
+                            <option value="Won" {% if lead.final_status == 'Won' %}selected{% endif %}>Won</option>
+                            <option value="Lost" {% if lead.final_status == 'Lost' %}selected{% endif %}>Lost</option>
                         </select>
-                        <small class="form-text text-muted">Final status will be automatically set based on lead status selection</small>
                     </div>
                 </div>
             </div>
@@ -276,62 +273,9 @@
 document.addEventListener('DOMContentLoaded', function() {
     // Set minimum date for follow-up to today and handle required toggle
     const followUpDate = document.getElementById('follow_up_date');
-    const finalStatus = document.getElementById('final_status');
-    const leadStatus = document.getElementById('lead_status');
-
-    // Make follow-up date required only if final status is not 'Lost'
-    function toggleFollowUpRequired() {
-        if (finalStatus && followUpDate) {
-            if (finalStatus.value === 'Lost') {
-                followUpDate.required = false;
-            } else {
-                followUpDate.required = true;
-            }
-        }
-    }
-    if (finalStatus && followUpDate) {
-        finalStatus.addEventListener('change', toggleFollowUpRequired);
-        // Initial check
-        toggleFollowUpRequired();
-    }
-
-    // Auto-set final status based on lead status and handle Planning in Next Month
-    if (leadStatus) {
-        function handleLeadStatusChange() {
-            const selectedLeadStatus = leadStatus.value;
-            // Planning in Next Month logic
-            if (selectedLeadStatus === 'Planning in Next Month' && followUpDate) {
-                const now = new Date();
-                now.setMonth(now.getMonth() + 1);
-                const pad = n => n < 10 ? '0' + n : n;
-                const formatted = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-                followUpDate.value = formatted;
-            }
-            // Auto final status logic
-            const wonStatuses = ['Retailed', 'Booked'];
-            const lostStatuses = ['Not Interested', 'Lost to Competition', 'Lost to codealer', 'Dropped'];
-            if (finalStatus) {
-                if (wonStatuses.includes(selectedLeadStatus)) {
-                    finalStatus.value = 'Won';
-                    finalStatus.disabled = true;
-                    finalStatus.style.backgroundColor = '#e9ecef';
-                } else if (lostStatuses.includes(selectedLeadStatus)) {
-                    finalStatus.value = 'Lost';
-                    finalStatus.disabled = true;
-                    finalStatus.style.backgroundColor = '#e9ecef';
-                } else {
-                    if (finalStatus.value === 'Won' || finalStatus.value === 'Lost') {
-                        finalStatus.value = 'Pending';
-                    }
-                    finalStatus.disabled = false;
-                    finalStatus.style.backgroundColor = '';
-                }
-                toggleFollowUpRequired();
-            }
-        }
-        leadStatus.addEventListener('change', handleLeadStatusChange);
-        // Initial check
-        handleLeadStatusChange();
+    const today = new Date().toISOString().slice(0, 16);
+    if (followUpDate) {
+        followUpDate.min = today;
     }
 
     // Form validation
@@ -348,6 +292,64 @@ document.addEventListener('DOMContentLoaded', function() {
             submitBtn.disabled = false;
         }, 10000);
     });
+
+    const leadStatus = document.getElementById('lead_status');
+    const callDateInput = document.getElementById('call_date');
+    const skipStatuses = [
+        'Call not Connected',
+        'RNR',
+        'Busy on another call',
+        'Call me Back'
+    ];
+    if (leadStatus && callDateInput) {
+        leadStatus.addEventListener('change', function() {
+            if (skipStatuses.includes(this.value)) {
+                callDateInput.disabled = true;
+                callDateInput.value = '';
+                if (!document.getElementById('skipStatusWarning')) {
+                    const warning = document.createElement('div');
+                    warning.id = 'skipStatusWarning';
+                    warning.className = 'alert alert-warning mt-2';
+                    warning.innerHTML = '<b>Note:</b> This status will not be counted as a call. Call progress will not move forward.';
+                    callDateInput.parentNode.appendChild(warning);
+                }
+            } else {
+                callDateInput.disabled = false;
+                const warning = document.getElementById('skipStatusWarning');
+                if (warning) warning.remove();
+            }
+        });
+        // Initial check
+        if (skipStatuses.includes(leadStatus.value)) {
+            callDateInput.disabled = true;
+            if (!document.getElementById('skipStatusWarning')) {
+                const warning = document.createElement('div');
+                warning.id = 'skipStatusWarning';
+                warning.className = 'alert alert-warning mt-2';
+                warning.innerHTML = '<b>Note:</b> This status will not be counted as a call. Call progress will not move forward.';
+                callDateInput.parentNode.appendChild(warning);
+            }
+        } else {
+            callDateInput.disabled = false;
+            const warning = document.getElementById('skipStatusWarning');
+            if (warning) warning.remove();
+        }
+    }
+
+    // Make follow-up date required only if final status is not 'Lost'
+    const finalStatus = document.getElementById('final_status');
+    if (finalStatus && followUpDate) {
+        function toggleFollowUpRequired() {
+            if (finalStatus.value === 'Lost') {
+                followUpDate.required = false;
+            } else {
+                followUpDate.required = true;
+            }
+        }
+        finalStatus.addEventListener('change', toggleFollowUpRequired);
+        // Initial check
+        toggleFollowUpRequired();
+    }
 });
 </script>
 {% endblock %}
