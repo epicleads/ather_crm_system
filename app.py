@@ -1250,14 +1250,18 @@ def add_cre():
             result = supabase.table('cre_users').insert(cre_data).execute()
 
             # Log CRE creation
-            auth_manager.log_audit_event(
-                user_id=session.get('user_id'),
-                user_type=session.get('user_type'),
-                action='CRE_CREATED',
-                resource='cre_users',
-                resource_id=str(result.data[0]['id']) if result.data else None,
-                details={'cre_name': name, 'username': username}
-            )
+            user_id = session.get('user_id')
+            user_type = session.get('user_type')
+            resource_id = str(result.data[0]['id']) if result.data and len(result.data) > 0 else ''
+            if user_id and user_type:
+                auth_manager.log_audit_event(
+                    user_id=user_id,
+                    user_type=user_type,
+                    action='CRE_CREATED',
+                    resource='cre_users',
+                    resource_id=resource_id,
+                    details={'cre_name': name, 'username': username}
+                )
 
             flash('CRE added successfully', 'success')
             return redirect(url_for('manage_cre'))
@@ -1319,14 +1323,18 @@ def add_ps():
             result = supabase.table('ps_users').insert(ps_data).execute()
 
             # Log PS creation
-            auth_manager.log_audit_event(
-                user_id=session.get('user_id'),
-                user_type=session.get('user_type'),
-                action='PS_CREATED',
-                resource='ps_users',
-                resource_id=str(result.data[0]['id']) if result.data else None,
-                details={'ps_name': name, 'username': username, 'branch': branch}
-            )
+            user_id = session.get('user_id')
+            user_type = session.get('user_type')
+            resource_id = str(result.data[0]['id']) if result.data and len(result.data) > 0 else ''
+            if user_id and user_type:
+                auth_manager.log_audit_event(
+                    user_id=user_id,
+                    user_type=user_type,
+                    action='PS_CREATED',
+                    resource='ps_users',
+                    resource_id=resource_id,
+                    details={'ps_name': name, 'username': username, 'branch': branch}
+                )
 
             flash('Product Specialist added successfully', 'success')
             return redirect(url_for('manage_ps'))
@@ -1749,7 +1757,7 @@ def cre_dashboard():
         # Get today's followups
         todays_followups = [
             lead for lead in all_leads
-            if lead.get('follow_up_date') and lead.get('follow_up_date').startswith(str(today))
+            if lead.get('follow_up_date') and lead.get('follow_up_date', '').startswith(str(today))
         ]
         print(f"[PERF] cre_dashboard: todays_followups filter took {time.time() - t2:.3f} seconds")
 
@@ -1888,7 +1896,9 @@ def update_lead(uid):
                 try:
                     if ps_user:
                         lead_data_for_email = {**lead_data, **update_data}
-                        socketio.start_background_task(send_email_to_ps, ps_user['email'], ps_user['name'], lead_data_for_email, session.get('cre_name'))
+                        def send_email_wrapper():
+                            send_email_to_ps(ps_user['email'], ps_user['name'], lead_data_for_email, session.get('cre_name'))
+                        socketio.start_background_task(send_email_wrapper)
                         flash(f'Lead assigned to {ps_name} and email notification sent', 'success')
                     else:
                         flash(f'Lead assigned to {ps_name}', 'success')
@@ -2340,8 +2350,9 @@ def logout():
     )
 
     # Deactivate session
-    if session.get('session_id'):
-        auth_manager.deactivate_session(session.get('session_id'))
+    session_id = session.get('session_id')
+    if session_id:
+        auth_manager.deactivate_session(session_id)
 
     session.clear()
     flash('You have been logged out successfully', 'info')
@@ -3147,37 +3158,45 @@ def analytics():
             trend_labels.append(date.strftime('%m/%d'))
 
         # Top performing CREs with new parameters
-        cre_performance = defaultdict(lambda: {'total': 0, 'hot': 0, 'warm': 0, 'cold': 0, 'won': 0, 'lost': 0, 'calls': []})
+        cre_performance = {}
         for lead in leads:
             cre_name = lead.get('cre_name')
             if cre_name:
-                cre_performance[cre_name]['total'] += 1
-                # Hot/Warm/Cold by lead_category
-                category = (lead.get('lead_category') or '').strip().lower()
-                if category == 'hot':
-                    cre_performance[cre_name]['hot'] += 1
-                elif category == 'warm':
-                    cre_performance[cre_name]['warm'] += 1
-                elif category == 'cold':
-                    cre_performance[cre_name]['cold'] += 1
-                # Won/Lost by final_status
-                if (lead.get('final_status') or '').strip().lower() == 'won':
-                    cre_performance[cre_name]['won'] += 1
-                elif (lead.get('final_status') or '').strip().lower() == 'lost':
-                    cre_performance[cre_name]['lost'] += 1
-                # Count calls made
-                call_count = 0
-                call_fields = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
-                for call_field in call_fields:
-                    if lead.get(f'{call_field}_call_date'):
-                        call_count += 1
+                if cre_name not in cre_performance:
+                    cre_performance[cre_name] = {
+                        'total': 0, 'hot': 0, 'warm': 0, 'cold': 0, 'won': 0, 'lost': 0, 'calls': []
+                    }
+                cre_performance[cre_name]['total'] = cre_performance[cre_name]['total'] + 1
+            # Hot/Warm/Cold by lead_category
+            category = (lead.get('lead_category') or '').strip().lower()
+            if category == 'hot':
+                cre_performance[cre_name]['hot'] = cre_performance[cre_name]['hot'] + 1
+            elif category == 'warm':
+                cre_performance[cre_name]['warm'] = cre_performance[cre_name]['warm'] + 1
+            elif category == 'cold':
+                cre_performance[cre_name]['cold'] = cre_performance[cre_name]['cold'] + 1
+            # Won/Lost by final_status
+            if (lead.get('final_status') or '').strip().lower() == 'won':
+                cre_performance[cre_name]['won'] = cre_performance[cre_name]['won'] + 1
+            elif (lead.get('final_status') or '').strip().lower() == 'lost':
+                cre_performance[cre_name]['lost'] = cre_performance[cre_name]['lost'] + 1
+            # Count calls made
+            call_count = 0
+            call_fields = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
+            for call_field in call_fields:
+                if lead.get(f'{call_field}_call_date'):
+                    call_count += 1
+            if isinstance(cre_performance[cre_name]['calls'], list):
                 cre_performance[cre_name]['calls'].append(call_count)
+            else:
+                cre_performance[cre_name]['calls'] = [call_count]
 
         # Calculate conversion rates and average calls for CREs
         top_cres = []
         for cre_name, data in cre_performance.items():
-            total_calls = sum(data['calls'])
-            avg_calls = round(total_calls / len(data['calls']), 1) if data['calls'] else 0
+            calls_list = data['calls'] if isinstance(data['calls'], list) else []
+            total_calls = sum(calls_list) if calls_list else 0
+            avg_calls = round(total_calls / len(calls_list), 1) if calls_list else 0
             conversion_rate_cre = round((data['won'] / data['total'] * 100) if data['total'] > 0 else 0, 1)
             top_cres.append({
                 'name': cre_name,
@@ -4229,11 +4248,11 @@ def source_analysis_data():
                 if followups:
                     latest_fu = max(followups, key=lambda f: f.get('created_at', ''))
                     if latest_fu.get('final_status'):
-                        latest_final_status = latest_fu.get('final_status').strip().lower()
+                        latest_final_status = (latest_fu.get('final_status') or '').strip().lower()
                     if latest_fu.get('lost_reason'):
-                        latest_lost_reason = latest_fu.get('lost_reason').strip().lower()
+                        latest_lost_reason = (latest_fu.get('lost_reason') or '').strip().lower()
                     if latest_fu.get('lead_status'):
-                        latest_lead_status = latest_fu.get('lead_status').strip().lower()
+                        latest_lead_status = (latest_fu.get('lead_status') or '').strip().lower()
             # --- END NEW LOGIC ---
             if latest_final_status == 'lost':
                 data[src]['closed_lost_total'] += 1
@@ -4699,10 +4718,11 @@ def export_filtered_leads():
     if format_ == 'excel':
         wb = openpyxl.Workbook()
         ws = wb.active
-        ws.title = 'Leads'
-        ws.append([col[1] for col in export_columns])
-        for lead in leads:
-            ws.append([lead.get(col[0], '') for col in export_columns])
+        if ws:
+            ws.title = 'Leads'
+            ws.append([col[1] for col in export_columns])
+            for lead in leads:
+                ws.append([lead.get(col[0], '') for col in export_columns])
         output = io.BytesIO()
         wb.save(output)
         output.seek(0)
@@ -4874,17 +4894,21 @@ def add_battery():
 def delete_vehicle(vehicle_id):
     """Delete a vehicle and all associated data"""
     try:
-        # Delete battery capacities first (through color_options)
-        supabase.table('battery_capacities').delete().in_('color_option_id', 
-            supabase.table('color_options').select('id').eq('model_id', 
-                supabase.table('models').select('id').eq('vehicle_id', vehicle_id)
-            )
-        ).execute()
+        # Get model IDs for this vehicle
+        models_response = supabase.table('models').select('id').eq('vehicle_id', vehicle_id).execute()
+        model_ids = [model['id'] for model in models_response.data] if models_response.data else []
         
-        # Delete color options
-        supabase.table('color_options').delete().in_('model_id',
-            supabase.table('models').select('id').eq('vehicle_id', vehicle_id)
-        ).execute()
+        if model_ids:
+            # Get color option IDs for these models
+            colors_response = supabase.table('color_options').select('id').in_('model_id', model_ids).execute()
+            color_ids = [color['id'] for color in colors_response.data] if colors_response.data else []
+            
+            if color_ids:
+                # Delete battery capacities
+                supabase.table('battery_capacities').delete().in_('color_option_id', color_ids).execute()
+            
+            # Delete color options
+            supabase.table('color_options').delete().in_('model_id', model_ids).execute()
         
         # Delete models
         supabase.table('models').delete().eq('vehicle_id', vehicle_id).execute()
@@ -4905,10 +4929,13 @@ def delete_vehicle(vehicle_id):
 def delete_model(model_id):
     """Delete a model and all associated data"""
     try:
-        # Delete battery capacities first
-        supabase.table('battery_capacities').delete().in_('color_option_id',
-            supabase.table('color_options').select('id').eq('model_id', model_id)
-        ).execute()
+        # Get color option IDs for this model
+        colors_response = supabase.table('color_options').select('id').eq('model_id', model_id).execute()
+        color_ids = [color['id'] for color in colors_response.data] if colors_response.data else []
+        
+        if color_ids:
+            # Delete battery capacities
+            supabase.table('battery_capacities').delete().in_('color_option_id', color_ids).execute()
         
         # Delete color options
         supabase.table('color_options').delete().eq('model_id', model_id).execute()
@@ -4982,5 +5009,47 @@ def get_colors(model_id):
         print(f"Error getting colors: {e}")
         return jsonify({'success': False, 'error': 'An error occurred while getting colors'})
 
+@app.route('/cre_analytics')
+@require_cre
+def cre_analytics():
+    """CRE analytics page"""
+    try:
+        # Get CRE's leads data
+        cre_id = session.get('cre_id')
+        if not cre_id:
+            flash('CRE ID not found in session', 'error')
+            return redirect(url_for('cre_dashboard'))
+        
+        # Get leads assigned to this CRE
+        leads_response = supabase.table('lead_master').select('*').eq('cre_id', cre_id).execute()
+        leads = leads_response.data if leads_response.data else []
+        
+        # Calculate analytics
+        total_leads = len(leads)
+        pending_leads = len([lead for lead in leads if not lead.get('ps_id')])
+        assigned_to_ps = len([lead for lead in leads if lead.get('ps_id')])
+        won_leads = len([lead for lead in leads if lead.get('final_status', '').strip().lower() == 'won'])
+        lost_leads = len([lead for lead in leads if lead.get('final_status', '').strip().lower() == 'lost'])
+        
+        # Calculate conversion rate
+        conversion_rate = round((won_leads / total_leads * 100) if total_leads > 0 else 0, 1)
+        
+        # Get recent activity (last 30 days)
+        thirty_days_ago = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+        recent_leads = [lead for lead in leads if lead.get('created_at', '').startswith(thirty_days_ago[:7])]
+        
+        return render_template('cre_analytics.html',
+                             total_leads=total_leads,
+                             pending_leads=pending_leads,
+                             assigned_to_ps=assigned_to_ps,
+                             won_leads=won_leads,
+                             lost_leads=lost_leads,
+                             conversion_rate=conversion_rate,
+                             recent_leads=len(recent_leads))
+    except Exception as e:
+        print(f"Error in cre_analytics: {e}")
+        flash('Error loading analytics data', 'error')
+        return redirect(url_for('cre_dashboard'))
+
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    socketio.run(app, debug=True, port=5001)
