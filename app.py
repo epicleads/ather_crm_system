@@ -1,6 +1,6 @@
 import eventlet
 eventlet.monkey_patch()
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Response
 from supabase.client import create_client, Client
 import csv
 import openpyxl
@@ -535,82 +535,47 @@ def index():
 
 
 @app.route('/unified_login', methods=['POST'])
-@limiter.limit("1000 per minute")
-def unified_login():
+@limiter.limit("100000 per minute")
+def unified_login() -> Response:
     start_time = time.time()
-    
-    # Debug: Log environment variables
-    print(f"[DEBUG] SUPABASE_URL loaded: {SUPABASE_URL is not None}")
-    print(f"[DEBUG] SUPABASE_KEY loaded: {SUPABASE_KEY is not None}")
-    print(f"[DEBUG] SECRET_KEY loaded: {SECRET_KEY is not None}")
-    print(f"[DEBUG] SECRET_KEY length: {len(SECRET_KEY) if SECRET_KEY else 0}")
-    
-    # Debug: Log request data
     username = request.form.get('username', '').strip()
     password = request.form.get('password', '').strip()
     user_type = request.form.get('user_type', '').strip().lower()
-    
-    print(f"[DEBUG] Login attempt - Username: {username}, User Type: {user_type}, Password length: {len(password)}")
-    print(f"[DEBUG] Request IP: {request.environ.get('REMOTE_ADDR')}")
-    print(f"[DEBUG] Request User Agent: {request.environ.get('HTTP_USER_AGENT', 'Unknown')}")
 
     valid_user_types = ['admin', 'cre', 'ps']
     if user_type not in valid_user_types:
-        print(f"[DEBUG] Invalid user type: {user_type}")
         flash('Please select a valid role (Admin, CRE, or PS)', 'error')
-        return redirect(url_for('index'))
-
-    # Debug: Test Supabase connection
-    try:
-        test_result = supabase.table('admin_users').select('id').limit(1).execute()
-        print(f"[DEBUG] Supabase connection test: {'SUCCESS' if test_result.data is not None else 'FAILED'}")
-    except Exception as e:
-        print(f"[DEBUG] Supabase connection error: {e}")
-        flash('Database connection error. Please try again later.', 'error')
         return redirect(url_for('index'))
 
     t_user = time.time()
     success, message, user_data = auth_manager.authenticate_user(username, password, user_type)
-    print(f"[DEBUG] Authentication result - Success: {success}, Message: {message}")
     print(f"[PERF] unified_login: authenticate_user({user_type}) took {time.time() - t_user:.3f} seconds")
-    
     if success:
-        print(f"[DEBUG] User authenticated successfully - ID: {user_data.get('id')}, Name: {user_data.get('name')}")
         t2 = time.time()
         session_id = auth_manager.create_session(user_data['id'], user_type, user_data)
-        print(f"[DEBUG] Session creation result - Session ID: {session_id}")
         print(f"[PERF] unified_login: create_session took {time.time() - t2:.3f} seconds")
-        
         if session_id:
-            # Debug: Verify session was set
-            print(f"[DEBUG] Session data after creation: {dict(session)}")
             flash(f'Welcome! Logged in as {user_type.upper()}', 'success')
             t3 = time.time()
-            
             # Redirect to appropriate dashboard
             if user_type == 'admin':
-                print(f"[DEBUG] Redirecting to admin dashboard")
                 print(f"[PERF] unified_login: redirect to admin_dashboard after {time.time() - t3:.3f} seconds")
                 print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
                 return redirect(url_for('admin_dashboard'))
             elif user_type == 'cre':
-                print(f"[DEBUG] Redirecting to CRE dashboard")
                 print(f"[PERF] unified_login: redirect to cre_dashboard after {time.time() - t3:.3f} seconds")
                 print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
                 return redirect(url_for('cre_dashboard'))
             elif user_type == 'ps':
-                print(f"[DEBUG] Redirecting to PS dashboard")
                 print(f"[PERF] unified_login: redirect to ps_dashboard after {time.time() - t3:.3f} seconds")
                 print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
                 return redirect(url_for('ps_dashboard'))
         else:
-            print(f"[DEBUG] Session creation failed")
             flash('Error creating session', 'error')
             print(f"[PERF] unified_login: session creation failed after {time.time() - t2:.3f} seconds")
             print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
             return redirect(url_for('index'))
     else:
-        print(f"[DEBUG] Authentication failed - Message: {message}")
         flash('Invalid username or password', 'error')
         print(f"[PERF] unified_login TOTAL (invalid login) took {time.time() - start_time:.3f} seconds")
         return redirect(url_for('index'))
@@ -1171,125 +1136,72 @@ def assign_leads_dynamic_action():
         if not assignments:
             return jsonify({'success': False, 'message': 'No assignments provided'}), 400
 
-        print(f"Processing {len(assignments)} assignments")
+        # Fetch all unassigned leads in batches
+        all_unassigned = []
+        batch_size = 1000
+        offset = 0
+        while True:
+            result = supabase.table('lead_master').select('*').eq('assigned', 'No').range(offset, offset + batch_size - 1).execute()
+            batch = result.data or []
+            all_unassigned.extend(batch)
+            if len(batch) < batch_size:
+                break
+            offset += batch_size
 
-        # Fetch fresh unassigned leads for each source being assigned
+        leads_by_source = {}
+        for lead in all_unassigned:
+            source = lead.get('source', 'Unknown')
+            leads_by_source.setdefault(source, []).append(lead)
+
         total_assigned = 0
-        successful_assignments = []
-        assignment_errors = []
 
-        # Process assignments one by one to avoid race conditions
-        for i, assignment in enumerate(assignments):
+        for assignment in assignments:
             cre_id = assignment.get('cre_id')
             source = assignment.get('source')
-            quantity = int(assignment.get('quantity', 0))
+            quantity = assignment.get('quantity')
 
-            print(f"Processing assignment {i+1}/{len(assignments)}: CRE {cre_id}, Source {source}, Quantity {quantity}")
-
-            if not cre_id or not source or quantity <= 0:
-                assignment_errors.append(f"Invalid assignment data: {assignment}")
+            if not cre_id or not source or not quantity:
                 continue
 
             # Get CRE details
-            cre_result = supabase.table('cre_users').select('*').eq('id', cre_id).execute()
-            if not cre_result.data:
-                assignment_errors.append(f"CRE not found with ID: {cre_id}")
+            cre_data = supabase.table('cre_users').select('*').eq('id', cre_id).execute()
+            if not cre_data.data:
                 continue
 
-            cre = cre_result.data[0]
-            cre_name = cre['name']
+            cre = cre_data.data[0]
+            leads = leads_by_source.get(source, [])
 
-            # Fetch current unassigned leads for this specific source
-            # Use limit and order to get deterministic results
-            leads_result = supabase.table('lead_master').select('uid, source').eq('assigned', 'No').eq('source', source).limit(quantity * 2).execute()
-            
-            available_leads = leads_result.data or []
-            
-            if len(available_leads) < quantity:
-                assignment_errors.append(f"Only {len(available_leads)} leads available for {source}, requested {quantity}")
-                quantity = len(available_leads)  # Assign what's available
-            
-            if quantity == 0:
-                assignment_errors.append(f"No unassigned leads available for source: {source}")
+            if not leads:
+                print(f"No unassigned leads found for source {source}")
                 continue
 
-            # Take only the exact number requested
-            leads_to_assign = available_leads[:quantity]
-            
-            # Assign leads one by one with verification
-            assigned_this_batch = 0
-            batch_errors = []
-            
+            random.shuffle(leads)
+            leads_to_assign = leads[:quantity]
+            leads_by_source[source] = leads[quantity:]  # Remove assigned leads
+
             for lead in leads_to_assign:
-                uid = lead['uid']
-                
-                # Double-check the lead is still unassigned before updating
-                check_result = supabase.table('lead_master').select('assigned').eq('uid', uid).execute()
-                if not check_result.data or check_result.data[0]['assigned'] != 'No':
-                    batch_errors.append(f"Lead {uid} already assigned")
-                    continue
-                
-                # Update the lead
                 update_data = {
-                    'cre_name': cre_name,
+                    'cre_name': cre['name'],
                     'assigned': 'Yes',
                     'cre_assigned_at': datetime.now().isoformat()
+
                 }
 
                 try:
-                    update_result = supabase.table('lead_master').update(update_data).eq('uid', uid).eq('assigned', 'No').execute()
-                    
-                    if update_result.data:  # Successfully updated
-                        assigned_this_batch += 1
-                        total_assigned += 1
-                        print(f"✓ Assigned lead {uid} to CRE {cre_name} for source {source}")
-                    else:
-                        batch_errors.append(f"Failed to update lead {uid} (may have been assigned elsewhere)")
-                        
+                    supabase.table('lead_master').update(update_data).eq('uid', lead['uid']).execute()
+                    total_assigned += 1
+                    print(f"Assigned lead {lead['uid']} to CRE {cre['name']} for source {source}")
+                    if total_assigned % 100 == 0:
+                        time.sleep(0.1)
                 except Exception as e:
-                    batch_errors.append(f"Error assigning lead {uid}: {str(e)}")
-
-            successful_assignments.append({
-                'cre_name': cre_name,
-                'source': source,
-                'requested': quantity,
-                'assigned': assigned_this_batch
-            })
-            
-            if batch_errors:
-                assignment_errors.extend(batch_errors)
-            
-            print(f"Assigned {assigned_this_batch}/{quantity} leads from {source} to {cre_name}")
-            
-            # Small delay to prevent overwhelming the database
-            if i < len(assignments) - 1:  # Don't delay after the last assignment
-                time.sleep(0.1)
-
-        # Prepare response message
-        success_msg = f"Total {total_assigned} leads assigned successfully"
-        
-        if successful_assignments:
-            success_msg += "\n\nAssignment Details:"
-            for assignment in successful_assignments:
-                success_msg += f"\n• {assignment['cre_name']}: {assignment['assigned']}/{assignment['requested']} leads from {assignment['source']}"
-        
-        if assignment_errors:
-            success_msg += f"\n\nWarnings: {len(assignment_errors)} issues encountered"
-            print("Assignment errors:", assignment_errors)
+                    print(f"Error assigning lead {lead['uid']}: {e}")
 
         print(f"Total leads assigned: {total_assigned}")
-        return jsonify({
-            'success': True, 
-            'message': success_msg,
-            'total_assigned': total_assigned,
-            'successful_assignments': successful_assignments,
-            'errors': assignment_errors[:10]  # Limit error list in response
-        })
+        return jsonify({'success': True, 'message': f'Total {total_assigned} leads assigned successfully'})
 
     except Exception as e:
-        error_msg = f"Error in dynamic lead assignment: {str(e)}"
-        print(error_msg)
-        return jsonify({'success': False, 'message': error_msg}), 500
+        print(f"Error in dynamic lead assignment: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
 @app.route('/add_cre', methods=['GET', 'POST'])
 @require_admin
 def add_cre():
@@ -1858,7 +1770,6 @@ def cre_dashboard():
         print(f"[PERF] cre_dashboard: won/lost_leads filter took {time.time() - t5:.3f} seconds")
 
         # --- Walk-in Follow-up Section ---
-
         t6 = time.time()
         result = render_template('cre_dashboard.html',
                                pending_leads=pending_leads,
@@ -1867,6 +1778,7 @@ def cre_dashboard():
                                assigned_to_ps=assigned_to_ps,
                                won_leads=won_leads,
                                lost_leads=lost_leads)
+                               #walkin_followups=walkin_followups)
         print(f"[PERF] cre_dashboard: render_template took {time.time() - t6:.3f} seconds")
         print(f"[PERF] cre_dashboard TOTAL took {time.time() - start_time:.3f} seconds")
         return result
@@ -1986,25 +1898,13 @@ def update_lead(uid):
             if follow_up_date:
                 update_data['follow_up_date'] = follow_up_date
 
-            # Auto-set final status based on lead status
-            won_statuses = []  # CRE doesn't have Retailed/Booked statuses
-            lost_statuses = ['Not Interested', 'Lost to Competition', 'Lost to Co Dealer']
-            
-            # Determine final status based on lead status
-            if lead_status in won_statuses:
-                final_status = 'Won'
-            elif lead_status in lost_statuses:
-                final_status = 'Lost'
-            else:
-                # For other statuses, use the form value or default to Pending
-                final_status = request.form.get('final_status', 'Pending')
-            
-            # Always update final status based on the determined value
-            update_data['final_status'] = final_status
-            if final_status == 'Won':
-                update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            elif final_status == 'Lost':
-                update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            if request.form.get('final_status'):
+                final_status = request.form['final_status']
+                update_data['final_status'] = final_status
+                if final_status == 'Won':
+                    update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                elif final_status == 'Lost':
+                    update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
             # Handle call dates and remarks - only record for actual conversations
             if request.form.get('call_date') and call_remark:
@@ -2146,10 +2046,24 @@ def ps_dashboard():
 
         t2 = time.time()
         # Today's Follow-ups (not filtered by ps_assigned_at)
-        todays_followups = [
+        # Regular leads
+        todays_followups_regular = [
             lead for lead in assigned_leads
-            if lead.get('follow_up_date') and lead.get('follow_up_date').startswith(str(today))
+            if lead.get('follow_up_date') and str(lead.get('follow_up_date')).startswith(str(today))
         ]
+        # Walk-in leads for this PS
+        walkin_leads = safe_get_data('walkin_data', {'ps_name': ps_name})
+        todays_followups_walkin = []
+        for lead in walkin_leads:
+            if (
+                (lead.get('walkin_followup_date') and str(lead.get('walkin_followup_date')).startswith(str(today))) or
+                (lead.get('follow_up_date') and str(lead.get('follow_up_date')).startswith(str(today)))
+            ):
+                lead = dict(lead)  # Make a copy to avoid mutating the original
+                lead['lead_uid'] = lead.get('uid')  # Add lead_uid for template compatibility
+                todays_followups_walkin.append(lead)
+        # Merge both lists
+        todays_followups = todays_followups_regular + todays_followups_walkin
         print(f"[PERF] ps_dashboard: todays_followups filter took {time.time() - t2:.3f} seconds")
 
         t3 = time.time()
@@ -2184,12 +2098,15 @@ def ps_dashboard():
         print(f"[PERF] ps_dashboard: lost_leads filter took {time.time() - t4:.3f} seconds")
 
         t5 = time.time()
+        # Fetch walk-in leads for this PS
+        walkin_leads = safe_get_data('walkin_data', {'ps_name': ps_name})
         result = render_template('ps_dashboard.html',
                                assigned_leads=filtered_leads,
                                pending_leads=pending_leads,
                                todays_followups=todays_followups,
                                attended_leads=attended_leads,
                                lost_leads=lost_leads,
+                               walkin_leads=walkin_leads,
                                filter_type=filter_type,
                                start_date=start_date,
                                end_date=end_date)
@@ -2205,6 +2122,7 @@ def ps_dashboard():
                                todays_followups=[],
                                attended_leads=[],
                                lost_leads=[],
+                               walkin_leads=[],
                                filter_type=filter_type,
                                start_date=start_date,
                                end_date=end_date)
@@ -2214,144 +2132,196 @@ def ps_dashboard():
 @require_ps
 def update_ps_lead(uid):
     try:
-        # Get PS followup data
+        # Try to get PS followup data (regular leads)
         ps_result = supabase.table('ps_followup_master').select('*').eq('lead_uid', uid).execute()
-        if not ps_result.data:
+        if ps_result.data:
+            ps_data = ps_result.data[0]
+            # Fetch CRE call summary from lead_master
+            lead_result = supabase.table('lead_master').select('*').eq('uid', uid).execute()
+            cre_call_summary = {}
+            if lead_result.data:
+                lead = lead_result.data[0]
+                call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
+                for call in call_order:
+                    date_key = f"{call}_call_date"
+                    remark_key = f"{call}_remark"
+                    cre_call_summary[call] = {
+                        "date": lead.get(date_key),
+                        "remark": lead.get(remark_key)
+                    }
+            else:
+                cre_call_summary = {}
+            # Verify this lead belongs to the current PS
+            if ps_data.get('ps_name') != session.get('ps_name'):
+                flash('Access denied - This lead is not assigned to you', 'error')
+                return redirect(url_for('ps_dashboard'))
+            # Get next call info for PS (only 7 calls)
+            next_call, completed_calls = get_next_ps_call_info(ps_data)
+            if request.method == 'POST':
+                update_data = {}
+                lead_status = request.form.get('lead_status', '')
+                follow_up_date = request.form.get('follow_up_date', '')
+                call_remark = request.form.get('call_remark', '')
+                # Always update lead_status from the form
+                if lead_status:
+                    update_data['lead_status'] = lead_status
+                if request.form.get('follow_up_date'):
+                    update_data['follow_up_date'] = follow_up_date
+                if request.form.get('final_status'):
+                    final_status = request.form['final_status']
+                    update_data['final_status'] = final_status
+                    if final_status == 'Won':
+                        update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    elif final_status == 'Lost':
+                        update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                # Handle call dates and remarks for the next available call
+                skip_first_call_statuses = [
+                    'Call not Connected',
+                    'Busy on another call',
+                    'RNR',
+                    'Call me Back'
+                ]
+                if request.form.get('call_date') and lead_status not in skip_first_call_statuses:
+                    update_data[f'{next_call}_call_date'] = request.form['call_date']
+                if call_remark:
+                    combined_remark = f"{lead_status}, {call_remark}"
+                    update_data[f'{next_call}_call_remark'] = combined_remark
+                    # Emit notification to CRE dashboard
+                    socketio.emit(
+                        'ps_remark_added',
+                        {
+                            'customer_name': ps_data.get('customer_name'),
+                            'ps_remark': combined_remark,
+                            'ps_name': ps_data.get('ps_name')
+                        }
+                    )
+                try:
+                    # Track the PS call attempt before updating the lead
+                    if lead_status:
+                        call_was_recorded = bool(request.form.get('call_date') and call_remark)
+                        track_ps_call_attempt(
+                            uid=uid,
+                            ps_name=session.get('ps_name'),
+                            call_no=next_call,
+                            lead_status=lead_status,
+                            call_was_recorded=call_was_recorded,
+                            follow_up_date=follow_up_date if follow_up_date else None,
+                            remarks=call_remark if call_remark else None
+                        )
+                    if update_data:
+                        supabase.table('ps_followup_master').update(update_data).eq('lead_uid', uid).execute()
+                        # Also update the main lead table final status
+                        if request.form.get('final_status'):
+                            final_status = request.form['final_status']
+                            main_update_data = {'final_status': final_status}
+                            if final_status == 'Won':
+                                main_update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                            elif final_status == 'Lost':
+                                main_update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                            supabase.table('lead_master').update(main_update_data).eq('uid', uid).execute()
+                        # Log PS lead update
+                        auth_manager.log_audit_event(
+                            user_id=session.get('user_id'),
+                            user_type=session.get('user_type'),
+                            action='PS_LEAD_UPDATED',
+                            resource='ps_followup_master',
+                            resource_id=uid,
+                            details={'updated_fields': list(update_data.keys())}
+                        )
+                        flash('Lead updated successfully', 'success')
+                    else:
+                        flash('No changes to update', 'info')
+                    return redirect(url_for('ps_dashboard'))
+                except Exception as e:
+                    flash(f'Error updating lead: {str(e)}', 'error')
+            return render_template('update_ps_lead.html',
+                                   lead=ps_data,
+                                   next_call=next_call,
+                                   completed_calls=completed_calls,
+                                   today=date.today(),
+                                   cre_call_summary=cre_call_summary)
+        # If not found in ps_followup_master, try walkin_data
+        walkin_result = supabase.table('walkin_data').select('*').eq('uid', uid).execute()
+        if not walkin_result.data:
             flash('Lead not found', 'error')
             return redirect(url_for('ps_dashboard'))
-
-        ps_data = ps_result.data[0]
-
-        # Fetch CRE call summary from lead_master
-        lead_result = supabase.table('lead_master').select('*').eq('uid', uid).execute()
-        cre_call_summary = {}
-        if lead_result.data:
-            lead = lead_result.data[0]
-            call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
-            for call in call_order:
-                date_key = f"{call}_call_date"
-                remark_key = f"{call}_remark"
-                cre_call_summary[call] = {
-                    "date": lead.get(date_key),
-                    "remark": lead.get(remark_key)
-                }
-        else:
-            cre_call_summary = {}
-
-        # Verify this lead belongs to the current PS
-        if ps_data.get('ps_name') != session.get('ps_name'):
-            flash('Access denied - This lead is not assigned to you', 'error')
+        walkin_data = walkin_result.data[0]
+        # Only allow the PS assigned to this walk-in lead
+        if walkin_data.get('ps_name') != session.get('ps_name'):
+            flash('Access denied - This walk-in lead is not assigned to you', 'error')
             return redirect(url_for('ps_dashboard'))
-
-        # Get next call info for PS (only 7 calls)
-        next_call, completed_calls = get_next_ps_call_info(ps_data)
-
+        # Determine next call info for walk-in (up to 7 calls)
+        call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
+        completed_calls = []
+        next_call = 'first'
+        for call_num in call_order:
+            call_date_key = f'{call_num}_call_date'
+            if walkin_data.get(call_date_key):
+                completed_calls.append(call_num)
+            else:
+                next_call = call_num
+                break
         if request.method == 'POST':
             update_data = {}
-            lead_status = request.form.get('lead_status', '')
+            status = request.form.get('lead_status', '')
             follow_up_date = request.form.get('follow_up_date', '')
             call_remark = request.form.get('call_remark', '')
-
-            # Always update lead_status from the form
-            if lead_status:
-                update_data['lead_status'] = lead_status
-
-            if request.form.get('follow_up_date'):
+            final_status = request.form.get('final_status', '')
+            call_date = request.form.get('call_date', '')
+            lead_category = request.form.get('lead_category', '')
+            update_data['lead_source'] = 'Walk-in'
+            if lead_category:
+                update_data['lead_category'] = lead_category
+            if status:
+                update_data['lead_status'] = status
+            # Fix: Update walkin_followup_date (timestamp) if provided
+            if follow_up_date:
+                update_data['walkin_followup_date'] = follow_up_date
+            if follow_up_date:
                 update_data['follow_up_date'] = follow_up_date
-
-            # Auto-set final status based on lead status
-            won_statuses = ['Retailed', 'Booked']
-            lost_statuses = ['Not Interested', 'Lost to Competition', 'Lost to codealer', 'Dropped']
-            
-            # Determine final status based on lead status
-            if lead_status in won_statuses:
-                final_status = 'Won'
-            elif lead_status in lost_statuses:
-                final_status = 'Lost'
+            if final_status in ['Won', 'Lost']:
+                update_data['ps_final_status'] = final_status
             else:
-                # For other statuses, use the form value or default to Pending
-                final_status = request.form.get('final_status', 'Pending')
-            
-            # Always update final status based on the determined value
-            update_data['final_status'] = final_status
-            if final_status == 'Won':
-                update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            elif final_status == 'Lost':
-                update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-            # Handle call dates and remarks for the next available call
+                update_data['ps_final_status'] = 'Pending'
             skip_first_call_statuses = [
                 'Call not Connected',
                 'Busy on another call',
                 'RNR',
                 'Call me Back'
             ]
-            if request.form.get('call_date') and lead_status not in skip_first_call_statuses:
-                update_data[f'{next_call}_call_date'] = request.form['call_date']
-
+            if call_date and status and status not in skip_first_call_statuses:
+                update_data[f'{next_call}_call_date'] = call_date
             if call_remark:
-                combined_remark = f"{lead_status}, {call_remark}"
-                update_data[f'{next_call}_call_remark'] = combined_remark
-                # Emit notification to CRE dashboard
-                socketio.emit(
-                    'ps_remark_added',
-                    {
-                        'customer_name': ps_data.get('customer_name'),
-                        'ps_remark': combined_remark,
-                        'ps_name': ps_data.get('ps_name')
-                    }
-                )
-
+                update_data[f'{next_call}_call_remark'] = f"{status}, {call_remark}"
             try:
-                # Track the PS call attempt before updating the lead
-                if lead_status:
-                    call_was_recorded = bool(request.form.get('call_date') and call_remark)
-                    track_ps_call_attempt(
-                        uid=uid,
-                        ps_name=session.get('ps_name'),
-                        call_no=next_call,
-                        lead_status=lead_status,
-                        call_was_recorded=call_was_recorded,
-                        follow_up_date=follow_up_date if follow_up_date else None,
-                        remarks=call_remark if call_remark else None
-                    )
-
                 if update_data:
-                    supabase.table('ps_followup_master').update(update_data).eq('lead_uid', uid).execute()
-
-                    # Also update the main lead table final status
-                    main_update_data = {'final_status': final_status}
-                    if final_status == 'Won':
-                        main_update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    elif final_status == 'Lost':
-                        main_update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-                    supabase.table('lead_master').update(main_update_data).eq('uid', uid).execute()
-
-                    # Log PS lead update
-                    auth_manager.log_audit_event(
-                        user_id=session.get('user_id'),
-                        user_type=session.get('user_type'),
-                        action='PS_LEAD_UPDATED',
-                        resource='ps_followup_master',
-                        resource_id=uid,
-                        details={'updated_fields': list(update_data.keys())}
-                    )
-
-                    flash('Lead updated successfully', 'success')
+                    supabase.table('walkin_data').update(update_data).eq('uid', uid).execute()
+                    flash('Walk-in lead updated successfully', 'success')
+                    return redirect(url_for('ps_dashboard'))  # Always redirect to PS dashboard after update
                 else:
                     flash('No changes to update', 'info')
-                return redirect(url_for('ps_dashboard'))
+                walkin_result = supabase.table('walkin_data').select('*').eq('uid', uid).execute()
+                walkin_data = walkin_result.data[0] if walkin_result.data else walkin_data
+                call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
+                completed_calls = []
+                next_call = 'first'
+                for call_num in call_order:
+                    call_date_key = f'{call_num}_call_date'
+                    if walkin_data.get(call_date_key):
+                        completed_calls.append(call_num)
+                    else:
+                        next_call = call_num
+                        break
+                return redirect(url_for('update_ps_lead', uid=uid))
             except Exception as e:
-                flash(f'Error updating lead: {str(e)}', 'error')
-
+                flash(f'Error updating walk-in lead: {str(e)}', 'error')
+        # For walk-in, mimic the same update form but only for available fields
         return render_template('update_ps_lead.html',
-                               lead=ps_data,
+                               lead=walkin_data,
                                next_call=next_call,
                                completed_calls=completed_calls,
                                today=date.today(),
-                               cre_call_summary=cre_call_summary)
-
+                               cre_call_summary={})
     except Exception as e:
         flash(f'Error loading lead: {str(e)}', 'error')
         return redirect(url_for('ps_dashboard'))
@@ -2939,6 +2909,7 @@ def walkin_customers():
             }
 
             # --- Walk-in Follow-up Assignment Logic ---
+ 
 
             # Insert walk-in data into the database
             result = supabase.table('walkin_data').insert(walkin_data).execute()
@@ -3083,7 +3054,7 @@ def view_walkin_customers():
 
 
 @app.route('/analytics')
-@require_admin
+@require_auth(['admin'])
 def analytics():
     try:
         # Get filter period or custom date range from query parameter
@@ -3315,73 +3286,6 @@ def analytics():
         # Calculate leads growth (mock calculation)
         leads_growth = 15
 
-        # --- Campaign/Platform/Lead Count Aggregation ---
-        campaign_stats_dict = {}
-        all_leads_count = len(all_leads)
-        today_str = today.strftime('%Y-%m-%d')
-        # Prepare date range for filtering
-        def in_range(ts):
-            if not ts:
-                return False
-            try:
-                if 'T' in ts:
-                    d = datetime.fromisoformat(ts.replace('Z', '+00:00')).date()
-                else:
-                    d = datetime.strptime(ts[:10], '%Y-%m-%d').date()
-            except Exception:
-                return False
-            if start_date and end_date:
-                return start_date <= d <= end_date
-            elif start_date:
-                return d >= start_date
-            else:
-                return True
-        for lead in all_leads:
-            campaign = lead.get('campaign', 'Unknown')
-            source = lead.get('source', 'Unknown')
-            if not campaign or campaign.strip().lower() in ['none', 'unknown', '']:
-                continue
-            key = (campaign, source)
-            if key not in campaign_stats_dict:
-                campaign_stats_dict[key] = {
-                    'campaign': campaign,
-                    'source': source,
-                    'total_leads': 0,
-                    'today_leads': 0,
-                    'lost_leads': 0,
-                    'pending_leads': 0,
-                    'won_leads': 0
-                }
-            # Total leads: filter by created_at
-            if in_range(lead.get('created_at')):
-                campaign_stats_dict[key]['total_leads'] += 1
-            # Today's leads: only by created_at
-            lead_date = lead.get('created_at')
-            if lead_date:
-                if 'T' in lead_date:
-                    lead_date_val = lead_date.split('T')[0]
-                else:
-                    lead_date_val = lead_date
-                if lead_date_val == today_str:
-                    campaign_stats_dict[key]['today_leads'] += 1
-            # Lost leads: filter by lost_timestamp and final_status
-            if (lead.get('final_status') or '').strip().lower() == 'lost' and in_range(lead.get('lost_timestamp')):
-                campaign_stats_dict[key]['lost_leads'] += 1
-            # Won leads: filter by won_timestamp and final_status
-            if (lead.get('final_status') or '').strip().lower() == 'won' and in_range(lead.get('won_timestamp')):
-                campaign_stats_dict[key]['won_leads'] += 1
-            # Pending leads: filter by created_at and final_status
-            if (lead.get('final_status') or '').strip().lower() == 'pending' and in_range(lead.get('created_at')):
-                campaign_stats_dict[key]['pending_leads'] += 1
-        # Calculate conversion rate for each campaign
-        campaign_stats = []
-        for row in campaign_stats_dict.values():
-            total = row['total_leads']
-            won = row['won_leads']
-            row['conversion_rate'] = round((won / total * 100) if total > 0 else 0, 1)
-            campaign_stats.append(row)
-        # --- End Campaign/Platform/Lead Count Aggregation ---
-
         # Create analytics object that matches template expectations
         analytics = {
             'total_leads': total_leads,
@@ -3399,10 +3303,7 @@ def analytics():
             'model_interest': model_interest,
             'branch_performance': branch_performance,
             'funnel': funnel,
-            'recent_activities': recent_activities,
-            # Add new campaign/platform stats
-            'campaign_stats': campaign_stats,
-            'all_leads_count': all_leads_count
+            'recent_activities': recent_activities
         }
 
         # Log analytics access
@@ -3446,9 +3347,7 @@ def analytics():
                 'won': 0,
                 'won_percent': 0
             },
-            'recent_activities': [],
-            'campaign_stats': [],
-            'all_leads_count': 0
+            'recent_activities': []
         }
         return render_template('analytics.html', analytics=empty_analytics)
 
@@ -4219,7 +4118,6 @@ def source_analysis_data():
     try:
         start_date_str = request.args.get('start_date')
         end_date_str = request.args.get('end_date')
-        date_field = request.args.get('date_field', 'created_at')  # Allow date_field param, default to created_at
         today = datetime.now().date()
         start_date = None
         end_date = None
@@ -4238,7 +4136,7 @@ def source_analysis_data():
         all_leads = safe_get_data('lead_master')
         all_followups = safe_get_data('ps_followup_master')
         def in_date_range(lead):
-            lead_date_str = lead.get(date_field) or lead.get('date')
+            lead_date_str = lead.get('created_at') or lead.get('date')
             if not lead_date_str:
                 return True
             try:
@@ -4819,442 +4717,6 @@ def export_filtered_leads():
         filename = f"leads_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         return send_file(io.BytesIO(output.getvalue().encode('utf-8')), as_attachment=True, download_name=filename, mimetype='text/csv')
 
-@app.route('/get_cre_list')
-@require_admin
-def get_cre_list():
-    """Get list of all CREs for dropdown"""
-    try:
-        cre_result = supabase.table('cre_users').select('name').eq('is_active', True).execute()
-        cre_list = cre_result.data if cre_result.data else []
-        return jsonify({'success': True, 'cre_list': cre_list})
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)})
-
-
-@app.route('/cre_analysis_data')
-@require_admin
-def cre_analysis_data():
-    """Get CRE performance analysis data"""
-    try:
-        start_date = request.args.get('start_date')
-        end_date = request.args.get('end_date')
-        cre_name = request.args.get('cre_name')
-        date_field = request.args.get('date_field', 'created_at')  # Allow date_field param, default to created_at
-        # Get all leads
-        leads_result = supabase.table('lead_master').select('*').execute()
-        leads = leads_result.data if leads_result.data else []
-        # Get all CREs
-        cre_result = supabase.table('cre_users').select('name').eq('is_active', True).execute()
-        cres = [cre['name'] for cre in cre_result.data] if cre_result.data else []
-        # Filter by date range if provided
-        if start_date and end_date:
-            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
-            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
-            def in_range(lead):
-                lead_date_str = lead.get(date_field)
-                if not lead_date_str:
-                    return False
-                try:
-                    if 'T' in lead_date_str:
-                        lead_date = datetime.fromisoformat(lead_date_str.replace('Z', '+00:00')).date()
-                    else:
-                        lead_date = datetime.strptime(lead_date_str[:10], '%Y-%m-%d').date()
-                    return start_dt.date() <= lead_date <= end_dt.date()
-                except Exception:
-                    return False
-            leads = [lead for lead in leads if in_range(lead)]
-        # Filter by CRE if provided
-        if cre_name:
-            leads = [lead for lead in leads if lead.get('cre_name') == cre_name]
-            cres = [cre_name]
-        # Initialize data structure
-        data = {}
-        for cre in cres:
-            data[cre] = {
-                'calls_allocated': 0,
-                'calls_attempted': 0,
-                'calls_connected': 0,
-                'total_leads': 0,
-                'hot_leads': 0,
-                'warm_leads': 0,
-                'cold_leads': 0,
-                'callback_leads': 0,
-                'rnr_leads': 0,
-                'disconnected_calls': 0,
-                'lost_total': 0,
-                'lost_co_dealer': 0,
-                'lost_competition': 0,
-                'not_interested': 0,
-                'did_not_enquire': 0,
-                'wrong_lead': 0,
-                'rnr_lost': 0,
-                'finance_reject': 0,
-                'sales_pipeline_total': 0,
-                'closed_won': 0,
-                'pending': 0,
-                'closed_lost': 0,
-                'call_percentage': 0,
-                'interested_percentage': 0,
-                'walkin_percentage': 0,
-                'retail_percentage': 0
-            }
-        # Process leads for each CRE
-        for lead in leads:
-            assigned_cre = lead.get('cre_name')
-            if assigned_cre not in cres:
-                continue
-            cre_data = data[assigned_cre]
-            # Calls allocated
-            cre_data['calls_allocated'] += 1
-            # Calls attempted
-            attempted = any(lead.get(f'{c}_call_date') for c in ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh'])
-            if attempted:
-                cre_data['calls_attempted'] += 1
-            # Calls connected
-            call_statuses = [lead.get(f'{c}_call_status', '').lower() for c in ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']]
-            connected = any(s and s not in ['rnr', 'busy', 'busy on another call'] for s in call_statuses)
-            if connected:
-                cre_data['calls_connected'] += 1
-            # Lead status analysis
-            status = (lead.get('lead_status') or '').strip().lower()
-            if status in ['interested', 'call back', 'rnr', 'call disconnected']:
-                cre_data['total_leads'] += 1
-                if status == 'interested':
-                    cat = (lead.get('lead_category') or '').strip().lower()
-                    if cat == 'hot':
-                        cre_data['hot_leads'] += 1
-                    elif cat == 'warm':
-                        cre_data['warm_leads'] += 1
-                    elif cat == 'cold':
-                        cre_data['cold_leads'] += 1
-                elif status == 'call back':
-                    cre_data['callback_leads'] += 1
-                elif status == 'rnr':
-                    cre_data['rnr_leads'] += 1
-                elif status == 'call disconnected':
-                    cre_data['disconnected_calls'] += 1
-            # Lost leads analysis - use lead_master data directly
-            final_status = (lead.get('final_status') or '').strip().lower()
-            lead_status = (lead.get('lead_status') or '').strip().lower()
-            if final_status == 'lost':
-                cre_data['lost_total'] += 1
-                cre_data['closed_lost'] += 1
-                if lead_status == 'rnr-lost':
-                    cre_data['rnr_lost'] += 1
-                elif lead_status == 'did not enquire':
-                    cre_data['did_not_enquire'] += 1
-                elif lead_status == 'not interested':
-                    cre_data['not_interested'] += 1
-                elif lead_status == 'lost to competition':
-                    cre_data['lost_competition'] += 1
-                elif lead_status == 'lost to co-dealer':
-                    cre_data['lost_co_dealer'] += 1
-                elif lead_status == 'finance rejected':
-                    cre_data['finance_reject'] += 1
-                elif lead_status == 'wrong lead':
-                    cre_data['wrong_lead'] += 1
-            if final_status == 'won':
-                cre_data['sales_pipeline_total'] += 1
-                cre_data['closed_won'] += 1
-            if status in ['interested', 'call back', 'rnr', 'call disconnected']:
-                cre_data['pending'] += 1
-        # Calculate percentages
-        for cre in cres:
-            cre_data = data[cre]
-            allocated = cre_data['calls_allocated']
-            if allocated > 0:
-                cre_data['call_percentage'] = round((cre_data['calls_connected'] / allocated) * 100, 1)
-                cre_data['interested_percentage'] = round((cre_data['total_leads'] / allocated) * 100, 1)
-                cre_data['walkin_percentage'] = round((cre_data['pending'] / allocated) * 100, 1)
-                cre_data['retail_percentage'] = round((cre_data['closed_won'] / allocated) * 100, 1)
-        # Calculate totals
-        total_data = {}
-        if data:
-            for key in data[cres[0]].keys():
-                if isinstance(data[cres[0]][key], (int, float)):
-                    total_data[key] = sum(data[cre][key] for cre in cres)
-                else:
-                    total_data[key] = 0
-        data['Total'] = total_data
-        return jsonify({'success': True, 'data': data})
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)})
-
-
-# --- Negative Feedback Analysis API ---
-from collections import defaultdict
-
-@app.route('/negative_feedback_stats')
-@require_admin
-def negative_feedback_stats():
-    """
-    Returns JSON with negative feedback stats for CRE and PS call attempts, bucketed by F1-F7 (time from today).
-    Accepts optional start_date and end_date query params (YYYY-MM-DD) to filter by updated_at.
-    """
-    import pytz
-    from datetime import datetime, timedelta
-    # Parse date filters
-    start_date_str = request.args.get('start_date')
-    end_date_str = request.args.get('end_date')
-    start_date = None
-    end_date = None
-    if start_date_str:
-        try:
-            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-        except Exception:
-            start_date = None
-    if end_date_str:
-        try:
-            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-        except Exception:
-            end_date = None
-    # Helper: bucket assignment
-    def get_bucket(dt):
-        now = datetime.now(pytz.UTC).date() if dt.tzinfo else datetime.now().date()
-        delta = (now - dt.date()).days
-        if delta == 0:
-            return 'F1'
-        elif delta == 1:
-            return 'F2'
-        elif delta <= 3:
-            return 'F3'
-        elif delta <= 7:
-            return 'F4'
-        elif delta <= 14:
-            return 'F5'
-        elif delta <= 30:
-            return 'F6'
-        else:
-            return 'F7'
-    # Negative feedback reasons to show (can be customized)
-    NEGATIVE_REASONS = [
-        'Discount Issue', 'Delayed', 'Lost to Competition', 'Finance Rejected',
-        'Dropped', 'Lost to Co-Dealer', 'RNR', 'Not Interested', 'Call Disconnected'
-    ]
-    # Helper: aggregate for a table
-    def aggregate(table, name_col, ts_col):
-        # Only fetch needed columns
-        result = supabase.table(table).select(f"status,{ts_col},{name_col}").execute()
-        rows = result.data if result.data else []
-        # Filter by date if needed
-        filtered_rows = []
-        for row in rows:
-            ts_raw = row.get(ts_col)
-            if not ts_raw:
-                continue
-            try:
-                dt = datetime.fromisoformat(ts_raw.replace('Z', '+00:00')) if 'T' in ts_raw else datetime.strptime(ts_raw, '%Y-%m-%d %H:%M:%S')
-            except Exception:
-                continue
-            dt_date = dt.date()
-            if start_date and dt_date < start_date:
-                continue
-            if end_date and dt_date > end_date:
-                continue
-            filtered_rows.append(row)
-        # Prepare: {reason: [bucket0, bucket1, ... bucket6]} (each is dict: total, percent, denom)
-        stats = {reason: [dict(total=0, percent=0.0, denom=0) for _ in range(7)] for reason in NEGATIVE_REASONS}
-        # For each bucket, count total and per reason
-        bucket_totals = [0]*7
-        bucket_reason_counts = [defaultdict(int) for _ in range(7)]
-        for row in filtered_rows:
-            status = (row.get('status') or '').strip()
-            ts_raw = row.get(ts_col)
-            if not ts_raw:
-                continue
-            try:
-                dt = datetime.fromisoformat(ts_raw.replace('Z', '+00:00')) if 'T' in ts_raw else datetime.strptime(ts_raw, '%Y-%m-%d %H:%M:%S')
-            except Exception:
-                continue
-            bucket_idx = int(get_bucket(dt)[1]) - 1  # F1->0, F2->1, ...
-            if bucket_idx < 0 or bucket_idx > 6:
-                continue
-            bucket_totals[bucket_idx] += 1
-            if status in NEGATIVE_REASONS:
-                bucket_reason_counts[bucket_idx][status] += 1
-        # Fill stats
-        for i in range(7):
-            denom = bucket_totals[i]
-            for reason in NEGATIVE_REASONS:
-                count = bucket_reason_counts[i][reason]
-                percent = (count/denom*100) if denom else 0.0
-                stats[reason][i] = dict(total=count, percent=round(percent,1), denom=denom)
-        return stats
-    cre_stats = aggregate('cre_call_attempt_history', 'cre_name', 'update_ts')
-    ps_stats = aggregate('ps_call_attempt_history', 'ps_name', 'updated_at')
-    return jsonify({"CRE": cre_stats, "PS": ps_stats})
-
-@app.route('/debug_auth')
-def debug_auth():
-    """Debug route to test authentication and environment variables"""
-    debug_info = {
-        'environment_variables': {
-            'SUPABASE_URL': SUPABASE_URL is not None,
-            'SUPABASE_KEY': SUPABASE_KEY is not None,
-            'SECRET_KEY': SECRET_KEY is not None,
-            'SECRET_KEY_LENGTH': len(SECRET_KEY) if SECRET_KEY else 0
-        },
-        'supabase_connection': 'Unknown',
-        'session_info': dict(session),
-        'request_info': {
-            'ip': request.environ.get('REMOTE_ADDR'),
-            'user_agent': request.environ.get('HTTP_USER_AGENT', 'Unknown')
-        }
-    }
-    
-    # Test Supabase connection
-    try:
-        test_result = supabase.table('admin_users').select('id').limit(1).execute()
-        debug_info['supabase_connection'] = 'SUCCESS' if test_result.data is not None else 'FAILED'
-        debug_info['supabase_test_data'] = test_result.data
-    except Exception as e:
-        debug_info['supabase_connection'] = f'ERROR: {str(e)}'
-    
-    return f"""
-    <h1>Authentication Debug Info</h1>
-    <pre>{debug_info}</pre>
-    <hr>
-    <h2>Test Login</h2>
-    <form method="POST" action="/test_login">
-        <label>Username: <input name="username" type="text"></label><br>
-        <label>Password: <input name="password" type="password"></label><br>
-        <label>User Type: 
-            <select name="user_type">
-                <option value="admin">Admin</option>
-                <option value="cre">CRE</option>
-                <option value="ps">PS</option>
-            </select>
-        </label><br>
-        <button type="submit">Test Login</button>
-    </form>
-    """
-
-@app.route('/test_login', methods=['POST'])
-def test_login():
-    """Test login without redirecting"""
-    username = request.form.get('username', '').strip()
-    password = request.form.get('password', '').strip()
-    user_type = request.form.get('user_type', '').strip().lower()
-    
-    print(f"[DEBUG TEST] Test login - Username: {username}, User Type: {user_type}")
-    
-    success, message, user_data = auth_manager.authenticate_user(username, password, user_type)
-    
-    result = {
-        'success': success,
-        'message': message,
-        'user_data': user_data if user_data else None,
-        'session_before': dict(session)
-    }
-    
-    if success:
-        session_id = auth_manager.create_session(user_data['id'], user_type, user_data)
-        result['session_created'] = session_id is not None
-        result['session_after'] = dict(session)
-    
-    return f"""
-    <h1>Test Login Result</h1>
-    <pre>{result}</pre>
-    <hr>
-    <a href="/debug_auth">Back to Debug</a>
-    """
-
-@app.route('/check_username')
-@require_admin
-def check_username():
-    """Check if username is available"""
-    username = request.args.get('username', '').strip()
-    user_type = request.args.get('type', '').strip()  # 'cre' or 'ps'
-    
-    if not username or not user_type:
-        return jsonify({'available': False, 'message': 'Invalid request'})
-    
-    if user_type not in ['cre', 'ps']:
-        return jsonify({'available': False, 'message': 'Invalid user type'})
-    
-    try:
-        # Check in the appropriate table
-        table_name = f"{user_type}_users"
-        result = supabase.table(table_name).select('username').eq('username', username).execute()
-        
-        if result.data and len(result.data) > 0:
-            return jsonify({'available': False, 'message': 'Username already exists'})
-        else:
-            return jsonify({'available': True, 'message': 'Username is available'})
-            
-    except Exception as e:
-        print(f"Error checking username: {e}")
-        return jsonify({'available': False, 'message': 'Error checking username'})
-
-@app.route('/simple_admin_login', methods=['GET', 'POST'])
-def simple_admin_login():
-    """Simple admin login for debugging"""
-    if request.method == 'POST':
-        username = request.form.get('username', '').strip()
-        password = request.form.get('password', '').strip()
-        
-        print(f"[SIMPLE DEBUG] Admin login attempt - Username: {username}")
-        
-        # Simple direct database check
-        try:
-            result = supabase.table('admin_users').select('*').eq('username', username).execute()
-            print(f"[SIMPLE DEBUG] Database query result: {len(result.data) if result.data else 0} users found")
-            
-            if result.data and len(result.data) > 0:
-                user_data = result.data[0]
-                print(f"[SIMPLE DEBUG] User found - ID: {user_data.get('id')}, Name: {user_data.get('name')}")
-                
-                # Check password (both hashed and plain text)
-                password_valid = False
-                
-                # Try hashed password first
-                if user_data.get('password_hash') and user_data.get('salt'):
-                    print(f"[SIMPLE DEBUG] Checking hashed password")
-                    password_valid = auth_manager.verify_password(password, user_data['password_hash'], user_data['salt'])
-                    print(f"[SIMPLE DEBUG] Hashed password result: {password_valid}")
-                
-                # Try plain text password if hashed failed
-                if not password_valid and user_data.get('password'):
-                    print(f"[SIMPLE DEBUG] Checking plain text password")
-                    password_valid = (user_data.get('password') == password)
-                    print(f"[SIMPLE DEBUG] Plain text password result: {password_valid}")
-                
-                if password_valid:
-                    print(f"[SIMPLE DEBUG] Password valid, creating session")
-                    
-                    # Simple session creation
-                    session.permanent = True
-                    session['user_id'] = user_data['id']
-                    session['user_type'] = 'admin'
-                    session['username'] = user_data.get('username')
-                    session['user_name'] = user_data.get('name', user_data.get('username'))
-                    
-                    print(f"[SIMPLE DEBUG] Session created: {dict(session)}")
-                    flash('Simple login successful!', 'success')
-                    return redirect(url_for('admin_dashboard'))
-                else:
-                    print(f"[SIMPLE DEBUG] Password invalid")
-                    flash('Invalid password', 'error')
-            else:
-                print(f"[SIMPLE DEBUG] User not found")
-                flash('User not found', 'error')
-                
-        except Exception as e:
-            print(f"[SIMPLE DEBUG] Error: {e}")
-            flash(f'Error: {str(e)}', 'error')
-    
-    return """
-    <h1>Simple Admin Login (Debug)</h1>
-    <form method="POST">
-        <label>Username: <input name="username" type="text" required></label><br><br>
-        <label>Password: <input name="password" type="password" required></label><br><br>
-        <button type="submit">Login</button>
-    </form>
-    <hr>
-    <a href="/debug_auth">Debug Auth</a> | 
-    <a href="/">Main Login</a>
-    """
-
 @app.route('/cre_analytics')
 @require_cre
 def cre_analytics():
@@ -5625,319 +5087,10 @@ def cre_analytics_data():
             'error': str(e)
         })
 
-# Vehicle Management Routes
 @app.route('/manage_vehicles')
 @require_admin
 def manage_vehicles():
-    """Vehicle management page for admin"""
-    try:
-        # Get all vehicles with their models, colors, and battery capacities
-        vehicles_data = supabase.table('vehicles').select('*').order('vehicle_name').execute()
-        
-        # Get all models with their vehicle info
-        models_data = supabase.table('models').select('*, vehicles(vehicle_name)').order('model_name').execute()
-        
-        # Get all color options with their model info
-        colors_data = supabase.table('color_options').select('*, models(model_name, vehicles(vehicle_name))').order('color_name').execute()
-        
-        # Get all battery capacities with their color info
-        batteries_data = supabase.table('battery_capacities').select('*, color_options(color_name, models(model_name, vehicles(vehicle_name)))').order('capacity_kwh').execute()
-        
-        return render_template('manage_vehicles.html', 
-                             vehicles=vehicles_data.data,
-                             models=models_data.data,
-                             colors=colors_data.data,
-                             batteries=batteries_data.data)
-    except Exception as e:
-        flash(f'Error loading vehicle data: {str(e)}', 'error')
-        return render_template('manage_vehicles.html', 
-                             vehicles=[], models=[], colors=[], batteries=[])
-
-@app.route('/add_vehicle', methods=['POST'])
-@require_admin
-def add_vehicle():
-    """Add a new vehicle"""
-    try:
-        vehicle_name = request.form.get('vehicle_name', '').strip()
-        if not vehicle_name:
-            return jsonify({'success': False, 'error': 'Vehicle name is required'})
-        
-        # Check if vehicle already exists
-        existing = supabase.table('vehicles').select('id').eq('vehicle_name', vehicle_name).execute()
-        if existing.data:
-            return jsonify({'success': False, 'error': 'Vehicle already exists'})
-        
-        # Insert new vehicle
-        result = supabase.table('vehicles').insert({'vehicle_name': vehicle_name}).execute()
-        
-        return jsonify({'success': True, 'message': 'Vehicle added successfully', 'vehicle': result.data[0]})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/add_model', methods=['POST'])
-@require_admin
-def add_model():
-    """Add a new model to a vehicle"""
-    try:
-        vehicle_id = request.form.get('vehicle_id')
-        model_name = request.form.get('model_name', '').strip()
-        
-        if not vehicle_id or not model_name:
-            return jsonify({'success': False, 'error': 'Vehicle and model name are required'})
-        
-        # Check if model already exists for this vehicle
-        existing = supabase.table('models').select('id').eq('vehicle_id', vehicle_id).eq('model_name', model_name).execute()
-        if existing.data:
-            return jsonify({'success': False, 'error': 'Model already exists for this vehicle'})
-        
-        # Insert new model
-        result = supabase.table('models').insert({
-            'vehicle_id': vehicle_id,
-            'model_name': model_name
-        }).execute()
-        
-        return jsonify({'success': True, 'message': 'Model added successfully', 'model': result.data[0]})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/add_color', methods=['POST'])
-@require_admin
-def add_color():
-    """Add a new color option to a model"""
-    try:
-        model_id = request.form.get('model_id')
-        color_name = request.form.get('color_name', '').strip()
-        
-        if not model_id or not color_name:
-            return jsonify({'success': False, 'error': 'Model and color name are required'})
-        
-        # Get model details to get vehicle_id
-        model_data = supabase.table('models').select('vehicle_id, model_name').eq('id', model_id).execute()
-        if not model_data.data:
-            return jsonify({'success': False, 'error': 'Model not found'})
-        
-        model_info = model_data.data[0]
-        vehicle_id = model_info['vehicle_id']
-        
-        # Check if color already exists for this vehicle and model combination
-        existing = supabase.table('color_options').select('id').eq('vehicle_id', vehicle_id).eq('model_id', model_id).eq('color_name', color_name).execute()
-        if existing.data:
-            return jsonify({'success': False, 'error': 'Color already exists for this model'})
-        
-        # Insert new color with vehicle_id and model_id
-        result = supabase.table('color_options').insert({
-            'vehicle_id': vehicle_id,
-            'model_id': model_id,
-            'color_name': color_name
-        }).execute()
-        
-        return jsonify({'success': True, 'message': 'Color added successfully', 'color': result.data[0]})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/add_battery', methods=['POST'])
-@require_admin
-def add_battery():
-    """Add a new battery capacity to a color option"""
-    try:
-        color_id = request.form.get('color_id')
-        capacity_kwh = request.form.get('capacity_kwh')
-        
-        if not color_id or not capacity_kwh:
-            return jsonify({'success': False, 'error': 'Color and battery capacity are required'})
-        
-        try:
-            capacity_kwh = float(capacity_kwh)
-        except ValueError:
-            return jsonify({'success': False, 'error': 'Invalid battery capacity format'})
-        
-        # Get color details to get vehicle_id and model_id
-        color_data = supabase.table('color_options').select('vehicle_id, model_id').eq('id', color_id).execute()
-        if not color_data.data:
-            return jsonify({'success': False, 'error': 'Color not found'})
-        
-        color_info = color_data.data[0]
-        vehicle_id = color_info['vehicle_id']
-        model_id = color_info['model_id']
-        
-        # Check if battery capacity already exists for this color
-        existing = supabase.table('battery_capacities').select('id').eq('vehicle_id', vehicle_id).eq('model_id', model_id).eq('color_id', color_id).eq('capacity_kwh', capacity_kwh).execute()
-        if existing.data:
-            return jsonify({'success': False, 'error': 'Battery capacity already exists for this color'})
-        
-        # Insert new battery capacity
-        result = supabase.table('battery_capacities').insert({
-            'vehicle_id': vehicle_id,
-            'model_id': model_id,
-            'color_id': color_id,
-            'capacity_kwh': capacity_kwh
-        }).execute()
-        
-        return jsonify({'success': True, 'message': 'Battery capacity added successfully', 'battery': result.data[0]})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/delete_vehicle/<int:vehicle_id>', methods=['DELETE'])
-@require_admin
-def delete_vehicle(vehicle_id):
-    """Delete a vehicle and all its related data"""
-    try:
-        # Delete vehicle (cascade will handle models, colors, and batteries)
-        supabase.table('vehicles').delete().eq('id', vehicle_id).execute()
-        return jsonify({'success': True, 'message': 'Vehicle deleted successfully'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/delete_model/<int:model_id>', methods=['DELETE'])
-@require_admin
-def delete_model(model_id):
-    """Delete a model and all its related data"""
-    try:
-        # Delete model (cascade will handle colors and batteries)
-        supabase.table('models').delete().eq('id', model_id).execute()
-        return jsonify({'success': True, 'message': 'Model deleted successfully'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/delete_color/<int:color_id>', methods=['DELETE'])
-@require_admin
-def delete_color(color_id):
-    """Delete a color option"""
-    try:
-        supabase.table('color_options').delete().eq('id', color_id).execute()
-        return jsonify({'success': True, 'message': 'Color deleted successfully'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/delete_battery/<int:battery_id>', methods=['DELETE'])
-@require_admin
-def delete_battery(battery_id):
-    """Delete a battery capacity"""
-    try:
-        supabase.table('battery_capacities').delete().eq('id', battery_id).execute()
-        return jsonify({'success': True, 'message': 'Battery capacity deleted successfully'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/get_vehicles')
-@require_admin
-def get_vehicles():
-    """Get all vehicles for dropdown"""
-    try:
-        vehicles = supabase.table('vehicles').select('id, vehicle_name').order('vehicle_name').execute()
-        return jsonify({'success': True, 'vehicles': vehicles.data})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/get_models/<int:vehicle_id>')
-@require_admin
-def get_models(vehicle_id):
-    """Get all models for a specific vehicle"""
-    try:
-        models = supabase.table('models').select('id, model_name').eq('vehicle_id', vehicle_id).order('model_name').execute()
-        return jsonify({'success': True, 'models': models.data})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/get_colors/<int:model_id>')
-@require_admin
-def get_colors(model_id):
-    """Get all colors for a specific model"""
-    try:
-        colors = supabase.table('color_options').select('id, color_name').eq('model_id', model_id).order('color_name').execute()
-        return jsonify({'success': True, 'colors': colors.data})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
-# --- Duplicate Prevention Insert Functions ---
-
-def add_vehicle(vehicle_name):
-    exists = supabase.table('vehicles').select('id').eq('vehicle_name', vehicle_name).execute()
-    if exists.data:
-        print("Row ignored: Duplicate entry already exists for vehicles")
-        return False
-    supabase.table('vehicles').insert({'vehicle_name': vehicle_name}).execute()
-    print("Entry Added: Vehicle")
-    return True
-
-def add_model(vehicle_id, model_name):
-    exists = supabase.table('models').select('id').eq('vehicle_id', vehicle_id).eq('model_name', model_name).execute()
-    if exists.data:
-        print("Row ignored: Duplicate entry already exists for models")
-        return False
-    supabase.table('models').insert({'vehicle_id': vehicle_id, 'model_name': model_name}).execute()
-    print("Entry Added: Model")
-    return True
-
-def add_color_option(vehicle_id, model_id, color_name):
-    exists = supabase.table('color_options').select('id').eq('vehicle_id', vehicle_id).eq('model_id', model_id).eq('color_name', color_name).execute()
-    if exists.data:
-        print("Row ignored: Duplicate entry already exists for color_options")
-        return False
-    supabase.table('color_options').insert({'vehicle_id': vehicle_id, 'model_id': model_id, 'color_name': color_name}).execute()
-    print("Entry Added: Color Option")
-    return True
-
-def add_battery_capacity(vehicle_id, model_id, color_id, capacity_kwh):
-    exists = supabase.table('battery_capacities').select('id').eq('vehicle_id', vehicle_id).eq('model_id', model_id).eq('color_id', color_id).eq('capacity_kwh', capacity_kwh).execute()
-    if exists.data:
-        print("Row ignored: Duplicate entry already exists for battery_capacities")
-        return False
-    supabase.table('battery_capacities').insert({'vehicle_id': vehicle_id, 'model_id': model_id, 'color_id': color_id, 'capacity_kwh': capacity_kwh}).execute()
-    print("Entry Added: Battery Capacity")
-    return True
-
-# --- End Duplicate Prevention Insert Functions ---
-
-# --- Fast Batch Insert Functions ---
-
-def fast_batch_insert_vehicles(vehicle_names):
-    rows = [{'vehicle_name': name} for name in vehicle_names]
-    result = supabase.table('vehicles').insert(rows, upsert=False).execute()
-    inserted_count = len(result.data) if result.data else 0
-    skipped_count = len(vehicle_names) - inserted_count
-    return inserted_count, skipped_count
-
-def fast_batch_insert_models(vehicle_id, model_names):
-    rows = [{'vehicle_id': vehicle_id, 'model_name': name} for name in model_names]
-    result = supabase.table('models').insert(rows, upsert=False).execute()
-    inserted_count = len(result.data) if result.data else 0
-    skipped_count = len(model_names) - inserted_count
-    return inserted_count, skipped_count
-
-def fast_batch_insert_colors(vehicle_id, model_id, color_names):
-    rows = [{'vehicle_id': vehicle_id, 'model_id': model_id, 'color_name': name} for name in color_names]
-    result = supabase.table('color_options').insert(rows, upsert=False).execute()
-    inserted_count = len(result.data) if result.data else 0
-    skipped_count = len(color_names) - inserted_count
-    return inserted_count, skipped_count
-
-def fast_batch_insert_batteries(vehicle_id, model_id, color_id, capacities):
-    rows = [{'vehicle_id': vehicle_id, 'model_id': model_id, 'color_id': color_id, 'capacity_kwh': cap} for cap in capacities]
-    result = supabase.table('battery_capacities').insert(rows, upsert=False).execute()
-    inserted_count = len(result.data) if result.data else 0
-    skipped_count = len(capacities) - inserted_count
-    return inserted_count, skipped_count
-
-# --- Example endpoint for models ---
-from flask import request, jsonify
-
-@app.route('/batch_add_models', methods=['POST'])
-def batch_add_models():
-    vehicle_id = request.json['vehicle_id']
-    model_names = request.json['model_names']
-    inserted, skipped = fast_batch_insert_models(vehicle_id, model_names)
-    if inserted == 0:
-        message = "❌ No new data inserted — all rows were duplicates."
-        status = "error"
-    else:
-        message = f"✅ {inserted} rows inserted successfully"
-        if skipped > 0:
-            message += f"<br>⚠️ {skipped} duplicate rows skipped"
-        status = "success"
-    return jsonify({'success': True, 'message': message, 'status': status})
-
-# --- End Fast Batch Insert Functions ---
+    return render_template('manage_vehicles.html')
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)
