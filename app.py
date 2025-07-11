@@ -14,6 +14,7 @@ from werkzeug.utils import secure_filename
 import random
 import string
 import io
+import time
 from dotenv import load_dotenv
 from collections import defaultdict, Counter
 import json
@@ -536,7 +537,7 @@ def index():
 
 @app.route('/unified_login', methods=['POST'])
 @limiter.limit("100000 per minute")
-def unified_login() -> Response:
+def unified_login():
     start_time = time.time()
     username = request.form.get('username', '').strip()
     password = request.form.get('password', '').strip()
@@ -4716,6 +4717,270 @@ def export_filtered_leads():
         output.seek(0)
         filename = f"leads_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         return send_file(io.BytesIO(output.getvalue().encode('utf-8')), as_attachment=True, download_name=filename, mimetype='text/csv')
+
+@app.route('/manage_vehicles')
+@require_admin
+def manage_vehicles():
+    """Vehicle management page for admin"""
+    try:
+        # Get vehicles data from Supabase
+        vehicles_response = supabase.table('vehicles').select('*').execute()
+        vehicles = vehicles_response.data if vehicles_response.data else []
+        
+        # Get models data
+        models_response = supabase.table('models').select('*').execute()
+        models = models_response.data if models_response.data else []
+        
+        # Get colors data with joins
+        colors_response = supabase.table('color_options').select(
+            '*, models(*, vehicles(*))'
+        ).execute()
+        colors = colors_response.data if colors_response.data else []
+        
+        # Get battery capacities data with joins
+        batteries_response = supabase.table('battery_capacities').select(
+            '*, color_options(*, models(*, vehicles(*)))'
+        ).execute()
+        batteries = batteries_response.data if batteries_response.data else []
+        
+        return render_template('manage_vehicles.html',
+                             vehicles=vehicles,
+                             models=models,
+                             colors=colors,
+                             batteries=batteries)
+    except Exception as e:
+        print(f"Error in manage_vehicles: {e}")
+        flash('Error loading vehicle data', 'error')
+        return redirect(url_for('admin_dashboard'))
+
+@app.route('/add_vehicle', methods=['POST'])
+@require_admin
+def add_vehicle():
+    """Add a new vehicle"""
+    try:
+        vehicle_name = request.form.get('vehicle_name', '').strip()
+        if not vehicle_name:
+            return jsonify({'success': False, 'error': 'Vehicle name is required'})
+        
+        # Check if vehicle already exists
+        existing = supabase.table('vehicles').select('id').eq('vehicle_name', vehicle_name).execute()
+        if existing.data:
+            return jsonify({'success': False, 'error': 'Vehicle already exists'})
+        
+        # Insert new vehicle
+        result = supabase.table('vehicles').insert({'vehicle_name': vehicle_name}).execute()
+        
+        if result.data:
+            return jsonify({'success': True, 'message': f'Vehicle "{vehicle_name}" added successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to add vehicle'})
+    except Exception as e:
+        print(f"Error adding vehicle: {e}")
+        return jsonify({'success': False, 'error': 'An error occurred while adding vehicle'})
+
+@app.route('/add_model', methods=['POST'])
+@require_admin
+def add_model():
+    """Add a new model"""
+    try:
+        vehicle_id = request.form.get('vehicle_id')
+        model_name = request.form.get('model_name', '').strip()
+        
+        if not vehicle_id or not model_name:
+            return jsonify({'success': False, 'error': 'Vehicle and model name are required'})
+        
+        # Check if model already exists for this vehicle
+        existing = supabase.table('models').select('id').eq('vehicle_id', vehicle_id).eq('model_name', model_name).execute()
+        if existing.data:
+            return jsonify({'success': False, 'error': 'Model already exists for this vehicle'})
+        
+        # Insert new model
+        result = supabase.table('models').insert({
+            'vehicle_id': vehicle_id,
+            'model_name': model_name
+        }).execute()
+        
+        if result.data:
+            return jsonify({'success': True, 'message': f'Model "{model_name}" added successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to add model'})
+    except Exception as e:
+        print(f"Error adding model: {e}")
+        return jsonify({'success': False, 'error': 'An error occurred while adding model'})
+
+@app.route('/add_color', methods=['POST'])
+@require_admin
+def add_color():
+    """Add a new color option"""
+    try:
+        model_id = request.form.get('model_id')
+        color_name = request.form.get('color_name', '').strip()
+        
+        if not model_id or not color_name:
+            return jsonify({'success': False, 'error': 'Model and color name are required'})
+        
+        # Check if color already exists for this model
+        existing = supabase.table('color_options').select('id').eq('model_id', model_id).eq('color_name', color_name).execute()
+        if existing.data:
+            return jsonify({'success': False, 'error': 'Color already exists for this model'})
+        
+        # Insert new color
+        result = supabase.table('color_options').insert({
+            'model_id': model_id,
+            'color_name': color_name
+        }).execute()
+        
+        if result.data:
+            return jsonify({'success': True, 'message': f'Color "{color_name}" added successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to add color'})
+    except Exception as e:
+        print(f"Error adding color: {e}")
+        return jsonify({'success': False, 'error': 'An error occurred while adding color'})
+
+@app.route('/add_battery', methods=['POST'])
+@require_admin
+def add_battery():
+    """Add a new battery capacity"""
+    try:
+        model_id = request.form.get('model_id')
+        color_id = request.form.get('color_id')
+        capacity_kwh = request.form.get('capacity_kwh')
+        
+        if not model_id or not color_id or not capacity_kwh:
+            return jsonify({'success': False, 'error': 'Model, color, and capacity are required'})
+        
+        # Check if battery capacity already exists for this color
+        existing = supabase.table('battery_capacities').select('id').eq('color_option_id', color_id).eq('capacity_kwh', capacity_kwh).execute()
+        if existing.data:
+            return jsonify({'success': False, 'error': 'Battery capacity already exists for this color'})
+        
+        # Insert new battery capacity
+        result = supabase.table('battery_capacities').insert({
+            'color_option_id': color_id,
+            'capacity_kwh': float(capacity_kwh)
+        }).execute()
+        
+        if result.data:
+            return jsonify({'success': True, 'message': f'Battery capacity {capacity_kwh} kWh added successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to add battery capacity'})
+    except Exception as e:
+        print(f"Error adding battery capacity: {e}")
+        return jsonify({'success': False, 'error': 'An error occurred while adding battery capacity'})
+
+@app.route('/delete_vehicle/<int:vehicle_id>', methods=['POST'])
+@require_admin
+def delete_vehicle(vehicle_id):
+    """Delete a vehicle and all associated data"""
+    try:
+        # Delete battery capacities first (through color_options)
+        supabase.table('battery_capacities').delete().in_('color_option_id', 
+            supabase.table('color_options').select('id').eq('model_id', 
+                supabase.table('models').select('id').eq('vehicle_id', vehicle_id)
+            )
+        ).execute()
+        
+        # Delete color options
+        supabase.table('color_options').delete().in_('model_id',
+            supabase.table('models').select('id').eq('vehicle_id', vehicle_id)
+        ).execute()
+        
+        # Delete models
+        supabase.table('models').delete().eq('vehicle_id', vehicle_id).execute()
+        
+        # Delete vehicle
+        result = supabase.table('vehicles').delete().eq('id', vehicle_id).execute()
+        
+        if result.data:
+            return jsonify({'success': True, 'message': 'Vehicle deleted successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to delete vehicle'})
+    except Exception as e:
+        print(f"Error deleting vehicle: {e}")
+        return jsonify({'success': False, 'error': 'An error occurred while deleting vehicle'})
+
+@app.route('/delete_model/<int:model_id>', methods=['POST'])
+@require_admin
+def delete_model(model_id):
+    """Delete a model and all associated data"""
+    try:
+        # Delete battery capacities first
+        supabase.table('battery_capacities').delete().in_('color_option_id',
+            supabase.table('color_options').select('id').eq('model_id', model_id)
+        ).execute()
+        
+        # Delete color options
+        supabase.table('color_options').delete().eq('model_id', model_id).execute()
+        
+        # Delete model
+        result = supabase.table('models').delete().eq('id', model_id).execute()
+        
+        if result.data:
+            return jsonify({'success': True, 'message': 'Model deleted successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to delete model'})
+    except Exception as e:
+        print(f"Error deleting model: {e}")
+        return jsonify({'success': False, 'error': 'An error occurred while deleting model'})
+
+@app.route('/delete_color/<int:color_id>', methods=['POST'])
+@require_admin
+def delete_color(color_id):
+    """Delete a color option"""
+    try:
+        # Delete battery capacities first
+        supabase.table('battery_capacities').delete().eq('color_option_id', color_id).execute()
+        
+        # Delete color option
+        result = supabase.table('color_options').delete().eq('id', color_id).execute()
+        
+        if result.data:
+            return jsonify({'success': True, 'message': 'Color deleted successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to delete color'})
+    except Exception as e:
+        print(f"Error deleting color: {e}")
+        return jsonify({'success': False, 'error': 'An error occurred while deleting color'})
+
+@app.route('/delete_battery/<int:battery_id>', methods=['POST'])
+@require_admin
+def delete_battery(battery_id):
+    """Delete a battery capacity"""
+    try:
+        result = supabase.table('battery_capacities').delete().eq('id', battery_id).execute()
+        
+        if result.data:
+            return jsonify({'success': True, 'message': 'Battery capacity deleted successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to delete battery capacity'})
+    except Exception as e:
+        print(f"Error deleting battery capacity: {e}")
+        return jsonify({'success': False, 'error': 'An error occurred while deleting battery capacity'})
+
+@app.route('/get_models/<int:vehicle_id>')
+@require_admin
+def get_models(vehicle_id):
+    """Get models for a specific vehicle"""
+    try:
+        result = supabase.table('models').select('*').eq('vehicle_id', vehicle_id).execute()
+        models = result.data if result.data else []
+        return jsonify({'success': True, 'models': models})
+    except Exception as e:
+        print(f"Error getting models: {e}")
+        return jsonify({'success': False, 'error': 'An error occurred while getting models'})
+
+@app.route('/get_colors/<int:model_id>')
+@require_admin
+def get_colors(model_id):
+    """Get colors for a specific model"""
+    try:
+        result = supabase.table('color_options').select('*').eq('model_id', model_id).execute()
+        colors = result.data if result.data else []
+        return jsonify({'success': True, 'colors': colors})
+    except Exception as e:
+        print(f"Error getting colors: {e}")
+        return jsonify({'success': False, 'error': 'An error occurred while getting colors'})
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)
