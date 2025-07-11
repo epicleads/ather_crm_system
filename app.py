@@ -4717,5 +4717,10 @@ def export_filtered_leads():
         filename = f"leads_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         return send_file(io.BytesIO(output.getvalue().encode('utf-8')), as_attachment=True, download_name=filename, mimetype='text/csv')
 
+@app.route('/manage_vehicles')
+@require_admin
+def manage_vehicles():
+    return render_template('manage_vehicles.html')
+
 if __name__ == '__main__':
     socketio.run(app, debug=True)
