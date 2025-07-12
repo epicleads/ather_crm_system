@@ -403,7 +403,62 @@
 </style>
 <div class="container">
   <h3 class="mb-3" style="font-weight:700;"><i class="fas fa-random text-success"></i> Smart Dynamic Lead Assignment</h3>
-
+   
+  <div class="card mb-4" style="border-radius: 14px; box-shadow: 0 2px 12px rgba(60,72,88,0.07);">
+    <div class="card-header" style="background: var(--bg-light); border-bottom: 1.5px solid var(--border); border-radius: 14px 14px 0 0;">
+      <h5 class="mb-0" style="color: var(--accent-dark); font-weight: 700;">
+        <i class="fas fa-plus-circle text-success me-2"></i>Add New Lead with CRE Assignment
+      </h5>
+    </div>
+    <div class="card-body p-4">
+      <form id="addLeadForm" class="row g-3">
+        <div class="col-md-6">
+          <label for="customer_name" class="form-label" style="font-weight: 600; color: var(--accent-dark);">
+            Customer Name <span class="text-danger">*</span>
+          </label>
+          <input type="text" class="form-control" id="customer_name" name="customer_name" required 
+                 style="border-radius: 10px; border: 1.5px solid var(--border);">
+        </div>
+        <div class="col-md-6">
+          <label for="customer_mobile_number" class="form-label" style="font-weight: 600; color: var(--accent-dark);">
+            Phone Number <span class="text-danger">*</span>
+          </label>
+          <input type="tel" class="form-control" id="customer_mobile_number" name="customer_mobile_number" required 
+                 style="border-radius: 10px; border: 1.5px solid var(--border);">
+        </div>
+        <div class="col-md-6">
+          <label for="assigned_cre" class="form-label" style="font-weight: 600; color: var(--accent-dark);">
+            Assigned CRE <span class="text-danger">*</span>
+          </label>
+          <select class="form-select" id="assigned_cre" name="assigned_cre" required 
+                  style="border-radius: 10px; border: 1.5px solid var(--border);">
+            <option value="">Select CRE</option>
+            {% for cre in cres %}
+              <option value="{{ cre.id }}">{{ cre.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label for="source" class="form-label" style="font-weight: 600; color: var(--accent-dark);">
+            Source <span class="text-danger">*</span>
+          </label>
+          <select class="form-select" id="source" name="source" required 
+                  style="border-radius: 10px; border: 1.5px solid var(--border);">
+            <option value="">Select Source</option>
+            <option value="Knowlarity">Knowlarity</option>
+            <option value="Google(Knowlarity)">Google(Knowlarity)</option>
+            <option value="Meta(Knowlarity)">Meta(Knowlarity)</option>
+            <option value="Google(Web)">Google(Web)</option>
+          </select>
+        </div>
+        <div class="col-12 text-end">
+          <button type="submit" class="btn btn-success" style="font-weight: 600; border-radius: 10px; padding: 10px 24px;">
+            <i class="fas fa-plus-circle me-2"></i>Add Lead
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
   <!-- Summary Box -->
   <div class="summary-box">
     <div class="summary-item">Total Unassigned Leads: <span id="totalUnassigned">{{ actual_unassigned_count }}</span></div>
@@ -507,6 +562,42 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
+    // Handle Add Lead Form Submission
+    document.getElementById('addLeadForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      const formData = new FormData(this);
+      const submitBtn = this.querySelector('button[type="submit"]');
+      const originalText = submitBtn.innerHTML;
+      
+      // Disable button and show loading
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Adding...';
+      
+      fetch('/add_lead_with_cre', {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          alert(`✅ Lead added successfully!\nUID: ${data.uid}`);
+          this.reset(); // Reset form
+        } else {
+          alert(`❌ Failed to add lead: ${data.message}`);
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('❌ Network error. Please try again.');
+      })
+      .finally(() => {
+        // Re-enable button
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+      });
+    });
+
     // Helper: get all CREs
     const allCREs = Array.from(document.querySelectorAll('#creTabList .cre-tab')).map(tab => ({
       id: tab.dataset.creId,

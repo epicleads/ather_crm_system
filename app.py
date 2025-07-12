@@ -1710,6 +1710,108 @@ def add_lead():
             return render_template('add_lead.html', branches=branches, ps_users=ps_users)
     return render_template('add_lead.html', branches=branches, ps_users=ps_users)
 
+@app.route('/add_lead_with_cre', methods=['POST'])
+@require_admin  # <-- Change to @require_cre if you want CREs to use it, or create a custom decorator for both
+def add_lead_with_cre():
+    """
+    Add a new lead with minimal required columns.
+    - Checks for duplicate by last 10 digits of phone number.
+    - If duplicate, returns UID of existing lead.
+    - Only fills: uid, customer_name, customer_mobile_number, source, date, assigned.
+    - Source is always 'Google(Web)', UID uses 'G' as the source character.
+    """
+    try:
+        customer_name = request.form.get('customer_name', '').strip()
+        customer_mobile_number = request.form.get('customer_mobile_number', '').strip()
+        source = request.form.get('source', 'Google(Web)').strip()  # Get from form, default to Google(Web)    
+        assigned = "Yes"
+        date_now = datetime.now().strftime('%Y-%m-%d')
+
+        # Validate required fields
+        if not customer_name or not customer_mobile_number:
+            return jsonify({
+                'success': False,
+                'message': 'Customer name and mobile number are required'
+            })
+
+        # Normalize phone number to last 10 digits
+        mobile_digits = ''.join(filter(str.isdigit, customer_mobile_number))[-10:]
+        
+        if len(mobile_digits) != 10:
+            return jsonify({
+                'success': False,
+                'message': 'Invalid mobile number. Please provide a 10-digit number.'
+            })
+
+        # Check for duplicate by last 10 digits
+        existing_leads = supabase.table('lead_master').select('uid, customer_mobile_number').execute()
+        for lead in existing_leads.data or []:
+            db_mobile = ''.join(filter(str.isdigit, lead.get('customer_mobile_number', '')))[-10:]
+            if db_mobile == mobile_digits:
+                return jsonify({
+                    'success': False,
+                    'message': f'Lead with this phone number already exists. UID: {lead["uid"]}',
+                    'uid': lead["uid"]
+                })
+
+        # Generate UID using the correct function based on source
+        # Map source to UID source character
+        source_mapping = {
+            'Google(Web)': 'Google',
+            'Google(Knowlarity)': 'Google',
+            'Knowlarity': 'Knowlarity',
+            'Meta(Knowlarity)': 'Meta'
+        }
+        uid_source = source_mapping.get(source, 'Google')
+        
+        sequence = 1
+        uid = generate_uid(uid_source, mobile_digits, sequence)
+        # Ensure UID is unique
+        while supabase.table('lead_master').select('uid').eq('uid', uid).execute().data:
+            sequence += 1
+            uid = generate_uid(uid_source, mobile_digits, sequence)
+
+        # Get assigned CRE ID from form
+        assigned_cre_id = request.form.get('assigned_cre')
+        cre_name = None
+        if assigned_cre_id:
+            cre_data = supabase.table('cre_users').select('name').eq('id', assigned_cre_id).execute()
+            if cre_data.data:
+                cre_name = cre_data.data[0]['name']
+
+        # Prepare lead data (only required columns)
+        lead_data = {
+            'uid': uid,
+            'customer_name': customer_name,
+            'customer_mobile_number': mobile_digits,
+            'source': source,
+            'date': date_now,
+            'assigned': assigned,
+            'final_status': 'Pending',
+            'cre_name': cre_name,
+            'lead_status': 'Pending',
+            'lead_category': 'Cold',  # Default category
+            'cre_assigned_at': datetime.now().isoformat(),
+            'created_at': datetime.now().isoformat(),
+            'updated_at': datetime.now().isoformat()
+        }
+        print('Form data:', dict(request.form))
+        print('Assigned CRE ID:', assigned_cre_id)
+        print('CRE name fetched:', cre_name)
+        print('Lead data to insert:', lead_data)
+
+        # Insert lead
+        result = supabase.table('lead_master').insert(lead_data).execute()
+        if result.data:
+            return jsonify({'success': True, 'message': 'Lead added successfully', 'uid': uid})
+        else:
+            return jsonify({'success': False, 'message': 'Failed to add lead'})
+
+    except Exception as e:
+        print(f"Error adding lead with CRE: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': f'Error adding lead: {str(e)}'})
 
 @app.route('/cre_dashboard')
 @require_cre
@@ -5087,10 +5189,6 @@ def cre_analytics_data():
             'error': str(e)
         })
 
-@app.route('/manage_vehicles')
-@require_admin
-def manage_vehicles():
-    return render_template('manage_vehicles.html')
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)
