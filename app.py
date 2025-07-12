@@ -424,7 +424,7 @@ def create_or_update_ps_followup(lead_data, ps_name, ps_branch):
 
 
 def track_cre_call_attempt(uid, cre_name, call_no, lead_status, call_was_recorded=False, follow_up_date=None, remarks=None):
-    """Track CRE call attempt in the history table"""
+    """Track CRE call attempt in the history table and update TAT for first attempt"""
     try:
         # Get the next attempt number for this call
         attempt_result = supabase.table('cre_call_attempt_history').select('attempt').eq('uid', uid).eq('call_no', call_no).order('attempt', desc=True).limit(1).execute()
@@ -446,10 +446,42 @@ def track_cre_call_attempt(uid, cre_name, call_no, lead_status, call_was_recorde
         }
 
         # Insert the attempt record
-        supabase.table('cre_call_attempt_history').insert(attempt_data).execute()
-        
+        insert_result = supabase.table('cre_call_attempt_history').insert(attempt_data).execute()
         print(f"Tracked call attempt: {uid} - {call_no} call, attempt {next_attempt}, status: {lead_status}")
-        
+
+        # --- TAT Calculation and Update ---
+        if call_no == 'first' and next_attempt == 1:
+            # Fetch lead's created_at
+            lead_result = supabase.table('lead_master').select('created_at').eq('uid', uid).limit(1).execute()
+            if lead_result.data and lead_result.data[0].get('created_at'):
+                created_at_str = lead_result.data[0]['created_at']
+                from datetime import datetime
+                try:
+                    if 'T' in created_at_str:
+                        created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                    else:
+                        created_at = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S')
+                except Exception:
+                    created_at = None
+                # Get updated_at from inserted attempt (if available), else use now
+                updated_at_str = None
+                if insert_result.data and insert_result.data[0].get('updated_at'):
+                    updated_at_str = insert_result.data[0]['updated_at']
+                else:
+                    from datetime import datetime
+                    updated_at_str = datetime.now().isoformat()
+                try:
+                    if 'T' in updated_at_str:
+                        updated_at = datetime.fromisoformat(updated_at_str.replace('Z', '+00:00'))
+                    else:
+                        updated_at = datetime.strptime(updated_at_str, '%Y-%m-%d %H:%M:%S')
+                except Exception:
+                    updated_at = datetime.now()
+                if created_at:
+                    tat_seconds = (updated_at - created_at).total_seconds()
+                    # Update lead_master with TAT
+                    supabase.table('lead_master').update({'tat': tat_seconds}).eq('uid', uid).execute()
+                    print(f"TAT updated for lead {uid}: {tat_seconds} seconds")
     except Exception as e:
         print(f"Error tracking CRE call attempt: {e}")
 
@@ -1462,6 +1494,29 @@ def manage_leads():
             else:
                 total_pages = 1
                 page = 1
+        # Add formatted CRE TAT for display
+        def format_cre_tat(tat):
+            try:
+                tat = float(tat)
+            except (TypeError, ValueError):
+                return 'N/A'
+            if tat < 60:
+                return f"{int(tat)}s"
+            elif tat < 3600:
+                m = int(tat // 60)
+                s = int(tat % 60)
+                return f"{m}m {s}s"
+            elif tat < 86400:
+                h = int(tat // 3600)
+                m = int((tat % 3600) // 60)
+                s = int(tat % 60)
+                return f"{h}h {m}m {s}s"
+            else:
+                d = int(tat // 86400)
+                h = int((tat % 86400) // 3600)
+                return f"{d} Days {h}h"
+        for lead in leads:
+            lead['cre_tat_display'] = format_cre_tat(lead.get('tat'))
         return render_template('manage_leads.html', cres=cres, selected_cre=selected_cre, leads=leads, sources=sources, selected_source=source, qualification=qualification, date_filter=date_filter, start_date=start_date, end_date=end_date, page=page, total_pages=total_pages, total_leads=total_leads, final_status=final_status)
     except Exception as e:
         flash(f'Error loading leads: {str(e)}', 'error')

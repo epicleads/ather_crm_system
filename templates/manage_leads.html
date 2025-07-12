@@ -106,9 +106,11 @@
                                     <th>Customer Name</th>
                                     <th>Mobile</th>
                                     <th>Qualification</th>
+                                    <th>CRE TAT</th>
                                     <th>Actions</th>
                                 </tr>
                                 <tr>
+                                    <th></th>
                                     <th></th>
                                     <th></th>
                                     <th></th>
@@ -133,6 +135,7 @@
                                     <td>{{ lead.customer_name }}</td>
                                     <td>{{ lead.customer_mobile_number }}</td>
                                     <td>{% if lead.first_call_date %}Qualified{% else %}Unqualified{% endif %}</td>
+                                    <td>{{ lead.cre_tat_display }}</td>
                                     <td>
                                         <div class="btn-group w-100" role="group" aria-label="Actions">
                                             {% if not lead.first_call_date %}
