@@ -1,0 +1,117 @@
+[33m7790810[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mvedsbranch[m[33m, [m[1;31morigin/vedsbranch[m[33m)[m analysis section sorted
+[33mec6535e[m WIP: saving local changes before pull
+[33me205e04[m Walk in Original
+[33m8edb432[m Clean reset and re-commit to vedsbranch
+[33md0ddcd9[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m Merge pull request #49 from epicleads/uday2
+[33m80e7173[m Finetune Manage Vehicle Section
+[33m0d62717[m Merge pull request #48 from epicleads/uday2
+[33m0feada9[m Applying Duplicate Functions
+[33mf640a46[m Adding Manage Vehicles
+[33ma765eae[m Merge branch 'vedsbranch'
+[33mf393e38[m[33m ([m[1;32mmaster[m[33m)[m Clean reset and re-commit
+[33m0aee021[m Merge branch 'main' of https://github.com/epicleads/ather_crm_system into uday2
+[33m59785a8[m Adding Add Vehicle Section in Admin Page
+[33mfb3d2de[m Merge pull request #47 from epicleads/prathmesh
+[33ma29c45e[m[33m ([m[1;31morigin/prathmesh[m[33m)[m updated ps lead update
+[33m9709b5d[m Changing Column
+[33me628909[m Merge pull request #46 from epicleads/uday2
+[33m182ae26[m Adding chages in Date Filter
+[33m360b42d[m Adding CRE Analystics in CRE Dashboard
+[33m0f8193b[m Adding Intrested option ps followup
+[33mef17c43[m Update app.py
+[33mbf9d970[m Merge pull request #45 from epicleads/uday2
+[33mdec1d0a[m Assign Leads Section
+[33m231defb[m Merge pull request #44 from epicleads/uday2
+[33m81cce6b[m Check Availability Username
+[33ma3d7198[m Merge pull request #43 from epicleads/uday2
+[33m9ef2d09[m Active CRE Count
+[33m12c27d5[m Merge pull request #42 from epicleads/uday2
+[33m7a201c8[m Auth Issues
+[33mc6e1aa3[m Auth Code
+[33mb5a50f4[m Merge branch 'Elon' into uday2
+[33mb041eb2[m[33m ([m[1;31morigin/Elon[m[33m)[m Changes
+[33m3bd8e5b[m Merge pull request #41 from epicleads/main-backup-2
+[33m2c99144[m[33m ([m[1;31morigin/main-backup-2[m[33m)[m Merge pull request #39 from epicleads/Elon
+[33m67410ae[m Adding Date Filter
+[33m5070ec9[m Merge pull request #37 from epicleads/Elon
+[33m1f5443f[m Adding Negative Feedback Analysis
+[33m1abbe7b[m Merge pull request #36 from epicleads/main-backup-2
+[33maadd56e[m Merge pull request #35 from epicleads/uday2
+[33m6d1fe18[m Adding Columns In Campaign Analysis
+[33mbee9598[m Merge pull request #33 from epicleads/uday2
+[33m0fee1d5[m Adding Tables
+[33me17ba3b[m[33m ([m[1;31morigin/ug[m[33m)[m Merge pull request #29 from epicleads/prathmesh
+[33m42a9002[m ps updatte issue fixed
+[33m816405e[m Merge pull request #28 from epicleads/prathmesh
+[33m6dd5f46[m deployment error
+[33mdbba8b3[m Merge pull request #27 from epicleads/prathmesh
+[33mb2e52ec[m updated manage leads
+[33m3a7571e[m Merge pull request #26 from epicleads/prathmesh
+[33mbf268f7[m Added features to manage leads and the lead journey
+[33me631902[m Merge pull request #25 from epicleads/prathmesh
+[33md96c2e1[m added manage lead section with a lot of filters for admin to analyse leads
+[33mb2bcedd[m Merge pull request #24 from epicleads/prathmesh
+[33ma23d69b[m Ps call history feature added
+[33m58ad16c[m Merge pull request #23 from epicleads/prathmesh
+[33mc0b960d[m Added the cre call attempt history one of the major pending features
+[33mc188bc1[m added cre call history
+[33m7814216[m Merge pull request #22 from epicleads/prathmesh
+[33m3cbdde0[m Leads not shifting through sections problem solved
+[33m4c08dee[m Merge pull request #21 from epicleads/prathmesh
+[33m0247d4d[m followup date not required if final status = lost
+[33m2e41771[m Merge pull request #20 from epicleads/prathmesh
+[33m0f22146[m Added 7 followups for PS
+[33md03d2d8[m Merge pull request #19 from epicleads/prathmesh
+[33mda6dfaf[m Lost filterss problem solved
+[33maabedc4[m 1) Added fresh leads and Pending Leads section to PS Dashboard 2) Added date filters to fresh leads in PS Dashboard 3) Added lead status dropdown for ps lead update 4) for events like RNR,Call back, Busy, Call not connected , no first call will be recorded as valid call
+[33m3d8f1cd[m smc
+[33m6f6435f[m Password reset functionality updated
+[33m8f36c27[m 1)Removed the unnecessary logout, Home, Change Pass Buttons from cre dashboard 2) fresh leads and other malfunctioning now works well
+[33m9d3e897[m fine now
+[33mdc709c4[m Merge pull request #12 from epicleads/slave
+[33m02a50db[m Merge pull request #11 from epicleads/Elon
+[33me9bf302[m Update analytics.html
+[33ma084dbe[m Lost Lead Table
+[33m48ca630[m Update daily-script-runner.yml
+[33m4e63913[m Added Monkeypatch for Real-Time features
+[33m3e89c5a[m Action button at the start
+[33mdbe859c[m Modified Auth.py
+[33m8f67352[m CRM Analytics Changes
+[33maa5d701[m Merge pull request #8 from epicleads/slave
+[33m0db18a7[m Ps remark update notification to CRE Dashboard
+[33m9b4308b[m Add activity event and lead management features
+[33me386afe[m Merge branch 'main' of https://github.com/epicleads/ather_crm_system
+[33m62bb65a[m Analytics Changes
+[33ma38c05c[m Add walk-in follow-up feature to dashboard
+[33m81b0f03[m Update app.py
+[33m7c7c90b[m Create add_lead.html
+[33me1fd580[m Update cre_dashboard.html
+[33m1981490[m Update assign_leads.html
+[33mf18ecab[m Update analytics.html
+[33me34222e[m Merge pull request #7 from epicleads/slave
+[33m219dd6f[m all widgets Done
+[33m8b2ba76[m Update analytics.html
+[33m1f54f92[m Merge pull request #6 from epicleads/slave
+[33m5f91992[m Update update_lead.html
+[33mc49b41b[m Widgets added update 3
+[33m00c9c2b[m Merge branch 'main' of https://github.com/epicleads/ather_crm_system
+[33m7aebeec[m Add campaign information to lead dashboard
+[33mfc7d945[m Merge pull request #5 from epicleads/slave
+[33m4410f26[m PS remarks visibl to CRE update 2
+[33m1360002[m Merge pull request #4 from epicleads/slave
+[33m576b0f2[m CRE call summmary to PS update 1
+[33m423574d[m[33m ([m[1;31morigin/sanjay[m[33m)[m Update render-deploy.yml
+[33mac44f77[m Merge branch 'main' of https://github.com/epicleads/ather_crm_system
+[33m2df3d31[m Enhance lead synchronization and processing
+[33mb5a2725[m Merge pull request #3 from epicleads/slave
+[33m76f4e34[m followup notification func add
+[33mbf7845e[m Merge pull request #2 from epicleads/slave
+[33m1b0d8e2[m Changed the emailaddress
+[33ma175cbe[m Merge pull request #1 from epicleads/slave
+[33ma04a0dd[m email functionality active
+[33m4c9c69d[m Add lead checking and UID generation enhancements in main process
+[33m3c52406[m Update app.py
+[33m8557f71[m Update .env
+[33mb960334[m Update requirements.txt
+[33ma84e059[m Configured for Production
+[33m46804fb[m Adding API's Scripts
