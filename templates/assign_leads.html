@@ -404,6 +404,63 @@
 <div class="container">
   <h3 class="mb-3" style="font-weight:700;"><i class="fas fa-random text-success"></i> Smart Dynamic Lead Assignment</h3>
 
+  <!-- Add New Lead Form -->
+  <div class="card mb-4" style="border-radius: 14px; box-shadow: 0 2px 12px rgba(60,72,88,0.07);">
+    <div class="card-header" style="background: var(--bg-light); border-bottom: 1.5px solid var(--border); border-radius: 14px 14px 0 0;">
+      <h5 class="mb-0" style="color: var(--accent-dark); font-weight: 700;">
+        <i class="fas fa-plus-circle text-success me-2"></i>Add New Lead with CRE Assignment
+      </h5>
+    </div>
+    <div class="card-body p-4">
+      <form id="addLeadForm" class="row g-3">
+        <div class="col-md-6">
+          <label for="customer_name" class="form-label" style="font-weight: 600; color: var(--accent-dark);">
+            Customer Name <span class="text-danger">*</span>
+          </label>
+          <input type="text" class="form-control" id="customer_name" name="customer_name" required 
+                 style="border-radius: 10px; border: 1.5px solid var(--border);">
+        </div>
+        <div class="col-md-6">
+          <label for="customer_mobile_number" class="form-label" style="font-weight: 600; color: var(--accent-dark);">
+            Phone Number <span class="text-danger">*</span>
+          </label>
+          <input type="tel" class="form-control" id="customer_mobile_number" name="customer_mobile_number" required 
+                 style="border-radius: 10px; border: 1.5px solid var(--border);">
+        </div>
+        <div class="col-md-6">
+          <label for="assigned_cre" class="form-label" style="font-weight: 600; color: var(--accent-dark);">
+            Assigned CRE <span class="text-danger">*</span>
+          </label>
+          <select class="form-select" id="assigned_cre" name="assigned_cre" required 
+                  style="border-radius: 10px; border: 1.5px solid var(--border);">
+            <option value="">Select CRE</option>
+            {% for cre in cres %}
+              <option value="{{ cre.id }}">{{ cre.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label for="source" class="form-label" style="font-weight: 600; color: var(--accent-dark);">
+            Source <span class="text-danger">*</span>
+          </label>
+          <select class="form-select" id="source" name="source" required 
+                  style="border-radius: 10px; border: 1.5px solid var(--border);">
+            <option value="">Select Source</option>
+            <option value="Knowlarity">Knowlarity</option>
+            <option value="Google(Knowlarity)">Google(Knowlarity)</option>
+            <option value="Meta(Knowlarity)">Meta(Knowlarity)</option>
+            <option value="Google(Web)">Google(Web)</option>
+          </select>
+        </div>
+        <div class="col-12 text-end">
+          <button type="submit" class="btn btn-success" style="font-weight: 600; border-radius: 10px; padding: 10px 24px;">
+            <i class="fas fa-plus-circle me-2"></i>Add Lead
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Summary Box -->
   <div class="summary-box">
     <div class="summary-item">Total Unassigned Leads: <span id="totalUnassigned">{{ actual_unassigned_count }}</span></div>
@@ -898,6 +955,88 @@
       currentPage++;
       renderLeadsTable(allLeads, currentPage);
     }
+  });
+
+  // Add Lead Form Functionality
+  document.getElementById('addLeadForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    // Get form data
+    const formData = new FormData(this);
+    const customerName = formData.get('customer_name').trim();
+    const customerMobile = formData.get('customer_mobile_number').trim();
+    const assignedCre = formData.get('assigned_cre');
+    const source = formData.get('source');
+    
+    // Validation
+    if (!customerName || !customerMobile || !assignedCre || !source) {
+      alert('❌ Please fill all required fields');
+      return;
+    }
+    
+    // Phone number validation
+    if (!/^\d{10}$/.test(customerMobile)) {
+      alert('❌ Please enter a valid 10-digit phone number');
+      return;
+    }
+    
+    // Show confirmation dialog
+    const confirmMessage = `Are you sure you want to add this lead?\n\n` +
+                          `Customer Name: ${customerName}\n` +
+                          `Phone Number: ${customerMobile}\n` +
+                          `Source: ${source}\n` +
+                          `Assigned CRE: ${document.getElementById('assigned_cre').options[document.getElementById('assigned_cre').selectedIndex].text}`;
+    
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+    
+    // Disable submit button and show loading state
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Adding...';
+    
+    // Submit form
+    console.log('Submitting form to /add_lead_with_cre');
+    console.log('Form data:', Object.fromEntries(formData));
+    fetch('/add_lead_with_cre', {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    })
+    .then(response => {
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+      return response.json();
+    })
+    .then(data => {
+      console.log('Response data:', data);
+      if (data.success) {
+        // Show success message
+        alert(`✅ ${data.message}\n\nLead UID: ${data.uid}`);
+        
+        // Reset form
+        this.reset();
+        
+        // Refresh the page to update counts
+        location.reload();
+      } else {
+        alert(`❌ ${data.message}`);
+      }
+    })
+    .catch(error => {
+      console.error('Error adding lead:', error);
+      console.error('Error details:', error.message);
+      alert('❌ Network error. Please check your connection and try again.\n\nError: ' + error.message);
+    })
+    .finally(() => {
+      // Re-enable submit button
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalText;
+    });
   });
 </script>
 {% endblock %}

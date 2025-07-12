@@ -14,6 +14,7 @@ from werkzeug.utils import secure_filename
 import random
 import string
 import io
+import time
 from dotenv import load_dotenv
 from collections import defaultdict, Counter
 import json
@@ -536,7 +537,7 @@ def index():
 
 @app.route('/unified_login', methods=['POST'])
 @limiter.limit("100000 per minute")
-def unified_login() -> Response:
+def unified_login():
     start_time = time.time()
     username = request.form.get('username', '').strip()
     password = request.form.get('password', '').strip()
@@ -1183,8 +1184,8 @@ def assign_leads_dynamic_action():
                 update_data = {
                     'cre_name': cre['name'],
                     'assigned': 'Yes',
-                    'cre_assigned_at': datetime.now().isoformat()
-
+                    'cre_assigned_at': datetime.now().isoformat(),
+                    'final_status': 'Pending'
                 }
 
                 try:
@@ -1202,6 +1203,92 @@ def assign_leads_dynamic_action():
     except Exception as e:
         print(f"Error in dynamic lead assignment: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/test_add_lead', methods=['GET'])
+def test_add_lead():
+    """Test route to verify server is working"""
+    return jsonify({'success': True, 'message': 'Server is working'})
+
+@app.route('/add_lead_with_cre', methods=['POST'])
+@require_admin  # <-- Change to @require_cre if you want CREs to use it, or create a custom decorator for both
+def add_lead_with_cre():
+    """
+    Add a new lead with minimal required columns.
+    - Checks for duplicate by last 10 digits of phone number.
+    - If duplicate, returns UID of existing lead.
+    - Only fills: uid, customer_name, customer_mobile_number, source, date, assigned.
+    - Source is always 'Google(Web)', UID uses 'G' as the source character.
+    """
+    try:
+        customer_name = request.form.get('customer_name', '').strip()
+        customer_mobile_number = request.form.get('customer_mobile_number', '').strip()
+        source = "Google(Web)"  # Always set to Google(Web)
+        assigned = "Yes"
+        date_now = datetime.now().strftime('%Y-%m-%d')
+
+        # Normalize phone number to last 10 digits
+        mobile_digits = ''.join(filter(str.isdigit, customer_mobile_number))[-10:]
+
+        # Check for duplicate by last 10 digits
+        existing_leads = supabase.table('lead_master').select('uid, customer_mobile_number').execute()
+        for lead in existing_leads.data or []:
+            db_mobile = ''.join(filter(str.isdigit, lead.get('customer_mobile_number', '')))[-10:]
+            if db_mobile == mobile_digits:
+                return jsonify({
+                    'success': False,
+                    'message': f'Lead with this phone number already exists. UID: {lead["uid"]}',
+                    'uid': lead["uid"]
+                })
+
+        # Generate UID using the correct function (always use 'Google' for 'G')
+        sequence = 1
+        uid = generate_uid("Google", mobile_digits, sequence)
+        # Ensure UID is unique
+        while supabase.table('lead_master').select('uid').eq('uid', uid).execute().data:
+            sequence += 1
+            uid = generate_uid("Google", mobile_digits, sequence)
+
+        # Get assigned CRE ID from form
+        assigned_cre_id = request.form.get('assigned_cre')
+        cre_name = None
+        if assigned_cre_id:
+            cre_data = supabase.table('cre_users').select('name').eq('id', assigned_cre_id).execute()
+            if cre_data.data:
+                cre_name = cre_data.data[0]['name']
+
+        # Prepare lead data (only required columns)
+        lead_data = {
+            'uid': uid,
+            'customer_name': customer_name,
+            'customer_mobile_number': mobile_digits,
+            'source': source,
+            'date': date_now,
+            'assigned': assigned,
+            'final_status': 'Pending',
+            'cre_name': cre_name,
+            'lead_status': 'Pending',
+            'cre_assigned_at': datetime.now().isoformat(),
+            'created_at': datetime.now().isoformat()
+        }
+        print('Form data:', dict(request.form))
+        print('Assigned CRE ID:', assigned_cre_id)
+        print('CRE name fetched:', cre_name)
+        print('Lead data to insert:', lead_data)
+
+        # Insert lead
+        result = supabase.table('lead_master').insert(lead_data).execute()
+        if result.data:
+            return jsonify({'success': True, 'message': 'Lead added successfully', 'uid': uid})
+        else:
+            return jsonify({'success': False, 'message': 'Failed to add lead'})
+
+    except Exception as e:
+        print(f"Error adding lead with CRE: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': f'Error adding lead: {str(e)}'})
+
 @app.route('/add_cre', methods=['GET', 'POST'])
 @require_admin
 def add_cre():
@@ -1249,14 +1336,18 @@ def add_cre():
             result = supabase.table('cre_users').insert(cre_data).execute()
 
             # Log CRE creation
-            auth_manager.log_audit_event(
-                user_id=session.get('user_id'),
-                user_type=session.get('user_type'),
-                action='CRE_CREATED',
-                resource='cre_users',
-                resource_id=str(result.data[0]['id']) if result.data else None,
-                details={'cre_name': name, 'username': username}
-            )
+            user_id = session.get('user_id')
+            user_type = session.get('user_type')
+            resource_id = str(result.data[0]['id']) if result.data and len(result.data) > 0 else ''
+            if user_id and user_type:
+                auth_manager.log_audit_event(
+                    user_id=user_id,
+                    user_type=user_type,
+                    action='CRE_CREATED',
+                    resource='cre_users',
+                    resource_id=resource_id,
+                    details={'cre_name': name, 'username': username}
+                )
 
             flash('CRE added successfully', 'success')
             return redirect(url_for('manage_cre'))
@@ -1318,14 +1409,18 @@ def add_ps():
             result = supabase.table('ps_users').insert(ps_data).execute()
 
             # Log PS creation
-            auth_manager.log_audit_event(
-                user_id=session.get('user_id'),
-                user_type=session.get('user_type'),
-                action='PS_CREATED',
-                resource='ps_users',
-                resource_id=str(result.data[0]['id']) if result.data else None,
-                details={'ps_name': name, 'username': username, 'branch': branch}
-            )
+            user_id = session.get('user_id')
+            user_type = session.get('user_type')
+            resource_id = str(result.data[0]['id']) if result.data and len(result.data) > 0 else ''
+            if user_id and user_type:
+                auth_manager.log_audit_event(
+                    user_id=user_id,
+                    user_type=user_type,
+                    action='PS_CREATED',
+                    resource='ps_users',
+                    resource_id=resource_id,
+                    details={'ps_name': name, 'username': username, 'branch': branch}
+                )
 
             flash('Product Specialist added successfully', 'success')
             return redirect(url_for('manage_ps'))
@@ -1388,322 +1483,6 @@ def toggle_ps_status(ps_id):
         print(f"Error toggling PS status: {e}")
         return jsonify({'success': False, 'message': str(e)})
 
-
-@app.route('/manage_vehicles')
-@require_admin
-def manage_vehicles():
-    """Manage vehicles, models, and colors (excluding battery capacities)"""
-    try:
-        # Get all vehicles with their models and colors
-        vehicles_response = supabase.table('vehicles').select('*').execute()
-        vehicles = vehicles_response.data if vehicles_response.data else []
-        
-        # Get all models with their vehicles
-        models_response = supabase.table('models').select('*, vehicles(*)').execute()
-        models = models_response.data if models_response.data else []
-        
-        # Get all colors with their models and vehicles
-        colors_response = supabase.table('color_options').select('*, models(*, vehicles(*))').execute()
-        colors = colors_response.data if colors_response.data else []
-        
-        return render_template('manage_vehicles.html', 
-                           vehicles=vehicles, 
-                           models=models, 
-                           colors=colors)
-        
-    except Exception as e:
-        print(f"Error in manage_vehicles: {e}")
-        flash('Error loading vehicles data', 'error')
-        return render_template('manage_vehicles.html', vehicles=[], models=[], colors=[])
-
-# Vehicle Management API Routes
-@app.route('/add_vehicle', methods=['POST'])
-@require_admin
-def add_vehicle():
-    """Add a new vehicle"""
-    try:
-        vehicle_name = request.form.get('vehicle_name', '').strip()
-        
-        if not vehicle_name:
-            return jsonify({'success': False, 'error': 'Vehicle name is required'})
-        
-        # Check for duplicate vehicle name
-        existing = supabase.table('vehicles').select('id').eq('vehicle_name', vehicle_name).execute()
-        if existing.data:
-            return jsonify({'success': False, 'error': f'Vehicle "{vehicle_name}" already exists'})
-        
-        # Insert new vehicle
-        result = supabase.table('vehicles').insert({'vehicle_name': vehicle_name}).execute()
-        
-        if result.data:
-            # Log the action
-            auth_manager.log_audit_event(
-                user_id=session.get('user_id'),
-                user_type=session.get('user_type'),
-                action='VEHICLE_ADDED',
-                resource='vehicles',
-                resource_id=result.data[0]['id'],
-                details={'vehicle_name': vehicle_name}
-            )
-            
-            return jsonify({
-                'success': True, 
-                'message': f'Vehicle "{vehicle_name}" added successfully',
-                'vehicle': result.data[0]
-            })
-        else:
-            return jsonify({'success': False, 'error': 'Failed to add vehicle'})
-            
-    except Exception as e:
-        print(f"Error adding vehicle: {e}")
-        return jsonify({'success': False, 'error': f'Error adding vehicle: {str(e)}'})
-
-@app.route('/add_model', methods=['POST'])
-@require_admin
-def add_model():
-    """Add a new model to a vehicle"""
-    try:
-        vehicle_id = request.form.get('vehicle_id')
-        model_name = request.form.get('model_name', '').strip()
-        
-        if not vehicle_id:
-            return jsonify({'success': False, 'error': 'Vehicle is required'})
-        
-        if not model_name:
-            return jsonify({'success': False, 'error': 'Model name is required'})
-        
-        # Check for duplicate model name for this vehicle
-        existing = supabase.table('models').select('id').eq('vehicle_id', vehicle_id).eq('model_name', model_name).execute()
-        if existing.data:
-            return jsonify({'success': False, 'error': f'Model "{model_name}" already exists for this vehicle'})
-        
-        # Insert new model
-        result = supabase.table('models').insert({
-            'vehicle_id': vehicle_id,
-            'model_name': model_name
-        }).execute()
-        
-        if result.data:
-            # Log the action
-            auth_manager.log_audit_event(
-                user_id=session.get('user_id'),
-                user_type=session.get('user_type'),
-                action='MODEL_ADDED',
-                resource='models',
-                resource_id=result.data[0]['id'],
-                details={'model_name': model_name, 'vehicle_id': vehicle_id}
-            )
-            
-            return jsonify({
-                'success': True, 
-                'message': f'Model "{model_name}" added successfully',
-                'model': result.data[0]
-            })
-        else:
-            return jsonify({'success': False, 'error': 'Failed to add model'})
-            
-    except Exception as e:
-        print(f"Error adding model: {e}")
-        return jsonify({'success': False, 'error': f'Error adding model: {str(e)}'})
-
-@app.route('/add_color', methods=['POST'])
-@require_admin
-def add_color():
-    """Add a new color to a model"""
-    try:
-        model_id = request.form.get('model_id')
-        color_name = request.form.get('color_name', '').strip()
-        
-        if not model_id:
-            return jsonify({'success': False, 'error': 'Model is required'})
-        
-        if not color_name:
-            return jsonify({'success': False, 'error': 'Color name is required'})
-        
-        # Check for duplicate color name for this model
-        existing = supabase.table('color_options').select('id').eq('model_id', model_id).eq('color_name', color_name).execute()
-        if existing.data:
-            return jsonify({'success': False, 'error': f'Color "{color_name}" already exists for this model'})
-        
-        # Insert new color
-        result = supabase.table('color_options').insert({
-            'model_id': model_id,
-            'color_name': color_name
-        }).execute()
-        
-        if result.data:
-            # Log the action
-            auth_manager.log_audit_event(
-                user_id=session.get('user_id'),
-                user_type=session.get('user_type'),
-                action='COLOR_ADDED',
-                resource='color_options',
-                resource_id=result.data[0]['id'],
-                details={'color_name': color_name, 'model_id': model_id}
-            )
-            
-            return jsonify({
-                'success': True, 
-                'message': f'Color "{color_name}" added successfully',
-                'color': result.data[0]
-            })
-        else:
-            return jsonify({'success': False, 'error': 'Failed to add color'})
-            
-    except Exception as e:
-        print(f"Error adding color: {e}")
-        return jsonify({'success': False, 'error': f'Error adding color: {str(e)}'})
-
-@app.route('/get_models/<int:vehicle_id>')
-@require_admin
-def get_models(vehicle_id):
-    """Get models for a specific vehicle"""
-    try:
-        response = supabase.table('models').select('*').eq('vehicle_id', vehicle_id).execute()
-        models = response.data if response.data else []
-        
-        return jsonify({
-            'success': True,
-            'models': models
-        })
-        
-    except Exception as e:
-        print(f"Error getting models: {e}")
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/get_colors/<int:model_id>')
-@require_admin
-def get_colors(model_id):
-    """Get colors for a specific model"""
-    try:
-        response = supabase.table('color_options').select('*').eq('model_id', model_id).execute()
-        colors = response.data if response.data else []
-        
-        return jsonify({
-            'success': True,
-            'colors': colors
-        })
-        
-    except Exception as e:
-        print(f"Error getting colors: {e}")
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/delete_vehicle/<int:vehicle_id>', methods=['DELETE'])
-@require_admin
-def delete_vehicle(vehicle_id):
-    """Delete a vehicle and all its associated data"""
-    try:
-        # Get vehicle name before deletion
-        vehicle_response = supabase.table('vehicles').select('vehicle_name').eq('id', vehicle_id).execute()
-        if not vehicle_response.data:
-            return jsonify({'success': False, 'error': 'Vehicle not found'})
-        
-        vehicle_name = vehicle_response.data[0]['vehicle_name']
-        
-        # Get all models for this vehicle
-        models_response = supabase.table('models').select('id').eq('vehicle_id', vehicle_id).execute()
-        model_ids = [model['id'] for model in models_response.data] if models_response.data else []
-        
-        # Delete associated colors for all models of this vehicle
-        if model_ids:
-            for model_id in model_ids:
-                supabase.table('color_options').delete().eq('model_id', model_id).execute()
-        
-        # Delete associated models
-        supabase.table('models').delete().eq('vehicle_id', vehicle_id).execute()
-        
-        # Delete the vehicle
-        supabase.table('vehicles').delete().eq('id', vehicle_id).execute()
-        
-        # Log the action
-        auth_manager.log_audit_event(
-            user_id=session.get('user_id'),
-            user_type=session.get('user_type'),
-            action='VEHICLE_DELETED',
-            resource='vehicles',
-            resource_id=vehicle_id,
-            details={'vehicle_name': vehicle_name}
-        )
-        
-        return jsonify({
-            'success': True,
-            'message': f'Vehicle "{vehicle_name}" and all associated data deleted successfully'
-        })
-        
-    except Exception as e:
-        print(f"Error deleting vehicle: {e}")
-        return jsonify({'success': False, 'error': f'Error deleting vehicle: {str(e)}'})
-
-@app.route('/delete_model/<int:model_id>', methods=['DELETE'])
-@require_admin
-def delete_model(model_id):
-    """Delete a model and all its associated data"""
-    try:
-        # Get model name before deletion
-        model_response = supabase.table('models').select('model_name').eq('id', model_id).execute()
-        if not model_response.data:
-            return jsonify({'success': False, 'error': 'Model not found'})
-        
-        model_name = model_response.data[0]['model_name']
-        
-        # Delete associated colors
-        supabase.table('color_options').delete().eq('model_id', model_id).execute()
-        
-        # Delete the model
-        supabase.table('models').delete().eq('id', model_id).execute()
-        
-        # Log the action
-        auth_manager.log_audit_event(
-            user_id=session.get('user_id'),
-            user_type=session.get('user_type'),
-            action='MODEL_DELETED',
-            resource='models',
-            resource_id=model_id,
-            details={'model_name': model_name}
-        )
-        
-        return jsonify({
-            'success': True,
-            'message': f'Model "{model_name}" and all associated data deleted successfully'
-        })
-        
-    except Exception as e:
-        print(f"Error deleting model: {e}")
-        return jsonify({'success': False, 'error': f'Error deleting model: {str(e)}'})
-
-@app.route('/delete_color/<int:color_id>', methods=['DELETE'])
-@require_admin
-def delete_color(color_id):
-    """Delete a color"""
-    try:
-        # Get color name before deletion
-        color_response = supabase.table('color_options').select('color_name').eq('id', color_id).execute()
-        if not color_response.data:
-            return jsonify({'success': False, 'error': 'Color not found'})
-        
-        color_name = color_response.data[0]['color_name']
-        
-        # Delete the color
-        supabase.table('color_options').delete().eq('id', color_id).execute()
-        
-        # Log the action
-        auth_manager.log_audit_event(
-            user_id=session.get('user_id'),
-            user_type=session.get('user_type'),
-            action='COLOR_DELETED',
-            resource='color_options',
-            resource_id=color_id,
-            details={'color_name': color_name}
-        )
-        
-        return jsonify({
-            'success': True,
-            'message': f'Color "{color_name}" deleted successfully'
-        })
-        
-    except Exception as e:
-        print(f"Error deleting color: {e}")
-        return jsonify({'success': False, 'error': f'Error deleting color: {str(e)}'})
 
 @app.route('/manage_leads')
 @require_admin
@@ -2064,7 +1843,7 @@ def cre_dashboard():
         # Get today's followups
         todays_followups = [
             lead for lead in all_leads
-            if lead.get('follow_up_date') and lead.get('follow_up_date').startswith(str(today))
+            if lead.get('follow_up_date') and lead.get('follow_up_date', '').startswith(str(today))
         ]
         print(f"[PERF] cre_dashboard: todays_followups filter took {time.time() - t2:.3f} seconds")
 
@@ -2203,7 +1982,9 @@ def update_lead(uid):
                 try:
                     if ps_user:
                         lead_data_for_email = {**lead_data, **update_data}
-                        socketio.start_background_task(send_email_to_ps, ps_user['email'], ps_user['name'], lead_data_for_email, session.get('cre_name'))
+                        def send_email_wrapper():
+                            send_email_to_ps(ps_user['email'], ps_user['name'], lead_data_for_email, session.get('cre_name'))
+                        socketio.start_background_task(send_email_wrapper)
                         flash(f'Lead assigned to {ps_name} and email notification sent', 'success')
                     else:
                         flash(f'Lead assigned to {ps_name}', 'success')
@@ -2655,8 +2436,9 @@ def logout():
     )
 
     # Deactivate session
-    if session.get('session_id'):
-        auth_manager.deactivate_session(session.get('session_id'))
+    session_id = session.get('session_id')
+    if session_id:
+        auth_manager.deactivate_session(session_id)
 
     session.clear()
     flash('You have been logged out successfully', 'info')
@@ -3462,37 +3244,45 @@ def analytics():
             trend_labels.append(date.strftime('%m/%d'))
 
         # Top performing CREs with new parameters
-        cre_performance = defaultdict(lambda: {'total': 0, 'hot': 0, 'warm': 0, 'cold': 0, 'won': 0, 'lost': 0, 'calls': []})
+        cre_performance = {}
         for lead in leads:
             cre_name = lead.get('cre_name')
             if cre_name:
-                cre_performance[cre_name]['total'] += 1
-                # Hot/Warm/Cold by lead_category
-                category = (lead.get('lead_category') or '').strip().lower()
-                if category == 'hot':
-                    cre_performance[cre_name]['hot'] += 1
-                elif category == 'warm':
-                    cre_performance[cre_name]['warm'] += 1
-                elif category == 'cold':
-                    cre_performance[cre_name]['cold'] += 1
-                # Won/Lost by final_status
-                if (lead.get('final_status') or '').strip().lower() == 'won':
-                    cre_performance[cre_name]['won'] += 1
-                elif (lead.get('final_status') or '').strip().lower() == 'lost':
-                    cre_performance[cre_name]['lost'] += 1
-                # Count calls made
-                call_count = 0
-                call_fields = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
-                for call_field in call_fields:
-                    if lead.get(f'{call_field}_call_date'):
-                        call_count += 1
+                if cre_name not in cre_performance:
+                    cre_performance[cre_name] = {
+                        'total': 0, 'hot': 0, 'warm': 0, 'cold': 0, 'won': 0, 'lost': 0, 'calls': []
+                    }
+                cre_performance[cre_name]['total'] = cre_performance[cre_name]['total'] + 1
+            # Hot/Warm/Cold by lead_category
+            category = (lead.get('lead_category') or '').strip().lower()
+            if category == 'hot':
+                cre_performance[cre_name]['hot'] = cre_performance[cre_name]['hot'] + 1
+            elif category == 'warm':
+                cre_performance[cre_name]['warm'] = cre_performance[cre_name]['warm'] + 1
+            elif category == 'cold':
+                cre_performance[cre_name]['cold'] = cre_performance[cre_name]['cold'] + 1
+            # Won/Lost by final_status
+            if (lead.get('final_status') or '').strip().lower() == 'won':
+                cre_performance[cre_name]['won'] = cre_performance[cre_name]['won'] + 1
+            elif (lead.get('final_status') or '').strip().lower() == 'lost':
+                cre_performance[cre_name]['lost'] = cre_performance[cre_name]['lost'] + 1
+            # Count calls made
+            call_count = 0
+            call_fields = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
+            for call_field in call_fields:
+                if lead.get(f'{call_field}_call_date'):
+                    call_count += 1
+            if isinstance(cre_performance[cre_name]['calls'], list):
                 cre_performance[cre_name]['calls'].append(call_count)
+            else:
+                cre_performance[cre_name]['calls'] = [call_count]
 
         # Calculate conversion rates and average calls for CREs
         top_cres = []
         for cre_name, data in cre_performance.items():
-            total_calls = sum(data['calls'])
-            avg_calls = round(total_calls / len(data['calls']), 1) if data['calls'] else 0
+            calls_list = data['calls'] if isinstance(data['calls'], list) else []
+            total_calls = sum(calls_list) if calls_list else 0
+            avg_calls = round(total_calls / len(calls_list), 1) if calls_list else 0
             conversion_rate_cre = round((data['won'] / data['total'] * 100) if data['total'] > 0 else 0, 1)
             top_cres.append({
                 'name': cre_name,
@@ -4544,11 +4334,11 @@ def source_analysis_data():
                 if followups:
                     latest_fu = max(followups, key=lambda f: f.get('created_at', ''))
                     if latest_fu.get('final_status'):
-                        latest_final_status = latest_fu.get('final_status').strip().lower()
+                        latest_final_status = (latest_fu.get('final_status') or '').strip().lower()
                     if latest_fu.get('lost_reason'):
-                        latest_lost_reason = latest_fu.get('lost_reason').strip().lower()
+                        latest_lost_reason = (latest_fu.get('lost_reason') or '').strip().lower()
                     if latest_fu.get('lead_status'):
-                        latest_lead_status = latest_fu.get('lead_status').strip().lower()
+                        latest_lead_status = (latest_fu.get('lead_status') or '').strip().lower()
             # --- END NEW LOGIC ---
             if latest_final_status == 'lost':
                 data[src]['closed_lost_total'] += 1
@@ -5014,10 +4804,11 @@ def export_filtered_leads():
     if format_ == 'excel':
         wb = openpyxl.Workbook()
         ws = wb.active
-        ws.title = 'Leads'
-        ws.append([col[1] for col in export_columns])
-        for lead in leads:
-            ws.append([lead.get(col[0], '') for col in export_columns])
+        if ws:
+            ws.title = 'Leads'
+            ws.append([col[1] for col in export_columns])
+            for lead in leads:
+                ws.append([lead.get(col[0], '') for col in export_columns])
         output = io.BytesIO()
         wb.save(output)
         output.seek(0)
@@ -5033,5 +4824,387 @@ def export_filtered_leads():
         filename = f"leads_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         return send_file(io.BytesIO(output.getvalue().encode('utf-8')), as_attachment=True, download_name=filename, mimetype='text/csv')
 
+@app.route('/manage_vehicles')
+@require_admin
+def manage_vehicles():
+    """Vehicle management page for admin"""
+    try:
+        # Get vehicles data from Supabase
+        vehicles_response = supabase.table('vehicles').select('*').execute()
+        vehicles = vehicles_response.data if vehicles_response.data else []
+        
+        # Get models data
+        models_response = supabase.table('models').select('*').execute()
+        models = models_response.data if models_response.data else []
+        
+        # Get colors data with joins
+        colors_response = supabase.table('color_options').select(
+            '*, models(*, vehicles(*))'
+        ).execute()
+        colors = colors_response.data if colors_response.data else []
+        
+        # Get battery capacities data with joins
+        batteries_response = supabase.table('battery_capacities').select(
+            '*, color_options(*, models(*, vehicles(*)))'
+        ).execute()
+        batteries = batteries_response.data if batteries_response.data else []
+        
+        return render_template('manage_vehicles.html',
+                             vehicles=vehicles,
+                             models=models,
+                             colors=colors,
+                             batteries=batteries)
+    except Exception as e:
+        print(f"Error in manage_vehicles: {e}")
+        flash('Error loading vehicle data', 'error')
+        return redirect(url_for('admin_dashboard'))
+
+@app.route('/add_vehicle', methods=['POST'])
+@require_admin
+def add_vehicle():
+    """Add a new vehicle"""
+    try:
+        vehicle_name = request.form.get('vehicle_name', '').strip()
+        if not vehicle_name:
+            return jsonify({'success': False, 'error': 'Vehicle name is required'})
+        
+        # Check if vehicle already exists
+        existing = supabase.table('vehicles').select('id').eq('vehicle_name', vehicle_name).execute()
+        if existing.data:
+            return jsonify({'success': False, 'error': 'Vehicle already exists'})
+        
+        # Insert new vehicle
+        result = supabase.table('vehicles').insert({'vehicle_name': vehicle_name}).execute()
+        
+        if result.data:
+            return jsonify({'success': True, 'message': f'Vehicle "{vehicle_name}" added successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to add vehicle'})
+    except Exception as e:
+        print(f"Error adding vehicle: {e}")
+        return jsonify({'success': False, 'error': 'An error occurred while adding vehicle'})
+
+@app.route('/add_model', methods=['POST'])
+@require_admin
+def add_model():
+    """Add a new model"""
+    try:
+        vehicle_id = request.form.get('vehicle_id')
+        model_name = request.form.get('model_name', '').strip()
+        
+        if not vehicle_id or not model_name:
+            return jsonify({'success': False, 'error': 'Vehicle and model name are required'})
+        
+        # Check if model already exists for this vehicle
+        existing = supabase.table('models').select('id').eq('vehicle_id', vehicle_id).eq('model_name', model_name).execute()
+        if existing.data:
+            return jsonify({'success': False, 'error': 'Model already exists for this vehicle'})
+        
+        # Insert new model
+        result = supabase.table('models').insert({
+            'vehicle_id': vehicle_id,
+            'model_name': model_name
+        }).execute()
+        
+        if result.data:
+            return jsonify({'success': True, 'message': f'Model "{model_name}" added successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to add model'})
+    except Exception as e:
+        print(f"Error adding model: {e}")
+        return jsonify({'success': False, 'error': 'An error occurred while adding model'})
+
+@app.route('/add_color', methods=['POST'])
+@require_admin
+def add_color():
+    """Add a new color option"""
+    try:
+        model_id = request.form.get('model_id')
+        color_name = request.form.get('color_name', '').strip()
+        
+        if not model_id or not color_name:
+            return jsonify({'success': False, 'error': 'Model and color name are required'})
+        
+        # Check if color already exists for this model
+        existing = supabase.table('color_options').select('id').eq('model_id', model_id).eq('color_name', color_name).execute()
+        if existing.data:
+            return jsonify({'success': False, 'error': 'Color already exists for this model'})
+        
+        # Insert new color
+        result = supabase.table('color_options').insert({
+            'model_id': model_id,
+            'color_name': color_name
+        }).execute()
+        
+        if result.data:
+            return jsonify({'success': True, 'message': f'Color "{color_name}" added successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to add color'})
+    except Exception as e:
+        print(f"Error adding color: {e}")
+        return jsonify({'success': False, 'error': 'An error occurred while adding color'})
+
+@app.route('/add_battery', methods=['POST'])
+@require_admin
+def add_battery():
+    """Add a new battery capacity"""
+    try:
+        model_id = request.form.get('model_id')
+        color_id = request.form.get('color_id')
+        capacity_kwh = request.form.get('capacity_kwh')
+        
+        if not model_id or not color_id or not capacity_kwh:
+            return jsonify({'success': False, 'error': 'Model, color, and capacity are required'})
+        
+        # Check if battery capacity already exists for this color
+        existing = supabase.table('battery_capacities').select('id').eq('color_option_id', color_id).eq('capacity_kwh', capacity_kwh).execute()
+        if existing.data:
+            return jsonify({'success': False, 'error': 'Battery capacity already exists for this color'})
+        
+        # Insert new battery capacity
+        result = supabase.table('battery_capacities').insert({
+            'color_option_id': color_id,
+            'capacity_kwh': float(capacity_kwh)
+        }).execute()
+        
+        if result.data:
+            return jsonify({'success': True, 'message': f'Battery capacity {capacity_kwh} kWh added successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to add battery capacity'})
+    except Exception as e:
+        print(f"Error adding battery capacity: {e}")
+        return jsonify({'success': False, 'error': 'An error occurred while adding battery capacity'})
+
+@app.route('/delete_vehicle/<int:vehicle_id>', methods=['POST'])
+@require_admin
+def delete_vehicle(vehicle_id):
+    """Delete a vehicle and all associated data"""
+    try:
+        # Get model IDs for this vehicle
+        models_response = supabase.table('models').select('id').eq('vehicle_id', vehicle_id).execute()
+        model_ids = [model['id'] for model in models_response.data] if models_response.data else []
+        
+        if model_ids:
+            # Get color option IDs for these models
+            colors_response = supabase.table('color_options').select('id').in_('model_id', model_ids).execute()
+            color_ids = [color['id'] for color in colors_response.data] if colors_response.data else []
+            
+            if color_ids:
+                # Delete battery capacities
+                supabase.table('battery_capacities').delete().in_('color_option_id', color_ids).execute()
+            
+            # Delete color options
+            supabase.table('color_options').delete().in_('model_id', model_ids).execute()
+        
+        # Delete models
+        supabase.table('models').delete().eq('vehicle_id', vehicle_id).execute()
+        
+        # Delete vehicle
+        result = supabase.table('vehicles').delete().eq('id', vehicle_id).execute()
+        
+        if result.data:
+            return jsonify({'success': True, 'message': 'Vehicle deleted successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to delete vehicle'})
+    except Exception as e:
+        print(f"Error deleting vehicle: {e}")
+        return jsonify({'success': False, 'error': 'An error occurred while deleting vehicle'})
+
+@app.route('/delete_model/<int:model_id>', methods=['POST'])
+@require_admin
+def delete_model(model_id):
+    """Delete a model and all associated data"""
+    try:
+        # Get color option IDs for this model
+        colors_response = supabase.table('color_options').select('id').eq('model_id', model_id).execute()
+        color_ids = [color['id'] for color in colors_response.data] if colors_response.data else []
+        
+        if color_ids:
+            # Delete battery capacities
+            supabase.table('battery_capacities').delete().in_('color_option_id', color_ids).execute()
+        
+        # Delete color options
+        supabase.table('color_options').delete().eq('model_id', model_id).execute()
+        
+        # Delete model
+        result = supabase.table('models').delete().eq('id', model_id).execute()
+        
+        if result.data:
+            return jsonify({'success': True, 'message': 'Model deleted successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to delete model'})
+    except Exception as e:
+        print(f"Error deleting model: {e}")
+        return jsonify({'success': False, 'error': 'An error occurred while deleting model'})
+
+@app.route('/delete_color/<int:color_id>', methods=['POST'])
+@require_admin
+def delete_color(color_id):
+    """Delete a color option"""
+    try:
+        # Delete battery capacities first
+        supabase.table('battery_capacities').delete().eq('color_option_id', color_id).execute()
+        
+        # Delete color option
+        result = supabase.table('color_options').delete().eq('id', color_id).execute()
+        
+        if result.data:
+            return jsonify({'success': True, 'message': 'Color deleted successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to delete color'})
+    except Exception as e:
+        print(f"Error deleting color: {e}")
+        return jsonify({'success': False, 'error': 'An error occurred while deleting color'})
+
+@app.route('/delete_battery/<int:battery_id>', methods=['POST'])
+@require_admin
+def delete_battery(battery_id):
+    """Delete a battery capacity"""
+    try:
+        result = supabase.table('battery_capacities').delete().eq('id', battery_id).execute()
+        
+        if result.data:
+            return jsonify({'success': True, 'message': 'Battery capacity deleted successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to delete battery capacity'})
+    except Exception as e:
+        print(f"Error deleting battery capacity: {e}")
+        return jsonify({'success': False, 'error': 'An error occurred while deleting battery capacity'})
+
+@app.route('/get_models/<int:vehicle_id>')
+@require_admin
+def get_models(vehicle_id):
+    """Get models for a specific vehicle"""
+    try:
+        result = supabase.table('models').select('*').eq('vehicle_id', vehicle_id).execute()
+        models = result.data if result.data else []
+        return jsonify({'success': True, 'models': models})
+    except Exception as e:
+        print(f"Error getting models: {e}")
+        return jsonify({'success': False, 'error': 'An error occurred while getting models'})
+
+@app.route('/get_colors/<int:model_id>')
+@require_admin
+def get_colors(model_id):
+    """Get colors for a specific model"""
+    try:
+        result = supabase.table('color_options').select('*').eq('model_id', model_id).execute()
+        colors = result.data if result.data else []
+        return jsonify({'success': True, 'colors': colors})
+    except Exception as e:
+        print(f"Error getting colors: {e}")
+        return jsonify({'success': False, 'error': 'An error occurred while getting colors'})
+
+@app.route('/cre_analytics')
+@require_cre
+def cre_analytics():
+    """CRE analytics page"""
+    try:
+        # Get CRE's leads data
+        cre_id = session.get('cre_id')
+        if not cre_id:
+            flash('CRE ID not found in session', 'error')
+            return redirect(url_for('cre_dashboard'))
+        
+        # Get leads assigned to this CRE
+        leads_response = supabase.table('lead_master').select('*').eq('cre_id', cre_id).execute()
+        leads = leads_response.data if leads_response.data else []
+        
+        # Calculate analytics
+        total_leads = len(leads)
+        pending_leads = len([lead for lead in leads if not lead.get('ps_id')])
+        assigned_to_ps = len([lead for lead in leads if lead.get('ps_id')])
+        won_leads = len([lead for lead in leads if lead.get('final_status', '').strip().lower() == 'won'])
+        lost_leads = len([lead for lead in leads if lead.get('final_status', '').strip().lower() == 'lost'])
+        
+        # Calculate conversion rate
+        conversion_rate = round((won_leads / total_leads * 100) if total_leads > 0 else 0, 1)
+        
+        # Get recent activity (last 30 days)
+        thirty_days_ago = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+        recent_leads = [lead for lead in leads if lead.get('created_at', '').startswith(thirty_days_ago[:7])]
+        
+        return render_template('cre_analytics.html',
+                             total_leads=total_leads,
+                             pending_leads=pending_leads,
+                             assigned_to_ps=assigned_to_ps,
+                             won_leads=won_leads,
+                             lost_leads=lost_leads,
+                             conversion_rate=conversion_rate,
+                             recent_leads=len(recent_leads))
+    except Exception as e:
+        print(f"Error in cre_analytics: {e}")
+        flash('Error loading analytics data', 'error')
+        return redirect(url_for('cre_dashboard'))
+
+# Print all registered routes at startup for debugging
+print('Registered routes:')
+for rule in app.url_map.iter_rules():
+    print(rule)
+
+@app.route('/add_minimal_lead', methods=['POST'])
+@require_admin  # Change to @require_cre or remove for open testing
+def add_minimal_lead():
+    """
+    Add a new lead with only minimal required fields.
+    - Checks for duplicate by last 10 digits of phone number.
+    - If duplicate, returns UID of existing lead.
+    - Only fills: uid, customer_name, customer_mobile_number, source, date, assigned.
+    - Source is always 'Google(Web)', UID uses 'G' as the source character.
+    """
+    try:
+        customer_name = request.form.get('customer_name', '').strip()
+        customer_mobile_number = request.form.get('customer_mobile_number', '').strip()
+        source = "Google(Web)"
+        assigned = "Yes"
+        date_now = datetime.now().strftime('%Y-%m-%d')
+
+        # Normalize phone number to last 10 digits
+        mobile_digits = ''.join(filter(str.isdigit, customer_mobile_number))[-10:]
+
+        # Check for duplicate by last 10 digits
+        existing_leads = supabase.table('lead_master').select('uid, customer_mobile_number').execute()
+        for lead in existing_leads.data or []:
+            db_mobile = ''.join(filter(str.isdigit, lead.get('customer_mobile_number', '')))[-10:]
+            if db_mobile == mobile_digits:
+                return jsonify({
+                    'success': False,
+                    'message': f'Lead with this phone number already exists. UID: {lead["uid"]}',
+                    'uid': lead["uid"]
+                })
+
+        # Generate UID using the correct function (always use 'Google' for 'G')
+        sequence = 1
+        uid = generate_uid("Google", mobile_digits, sequence)
+        while supabase.table('lead_master').select('uid').eq('uid', uid).execute().data:
+            sequence += 1
+            uid = generate_uid("Google", mobile_digits, sequence)
+
+        lead_data = {
+            'uid': uid,
+            'customer_name': customer_name,
+            'customer_mobile_number': mobile_digits,
+            'source': source,
+            'date': date_now,
+            'assigned': assigned,
+            'final_status': 'Pending'
+        }
+
+        result = supabase.table('lead_master').insert(lead_data).execute()
+        if result.data:
+            return jsonify({'success': True, 'message': 'Lead added successfully', 'uid': uid})
+        else:
+            return jsonify({'success': False, 'message': 'Failed to add lead'})
+
+    except Exception as e:
+        print(f"Error adding minimal lead: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': f'Error adding lead: {str(e)}'})
+
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    print("🚀 Starting Ather CRM System...")
+    print("📱 Server will be available at: http://127.0.0.1:5000")
+    print("🌐 You can also try: http://localhost:5000")
+    # socketio.run(app, host='127.0.0.1', port=5000, debug=True)
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True, use_reloader=False)
