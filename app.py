@@ -1878,6 +1878,9 @@ def cre_dashboard():
     today = datetime.now().date()
     all_leads = safe_get_data('lead_master', {'cre_name': cre_name})
 
+    # Fetch event leads assigned to this CRE
+    event_event_leads = safe_get_data('activity_leads', {'cre_assigned': cre_name})
+
     print("Fetched leads for CRE:", cre_name, "Count:", len(all_leads))
     for lead in all_leads[:5]:  # Print first 5 leads for inspection
         print("Lead:", lead.get('uid'), "Status:", lead.get('lead_status'))
@@ -1932,7 +1935,8 @@ def cre_dashboard():
         attended_leads=attended_leads,
         assigned_to_ps=assigned_to_ps,
         won_leads=won_leads,
-        lost_leads=lost_leads
+        lost_leads=lost_leads,
+        event_event_leads=event_event_leads
     )
 
 @app.route('/update_lead/<uid>', methods=['GET', 'POST'])
@@ -2241,6 +2245,8 @@ def ps_dashboard():
         t5 = time.time()
         # Fetch walk-in leads for this PS
         walkin_leads = safe_get_data('walkin_data', {'ps_name': ps_name})
+        # Fetch event leads for this PS
+        event_leads = safe_get_data('activity_leads', {'ps_name': ps_name})
         result = render_template('ps_dashboard.html',
                                assigned_leads=filtered_leads,
                                pending_leads=pending_leads,
@@ -2248,6 +2254,7 @@ def ps_dashboard():
                                attended_leads=attended_leads,
                                lost_leads=lost_leads,
                                walkin_leads=walkin_leads,
+                               event_leads=event_leads,
                                filter_type=filter_type,
                                start_date=start_date,
                                end_date=end_date)
@@ -2264,6 +2271,7 @@ def ps_dashboard():
                                attended_leads=[],
                                lost_leads=[],
                                walkin_leads=[],
+                               event_leads=[],
                                filter_type=filter_type,
                                start_date=start_date,
                                end_date=end_date)
@@ -4132,12 +4140,18 @@ def activity_event():
         
         try:
             leads_added = 0
-            
+            # Fetch all CREs for round-robin assignment
+            cre_users = safe_get_data('cre_users')
+            cre_names = [cre['name'] for cre in cre_users] if cre_users else []
+            cre_count = len(cre_names)
+            cre_index = 0  # Start from the first CRE for each batch
             for i in range(len(customer_names)):
                 if customer_names[i] and customer_phones[i]:  # Only process if name and phone are provided
+                    # Assign CRE in round-robin
+                    cre_assigned = cre_names[cre_index] if cre_count > 0 else None
+                    cre_index = (cre_index + 1) % cre_count if cre_count > 0 else 0
                     # Generate UID for event lead
                     uid = f"E-{activity_name[:3].upper()}-{customer_phones[i][-4:]}"
-                    
                     # Create event lead data strictly matching activity_leads schema
                     event_lead_data = {
                         'activity_uid': uid,
@@ -4156,7 +4170,8 @@ def activity_event():
                         'date': dates[i] if i < len(dates) else datetime.now().strftime('%Y-%m-%d'),
                         'customer_phone_number': customer_phones[i].strip(),
                         'created_at': datetime.now().isoformat(),
-                        'lead_category': lead_statuses[i] if i < len(lead_statuses) else 'WARM'
+                        'lead_category': lead_statuses[i] if i < len(lead_statuses) else 'WARM',
+                        'cre_assigned': cre_assigned
                     }
                     # Insert into activity_leads
                     result = supabase.table('activity_leads').insert(event_lead_data).execute()
@@ -4201,7 +4216,8 @@ def view_event_leads():
                 'remarks': lead.get('remarks', ''),
                 'lead_status': lead.get('lead_status', ''),
                 'month': lead.get('month', ''),
-                'date': lead.get('date', '')
+                'date': lead.get('date', ''),
+                'activity_uid': lead.get('activity_uid', '')
             }
             transformed_leads.append(transformed_lead)
         
@@ -5331,62 +5347,11 @@ def cre_analytics_data():
             'error': str(e)
         })
 
-@app.route('/call_attempt_summary')
-@require_admin
-def call_attempt_summary():
-    from_date_str = request.args.get('from_date')
-    to_date_str = request.args.get('to_date')
-    call_no_map = {
-        'first': 'F1', 'second': 'F2', 'third': 'F3',
-        'fourth': 'F4', 'fifth': 'F5', 'sixth': 'F6', 'seventh': 'F7'
-    }
-    def parse_ts(ts):
-        if not ts:
-            return None
-        try:
-            if 'T' in ts:
-                return datetime.fromisoformat(ts.replace('Z', '+00:00'))
-            else:
-                return datetime.strptime(ts, '%Y-%m-%d %H:%M:%S')
-        except Exception:
-            return None
-    def in_range(ts):
-        if not ts:
-            return False
-        if from_date_str and to_date_str:
-            try:
-                from_dt = datetime.strptime(from_date_str, '%Y-%m-%d')
-                to_dt = datetime.strptime(to_date_str, '%Y-%m-%d')
-                return from_dt <= ts.date() <= to_dt
-            except Exception:
-                return True
-        return True
-    # Fetch data
-    cre_attempts = safe_get_data('cre_call_attempt_history', select_fields='call_no,created_at')
-    ps_attempts = safe_get_data('ps_call_attempt_history', select_fields='call_no,created_at')
-    # Count logic
-    def count_attempts(attempts):
-        counts = {f'F{i}': 0 for i in range(1,8)}
-        for att in attempts:
-            call_no = (att.get('call_no') or '').strip().lower()
-            created_at = parse_ts(att.get('created_at'))
-            if call_no in call_no_map and in_range(created_at):
-                col = call_no_map[call_no]
-                counts[col] += 1
-        return counts
-    cre_counts = count_attempts(cre_attempts)
-    ps_counts = count_attempts(ps_attempts)
-    return jsonify({'CRE': cre_counts, 'PS': ps_counts})
-
 @app.route('/negative_call_attempt_history')
 @require_admin
 def negative_call_attempt_history():
     from_date = request.args.get('from_date')
     to_date = request.args.get('to_date')
-    negative_reasons = [
-        "Discount Issue", "Delayed", "Lost to Competition", "Finance Rejected",
-        "Dropped", "Lost to Co-Dealer", "RNR", "Not Interested", "Call Disconnected"
-    ]
     call_no_map = {
         'first': 'F1', 'second': 'F2', 'third': 'F3',
         'fourth': 'F4', 'fifth': 'F5', 'sixth': 'F6', 'seventh': 'F7'
@@ -5410,6 +5375,15 @@ def negative_call_attempt_history():
             except Exception:
                 return True
         return True
+    cre_attempts = safe_get_data('cre_call_attempt_history', select_fields='call_no,created_at,remarks,status,lead_status')
+    ps_attempts = safe_get_data('ps_call_attempt_history', select_fields='call_no,created_at,remarks,status,lead_status')
+    # Dynamically build the list of all unique statuses
+    all_statuses = set()
+    for att in cre_attempts + ps_attempts:
+        feedback = (att.get('remarks') or att.get('status') or att.get('lead_status') or '').strip()
+        if feedback:
+            all_statuses.add(feedback)
+    negative_reasons = sorted(all_statuses)
     def count_negatives(attempts):
         result = {reason: [0]*7 for reason in negative_reasons}
         for att in attempts:
@@ -5420,27 +5394,22 @@ def negative_call_attempt_history():
                 idx = int(call_no_map[call_no][1]) - 1  # F1->0, F2->1, ...
                 result[feedback][idx] += 1
         return result
-    cre_attempts = safe_get_data('cre_call_attempt_history', select_fields='call_no,created_at,remarks,status,lead_status')
-    ps_attempts = safe_get_data('ps_call_attempt_history', select_fields='call_no,created_at,remarks,status,lead_status')
-    cre_data = count_negatives(cre_attempts)
-    ps_data = count_negatives(ps_attempts)
-    # After your count_negatives function, add:
     def count_totals(attempts):
         totals = [0]*7
-        call_no_map = {
+        call_no_map_idx = {
             'first': 0, 'second': 1, 'third': 2,
             'fourth': 3, 'fifth': 4, 'sixth': 5, 'seventh': 6
         }
         for att in attempts:
             call_no = (att.get('call_no') or '').strip().lower()
-            idx = call_no_map.get(call_no)
+            idx = call_no_map_idx.get(call_no)
             if idx is not None:
                 totals[idx] += 1
         return totals
-
+    cre_data = count_negatives(cre_attempts)
+    ps_data = count_negatives(ps_attempts)
     cre_totals = count_totals(cre_attempts)
     ps_totals = count_totals(ps_attempts)
-
     return jsonify({
         'CRE': cre_data,
         'PS': ps_data,
@@ -5461,6 +5430,69 @@ def get_cre_list():
 def cre_analysis_data():
     # Return a mock response or implement your actual logic here
     return jsonify({'success': True, 'data': {}})
+
+@app.route('/update_event_lead/<activity_uid>', methods=['GET', 'POST'])
+@require_ps
+def update_event_lead(activity_uid):
+    try:
+        # Fetch the event lead by activity_uid
+        result = supabase.table('activity_leads').select('*').eq('activity_uid', activity_uid).execute()
+        if not result.data:
+            flash('Event lead not found', 'error')
+            return redirect(url_for('ps_dashboard'))
+        lead = result.data[0]
+        # Determine next call and completed calls for PS follow-ups
+        call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
+        completed_calls = []
+        next_call = 'first'
+        for call_num in call_order:
+            call_date_key = f'ps_{call_num}_call_date'
+            if lead.get(call_date_key):
+                completed_calls.append(call_num)
+            else:
+                next_call = call_num
+                break
+        if request.method == 'POST':
+            update_data = {}
+            customer_name = request.form.get('customer_name', '').strip()
+            lead_category = request.form.get('lead_category', '').strip()
+            interested_model = request.form.get('interested_model', '').strip()
+            customer_location = request.form.get('customer_location', '').strip()
+            ps_followup_date_ts = request.form.get('ps_followup_date_ts', '').strip()
+            lead_status = request.form.get('lead_status', '').strip()
+            final_status = request.form.get('final_status', '').strip()
+            call_date = request.form.get('call_date', '').strip()
+            call_remark = request.form.get('call_remark', '').strip()
+            # Update editable fields
+            if customer_name:
+                update_data['customer_name'] = customer_name
+            if lead_category:
+                update_data['lead_category'] = lead_category
+            if interested_model:
+                update_data['interested_model'] = interested_model
+            if customer_location:
+                update_data['customer_location'] = customer_location
+            if ps_followup_date_ts:
+                update_data['ps_followup_date_ts'] = ps_followup_date_ts
+            if lead_status:
+                update_data['lead_status'] = lead_status
+            if final_status:
+                update_data['final_status'] = final_status
+            # Handle PS call date/remark for the next call
+            if call_date:
+                update_data[f'ps_{next_call}_call_date'] = call_date
+            if call_remark:
+                update_data[f'ps_{next_call}_call_remark'] = call_remark
+            if update_data:
+                supabase.table('activity_leads').update(update_data).eq('activity_uid', activity_uid).execute()
+                flash('Event lead updated successfully', 'success')
+                return redirect(url_for('ps_dashboard'))
+            else:
+                flash('No changes to update', 'info')
+        return render_template('update_event_lead.html', lead=lead, next_call=next_call, completed_calls=completed_calls, today=date.today())
+    except Exception as e:
+        flash(f'Error updating event lead: {str(e)}', 'error')
+        return redirect(url_for('ps_dashboard'))
 
 if __name__ == '__main__':
     # socketio.run(app, debug=True)

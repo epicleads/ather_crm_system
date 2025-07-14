@@ -12,16 +12,16 @@ SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY")
 KNOW_SR_KEY = os.getenv("KNOW_SR_KEY")
 KNOW_X_API_KEY = os.getenv("KNOW_X_API_KEY")
 
-# SR number to source mapping - UPDATED
-number_to_source = {
-    '+918929841338': 'Meta(KNOW)',
-    '+917353089911': 'Google(KNOW)',
-    '+919513249906': 'BTL(KNOW)',
-    '+918071023606': 'BTL(KNOW)'
+# UPDATED: SR number to source mapping with clean source names and sub_source
+number_to_source_mapping = {
+    '+918929841338': {'source': 'META', 'sub_source': 'Meta Know'},
+    '+917353089911': {'source': 'GOOGLE', 'sub_source': 'Google Know'},
+    '+919513249906': {'source': 'BTL', 'sub_source': 'BTL Know'},
+    '+918071023606': {'source': 'BTL', 'sub_source': 'BTL Know'}
 }
 
 def generate_uid(source, mobile_number, sequence):
-    source_map = {'Google': 'G', 'Meta': 'M', 'Affiliate': 'A', 'Know': 'K', 'Whatsapp': 'W', 'Tele': 'T', 'BTL': 'B'}
+    source_map = {'GOOGLE': 'G', 'META': 'M', 'Affiliate': 'A', 'Know': 'K', 'Whatsapp': 'W', 'Tele': 'T', 'BTL': 'B'}
     source_char = source_map.get(source, 'X')
     sequence_char = chr(65 + (sequence % 26))
     mobile_last4 = str(mobile_number).replace(" ", "").replace("-", "")[-4:].zfill(4)
@@ -59,91 +59,148 @@ class KnowlarityAPI:
 
 def check_existing_leads(supabase, df_leads):
     """
-    Check for existing leads by phone number in the database
-    Returns a dictionary with phone_number as key and existing record data as value
+    Check for existing leads by phone number in both lead_master and duplicate_leads tables
     """
     try:
-        # Get unique phone numbers from the current batch
         phone_list = df_leads['customer_mobile_number'].unique().tolist()
         
-        # Query database for existing phone numbers - now include campaign column
-        existing = supabase.table("lead_master").select("*").in_("customer_mobile_number", phone_list).execute()
+        # Check lead_master table
+        existing_master = supabase.table("lead_master").select("*").in_("customer_mobile_number", phone_list).execute()
+        master_records = {row['customer_mobile_number']: row for row in existing_master.data}
         
-        # Return dictionary with phone number as key and record data as value
-        existing_records = {row['customer_mobile_number']: row for row in existing.data}
-        print(f"📞 Found {len(existing_records)} existing phone numbers in database")
+        # Check duplicate_leads table
+        existing_duplicate = supabase.table("duplicate_leads").select("*").in_("customer_mobile_number", phone_list).execute()
+        duplicate_records = {row['customer_mobile_number']: row for row in existing_duplicate.data}
         
-        return existing_records
+        print(f"📞 Found {len(master_records)} existing in lead_master and {len(duplicate_records)} in duplicate_leads")
+        
+        return master_records, duplicate_records
         
     except Exception as e:
         print(f"❌ Error checking existing leads: {e}")
-        return {}
+        return {}, {}
 
 def get_next_sequence_number(supabase):
     """
     Get the next sequence number for UID generation
     """
     try:
-        # Get the latest record to determine next sequence
         result = supabase.table("lead_master").select("id").order("id", desc=True).limit(1).execute()
-        
         if result.data:
             return result.data[0]['id'] + 1
         else:
             return 1
-            
     except Exception as e:
         print(f"❌ Error getting sequence number: {e}")
         return 1
 
-def combine_sources_for_phone_number(df):
+def process_individual_leads(df):
     """
-    Combine multiple sources for the same phone number into a single row
+    Process leads individually - no consolidation at all
+    Each record becomes a separate lead entry
     """
-    # Group by phone number and combine sources
-    grouped = df.groupby('customer_mobile_number').agg({
-        'source': lambda x: ','.join(sorted(x.unique())),
-        'date': 'first',  # Use the first date
-        'customer_name': 'first',
-        'start_time': 'first'  # Keep other fields from first occurrence
-    }).reset_index()
+    result_leads = []
     
-    print(f"📱 Consolidated {len(df)} records into {len(grouped)} unique phone numbers")
+    for _, row in df.iterrows():
+        # Each row becomes an individual lead
+        lead_record = row.copy()
+        print(f"📱 Processing: {row['customer_mobile_number']} | Source: {row['source']} | Sub-source: {row['sub_source']}")
+        result_leads.append(lead_record)
     
-    return grouped
+    return pd.DataFrame(result_leads)
 
-def generate_uid_for_leads(supabase, df_leads):
+def find_next_available_source_slot(duplicate_record):
     """
-    Generate UIDs for new leads, reusing existing UIDs for same phone numbers
+    Find the next available source slot (source1, source2, etc.) in duplicate_leads record
     """
-    uids = []
-    sequence = get_next_sequence_number(supabase)
-    
-    existing_records = check_existing_leads(supabase, df_leads)
-    
-    for _, row in df_leads.iterrows():
-        phone = row['customer_mobile_number']
+    for i in range(1, 11):  # source1 to source10
+        if duplicate_record.get(f'source{i}') is None:
+            return i
+    return None  # All slots are full
+
+def add_source_to_duplicate_record(supabase, duplicate_record, new_source, new_sub_source, new_date):
+    """
+    Add new source to existing duplicate_leads record
+    """
+    try:
+        slot = find_next_available_source_slot(duplicate_record)
+        if slot is None:
+            print(f"⚠️ All source slots full for phone: {duplicate_record['customer_mobile_number']}")
+            return False
         
-        if phone in existing_records:
-            # Reuse existing UID
-            existing_uid = existing_records[phone]['uid']
-            uids.append(existing_uid)
-            print(f"🔄 Reusing UID {existing_uid} for existing phone: {phone}")
-        else:
-            # Generate new UID
-            # Use the first source for UID generation (since sources are combined)
-            first_source = row['source'].split(',')[0].replace('(KNOW)', '')
-            new_uid = generate_uid(first_source, phone, sequence)
-            uids.append(new_uid)
-            sequence += 1
-            print(f"🆕 Generated new UID {new_uid} for phone: {phone}")
+        # Update the record with new source in the available slot
+        update_data = {
+            f'source{slot}': new_source,
+            f'sub_source{slot}': new_sub_source,
+            f'date{slot}': new_date,
+            'duplicate_count': duplicate_record['duplicate_count'] + 1,
+            'updated_at': datetime.now().isoformat()
+        }
+        
+        supabase.table("duplicate_leads").update(update_data).eq('id', duplicate_record['id']).execute()
+        print(f"✅ Added source{slot} to duplicate record: {duplicate_record['uid']} | Phone: {duplicate_record['customer_mobile_number']} | New Source: {new_source}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Failed to add source to duplicate record: {e}")
+        return False
+
+def create_duplicate_record(supabase, original_record, new_source, new_sub_source, new_date):
+    """
+    Create new duplicate_leads record when a lead becomes duplicate
+    """
+    try:
+        duplicate_data = {
+            'uid': original_record['uid'],
+            'customer_mobile_number': original_record['customer_mobile_number'],
+            'customer_name': original_record['customer_name'],
+            'original_lead_id': original_record['id'],
+            'source1': original_record['source'],
+            'sub_source1': original_record['sub_source'],
+            'date1': original_record['date'],
+            'source2': new_source,
+            'sub_source2': new_sub_source,
+            'date2': new_date,
+            'duplicate_count': 2,
+            'created_at': datetime.now().isoformat(),
+            'updated_at': datetime.now().isoformat()
+        }
+        
+        # Initialize remaining slots as None
+        for i in range(3, 11):
+            duplicate_data[f'source{i}'] = None
+            duplicate_data[f'sub_source{i}'] = None
+            duplicate_data[f'date{i}'] = None
+        
+        supabase.table("duplicate_leads").insert(duplicate_data).execute()
+        print(f"✅ Created duplicate record: {original_record['uid']} | Phone: {original_record['customer_mobile_number']} | Sources: {original_record['source']} + {new_source}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Failed to create duplicate record: {e}")
+        return False
+
+def is_duplicate_source(existing_record, new_source, new_sub_source):
+    """
+    Check if the new source/sub_source combination already exists in the record
+    """
+    # For lead_master, check direct fields
+    if 'source' in existing_record:
+        return (existing_record['source'] == new_source and 
+                existing_record['sub_source'] == new_sub_source)
     
-    return uids
+    # For duplicate_leads, check all source slots
+    for i in range(1, 11):
+        if (existing_record.get(f'source{i}') == new_source and 
+            existing_record.get(f'sub_source{i}') == new_sub_source):
+            return True
+    
+    return False
 
 def main():
     client = KnowlarityAPI(KNOW_SR_KEY, KNOW_X_API_KEY)
     
-    # Get past 24 hours instead of just today
+    # Get past 24 hours
     from datetime import timedelta
     now = datetime.now()
     yesterday = now - timedelta(hours=24)
@@ -159,166 +216,152 @@ def main():
         print(f"❌ No call logs from {start_date} to {end_date}")
         return
 
-    df = df[df['knowlarity_number'].isin(number_to_source)].copy()
+    df = df[df['knowlarity_number'].isin(number_to_source_mapping)].copy()
     if df.empty:
         print("⚠ No known SR calls (Google/Meta/BTL) found.")
         return
 
-    df['source'] = df['knowlarity_number'].map(number_to_source)
+    # Map to source and sub_source
+    df['source'] = df['knowlarity_number'].map(lambda x: number_to_source_mapping[x]['source'])
+    df['sub_source'] = df['knowlarity_number'].map(lambda x: number_to_source_mapping[x]['sub_source'])
+    
     df['customer_mobile_number'] = df['customer_number']
     df['customer_name'] = 'No Name(Knowlarity)'
-    
-    # FIX: Convert date to string format for JSON serialization
     df['date'] = pd.to_datetime(df['start_time']).dt.date.astype(str)
     
-    # NEW: Combine sources for same phone numbers
-    df_combined = combine_sources_for_phone_number(df)
+    # Process leads individually - no consolidation
+    df_processed = process_individual_leads(df)
     
-    print(f"📊 Found {len(df_combined)} unique phone numbers with combined sources")
+    print(f"📊 Found {len(df_processed)} individual lead records")
     
     # Initialize Supabase client
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     
-    # Check existing records
-    existing_records = check_existing_leads(supabase, df_combined)
+    # Check existing records in both tables
+    master_records, duplicate_records = check_existing_leads(supabase, df_processed)
     
-    # Separate new leads from existing leads that need source updates
+    # Process each lead
     new_leads = []
-    update_leads = []
+    updated_duplicates = 0
+    skipped_duplicates = 0
     
-    for _, row in df_combined.iterrows():
+    for _, row in df_processed.iterrows():
         phone = row['customer_mobile_number']
-        new_sources = set(row['source'].split(','))
+        current_source = row['source']
+        current_sub_source = row['sub_source']
+        current_date = row['date']
         
-        if phone in existing_records:
-            # Check if we need to update sources
-            existing_record = existing_records[phone]
-            existing_sources = set(existing_record['source'].split(','))
+        # Check if phone exists in lead_master
+        if phone in master_records:
+            master_record = master_records[phone]
             
-            # If there are new sources not in existing record
-            if not new_sources.issubset(existing_sources):
-                combined_sources = existing_sources.union(new_sources)
+            # Check if this is a duplicate source/sub_source combination
+            if is_duplicate_source(master_record, current_source, current_sub_source):
+                print(f"⚠️ Skipping duplicate: {phone} | Source: {current_source} | Sub-source: {current_sub_source}")
+                skipped_duplicates += 1
+                continue
+            
+            # Check if already exists in duplicate_leads
+            if phone in duplicate_records:
+                duplicate_record = duplicate_records[phone]
                 
-                # IMPORTANT: Preserve existing campaign if it exists
-                existing_campaign = existing_record.get('campaign', None)
+                # Check if this source/sub_source already exists in duplicate record
+                if is_duplicate_source(duplicate_record, current_source, current_sub_source):
+                    print(f"⚠️ Skipping duplicate: {phone} | Source: {current_source} | Sub-source: {current_sub_source}")
+                    skipped_duplicates += 1
+                    continue
                 
-                update_leads.append({
-                    'phone': phone,
-                    'uid': existing_record['uid'],
-                    'id': existing_record['id'],
-                    'new_source': ','.join(sorted(combined_sources)),
-                    'existing_campaign': existing_campaign  # Keep existing campaign
-                })
-                print(f"🔄 Will update sources for {phone}: {existing_record['source']} → {','.join(sorted(combined_sources))}")
-                if existing_campaign:
-                    print(f"   📊 Preserving existing campaign: {existing_campaign}")
+                # Add to existing duplicate record
+                if add_source_to_duplicate_record(supabase, duplicate_record, current_source, current_sub_source, current_date):
+                    updated_duplicates += 1
+                    # Update local duplicate_records to avoid conflicts in same batch
+                    duplicate_records[phone]['duplicate_count'] += 1
             else:
-                print(f"✅ Phone {phone} already has all sources: {existing_record['source']}")
+                # Create new duplicate record
+                if create_duplicate_record(supabase, master_record, current_source, current_sub_source, current_date):
+                    updated_duplicates += 1
+                    # Add to local duplicate_records to avoid conflicts in same batch
+                    duplicate_records[phone] = {
+                        'customer_mobile_number': phone,
+                        'duplicate_count': 2,
+                        'source1': master_record['source'],
+                        'source2': current_source,
+                        'sub_source1': master_record['sub_source'],
+                        'sub_source2': current_sub_source
+                    }
         else:
-            # Completely new lead
+            # Completely new lead - add to new_leads list
             new_leads.append(row)
     
-    # Convert new leads back to DataFrame
-    df_new = pd.DataFrame(new_leads) if new_leads else pd.DataFrame()
-    
-    # Process updates first
-    if update_leads:
-        print(f"🔄 Updating {len(update_leads)} existing records with new sources...")
-        for update in update_leads:
-            try:
-                # Update only source, preserve existing campaign
-                update_data = {
-                    'source': update['new_source'],
-                    'updated_at': datetime.now().isoformat()
-                }
-                # Don't update campaign field - it should remain as is
-                
-                supabase.table("lead_master").update(update_data).eq('id', update['id']).execute()
-                print(f"✅ Updated UID: {update['uid']} | Phone: {update['phone']} | Sources: {update['new_source']}")
-                if update['existing_campaign']:
-                    print(f"   📊 Campaign preserved: {update['existing_campaign']}")
-            except Exception as e:
-                print(f"❌ Failed to update {update['phone']}: {e}")
-    
     # Process new leads
-    if df_new.empty:
-        print("✅ No completely new leads to insert.")
-        if not update_leads:
-            print("✅ All phone numbers already exist with same sources.")
-        return
-    
-    print(f"🆕 Found {len(df_new)} completely new leads to insert")
-    
-    # Generate UIDs for new leads
-    df_new['uid'] = generate_uid_for_leads(supabase, df_new)
-    
-    # Additional UID uniqueness check (extra safety)
-    existing_uids_result = supabase.table("lead_master").select("uid").execute()
-    existing_uids = {row['uid'] for row in existing_uids_result.data}
-    
-    uid_conflicts = df_new[df_new['uid'].isin(existing_uids)]
-    if not uid_conflicts.empty:
-        print(f"⚠️ Found {len(uid_conflicts)} UID conflicts, regenerating...")
-        sequence_start = get_next_sequence_number(supabase) + 1000  # Jump ahead to avoid conflicts
-        for idx in uid_conflicts.index:
-            first_source = df_new.at[idx, 'source'].split(',')[0].replace('(KNOW)', '')
-            df_new.at[idx, 'uid'] = generate_uid(
-                first_source, 
-                df_new.at[idx, 'customer_mobile_number'], 
-                sequence_start
-            )
-            sequence_start += 1
-    
-    # FIX: Convert timestamps to ISO format strings for JSON serialization
-    current_time = datetime.now().isoformat()
-    df_new['created_at'] = df_new['updated_at'] = current_time
-
-    # Add default nulls including campaign column
-    default_fields = {
-        'campaign': None,  # NEW: Campaign column - empty for Knowlarity leads
-        'cre_name': None, 'lead_category': None, 'model_interested': None, 'branch': None, 'ps_name': None,
-        'assigned': 'No', 'lead_status': 'Pending', 'follow_up_date': None,
-        'first_call_date': None, 'first_remark': None, 'second_call_date': None, 'second_remark': None,
-        'third_call_date': None, 'third_remark': None, 'fourth_call_date': None, 'fourth_remark': None,
-        'fifth_call_date': None, 'fifth_remark': None, 'sixth_call_date': None, 'sixth_remark': None,
-        'seventh_call_date': None, 'seventh_remark': None, 'final_status': 'Pending'
-    }
-    for col, val in default_fields.items():
-        df_new[col] = val
-
-    # Select final columns - include campaign column
-    final_cols = ['uid', 'date', 'customer_name', 'customer_mobile_number', 'source', 'campaign',  # Added campaign
-                  'cre_name', 'lead_category', 'model_interested', 'branch', 'ps_name',
-                  'assigned', 'lead_status', 'follow_up_date',
-                  'first_call_date', 'first_remark', 'second_call_date', 'second_remark',
-                  'third_call_date', 'third_remark', 'fourth_call_date', 'fourth_remark',
-                  'fifth_call_date', 'fifth_remark', 'sixth_call_date', 'sixth_remark',
-                  'seventh_call_date', 'seventh_remark', 'final_status',
-                  'created_at', 'updated_at']
-    df_new = df_new[final_cols]
-
-    print(f"🚀 Inserting {len(df_new)} new leads...")
-    
-    # Insert new leads
-    successful_inserts = 0
-    failed_inserts = 0
-    
-    for row in df_new.to_dict(orient="records"):
-        try:
-            supabase.table("lead_master").insert(row).execute()
-            print(f"✅ Inserted UID: {row['uid']} | Phone: {row['customer_mobile_number']} | Sources: {row['source']} | Campaign: {row['campaign'] or 'None'}")
-            successful_inserts += 1
-        except Exception as e:
-            print(f"❌ Failed to insert {row['uid']} | Phone: {row['customer_mobile_number']}: {e}")
-            failed_inserts += 1
+    if not new_leads:
+        print("✅ No new leads to insert.")
+    else:
+        df_new = pd.DataFrame(new_leads)
+        print(f"🆕 Found {len(df_new)} new leads to insert")
+        
+        # Generate UIDs for new leads
+        sequence = get_next_sequence_number(supabase)
+        uids = []
+        
+        for _, row in df_new.iterrows():
+            new_uid = generate_uid(row['source'], row['customer_mobile_number'], sequence)
+            uids.append(new_uid)
+            sequence += 1
+        
+        df_new['uid'] = uids
+        
+        # Add timestamps and default fields
+        current_time = datetime.now().isoformat()
+        df_new['created_at'] = df_new['updated_at'] = current_time
+        
+        # Add default fields - no campaign for Knowlarity leads
+        default_fields = {
+            'campaign': None,
+            'cre_name': None, 'lead_category': None, 'model_interested': None, 'branch': None, 'ps_name': None,
+            'assigned': 'No', 'lead_status': 'Pending', 'follow_up_date': None,
+            'first_call_date': None, 'first_remark': None, 'second_call_date': None, 'second_remark': None,
+            'third_call_date': None, 'third_remark': None, 'fourth_call_date': None, 'fourth_remark': None,
+            'fifth_call_date': None, 'fifth_remark': None, 'sixth_call_date': None, 'sixth_remark': None,
+            'seventh_call_date': None, 'seventh_remark': None, 'final_status': 'Pending'
+        }
+        for col, val in default_fields.items():
+            df_new[col] = val
+        
+        # Select final columns
+        final_cols = ['uid', 'date', 'customer_name', 'customer_mobile_number', 'source', 'sub_source', 'campaign',
+                      'cre_name', 'lead_category', 'model_interested', 'branch', 'ps_name',
+                      'assigned', 'lead_status', 'follow_up_date',
+                      'first_call_date', 'first_remark', 'second_call_date', 'second_remark',
+                      'third_call_date', 'third_remark', 'fourth_call_date', 'fourth_remark',
+                      'fifth_call_date', 'fifth_remark', 'sixth_call_date', 'sixth_remark',
+                      'seventh_call_date', 'seventh_remark', 'final_status',
+                      'created_at', 'updated_at']
+        df_new = df_new[final_cols]
+        
+        # Insert new leads
+        successful_inserts = 0
+        failed_inserts = 0
+        
+        for row in df_new.to_dict(orient="records"):
+            try:
+                supabase.table("lead_master").insert(row).execute()
+                print(f"✅ Inserted new lead: {row['uid']} | Phone: {row['customer_mobile_number']} | Source: {row['source']} | Sub-source: {row['sub_source']}")
+                successful_inserts += 1
+            except Exception as e:
+                print(f"❌ Failed to insert {row['uid']} | Phone: {row['customer_mobile_number']}: {e}")
+                failed_inserts += 1
+        
+        print(f"✅ Successfully inserted new leads: {successful_inserts}")
+        print(f"❌ Failed insertions: {failed_inserts}")
     
     # Summary
     print(f"\n📊 SUMMARY:")
-    print(f"✅ Successfully inserted new leads: {successful_inserts}")
-    print(f"❌ Failed insertions: {failed_inserts}")
-    print(f"🔄 Updated existing records with new sources: {len(update_leads)}")
-    print(f"📱 Total unique phone numbers processed: {len(df_combined)}")
-    print(f"📊 Campaign info: Knowlarity leads have empty campaign (compatible with Meta campaign data)")
+    print(f"✅ New leads inserted: {len(new_leads) if new_leads else 0}")
+    print(f"🔄 Duplicate records updated/created: {updated_duplicates}")
+    print(f"⚠️ Skipped exact duplicates: {skipped_duplicates}")
+    print(f"📱 Total records processed: {len(df_processed)}")
+    print(f"📊 No source consolidation - each lead maintains individual source/sub_source")
 
 if __name__ == "__main__":
-    main()
+    main()  
