@@ -792,6 +792,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
     console.log('Current date for filtering:', getCurrentDate());
 
+    // Filter state management using localStorage
+    const filterState = {
+        fresh: localStorage.getItem('cre_dashboard_fresh_filter') || 'today',
+        pending: localStorage.getItem('cre_dashboard_pending_filter') || 'today',
+        ps: localStorage.getItem('cre_dashboard_ps_filter') || 'today',
+        won: localStorage.getItem('cre_dashboard_won_filter') || 'today'
+    };
+
+    // Save filter state to localStorage
+    function saveFilterState(section, filterType) {
+        filterState[section] = filterType;
+        localStorage.setItem(`cre_dashboard_${section}_filter`, filterType);
+    }
+
     // Generic search function
     function setupSearch(inputId, buttonId, clearId, tableId) {
         const searchInput = document.getElementById(inputId);
@@ -1011,6 +1025,7 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             const filterType = this.getAttribute('data-filter');
             freshTimeFilterText.textContent = this.textContent;
+            saveFilterState('fresh', filterType);
 
             console.log('Fresh leads filter clicked:', filterType);
 
@@ -1040,6 +1055,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             console.log('Applying fresh leads date range filter:', startDate, 'to', endDate);
             filterFreshLeads('range', startDate, endDate);
+            saveFilterState('fresh', 'range');
         });
     }
 
@@ -1128,6 +1144,7 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             const filterType = this.getAttribute('data-filter');
             wonTimeFilterText.textContent = this.textContent;
+            saveFilterState('won', filterType);
 
             if (filterType === 'range') {
                 dateRangeInputs.style.display = 'flex';
@@ -1154,6 +1171,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             filterWonLeads('range', startDate, endDate);
+            saveFilterState('won', 'range');
         });
     }
 
@@ -1217,6 +1235,7 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             const filterType = this.getAttribute('data-filter');
             pendingTimeFilterText.textContent = this.textContent;
+            saveFilterState('pending', filterType);
 
             if (filterType === 'range') {
                 pendingDateRangeInputs.style.display = 'flex';
@@ -1243,6 +1262,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             filterPendingLeads('range', startDate, endDate);
+            saveFilterState('pending', 'range');
         });
     }
 
@@ -1306,6 +1326,7 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             const filterType = this.getAttribute('data-filter');
             psTimeFilterText.textContent = this.textContent;
+            saveFilterState('ps', filterType);
 
             if (filterType === 'range') {
                 psDateRangeInputs.style.display = 'flex';
@@ -1332,15 +1353,28 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             filterPsAssignedLeads('range', startDate, endDate);
+            saveFilterState('ps', 'range');
         });
     }
 
-    // Apply default "Today" filter on page load for all sections
-    console.log('Applying default Today filters on page load...');
-    filterFreshLeads('today');
-    filterPendingLeads('today');
-    filterPsAssignedLeads('today');
-    filterWonLeads('today');
+    // Apply saved filter states on page load instead of defaulting to "Today"
+    console.log('Applying saved filter states on page load...');
+    
+    // Set filter text based on saved state
+    freshTimeFilterText.textContent = filterState.fresh === 'today' ? 'Today' : 
+                                   filterState.fresh === 'all' ? 'All Time' : 'Date Range';
+    pendingTimeFilterText.textContent = filterState.pending === 'today' ? 'Today' : 
+                                      filterState.pending === 'all' ? 'All Time' : 'Date Range';
+    psTimeFilterText.textContent = filterState.ps === 'today' ? 'Today' : 
+                                 filterState.ps === 'all' ? 'All Time' : 'Date Range';
+    wonTimeFilterText.textContent = filterState.won === 'today' ? 'Today' : 
+                                  filterState.won === 'all' ? 'All Time' : 'Date Range';
+
+    // Apply the saved filters
+    filterFreshLeads(filterState.fresh);
+    filterPendingLeads(filterState.pending);
+    filterPsAssignedLeads(filterState.ps);
+    filterWonLeads(filterState.won);
 
     // Initialize counts
     updateFreshLeadsCount();
