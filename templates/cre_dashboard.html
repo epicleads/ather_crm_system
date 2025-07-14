@@ -181,6 +181,11 @@
                     <i class="fas fa-trophy"></i> Won Leads
                 </button>
             </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="event-leads-tab" data-bs-toggle="tab" data-bs-target="#event-leads" type="button" role="tab" aria-controls="event-leads" aria-selected="false">
+                    <i class="fas fa-calendar-alt"></i> Event Leads
+                </button>
+            </li>
         </ul>
     </div>
     <div class="card-body">
@@ -695,6 +700,74 @@
                 </div>
                 {% endif %}
             </div>
+
+            <!-- Event Leads Tab -->
+            <div class="tab-pane fade" id="event-leads" role="tabpanel" aria-labelledby="event-leads-tab">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="mb-0">Event Leads ({{ event_event_leads|length }})</h5>
+                    <div class="d-flex gap-2">
+                        <div class="input-group" style="max-width: 300px;">
+                            <input type="text" class="form-control" id="eventLeadSearchInput" placeholder="Search by name, mobile, model...">
+                            <button class="btn btn-outline-secondary" type="button" id="eventLeadSearchButton">
+                                <i class="fas fa-search"></i>
+                            </button>
+                            <button class="btn btn-outline-warning" type="button" id="eventLeadClearButton">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% if event_event_leads %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0" id="eventLeadsTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Activity Name</th>
+                                <th>Activity Location</th>
+                                <th>PS Name</th>
+                                <th>Branch</th>
+                                <th>Customer Name</th>
+                                <th>Mobile</th>
+                                <th>Customer Location</th>
+                                <th>Profession</th>
+                                <th>Gender</th>
+                                <th>Interested Model</th>
+                                <th>Remarks</th>
+                                <th>Lead Status</th>
+                                <th>Month</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for lead in event_event_leads %}
+                            <tr>
+                                <td>{{ lead.activity_name }}</td>
+                                <td>{{ lead.activity_location }}</td>
+                                <td>{{ lead.ps_name }}</td>
+                                <td>{{ lead.location }}</td>
+                                <td>{{ lead.customer_name }}</td>
+                                <td>{{ lead.customer_phone_number }}</td>
+                                <td>{{ lead.customer_location }}</td>
+                                <td>{{ lead.customer_profession }}</td>
+                                <td>{{ lead.gender }}</td>
+                                <td>{{ lead.interested_model }}</td>
+                                <td>{{ lead.remarks }}</td>
+                                <td>{{ lead.lead_status }}</td>
+                                <td>{{ lead.month }}</td>
+                                <td>{{ lead.date }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-calendar-alt fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No event leads</h5>
+                    <p class="text-muted">Event leads will appear here when assigned</p>
+                </div>
+                {% endif %}
+            </div>
         </div>
     </div>
 </div>
@@ -852,6 +925,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupSearch('psSearchInput', 'psSearchButton', 'psClearButton', 'psAssignedTable');
     setupSearch('wonSearchInput', 'wonSearchButton', 'wonClearButton', 'wonLeadsTable');
     setupSearch('lostSearchInput', 'lostSearchButton', 'lostClearButton', 'lostLeadsTable');
+    setupSearch('eventLeadSearchInput', 'eventLeadSearchButton', 'eventLeadClearButton', 'eventLeadsTable');
 
     // Custom search for fresh leads (both untouched and called tables)
     const freshLeadSearchInput = document.getElementById('freshLeadSearchInput');
