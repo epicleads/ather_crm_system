@@ -816,25 +816,38 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% if analytics.campaign_stats and analytics.campaign_stats|length > 0 %}
-                            {% for row in analytics.campaign_stats %}
-                                <tr>
-                                    <td>{{ row.campaign }}</td>
-                                    <td>{{ row.source }}</td>
-                                    <td>{{ row.total_leads }}</td>
-                                    <td>{{ row.today_leads }}</td>
-                                    <td>{{ row.lost_leads }}</td>
-                                    <td>{{ row.pending_leads }}</td>
-                                    <td>{{ row.won_leads }}</td>
-                                    <td>
-                                        {% if row.total_leads > 0 %}
-                                            <span style="font-weight:600;">{{ row.conversion_rate }}%</span>
-                                            <span class="text-muted small">({{ row.won_leads }}/{{ row.total_leads }})</span>
-                                        {% else %}
-                                            0% (0/0)
-                                        {% endif %}
-                                    </td>
-                                </tr>
+                        {% if analytics.campaign_platform_counts and analytics.campaign_platform_counts|length > 0 %}
+                            {% for row in analytics.campaign_platform_counts %}
+                                {% set campaign_clean = (row.campaign or '').strip().lower() %}
+                                {% if campaign_clean and campaign_clean != 'none' %}
+                                    <tr>
+                                        <td>{{ row.campaign }}</td>
+                                        <td>{{ row.platform }}</td>
+                                        <td>
+                                            <strong>{{ row.total_leads }}</strong>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-info text-dark">{{ row.todays_leads }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-danger">{{ row.lost }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-warning text-dark">{{ row.pending }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge" style="background-color:#00b894;color:white;">{{ row.won }}</span>
+                                        </td>
+                                        <td>
+                                            {% if row.total_leads > 0 %}
+                                                <span style="font-weight:600;">{{ row.conversion_rate }}%</span>
+                                                <span style="font-size:11px;opacity:0.7;">({{ row.won }}/{{ row.total_leads }})</span>
+                                            {% else %}
+                                                0%
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endif %}
                             {% endfor %}
                         {% else %}
                             <tr><td colspan="8" class="text-center">No campaign/platform data available.</td></tr>

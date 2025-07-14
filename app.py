@@ -3427,6 +3427,105 @@ def analytics():
         # Calculate leads growth (mock calculation)
         leads_growth = 15
 
+        # Calculate Campaign & Platform Lead Counts
+        def parse_timestamp(timestamp_str):
+            """Parse timestamp string to datetime object"""
+            if not timestamp_str:
+                return None
+            try:
+                if 'T' in timestamp_str:
+                    return datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                else:
+                    return datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+            except (ValueError, TypeError):
+                return None
+
+        def is_within_date_filter(target_date, start_date, end_date):
+            """Check if target date is within the filter range"""
+            if not target_date:
+                return False
+            if start_date and end_date:
+                return start_date <= target_date.date() <= end_date
+            elif start_date:
+                return target_date.date() >= start_date
+            return True
+
+        # Get today's date for "Today's Leads" calculation
+        today = datetime.now().date()
+        
+        # Group leads by campaign and source
+        campaign_platform_data = {}
+        
+        for lead in all_leads:
+            campaign = lead.get('campaign')
+            source = lead.get('source')
+            # Normalize and check for None, empty, whitespace, or 'none' (case-insensitive)
+            campaign_clean = str(campaign).strip().lower() if campaign is not None else ''
+            source_clean = str(source).strip().lower() if source is not None else ''
+            if not campaign_clean or campaign_clean == 'none' or not source_clean or source_clean == 'none':
+                continue
+            key = f"{campaign}|{source}"
+            
+            if key not in campaign_platform_data:
+                campaign_platform_data[key] = {
+                    'campaign': campaign,
+                    'platform': source,
+                    'total_leads': 0,
+                    'todays_leads': 0,
+                    'lost': 0,
+                    'pending': 0,
+                    'won': 0
+                }
+            
+            # Parse timestamps
+            created_at = parse_timestamp(lead.get('created_at'))
+            won_timestamp = parse_timestamp(lead.get('won_timestamp'))
+            lost_timestamp = parse_timestamp(lead.get('lost_timestamp'))
+            final_status = lead.get('final_status', '').strip()
+            
+            # Total Leads (respects date filter)
+            if created_at and is_within_date_filter(created_at, start_date, end_date):
+                campaign_platform_data[key]['total_leads'] += 1
+            
+            # Today's Leads (ignores date filter)
+            if created_at and created_at.date() == today:
+                campaign_platform_data[key]['todays_leads'] += 1
+            
+            # Lost leads (lost_timestamp within date filter)
+            if lost_timestamp and is_within_date_filter(lost_timestamp, start_date, end_date):
+                campaign_platform_data[key]['lost'] += 1
+            
+            # Pending leads (final_status = 'Pending', no won/lost timestamp, created_at within filter)
+            if (final_status == 'Pending' and 
+                not won_timestamp and 
+                not lost_timestamp and 
+                created_at and 
+                is_within_date_filter(created_at, start_date, end_date)):
+                campaign_platform_data[key]['pending'] += 1
+            
+            # Won leads (won_timestamp within date filter)
+            if won_timestamp and is_within_date_filter(won_timestamp, start_date, end_date):
+                campaign_platform_data[key]['won'] += 1
+        
+        # Calculate conversion rates and format data
+        campaign_platform_counts = []
+        for key, data in campaign_platform_data.items():
+            conversion_rate = round((data['won'] / data['total_leads'] * 100) if data['total_leads'] > 0 else 0, 1)
+            
+            campaign_platform_counts.append({
+                'campaign': data['campaign'],
+                'platform': data['platform'],
+                'total_leads': data['total_leads'],
+                'todays_leads': data['todays_leads'],
+                'lost': data['lost'],
+                'pending': data['pending'],
+                'won': data['won'],
+                'conversion_rate': conversion_rate
+            })
+        
+        # Sort by total leads descending
+        campaign_platform_counts.sort(key=lambda x: x['total_leads'], reverse=True)
+
         # Create analytics object that matches template expectations
         analytics = {
             'total_leads': total_leads,
@@ -3444,7 +3543,9 @@ def analytics():
             'model_interest': model_interest,
             'branch_performance': branch_performance,
             'funnel': funnel,
-            'recent_activities': recent_activities
+            'recent_activities': recent_activities,
+            'campaign_platform_counts': campaign_platform_counts,
+            'all_leads_count': len(all_leads)
         }
 
         # Log analytics access
@@ -3488,7 +3589,9 @@ def analytics():
                 'won': 0,
                 'won_percent': 0
             },
-            'recent_activities': []
+            'recent_activities': [],
+            'campaign_platform_counts': [],
+            'all_leads_count': 0
         }
         return render_template('analytics.html', analytics=empty_analytics)
 
@@ -5231,3 +5334,8 @@ def cre_analytics_data():
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)
+    # print("🚀 Starting Ather CRM System...")
+    # print("📱 Server will be available at: http://127.0.0.1:5000")
+    # print("🌐 You can also try: http://localhost:5000")
+    # # socketio.run(app, host='127.0.0.1', port=5000, debug=True)
+    # socketio.run(app, host='0.0.0.0', port=5000, debug=True, use_reloader=False)
