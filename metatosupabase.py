@@ -26,47 +26,127 @@ def normalize_phone_number(phone: str) -> str:
         digits = digits[1:]
     return digits[-10:] if len(digits) >= 10 else digits
 
-def check_existing_leads_for_consolidation(phone_numbers: Set[str]) -> Dict[str, Dict]:
-    """Check existing leads by normalized phone numbers"""
-    if not phone_numbers:
-        return {}
-    
-    normalized_phones = {normalize_phone_number(p) for p in phone_numbers if normalize_phone_number(p)}
-    if not normalized_phones:
-        return {}
-    
+def generate_uid(source, mobile_number, sequence):
+    """Generate UID following the same pattern as Knowlarity script"""
+    source_map = {'GOOGLE': 'G', 'META': 'M', 'Affiliate': 'A', 'Know': 'K', 'Whatsapp': 'W', 'Tele': 'T', 'BTL': 'B'}
+    source_char = source_map.get(source, 'X')
+    sequence_char = chr(65 + (sequence % 26))
+    mobile_last4 = str(mobile_number).replace(" ", "").replace("-", "")[-4:].zfill(4)
+    seq_num = f"{(sequence % 9999) + 1:04d}"
+    return f"{source_char}{sequence_char}-{mobile_last4}-{seq_num}"
+
+def get_next_sequence_number(supabase):
+    """Get the next sequence number for UID generation"""
     try:
-        result = supabase.table("lead_master").select("*").execute()
-        existing_leads = {}
-        
-        for row in result.data:
-            normalized_existing = normalize_phone_number(row.get('customer_mobile_number', ''))
-            if normalized_existing in normalized_phones:
-                existing_leads[normalized_existing] = row
-        
-        print(f"📞 Found {len(existing_leads)} existing phone numbers")
-        return existing_leads
+        result = supabase.table("lead_master").select("id").order("id", desc=True).limit(1).execute()
+        if result.data:
+            return result.data[0]['id'] + 1
+        else:
+            return 1
     except Exception as e:
-        print(f"❌ Error checking leads: {e}")
-        return {}
+        print(f"❌ Error getting sequence number: {e}")
+        return 1
 
-def combine_sources(existing: str, new: str) -> str:
-    """Combine sources without duplicates - e.g., 'Google,Meta' + 'BTL' = 'BTL,Google,Meta'"""
-    existing_set = set(existing.split(',')) if existing else set()
-    new_set = {new} if new else set()
-    existing_set.discard('')
-    new_set.discard('')
-    return ','.join(sorted(existing_set.union(new_set)))
+def check_existing_leads(supabase, df_leads):
+    """Check for existing leads by phone number in both lead_master and duplicate_leads tables"""
+    try:
+        phone_list = df_leads['customer_mobile_number'].unique().tolist()
+        
+        # Check lead_master table
+        existing_master = supabase.table("lead_master").select("*").in_("customer_mobile_number", phone_list).execute()
+        master_records = {row['customer_mobile_number']: row for row in existing_master.data}
+        
+        # Check duplicate_leads table
+        existing_duplicate = supabase.table("duplicate_leads").select("*").in_("customer_mobile_number", phone_list).execute()
+        duplicate_records = {row['customer_mobile_number']: row for row in existing_duplicate.data}
+        
+        print(f"📞 Found {len(master_records)} existing in lead_master and {len(duplicate_records)} in duplicate_leads")
+        
+        return master_records, duplicate_records
+        
+    except Exception as e:
+        print(f"❌ Error checking existing leads: {e}")
+        return {}, {}
 
-def generate_consistent_uid_from_phone(mobile: str) -> str:
-    """Generate consistent UID from normalized phone"""
-    normalized = normalize_phone_number(mobile)
-    if not normalized:
-        normalized = str(int(time.time()))[-10:]
+def find_next_available_source_slot(duplicate_record):
+    """Find the next available source slot (source1, source2, etc.) in duplicate_leads record"""
+    for i in range(1, 11):  # source1 to source10
+        if duplicate_record.get(f'source{i}') is None:
+            return i
+    return None  # All slots are full
+
+def add_source_to_duplicate_record(supabase, duplicate_record, new_source, new_sub_source, new_date):
+    """Add new source to existing duplicate_leads record"""
+    try:
+        slot = find_next_available_source_slot(duplicate_record)
+        if slot is None:
+            print(f"⚠️ All source slots full for phone: {duplicate_record['customer_mobile_number']}")
+            return False
+        
+        # Update the record with new source in the available slot
+        update_data = {
+            f'source{slot}': new_source,
+            f'sub_source{slot}': new_sub_source,
+            f'date{slot}': new_date,
+            'duplicate_count': duplicate_record['duplicate_count'] + 1,
+            'updated_at': datetime.now().isoformat()
+        }
+        
+        supabase.table("duplicate_leads").update(update_data).eq('id', duplicate_record['id']).execute()
+        print(f"✅ Added source{slot} to duplicate record: {duplicate_record['uid']} | Phone: {duplicate_record['customer_mobile_number']} | New Source: {new_source}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Failed to add source to duplicate record: {e}")
+        return False
+
+def create_duplicate_record(supabase, original_record, new_source, new_sub_source, new_date):
+    """Create new duplicate_leads record when a lead becomes duplicate"""
+    try:
+        duplicate_data = {
+            'uid': original_record['uid'],
+            'customer_mobile_number': original_record['customer_mobile_number'],
+            'customer_name': original_record['customer_name'],
+            'original_lead_id': original_record['id'],
+            'source1': original_record['source'],
+            'sub_source1': original_record['sub_source'],
+            'date1': original_record['date'],
+            'source2': new_source,
+            'sub_source2': new_sub_source,
+            'date2': new_date,
+            'duplicate_count': 2,
+            'created_at': datetime.now().isoformat(),
+            'updated_at': datetime.now().isoformat()
+        }
+        
+        # Initialize remaining slots as None
+        for i in range(3, 11):
+            duplicate_data[f'source{i}'] = None
+            duplicate_data[f'sub_source{i}'] = None
+            duplicate_data[f'date{i}'] = None
+        
+        supabase.table("duplicate_leads").insert(duplicate_data).execute()
+        print(f"✅ Created duplicate record: {original_record['uid']} | Phone: {original_record['customer_mobile_number']} | Sources: {original_record['source']} + {new_source}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Failed to create duplicate record: {e}")
+        return False
+
+def is_duplicate_source(existing_record, new_source, new_sub_source):
+    """Check if the new source/sub_source combination already exists in the record"""
+    # For lead_master, check direct fields
+    if 'source' in existing_record:
+        return (existing_record['source'] == new_source and 
+                existing_record['sub_source'] == new_sub_source)
     
-    phone_hash = hashlib.md5(normalized.encode()).hexdigest()[:8].upper()
-    mobile_last4 = normalized[-4:].zfill(4) if len(normalized) >= 4 else normalized.zfill(4)
-    return f"M{phone_hash[:4]}-{mobile_last4}"
+    # For duplicate_leads, check all source slots
+    for i in range(1, 11):
+        if (existing_record.get(f'source{i}') == new_source and 
+            existing_record.get(f'sub_source{i}') == new_sub_source):
+            return True
+    
+    return False
 
 class MetaAPIOptimized:
     def __init__(self, page_token: str, max_workers: int = 5):
@@ -175,8 +255,7 @@ class MetaAPIOptimized:
                 campaign_name = self.get_campaign_name_safe(form['id'], form.get('name', f'Form-{form["id"]}'))
                 enhanced_forms.append({
                     **form,
-                    'campaign_name': campaign_name,
-                    'source_name': "Meta"  # Changed: Just "Meta" instead of "Meta(campaign_name)"
+                    'campaign_name': campaign_name
                 })
             
             self._enhanced_forms_cache = enhanced_forms
@@ -204,8 +283,8 @@ class MetaAPIOptimized:
 
 meta_api = MetaAPIOptimized(PAGE_TOKEN)
 
-def map_lead_with_source(raw: dict, source_name: str, campaign_name: str, existing_lead_data: dict = None) -> Optional[dict]:
-    """Map raw lead data to database format"""
+def map_lead_with_source(raw: dict, campaign_name: str) -> Optional[dict]:
+    """Map raw lead data to database format with META source"""
     if not meta_api._is_within_past_24_hours(raw.get("created_time", "")):
         return None
     
@@ -228,12 +307,15 @@ def map_lead_with_source(raw: dict, source_name: str, campaign_name: str, existi
     created_time = raw.get("created_time", "")
     created = created_time[:10] if created_time and len(created_time) >= 10 and created_time.count('-') == 2 else datetime.now(timezone.utc).date().isoformat()
     
-    uid = existing_lead_data['uid'] if existing_lead_data else generate_consistent_uid_from_phone(normalized_phone)
     now_iso = datetime.now().isoformat()
     
     return {
-        "uid": uid, "date": created, "customer_name": name, "customer_mobile_number": normalized_phone,
-        "source": source_name, "campaign": campaign_name,  # Added: campaign column
+        "date": created, 
+        "customer_name": name, 
+        "customer_mobile_number": normalized_phone,
+        "source": "META",  # Fixed source
+        "sub_source": "Meta",  # Fixed sub_source
+        "campaign": campaign_name,
         "cre_name": None, "lead_category": None, "model_interested": None,
         "branch": None, "ps_name": None, "assigned": "No", "lead_status": "Pending",
         "follow_up_date": None, "first_call_date": None, "first_remark": None,
@@ -255,11 +337,11 @@ def preview_field_names_optimized():
     
     for form in forms:
         form_id, form_name = form['id'], form['name']
-        campaign_name, source_name = form['campaign_name'], form['source_name']
+        campaign_name = form['campaign_name']
         leads = all_form_leads.get(form_id, [])
         
         print(f"📄 {form_name} ({form_id})")
-        print(f"   📊 Campaign: {campaign_name} | Source: {source_name}")
+        print(f"   📊 Campaign: {campaign_name} | Source: META | Sub-source: Meta")
         
         local_fields = set()
         leads_count = 0
@@ -284,28 +366,26 @@ def preview_field_names_optimized():
     print("🧾 ALL FIELDS:", ", ".join(sorted(global_set)), "\n")
 
 def sync_to_db_optimized():
-    """Enhanced sync with source consolidation"""
-    print(f"🔄 Enhanced sync starting...")
-    print(f"🎯 One Phone Number = One UID across all sources")
+    """Enhanced sync with duplicate handling logic"""
+    print(f"🔄 Meta API sync starting with duplicate handling...")
+    print(f"🎯 Source: META | Sub-source: Meta")
+    print(f"🎯 Each lead processed individually - duplicate handling active")
     
     forms = meta_api.get_forms_with_campaign_info_safe()
     all_form_leads = meta_api.get_form_leads_parallel([f['id'] for f in forms])
     
     all_new_leads = []
-    all_phone_numbers = set()
     form_data = {f['id']: f for f in forms}
     
     for form_id, leads in all_form_leads.items():
         form_info = form_data.get(form_id, {})
-        source_name = form_info.get('source_name', 'Meta')  # Changed: Just "Meta"
-        campaign_name = form_info.get('campaign_name', 'Unknown Campaign')  # Campaign name separately
+        campaign_name = form_info.get('campaign_name', 'Unknown Campaign')
         valid_leads = 0
         
         for raw_lead in leads:
-            mapped_lead = map_lead_with_source(raw_lead, source_name, campaign_name)  # Pass both source and campaign
+            mapped_lead = map_lead_with_source(raw_lead, campaign_name)
             if mapped_lead and mapped_lead["customer_mobile_number"]:
                 all_new_leads.append(mapped_lead)
-                all_phone_numbers.add(mapped_lead["customer_mobile_number"])
                 valid_leads += 1
         
         if valid_leads > 0:
@@ -315,86 +395,122 @@ def sync_to_db_optimized():
         print("📭 No valid leads found.")
         return
     
-    print(f"\n📊 Collected {len(all_new_leads)} leads, {len(all_phone_numbers)} unique phones")
+    print(f"\n📊 Collected {len(all_new_leads)} leads from Meta")
     
-    existing_leads_data = check_existing_leads_for_consolidation(all_phone_numbers)
-    new_leads, update_leads = [], []
+    # Convert to DataFrame for processing
+    import pandas as pd
+    df_processed = pd.DataFrame(all_new_leads)
     
-    # Analyze leads for source consolidation
-    for lead in all_new_leads:
-        normalized_phone = lead['customer_mobile_number']
-        new_source = lead['source']
+    # Check existing records in both tables
+    master_records, duplicate_records = check_existing_leads(supabase, df_processed)
+    
+    # Process each lead
+    new_leads = []
+    updated_duplicates = 0
+    skipped_duplicates = 0
+    
+    for _, row in df_processed.iterrows():
+        phone = row['customer_mobile_number']
+        current_source = row['source']
+        current_sub_source = row['sub_source']
+        current_date = row['date']
         
-        if normalized_phone in existing_leads_data:
-            # EXISTING PHONE: Check if we need to add new source
-            existing_record = existing_leads_data[normalized_phone]
-            existing_source = existing_record.get('source', '')
-            existing_sources = set(existing_source.split(',')) if existing_source else set()
-            existing_sources.discard('')
+        # Check if phone exists in lead_master
+        if phone in master_records:
+            master_record = master_records[phone]
             
-            # Only update if new source is not already present
-            if new_source not in existing_sources:
-                combined_source = combine_sources(existing_source, new_source)
-                update_leads.append({
-                    'phone': normalized_phone, 'uid': existing_record['uid'], 'id': existing_record['id'],
-                    'existing_source': existing_source, 'new_source': combined_source
-                })
-                print(f"🔄 Will consolidate: {normalized_phone} (UID: {existing_record['uid']}) | {existing_source} → {combined_source}")
+            # Check if this is a duplicate source/sub_source combination
+            if is_duplicate_source(master_record, current_source, current_sub_source):
+                print(f"⚠️ Skipping duplicate: {phone} | Source: {current_source} | Sub-source: {current_sub_source}")
+                skipped_duplicates += 1
+                continue
+            
+            # Check if already exists in duplicate_leads
+            if phone in duplicate_records:
+                duplicate_record = duplicate_records[phone]
+                
+                # Check if this source/sub_source already exists in duplicate record
+                if is_duplicate_source(duplicate_record, current_source, current_sub_source):
+                    print(f"⚠️ Skipping duplicate: {phone} | Source: {current_source} | Sub-source: {current_sub_source}")
+                    skipped_duplicates += 1
+                    continue
+                
+                # Add to existing duplicate record
+                if add_source_to_duplicate_record(supabase, duplicate_record, current_source, current_sub_source, current_date):
+                    updated_duplicates += 1
+                    # Update local duplicate_records to avoid conflicts in same batch
+                    duplicate_records[phone]['duplicate_count'] += 1
             else:
-                print(f"✅ Phone {normalized_phone} already has source: {new_source}")
+                # Create new duplicate record
+                if create_duplicate_record(supabase, master_record, current_source, current_sub_source, current_date):
+                    updated_duplicates += 1
+                    # Add to local duplicate_records to avoid conflicts in same batch
+                    duplicate_records[phone] = {
+                        'customer_mobile_number': phone,
+                        'duplicate_count': 2,
+                        'source1': master_record['source'],
+                        'source2': current_source,
+                        'sub_source1': master_record['sub_source'],
+                        'sub_source2': current_sub_source
+                    }
         else:
-            # NEW PHONE: Generate consistent UID
-            lead['uid'] = generate_consistent_uid_from_phone(normalized_phone)
-            new_leads.append(lead)
-            print(f"🆕 New phone {normalized_phone} → UID: {lead['uid']} | Campaign: {lead['campaign']}")  # Updated: Show campaign info
-    
-    # Process updates
-    successful_updates = 0
-    if update_leads:
-        print(f"\n🔄 Updating {len(update_leads)} existing records...")
-        for update in update_leads:
-            try:
-                supabase.table("lead_master").update({
-                    'source': update['new_source'],
-                    'updated_at': datetime.now().isoformat()
-                }).eq('id', update['id']).execute()
-                print(f"✅ Updated {update['uid']}: {update['new_source']}")
-                successful_updates += 1
-            except Exception as e:
-                print(f"❌ Failed {update['phone']}: {e}")
+            # Completely new lead - add to new_leads list
+            new_leads.append(row)
     
     # Process new leads
-    inserted = 0
-    if new_leads:
-        print(f"\n🆕 Inserting {len(new_leads)} new leads...")
-        batch_size = 100
+    if not new_leads:
+        print("✅ No new leads to insert.")
+    else:
+        df_new = pd.DataFrame(new_leads)
+        print(f"🆕 Found {len(df_new)} new leads to insert")
         
-        for i in range(0, len(new_leads), batch_size):
-            batch = new_leads[i:i + batch_size]
+        # Generate UIDs for new leads
+        sequence = get_next_sequence_number(supabase)
+        uids = []
+        
+        for _, row in df_new.iterrows():
+            new_uid = generate_uid(row['source'], row['customer_mobile_number'], sequence)
+            uids.append(new_uid)
+            sequence += 1
+        
+        df_new['uid'] = uids
+        
+        # Select final columns
+        final_cols = ['uid', 'date', 'customer_name', 'customer_mobile_number', 'source', 'sub_source', 'campaign',
+                      'cre_name', 'lead_category', 'model_interested', 'branch', 'ps_name',
+                      'assigned', 'lead_status', 'follow_up_date',
+                      'first_call_date', 'first_remark', 'second_call_date', 'second_remark',
+                      'third_call_date', 'third_remark', 'fourth_call_date', 'fourth_remark',
+                      'fifth_call_date', 'fifth_remark', 'sixth_call_date', 'sixth_remark',
+                      'seventh_call_date', 'seventh_remark', 'final_status',
+                      'created_at', 'updated_at']
+        df_new = df_new[final_cols]
+        
+        # Insert new leads
+        successful_inserts = 0
+        failed_inserts = 0
+        
+        for row in df_new.to_dict(orient="records"):
             try:
-                response = supabase.table("lead_master").insert(batch).execute()
-                batch_inserted = len(response.data) if response.data else len(batch)
-                inserted += batch_inserted
-                print(f"✅ Batch {i//batch_size + 1}: {batch_inserted} leads")
+                supabase.table("lead_master").insert(row).execute()
+                print(f"✅ Inserted new lead: {row['uid']} | Phone: {row['customer_mobile_number']} | Campaign: {row['campaign']}")
+                successful_inserts += 1
             except Exception as e:
-                print(f"❌ Batch failed: {e}")
-                for lead in batch:
-                    try:
-                        supabase.table("lead_master").insert(lead).execute()
-                        inserted += 1
-                    except:
-                        pass
+                print(f"❌ Failed to insert {row['uid']} | Phone: {row['customer_mobile_number']}: {e}")
+                failed_inserts += 1
+        
+        print(f"✅ Successfully inserted new leads: {successful_inserts}")
+        print(f"❌ Failed insertions: {failed_inserts}")
     
+    # Summary
     print(f"\n📊 SUMMARY:")
-    print(f"✅ New leads inserted: {inserted}")
-    print(f"🔄 Records updated with consolidated sources: {successful_updates}")
-    print(f"📱 Total phones processed: {len(all_phone_numbers)}")
-    print(f"\n🎯 SOURCE CONSOLIDATION EXAMPLES:")
-    print(f"   • Same phone from Google + Meta → 'Google,Meta'")
-    print(f"   • Same phone from Meta + BTL → 'BTL,Meta'") 
-    print(f"   • Same UID maintained across all sources")
-    print(f"   • Phone variations (91-XXX, 0XXX, XXX) treated as same number")
-    print(f"   • Campaign names stored separately in 'campaign' column")
+    print(f"✅ New leads inserted: {len(new_leads) if new_leads else 0}")
+    print(f"🔄 Duplicate records updated/created: {updated_duplicates}")
+    print(f"⚠️ Skipped exact duplicates: {skipped_duplicates}")
+    print(f"📱 Total records processed: {len(df_processed)}")
+    print(f"🎯 Source: META | Sub-source: Meta")
+    print(f"📊 Each lead processed individually with duplicate handling")
+    print(f"🔄 Duplicates with other sources (Google, BTL, etc.) handled via duplicate_leads table")
 
 # Compatibility functions
 def preview_field_names():
