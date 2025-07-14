@@ -5331,11 +5331,141 @@ def cre_analytics_data():
             'error': str(e)
         })
 
+@app.route('/call_attempt_summary')
+@require_admin
+def call_attempt_summary():
+    from_date_str = request.args.get('from_date')
+    to_date_str = request.args.get('to_date')
+    call_no_map = {
+        'first': 'F1', 'second': 'F2', 'third': 'F3',
+        'fourth': 'F4', 'fifth': 'F5', 'sixth': 'F6', 'seventh': 'F7'
+    }
+    def parse_ts(ts):
+        if not ts:
+            return None
+        try:
+            if 'T' in ts:
+                return datetime.fromisoformat(ts.replace('Z', '+00:00'))
+            else:
+                return datetime.strptime(ts, '%Y-%m-%d %H:%M:%S')
+        except Exception:
+            return None
+    def in_range(ts):
+        if not ts:
+            return False
+        if from_date_str and to_date_str:
+            try:
+                from_dt = datetime.strptime(from_date_str, '%Y-%m-%d')
+                to_dt = datetime.strptime(to_date_str, '%Y-%m-%d')
+                return from_dt <= ts.date() <= to_dt
+            except Exception:
+                return True
+        return True
+    # Fetch data
+    cre_attempts = safe_get_data('cre_call_attempt_history', select_fields='call_no,created_at')
+    ps_attempts = safe_get_data('ps_call_attempt_history', select_fields='call_no,created_at')
+    # Count logic
+    def count_attempts(attempts):
+        counts = {f'F{i}': 0 for i in range(1,8)}
+        for att in attempts:
+            call_no = (att.get('call_no') or '').strip().lower()
+            created_at = parse_ts(att.get('created_at'))
+            if call_no in call_no_map and in_range(created_at):
+                col = call_no_map[call_no]
+                counts[col] += 1
+        return counts
+    cre_counts = count_attempts(cre_attempts)
+    ps_counts = count_attempts(ps_attempts)
+    return jsonify({'CRE': cre_counts, 'PS': ps_counts})
+
+@app.route('/negative_call_attempt_history')
+@require_admin
+def negative_call_attempt_history():
+    from_date = request.args.get('from_date')
+    to_date = request.args.get('to_date')
+    negative_reasons = [
+        "Discount Issue", "Delayed", "Lost to Competition", "Finance Rejected",
+        "Dropped", "Lost to Co-Dealer", "RNR", "Not Interested", "Call Disconnected"
+    ]
+    call_no_map = {
+        'first': 'F1', 'second': 'F2', 'third': 'F3',
+        'fourth': 'F4', 'fifth': 'F5', 'sixth': 'F6', 'seventh': 'F7'
+    }
+    def parse_ts(ts):
+        if not ts: return None
+        try:
+            if 'T' in ts:
+                return datetime.fromisoformat(ts.replace('Z', '+00:00'))
+            else:
+                return datetime.strptime(ts, '%Y-%m-%d %H:%M:%S')
+        except Exception:
+            return None
+    def in_range(ts):
+        if not ts: return False
+        if from_date and to_date:
+            try:
+                from_dt = datetime.strptime(from_date, '%Y-%m-%d')
+                to_dt = datetime.strptime(to_date, '%Y-%m-%d')
+                return from_dt <= ts.date() <= to_dt
+            except Exception:
+                return True
+        return True
+    def count_negatives(attempts):
+        result = {reason: [0]*7 for reason in negative_reasons}
+        for att in attempts:
+            call_no = (att.get('call_no') or '').strip().lower()
+            created_at = parse_ts(att.get('created_at'))
+            feedback = (att.get('remarks') or att.get('status') or att.get('lead_status') or '').strip()
+            if call_no in call_no_map and in_range(created_at) and feedback in negative_reasons:
+                idx = int(call_no_map[call_no][1]) - 1  # F1->0, F2->1, ...
+                result[feedback][idx] += 1
+        return result
+    cre_attempts = safe_get_data('cre_call_attempt_history', select_fields='call_no,created_at,remarks,status,lead_status')
+    ps_attempts = safe_get_data('ps_call_attempt_history', select_fields='call_no,created_at,remarks,status,lead_status')
+    cre_data = count_negatives(cre_attempts)
+    ps_data = count_negatives(ps_attempts)
+    # After your count_negatives function, add:
+    def count_totals(attempts):
+        totals = [0]*7
+        call_no_map = {
+            'first': 0, 'second': 1, 'third': 2,
+            'fourth': 3, 'fifth': 4, 'sixth': 5, 'seventh': 6
+        }
+        for att in attempts:
+            call_no = (att.get('call_no') or '').strip().lower()
+            idx = call_no_map.get(call_no)
+            if idx is not None:
+                totals[idx] += 1
+        return totals
+
+    cre_totals = count_totals(cre_attempts)
+    ps_totals = count_totals(ps_attempts)
+
+    return jsonify({
+        'CRE': cre_data,
+        'PS': ps_data,
+        'reasons': negative_reasons,
+        'CRE_totals': cre_totals,
+        'PS_totals': ps_totals
+    })
+
+@app.route('/get_cre_list')
+@require_admin
+def get_cre_list():
+    cres = safe_get_data('cre_users', select_fields='name')
+    cre_list = [{'name': cre.get('name')} for cre in cres if cre.get('name')]
+    return jsonify({'success': True, 'cre_list': cre_list})
+
+@app.route('/cre_analysis_data')
+@require_admin
+def cre_analysis_data():
+    # Return a mock response or implement your actual logic here
+    return jsonify({'success': True, 'data': {}})
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
-    # print("🚀 Starting Ather CRM System...")
-    # print("📱 Server will be available at: http://127.0.0.1:5000")
-    # print("🌐 You can also try: http://localhost:5000")
-    # # socketio.run(app, host='127.0.0.1', port=5000, debug=True)
-    # socketio.run(app, host='0.0.0.0', port=5000, debug=True, use_reloader=False)
+    # socketio.run(app, debug=True)
+    print("�� Starting Ather CRM System...")
+    print("📱 Server will be available at: http://127.0.0.1:5000")
+    print("🌐 You can also try: http://localhost:5000")
+    # socketio.run(app, host='127.0.0.1', port=5000, debug=True)
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True, use_reloader=False)
