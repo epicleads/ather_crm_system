@@ -77,82 +77,80 @@
         </div>
     </div>
 </div>
+<!-- Stats Row -->
+<div class="row g-3 mb-4 text-white">
 
-<!-- Quick Stats -->
-<div class="row g-4 mb-4">
-    <div class="col-md-2">
-        <div class="stats-card bg-primary text-white p-3 rounded">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h4>{{ pending_leads|length }}</h4>
-                    <small class="text-white">Fresh Leads</small>
+    <!-- Fresh Leads -->
+    <div class="col-md-3">
+        <div class="card p-3 text-center h-100" style="background: linear-gradient(135deg, #2196f3 60%, #21cbf3 100%);">
+            <h6 class="mb-1 fw-bold">Fresh Leads</h6>
+            <div class="fs-4 fw-bold">{{ total_fresh_leads }}</div>
+            <div class="d-flex justify-content-between mt-2">
+                <div class="flex-fill mx-1 bg-white text-dark rounded p-2">
+                    <div class="fw-semibold">{{ untouched_count }}</div>
+                    <small class="text-uppercase">Untouched</small>
                 </div>
-                <i class="fas fa-clock fa-2x"></i>
+                <div class="flex-fill mx-1 bg-white text-dark rounded p-2">
+                    <div class="fw-semibold">{{ called_count }}</div>
+                    <small class="text-uppercase">Called</small>
+                </div>
             </div>
         </div>
     </div>
+
+    <!-- Today's Follow-ups -->
     <div class="col-md-2">
-        <div class="stats-card bg-warning text-dark p-3 rounded">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h4>{{ todays_followups|length }}</h4>
-                    <small class="text-white">Today's Follow-ups</small>
-                </div>
-                <i class="fas fa-calendar-check fa-2x"></i>
-            </div>
+        <div class="card p-3 h-100 text-white bg-warning text-center">
+            <div class="fs-4 fw-bold">{{ todays_followups|length }}</div>
+            <div class="fw-semibold">Today's Follow-ups</div>
+            <i class="fas fa-calendar-check fa-lg mt-2"></i>
         </div>
     </div>
+
+    <!-- Pending Leads -->
     <div class="col-md-2">
-        <div class="stats-card bg-success text-white p-3 rounded">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    {% set pending_leads_list = [] %}
-                    {% for lead in attended_leads %}
-                        {% if lead.final_status != 'Won' and lead.final_status != 'Lost' %}
-                            {% if pending_leads_list.append(lead) %}{% endif %}
-                        {% endif %}
-                    {% endfor %}
-                    <h4>{{ pending_leads_list|length }}</h4>
-                    <small class="text-white">Pending Leads</small>
-                </div>
-                <i class="fas fa-hourglass-half fa-2x"></i>
-            </div>
+        <div class="card p-3 h-100 text-white bg-info text-center">
+            {% set pending_leads_list = [] %}
+            {% for lead in attended_leads %}
+                {% if lead.final_status != 'Won' and lead.final_status != 'Lost' %}
+                    {% if pending_leads_list.append(lead) %}{% endif %}
+                {% endif %}
+            {% endfor %}
+            <div class="fs-4 fw-bold">{{ pending_leads_list|length }}</div>
+            <div class="fw-semibold">Pending Leads</div>
+            <i class="fas fa-hourglass-half fa-lg mt-2"></i>
         </div>
     </div>
+
+    <!-- Assigned to PS -->
     <div class="col-md-2">
-        <div class="stats-card bg-info text-white p-3 rounded">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h4>{{ assigned_to_ps|length }}</h4>
-                    <small class="text-white">Assigned to PS</small>
-                </div>
-                <i class="fas fa-user-tie fa-2x"></i>
-            </div>
+        <div class="card p-3 h-100 text-white bg-teal text-center" style="background-color: #00796b;">
+            <div class="fs-4 fw-bold">{{ assigned_to_ps|length }}</div>
+            <div class="fw-semibold">Assigned to PS</div>
+            <i class="fas fa-user-tie fa-lg mt-2"></i>
         </div>
     </div>
+
+    <!-- Won Leads -->
     <div class="col-md-2">
-        <div class="stats-card bg-success text-white p-3 rounded">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h4>{{ won_leads|length }}</h4>
-                    <small class="text-white">Won Leads</small>
-                </div>
-                <i class="fas fa-trophy fa-2x"></i>
-            </div>
+        <div class="card p-3 h-100 text-white bg-success text-center">
+            <div class="fs-4 fw-bold">{{ won_leads|length }}</div>
+            <div class="fw-semibold">Won Leads</div>
+            <i class="fas fa-trophy fa-lg mt-2"></i>
         </div>
     </div>
+
+    <!-- Lost Leads -->
     <div class="col-md-2">
-        <div class="stats-card bg-danger text-white p-3 rounded">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h4>{{ lost_leads|length }}</h4>
-                    <small class="text-white">Lost Leads</small>
-                </div>
-                <i class="fas fa-ban fa-2x"></i>
-            </div>
+        <div class="card p-3 h-100 text-white bg-danger text-center">
+            <div class="fs-4 fw-bold">{{ lost_leads|length }}</div>
+            <div class="fw-semibold">Lost Leads</div>
+            <i class="fas fa-ban fa-lg mt-2"></i>
         </div>
     </div>
+
 </div>
+
 
 <!-- Tabs for different lead views -->
 <div class="card shadow">
@@ -190,7 +188,7 @@
             <!-- Fresh Leads Tab -->
             <div class="tab-pane fade show active" id="fresh-leads" role="tabpanel" aria-labelledby="fresh-leads-tab" style="min-height: 400px;">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="mb-0">Fresh Leads (<span id="freshLeadsCount">{{ pending_leads|length }}</span>)</h5>
+                    <h5 class="mb-0">Fresh Leads (<span id="freshLeadsCount">{{ total_fresh_leads }}</span>)</h5>
                     <div class="d-flex gap-2">
                         <div class="btn-group">
                             <button type="button" class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" style="z-index: 1050;">
@@ -221,58 +219,100 @@
                     </div>
                 </div>
 
-                {% if pending_leads %}
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover" id="freshLeadsTable">
-                        <thead class="table-dark">
-                            <tr>
-                                <th>Action</th>
-                                <th>Lead Status</th>
-                                <th>Customer Name</th>
-                                <th>Mobile</th>
-                                <th>Source</th>
-                                <th>Campaign</th>
-                                <th>Date</th>
-                                <th>UID</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for lead in pending_leads %}
-                            <tr class="fresh-lead-row"
-                                data-assigned-date="{{ lead.cre_assigned_at[:10] if lead.cre_assigned_at else '' }}"
-                                data-has-first-call="{{ 'yes' if lead.first_call_date else 'no' }}"
-                                data-lead-status="{{ lead.lead_status or '' }}"
-                                data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or '') + ' ' + (lead.campaign or ''))|lower }}">
-                                <td>
-                                    <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-outline-primary">
-                                        <i class="fas fa-edit"></i> Update
-                                    </a>
-                                </td>
-                                <td>
-                                    {% if lead.lead_status %}
-                                        <span class="badge bg-info">{{ lead.lead_status }}</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">Not Set</span>
-                                    {% endif %}
-                                </td>
-                                <td>{{ lead.customer_name }}</td>
-                                <td>{{ lead.customer_mobile_number }}</td>
-                                <td><span class="badge bg-secondary">{{ lead.source }}</span></td>
-                                <td><span class="badge bg-info">{{ lead.campaign or 'N/A' }}</span></td>
-                                <td>{{ lead.date }}</td>
-                                <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                <!-- Fresh Leads Tab Navigation -->
+                <ul class="nav nav-tabs mb-3" id="freshLeadsSubTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="untouched-leads-tab" data-bs-toggle="tab" data-bs-target="#untouched-leads" type="button" role="tab" aria-controls="untouched-leads" aria-selected="true">
+                            Untouched <span class="badge bg-secondary">{{ untouched_count }}</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="called-leads-tab" data-bs-toggle="tab" data-bs-target="#called-leads" type="button" role="tab" aria-controls="called-leads" aria-selected="false">
+                            Called <span class="badge bg-secondary">{{ called_count }}</span>
+                        </button>
+                    </li>
+                </ul>
+                <div class="tab-content" id="freshLeadsSubTabContent">
+                    <!-- Untouched Leads Table -->
+                    <div class="tab-pane fade show active" id="untouched-leads" role="tabpanel" aria-labelledby="untouched-leads-tab">
+                        {% if untouched_leads %}
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover" id="untouchedLeadsTable">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Action</th>
+                                        <th>Lead Status</th>
+                                        <th>Customer Name</th>
+                                        <th>Mobile</th>
+                                        <th>Source</th>
+                                        <th>Campaign</th>
+                                        <th>Date</th>
+                                        <th>UID</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for lead in untouched_leads %}
+                                    <tr data-search="{{ lead.uid }} {{ lead.customer_name }} {{ lead.customer_mobile_number }} {{ lead.source or '' }}" data-assigned-date="{{ lead.cre_assigned_at[:10] if lead.cre_assigned_at else '' }}">
+                                        <td>
+                                            <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-primary">Update</a>
+                                        </td>
+                                        <td>{{ lead.lead_status }}</td>
+                                        <td>{{ lead.customer_name }}</td>
+                                        <td>{{ lead.customer_mobile_number }}</td>
+                                        <td>{{ lead.source }}</td>
+                                        <td>{{ lead.lead_category }}</td>
+                                        <td>{{ lead.date }}</td>
+                                        <td>{{ lead.uid }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="alert alert-info">No untouched leads found.</div>
+                        {% endif %}
+                    </div>
+                    <!-- Called Leads Table -->
+                    <div class="tab-pane fade" id="called-leads" role="tabpanel" aria-labelledby="called-leads-tab">
+                        {% if called_leads %}
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover" id="calledLeadsTable">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Action</th>
+                                        <th>Lead Status</th>
+                                        <th>Customer Name</th>
+                                        <th>Mobile</th>
+                                        <th>Source</th>
+                                        <th>Campaign</th>
+                                        <th>Date</th>
+                                        <th>UID</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for lead in called_leads %}
+                                    <tr data-search="{{ lead.uid }} {{ lead.customer_name }} {{ lead.customer_mobile_number }} {{ lead.source or '' }}" data-assigned-date="{{ lead.cre_assigned_at[:10] if lead.cre_assigned_at else '' }}">
+                                        <td>
+                                            <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-primary">Update</a>
+                                        </td>
+                                        <td>{{ lead.lead_status }}</td>
+                                        <td>{{ lead.customer_name }}</td>
+                                        <td>{{ lead.customer_mobile_number }}</td>
+                                        <td>{{ lead.source }}</td>
+                                        <td>{{ lead.lead_category }}</td>
+                                        <td>{{ lead.date }}</td>
+                                        <td>{{ lead.uid }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="alert alert-info">No called leads found.</div>
+                        {% endif %}
+                    </div>
                 </div>
-                {% else %}
-                <div class="text-center py-5" id="freshLeadsEmptyState">
-                    <i class="fas fa-clock fa-3x text-muted mb-3"></i>
-                    <h5 class="text-muted">No fresh leads</h5>
-                    <p class="text-muted">All assigned leads have been contacted</p>
-                </div>
-                {% endif %}
+                <!-- The filter dropdown remains unchanged and works for both tables -->
             </div>
 
             <!-- Today's Follow-ups Tab -->
@@ -793,39 +833,80 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Setup search for all tabs (updated IDs)
-    setupSearch('freshLeadSearchInput', 'freshLeadSearchButton', 'freshLeadClearButton', 'freshLeadsTable');
     setupSearch('followupSearchInput', 'followupSearchButton', 'followupClearButton', 'followupTable');
     setupSearch('pendingSearchInput', 'pendingSearchButton', 'pendingClearButton', 'pendingLeadsTable');
     setupSearch('psSearchInput', 'psSearchButton', 'psClearButton', 'psAssignedTable');
     setupSearch('wonSearchInput', 'wonSearchButton', 'wonClearButton', 'wonLeadsTable');
     setupSearch('lostSearchInput', 'lostSearchButton', 'lostClearButton', 'lostLeadsTable');
 
+    // Custom search for fresh leads (both untouched and called tables)
+    const freshLeadSearchInput = document.getElementById('freshLeadSearchInput');
+    const freshLeadSearchButton = document.getElementById('freshLeadSearchButton');
+    const freshLeadClearButton = document.getElementById('freshLeadClearButton');
+
+    if (freshLeadSearchInput && freshLeadSearchButton && freshLeadClearButton) {
+        function performFreshLeadsSearch() {
+            const searchTerm = freshLeadSearchInput.value.toLowerCase().trim();
+            const untouchedRows = document.querySelectorAll('#untouchedLeadsTable tbody tr');
+            const calledRows = document.querySelectorAll('#calledLeadsTable tbody tr');
+
+            let untouchedVisibleCount = 0;
+            let calledVisibleCount = 0;
+
+            // Search in untouched leads
+            untouchedRows.forEach(row => {
+                const searchData = (row.getAttribute('data-search') || '').toLowerCase();
+                if (searchData.includes(searchTerm) || searchTerm === '') {
+                    row.style.display = '';
+                    untouchedVisibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            // Search in called leads
+            calledRows.forEach(row => {
+                const searchData = (row.getAttribute('data-search') || '').toLowerCase();
+                if (searchData.includes(searchTerm) || searchTerm === '') {
+                    row.style.display = '';
+                    calledVisibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            // Update counts
+            const totalVisibleCount = untouchedVisibleCount + calledVisibleCount;
+            document.getElementById('freshLeadsCount').textContent = totalVisibleCount;
+            document.querySelector('#untouched-leads-tab .badge').textContent = untouchedVisibleCount;
+            document.querySelector('#called-leads-tab .badge').textContent = calledVisibleCount;
+        }
+
+        function clearFreshLeadsSearch() {
+            freshLeadSearchInput.value = '';
+            performFreshLeadsSearch();
+        }
+
+        freshLeadSearchButton.addEventListener('click', performFreshLeadsSearch);
+        freshLeadClearButton.addEventListener('click', clearFreshLeadsSearch);
+
+        freshLeadSearchInput.addEventListener('keyup', function(e) {
+            if (e.key === 'Enter') {
+                performFreshLeadsSearch();
+            }
+        });
+
+        // Real-time search as user types
+        freshLeadSearchInput.addEventListener('input', performFreshLeadsSearch);
+    }
+
     // Fresh leads time filter functionality
     const freshTimeFilters = document.querySelectorAll('.fresh-time-filter');
     const freshTimeFilterText = document.getElementById('freshTimeFilterText');
-    const freshRows = document.querySelectorAll('.fresh-lead-row');
     const freshDateRangeInputs = document.getElementById('freshDateRangeInputs');
     const freshStartDate = document.getElementById('freshStartDate');
     const freshEndDate = document.getElementById('freshEndDate');
     const applyFreshDateRange = document.getElementById('applyFreshDateRange');
-    const freshLeadsCount = document.getElementById('freshLeadsCount');
-    const freshLeadsEmptyState = document.getElementById('freshLeadsEmptyState');
-
-    function updateFreshLeadsCount() {
-        const visibleRows = document.querySelectorAll('.fresh-lead-row[style=""], .fresh-lead-row:not([style*="display: none"])');
-        const count = visibleRows.length;
-        freshLeadsCount.textContent = count;
-
-        // Show/hide empty state based on visible rows
-        const tableContainer = document.querySelector('#freshLeadsTable').closest('.table-responsive');
-        if (count === 0) {
-            if (tableContainer) tableContainer.style.display = 'none';
-            if (freshLeadsEmptyState) freshLeadsEmptyState.style.display = 'block';
-        } else {
-            if (tableContainer) tableContainer.style.display = 'block';
-            if (freshLeadsEmptyState) freshLeadsEmptyState.style.display = 'none';
-        }
-    }
 
     function filterFreshLeads(filterType, startDate = null, endDate = null) {
         const today = getCurrentDate(); // Use the function to get current date
@@ -833,46 +914,37 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('Filter Type:', filterType, 'Today:', today);
         console.log('Start Date:', startDate, 'End Date:', endDate);
 
-        let visibleCount = 0;
+        // Get rows from both untouched and called tables
+        const untouchedRows = document.querySelectorAll('#untouchedLeadsTable tbody tr');
+        const calledRows = document.querySelectorAll('#calledLeadsTable tbody tr');
+        
+        let totalVisibleCount = 0;
+        let untouchedVisibleCount = 0;
+        let calledVisibleCount = 0;
 
-        freshRows.forEach(row => {
-            const assignedDate = row.getAttribute('data-assigned-date');
-            const hasFirstCall = row.getAttribute('data-has-first-call');
-
-            console.log('Lead - Assigned Date:', assignedDate, 'Has First Call:', hasFirstCall);
-
-            // Fresh leads should NEVER have a first call (that's the definition)
-            if (hasFirstCall === 'yes') {
-                console.log('Hiding lead - already has first call (not fresh anymore)');
-                row.style.display = 'none';
-                return;
-            }
+        // Filter untouched leads
+        untouchedRows.forEach(row => {
+            const leadDate = row.getAttribute('data-assigned-date');
+            console.log('Untouched Lead - Date:', leadDate);
 
             let showRow = false;
 
             switch(filterType) {
                 case 'today':
-                    // Show fresh leads assigned today
-                    showRow = assignedDate === today;
-                    console.log('Today filter - Match:', showRow, 'for date:', assignedDate);
+                    showRow = leadDate === today;
+                    console.log('Today filter - Untouched Match:', showRow, 'for date:', leadDate);
                     break;
                 case 'all':
-                    // Show ALL fresh leads (regardless of assignment date)
                     showRow = true;
-                    console.log('All Time filter - Showing all fresh leads');
+                    console.log('All Time filter - Showing all untouched leads');
                     break;
                 case 'range':
-                    // Show fresh leads assigned within date range
-                    if (startDate && endDate && assignedDate) {
-                        showRow = assignedDate >= startDate && assignedDate <= endDate;
-                        console.log('Range filter - Match:', showRow, 'for date:', assignedDate, 'in range:', startDate, 'to', endDate);
-                    } else if (!assignedDate) {
-                        // If no assigned date, don't show in range filter
-                        showRow = false;
-                        console.log('Range filter - No assigned date, hiding');
+                    if (startDate && endDate && leadDate) {
+                        showRow = leadDate >= startDate && leadDate <= endDate;
+                        console.log('Range filter - Untouched Match:', showRow, 'for date:', leadDate, 'in range:', startDate, 'to', endDate);
                     } else {
                         showRow = false;
-                        console.log('Range filter - Invalid range or date, hiding');
+                        console.log('Range filter - Invalid range or date for untouched, hiding');
                     }
                     break;
                 default:
@@ -880,16 +952,58 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             if (showRow) {
-                visibleCount++;
+                untouchedVisibleCount++;
             }
 
             row.style.display = showRow ? '' : 'none';
         });
 
-        console.log('Total visible fresh leads after filter:', visibleCount);
+        // Filter called leads
+        calledRows.forEach(row => {
+            const leadDate = row.getAttribute('data-assigned-date');
+            console.log('Called Lead - Date:', leadDate);
+
+            let showRow = false;
+
+            switch(filterType) {
+                case 'today':
+                    showRow = leadDate === today;
+                    console.log('Today filter - Called Match:', showRow, 'for date:', leadDate);
+                    break;
+                case 'all':
+                    showRow = true;
+                    console.log('All Time filter - Showing all called leads');
+                    break;
+                case 'range':
+                    if (startDate && endDate && leadDate) {
+                        showRow = leadDate >= startDate && leadDate <= endDate;
+                        console.log('Range filter - Called Match:', showRow, 'for date:', leadDate, 'in range:', startDate, 'to', endDate);
+                    } else {
+                        showRow = false;
+                        console.log('Range filter - Invalid range or date for called, hiding');
+                    }
+                    break;
+                default:
+                    showRow = true;
+            }
+
+            if (showRow) {
+                calledVisibleCount++;
+            }
+
+            row.style.display = showRow ? '' : 'none';
+        });
+
+        totalVisibleCount = untouchedVisibleCount + calledVisibleCount;
+
+        console.log('Total visible fresh leads after filter:', totalVisibleCount);
+        console.log('Untouched visible:', untouchedVisibleCount, 'Called visible:', calledVisibleCount);
         console.log('=== END FRESH LEADS FILTER ===');
 
-        updateFreshLeadsCount();
+        // Update the count display and badges
+        document.getElementById('freshLeadsCount').textContent = totalVisibleCount;
+        document.querySelector('#untouched-leads-tab .badge').textContent = untouchedVisibleCount;
+        document.querySelector('#called-leads-tab .badge').textContent = calledVisibleCount;
     }
 
     freshTimeFilters.forEach(filter => {

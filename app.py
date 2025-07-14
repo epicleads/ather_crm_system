@@ -1871,85 +1871,69 @@ def add_lead_with_cre():
 @app.route('/cre_dashboard')
 @require_cre
 def cre_dashboard():
+    import time
+    from datetime import datetime
     start_time = time.time()
     cre_name = session.get('cre_name')
     today = datetime.now().date()
+    all_leads = safe_get_data('lead_master', {'cre_name': cre_name})
 
-    try:
-        t0 = time.time()
-        # Get all leads assigned to this CRE
-        all_leads = safe_get_data('lead_master', {'cre_name': cre_name})
-        print(f"[PERF] cre_dashboard: safe_get_data('lead_master') took {time.time() - t0:.3f} seconds")
+    print("Fetched leads for CRE:", cre_name, "Count:", len(all_leads))
+    for lead in all_leads[:5]:  # Print first 5 leads for inspection
+        print("Lead:", lead.get('uid'), "Status:", lead.get('lead_status'))
 
-        t1 = time.time()
-        # Get pending leads (assigned but no first call date), sorted by priority
-        # Leads with status 'RNR', 'Busy on another Call', 'Call me Back' should be at the bottom
-        pending_leads = [lead for lead in all_leads if not lead.get('first_call_date')]
-        
-        # Define priority statuses that should move leads down in the list
-        low_priority_statuses = ['RNR', 'Busy on another Call', 'Call me Back']
-        
-        # Sort leads: high priority first (by cre_assigned_at), then low priority (by cre_assigned_at)
-        pending_leads = sorted(
-            pending_leads,
-            key=lambda l: (
-                # First sort by priority (low priority statuses get higher priority number)
-                1 if (l.get('lead_status') or '').strip() in low_priority_statuses else 0,
-                # Then sort by assignment date (oldest first within each priority group)
-                l.get('cre_assigned_at') or ''
-            )
-        )
-        print(f"[PERF] cre_dashboard: pending_leads filter/sort took {time.time() - t1:.3f} seconds")
+    untouched_leads = [lead for lead in all_leads if (lead.get('lead_status') or '').strip() == 'Pending']
+    untouched_count = len(untouched_leads)
 
-        t2 = time.time()
-        # Get today's followups
-        todays_followups = [
-            lead for lead in all_leads
-            if lead.get('follow_up_date') and lead.get('follow_up_date').startswith(str(today))
-        ]
-        print(f"[PERF] cre_dashboard: todays_followups filter took {time.time() - t2:.3f} seconds")
+    called_leads = [lead for lead in all_leads if (lead.get('lead_status') or '').strip() == 'RNR' or (lead.get('lead_status') or '').strip() == 'Busy on another Call' or (lead.get('lead_status') or '').strip() == 'Call me Back' or (lead.get('lead_status') or '').strip() == 'Call Disconnected' ]
+    called_count = len(called_leads)
 
-        t3 = time.time()
-        # Get attended leads (leads with at least one call)
-        attended_leads = [lead for lead in all_leads if lead.get('first_call_date')]
-        print(f"[PERF] cre_dashboard: attended_leads filter took {time.time() - t3:.3f} seconds")
+    print("Untouched count:", untouched_count, "Called count:", called_count)
+    fresh_leads = called_leads + untouched_leads
+    total_fresh_leads = len(fresh_leads)
 
-        t4 = time.time()
-        # Get leads assigned to PS
-        assigned_to_ps = [lead for lead in all_leads if lead.get('ps_name')]
-        print(f"[PERF] cre_dashboard: assigned_to_ps filter took {time.time() - t4:.3f} seconds")
+    # Get pending leads (assigned but no first call date), sorted by priority
+    low_priority_statuses = ['RNR', 'Busy on another Call', 'Call me Back', 'Call Disconnected']
+    pending_leads = [lead for lead in all_leads if not lead.get('first_call_date')]
+    fresh_leads_sorted = sorted(
+        fresh_leads,
+        key=lambda l: l.get('cre_assigned_at') or l.get('created_at') or '',
+        reverse=True
+    )
+    total_fresh_leads = len(fresh_leads_sorted)
+    # Get today's followups
+    todays_followups = [
+        lead for lead in all_leads
+        if lead.get('follow_up_date') and str(lead.get('follow_up_date')).startswith(str(today))
+    ]
 
-        t5 = time.time()
-        # Get won leads (leads with final status "Won")
-        won_leads = [lead for lead in all_leads if lead.get('final_status') == 'Won']
-        # Get lost leads (leads with final status "Lost")
-        lost_leads = [lead for lead in all_leads if lead.get('final_status') == 'Lost']
-        print(f"[PERF] cre_dashboard: won/lost_leads filter took {time.time() - t5:.3f} seconds")
+    # Get attended leads (leads with at least one call)
+    attended_leads = [lead for lead in all_leads if lead.get('first_call_date')]
 
-        # --- Walk-in Follow-up Section ---
-        t6 = time.time()
-        result = render_template('cre_dashboard.html',
-                               pending_leads=pending_leads,
-                               todays_followups=todays_followups,
-                               attended_leads=attended_leads,
-                               assigned_to_ps=assigned_to_ps,
-                               won_leads=won_leads,
-                               lost_leads=lost_leads)
-                               #walkin_followups=walkin_followups)
-        print(f"[PERF] cre_dashboard: render_template took {time.time() - t6:.3f} seconds")
-        print(f"[PERF] cre_dashboard TOTAL took {time.time() - start_time:.3f} seconds")
-        return result
-    except Exception as e:
-        print(f"[PERF] cre_dashboard failed after {time.time() - start_time:.3f} seconds")
-        flash(f'Error loading dashboard: {str(e)}', 'error')
-        return render_template('cre_dashboard.html',
-                               pending_leads=[],
-                               todays_followups=[],
-                               attended_leads=[],
-                               assigned_to_ps=[],
-                               won_leads=[],
-                               lost_leads=[])
+    # Get leads assigned to PS
+    assigned_to_ps = [lead for lead in all_leads if lead.get('ps_name')]
 
+    # Get won leads (leads with final status "Won")
+    won_leads = [lead for lead in all_leads if lead.get('final_status') == 'Won']
+    # Get lost leads (leads with final status "Lost")
+    lost_leads = [lead for lead in all_leads if lead.get('final_status') == 'Lost']
+
+    print(f"[PERF] cre_dashboard TOTAL took {time.time() - start_time:.3f} seconds")
+    return render_template(
+        'cre_dashboard.html',
+        untouched_count=untouched_count,
+        called_count=called_count,
+        total_fresh_leads=total_fresh_leads,
+        fresh_leads_sorted=fresh_leads_sorted,
+        untouched_leads=untouched_leads,
+        called_leads=called_leads,
+        pending_leads=pending_leads,
+        todays_followups=todays_followups,
+        attended_leads=attended_leads,
+        assigned_to_ps=assigned_to_ps,
+        won_leads=won_leads,
+        lost_leads=lost_leads
+    )
 
 @app.route('/update_lead/<uid>', methods=['GET', 'POST'])
 @require_cre
