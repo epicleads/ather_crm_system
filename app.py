@@ -1878,6 +1878,9 @@ def cre_dashboard():
     today = datetime.now().date()
     all_leads = safe_get_data('lead_master', {'cre_name': cre_name})
 
+    # Fetch event leads assigned to this CRE
+    event_event_leads = safe_get_data('activity_leads', {'cre_assigned': cre_name})
+
     print("Fetched leads for CRE:", cre_name, "Count:", len(all_leads))
     for lead in all_leads[:5]:  # Print first 5 leads for inspection
         print("Lead:", lead.get('uid'), "Status:", lead.get('lead_status'))
@@ -1932,7 +1935,8 @@ def cre_dashboard():
         attended_leads=attended_leads,
         assigned_to_ps=assigned_to_ps,
         won_leads=won_leads,
-        lost_leads=lost_leads
+        lost_leads=lost_leads,
+        event_event_leads=event_event_leads
     )
 
 @app.route('/update_lead/<uid>', methods=['GET', 'POST'])
@@ -2241,6 +2245,8 @@ def ps_dashboard():
         t5 = time.time()
         # Fetch walk-in leads for this PS
         walkin_leads = safe_get_data('walkin_data', {'ps_name': ps_name})
+        # Fetch event leads for this PS
+        event_leads = safe_get_data('activity_leads', {'ps_name': ps_name})
         result = render_template('ps_dashboard.html',
                                assigned_leads=filtered_leads,
                                pending_leads=pending_leads,
@@ -2248,6 +2254,7 @@ def ps_dashboard():
                                attended_leads=attended_leads,
                                lost_leads=lost_leads,
                                walkin_leads=walkin_leads,
+                               event_leads=event_leads,
                                filter_type=filter_type,
                                start_date=start_date,
                                end_date=end_date)
@@ -2264,6 +2271,7 @@ def ps_dashboard():
                                attended_leads=[],
                                lost_leads=[],
                                walkin_leads=[],
+                               event_leads=[],
                                filter_type=filter_type,
                                start_date=start_date,
                                end_date=end_date)
@@ -4029,12 +4037,18 @@ def activity_event():
         
         try:
             leads_added = 0
-            
+            # Fetch all CREs for round-robin assignment
+            cre_users = safe_get_data('cre_users')
+            cre_names = [cre['name'] for cre in cre_users] if cre_users else []
+            cre_count = len(cre_names)
+            cre_index = 0  # Start from the first CRE for each batch
             for i in range(len(customer_names)):
                 if customer_names[i] and customer_phones[i]:  # Only process if name and phone are provided
+                    # Assign CRE in round-robin
+                    cre_assigned = cre_names[cre_index] if cre_count > 0 else None
+                    cre_index = (cre_index + 1) % cre_count if cre_count > 0 else 0
                     # Generate UID for event lead
                     uid = f"E-{activity_name[:3].upper()}-{customer_phones[i][-4:]}"
-                    
                     # Create event lead data strictly matching activity_leads schema
                     event_lead_data = {
                         'activity_uid': uid,
@@ -4053,7 +4067,8 @@ def activity_event():
                         'date': dates[i] if i < len(dates) else datetime.now().strftime('%Y-%m-%d'),
                         'customer_phone_number': customer_phones[i].strip(),
                         'created_at': datetime.now().isoformat(),
-                        'lead_category': lead_statuses[i] if i < len(lead_statuses) else 'WARM'
+                        'lead_category': lead_statuses[i] if i < len(lead_statuses) else 'WARM',
+                        'cre_assigned': cre_assigned
                     }
                     # Insert into activity_leads
                     result = supabase.table('activity_leads').insert(event_lead_data).execute()
