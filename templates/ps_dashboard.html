@@ -705,6 +705,7 @@
                     <table class="table table-hover mb-0" id="eventLeadsTable">
                         <thead class="table-dark">
                             <tr>
+                                <th>Action</th>
                                 <th>Activity Name</th>
                                 <th>Activity Location</th>
                                 <th>PS Name</th>
@@ -724,6 +725,11 @@
                         <tbody>
                             {% for lead in event_leads %}
                             <tr>
+                                <td>
+                                    <a href="{{ url_for('update_event_lead', activity_uid=lead.activity_uid) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-edit"></i> Update
+                                    </a>
+                                </td>
                                 <td>{{ lead.activity_name }}</td>
                                 <td>{{ lead.activity_location }}</td>
                                 <td>{{ lead.ps_name }}</td>
