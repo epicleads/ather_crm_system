@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+
+{% block title %}Update Event Lead - PS Dashboard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2><i class="fas fa-edit text-primary"></i> Update Event Lead - {{ lead.activity_uid }}</h2>
+                <p class="text-muted">Customer: {{ lead.customer_name }} | Mobile: {{ lead.customer_phone_number }}</p>
+            </div>
+            <div>
+                <a href="{{ url_for('ps_dashboard') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow">
+    <div class="card-header">
+        <h5>Event Lead Information</h5>
+    </div>
+    <div class="card-body">
+        {% if next_call and lead.final_status != 'Won' %}
+        <!-- Call Progress Indicator -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h6><i class="fas fa-phone"></i> PS Call Progress (7 Calls Maximum)</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            {% set call_names = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh'] %}
+                            {% for call in call_names %}
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    {% if call in completed_calls %}
+                                        <div class="badge bg-success mb-2 w-100">
+                                            <i class="fas fa-check"></i> {{ call.title() }} Call
+                                        </div>
+                                        <small class="text-muted d-block">{{ lead['ps_' + call + '_call_date'] or 'No date' }}</small>
+                                    {% elif call == next_call %}
+                                        <div class="badge bg-warning mb-2 w-100">
+                                            <i class="fas fa-clock"></i> {{ call.title() }} Call
+                                        </div>
+                                        <small class="text-muted d-block">Next Call</small>
+                                    {% else %}
+                                        <div class="badge bg-secondary mb-2 w-100">
+                                            <i class="fas fa-minus"></i> {{ call.title() }} Call
+                                        </div>
+                                        <small class="text-muted d-block">Pending</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <form method="POST" id="eventLeadUpdateForm">
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Customer Name</label>
+                        <input type="text" class="form-control" id="customer_name" name="customer_name" value="{{ lead.customer_name }}" required>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Mobile Number</label>
+                        <input type="text" class="form-control" value="{{ lead.customer_phone_number }}" readonly>
+                    </div>
+                </div>
+            </div>
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label">Activity Name</label>
+                        <input type="text" class="form-control" value="{{ lead.activity_name }}" readonly>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label">Activity Location</label>
+                        <input type="text" class="form-control" value="{{ lead.activity_location }}" readonly>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label">Created At</label>
+                        <input type="text" class="form-control" value="{{ lead.created_at }}" readonly>
+                    </div>
+                </div>
+            </div>
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label">Customer Location</label>
+                        <input type="text" class="form-control" id="customer_location" name="customer_location" value="{{ lead.customer_location }}">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label">Customer Profession</label>
+                        <input type="text" class="form-control" value="{{ lead.customer_profession }}" readonly>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label">Gender</label>
+                        <input type="text" class="form-control" value="{{ lead.gender }}" readonly>
+                    </div>
+                </div>
+            </div>
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label">Lead Status</label>
+                        <select class="form-select" id="lead_status" name="lead_status">
+                            <option value="Call not Connected" {% if lead.lead_status == 'Call not Connected' %}selected{% endif %}>Call not Connected</option>
+                            <option value="Retailed" {% if lead.lead_status == 'Retailed' %}selected{% endif %}>Retailed</option>
+                            <option value="Discount Issue" {% if lead.lead_status == 'Discount Issue' %}selected{% endif %}>Discount Issue</option>
+                            <option value="Delayed" {% if lead.lead_status == 'Delayed' %}selected{% endif %}>Delayed</option>
+                            <option value="Booked" {% if lead.lead_status == 'Booked' %}selected{% endif %}>Booked</option>
+                            <option value="Test Drive" {% if lead.lead_status == 'Test Drive' %}selected{% endif %}>Test Drive</option>
+                            <option value="Planning in Next Month" {% if lead.lead_status == 'Planning in Next Month' %}selected{% endif %}>Planning in Next Month</option>
+                            <option value="Lost to Competition" {% if lead.lead_status == 'Lost to Competition' %}selected{% endif %}>Lost to Competition</option>
+                            <option value="Finance Rejected" {% if lead.lead_status == 'Finance Rejected' %}selected{% endif %}>Finance Rejected</option>
+                            <option value="Dropped" {% if lead.lead_status == 'Dropped' %}selected{% endif %}>Dropped</option>
+                            <option value="Lost to codealer" {% if lead.lead_status == 'Lost to codealer' %}selected{% endif %}>Lost to codealer</option>
+                            <option value="Busy on another call" {% if lead.lead_status == 'Busy on another call' %}selected{% endif %}>Busy on another call</option>
+                            <option value="RNR" {% if lead.lead_status == 'RNR' %}selected{% endif %}>RNR</option>
+                            <option value="Call me Back" {% if lead.lead_status == 'Call me Back' %}selected{% endif %}>Call me Back</option>
+                            <option value="Not Interested" {% if lead.lead_status == 'Not Interested' %}selected{% endif %}>Not Interested</option>
+                            <option value="Call Disconnected" {% if lead.lead_status == 'Call Disconnected' %}selected{% endif %}>Call Disconnected</option>
+                            <option value="Interested" {% if lead.lead_status == 'Interested' %}selected{% endif %}>Interested</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label">Lead Category</label>
+                        <select class="form-select" id="lead_category" name="lead_category" required>
+                            <option value="HOT" {% if lead.lead_category == 'HOT' %}selected{% endif %}>Hot</option>
+                            <option value="WARM" {% if lead.lead_category == 'WARM' %}selected{% endif %}>Warm</option>
+                            <option value="COLD" {% if lead.lead_category == 'COLD' %}selected{% endif %}>Cold</option>
+                            <option value="CASUAL ENQUIRY" {% if lead.lead_category == 'CASUAL ENQUIRY' %}selected{% endif %}>Casual Enquiry</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label">Interested Model</label>
+                        <select class="form-select" id="interested_model" name="interested_model">
+                            <option value="" disabled {% if not lead.interested_model %}selected{% endif %}>Select Model</option>
+                            <option value="Rizta S Mono (2.9 kWh)" {% if lead.interested_model == 'Rizta S Mono (2.9 kWh)' %}selected{% endif %}>Rizta S Mono (2.9 kWh)</option>
+                            <option value="Rizta S Super Matte (2.9 kWh)" {% if lead.interested_model == 'Rizta S Super Matte (2.9 kWh)' %}selected{% endif %}>Rizta S Super Matte (2.9 kWh)</option>
+                            <option value="Rizta Z Mono (2.9 kWh)" {% if lead.interested_model == 'Rizta Z Mono (2.9 kWh)' %}selected{% endif %}>Rizta Z Mono (2.9 kWh)</option>
+                            <option value="Rizta Z Duo (2.9 kWh)" {% if lead.interested_model == 'Rizta Z Duo (2.9 kWh)' %}selected{% endif %}>Rizta Z Duo (2.9 kWh)</option>
+                            <option value="Rizta Z Super Matte (2.9 kWh)" {% if lead.interested_model == 'Rizta Z Super Matte (2.9 kWh)' %}selected{% endif %}>Rizta Z Super Matte (2.9 kWh)</option>
+                            <option value="Rizta Z Mono (3.7 kWh)" {% if lead.interested_model == 'Rizta Z Mono (3.7 kWh)' %}selected{% endif %}>Rizta Z Mono (3.7 kWh)</option>
+                            <option value="Rizta Z Duo (3.7 kWh)" {% if lead.interested_model == 'Rizta Z Duo (3.7 kWh)' %}selected{% endif %}>Rizta Z Duo (3.7 kWh)</option>
+                            <option value="Rizta Z Super Matte (3.7 kWh)" {% if lead.interested_model == 'Rizta Z Super Matte (3.7 kWh)' %}selected{% endif %}>Rizta Z Super Matte (3.7 kWh)</option>
+                            <option value="450 X (2.9 kWh)" {% if lead.interested_model == '450 X (2.9 kWh)' %}selected{% endif %}>450 X (2.9 kWh)</option>
+                            <option value="450 X (3.7 kWh)" {% if lead.interested_model == '450 X (3.7 kWh)' %}selected{% endif %}>450 X (3.7 kWh)</option>
+                            <option value="450 X (2.9 kWh) Pro Pack" {% if lead.interested_model == '450 X (2.9 kWh) Pro Pack' %}selected{% endif %}>450 X (2.9 kWh) Pro Pack</option>
+                            <option value="450 X (3.7 kWh) Pro Pack" {% if lead.interested_model == '450 X (3.7 kWh) Pro Pack' %}selected{% endif %}>450 X (3.7 kWh) Pro Pack</option>
+                            <option value="450 Apex STD" {% if lead.interested_model == '450 Apex STD' %}selected{% endif %}>450 Apex STD</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label">Remarks</label>
+                        <input type="text" class="form-control" value="{{ lead.remarks }}" readonly>
+                    </div>
+                </div>
+            </div>
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label">PS Name</label>
+                        <input type="text" class="form-control" value="{{ lead.ps_name }}" readonly>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label">Branch</label>
+                        <input type="text" class="form-control" value="{{ lead.location }}" readonly>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label">Month</label>
+                        <input type="text" class="form-control" value="{{ lead.month }}" readonly>
+                    </div>
+                </div>
+            </div>
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label">Date</label>
+                        <input type="text" class="form-control" value="{{ lead.date }}" readonly>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label">Final Status</label>
+                        <select class="form-select" id="final_status" name="final_status">
+                            <option value="Pending" {% if lead.final_status == 'Pending' or not lead.final_status %}selected{% endif %}>Pending</option>
+                            <option value="Won" {% if lead.final_status == 'Won' %}selected{% endif %}>Won</option>
+                            <option value="Lost" {% if lead.final_status == 'Lost' %}selected{% endif %}>Lost</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label for="ps_followup_date_ts" class="form-label">Follow-up Date</label>
+                        <input type="datetime-local" class="form-control" id="ps_followup_date_ts" name="ps_followup_date_ts" value="{{ lead.ps_followup_date_ts[:16] if lead.ps_followup_date_ts else '' }}">
+                    </div>
+                </div>
+            </div>
+            {% if next_call and lead.final_status != 'Won' %}
+            <!-- Current Call Section -->
+            <div class="card mt-4">
+                <div class="card-header bg-warning text-dark">
+                    <h6><i class="fas fa-phone"></i> {{ next_call.title() }} Call Details</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="call_date" class="form-label">{{ next_call.title() }} Call Date</label>
+                                <input type="date" class="form-control" id="call_date" name="call_date" value="{{ today }}">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="call_remark" class="form-label">{{ next_call.title() }} Call Remark</label>
+                                <textarea class="form-control" id="call_remark" name="call_remark" rows="2" placeholder="Enter call details and customer response..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            <!-- Previous Calls Summary -->
+            {% if completed_calls %}
+            <div class="card mt-4">
+                <div class="card-header bg-success text-white">
+                    <h6><i class="fas fa-history"></i> Previous Calls Summary</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for call in completed_calls %}
+                        <div class="col-md-6 mb-3">
+                            <div class="border rounded p-3">
+                                <h6 class="text-success">{{ call.title() }} Call</h6>
+                                <p class="mb-1"><strong>Date:</strong> {{ lead['ps_' + call + '_call_date'] or 'Not recorded' }}</p>
+                                <p class="mb-0"><strong>Remark:</strong> {{ lead['ps_' + call + '_call_remark'] or 'No remarks' }}</p>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            <div class="d-grid mt-4">
+                <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-save"></i> Update Lead</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %} 
