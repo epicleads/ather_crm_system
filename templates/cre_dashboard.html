@@ -341,45 +341,42 @@
                         <thead class="table-dark">
                             <tr>
                                 <th>Action</th>
-                                <th>Lead Status</th>
                                 <th>Customer Name</th>
                                 <th>Mobile</th>
-                                <th>Category</th>
-                                <th>Date</th>
-                                <th>UID</th>
+                                <th>Lead Status</th>
+                                <th>Branch</th>
+                                <th>Activity Name</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for lead in todays_followups %}
-                            <tr data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or '') + ' ' + (lead.campaign or '') + ' ' + (lead.lead_category or ''))|lower }}">
-                                <td>
-                                    <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-outline-primary">
-                                        <i class="fas fa-edit"></i> Update
-                                    </a>
-                                </td>
-                                <td>
-                                    {% if lead.lead_status %}
-                                        <span class="badge bg-info">{{ lead.lead_status }}</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">Not Set</span>
-                                    {% endif %}
-                                </td>
-                                <td>{{ lead.customer_name }}</td>
-                                <td>{{ lead.customer_mobile_number }}</td>
-                                <td>
-                                    {% if lead.lead_category == 'Hot' %}
-                                        <span class="badge bg-danger">{{ lead.lead_category }}</span>
-                                    {% elif lead.lead_category == 'Warm' %}
-                                        <span class="badge bg-warning">{{ lead.lead_category }}</span>
-                                    {% elif lead.lead_category == 'Cold' %}
-                                        <span class="badge bg-info">{{ lead.lead_category }}</span>
-                                    {% else %}
-                                        <span class="badge bg-dark">{{ lead.lead_category or 'Not Set' }}</span>
-                                    {% endif %}
-                                </td>
-                                <td>{{ lead.date }}</td>
-                                <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
-                            </tr>
+                                {% if lead.is_event_lead %}
+                                    <tr>
+                                        <td>
+                                            <a href="{{ url_for('update_event_lead_cre', activity_uid=lead.activity_uid) }}" class="btn btn-sm btn-outline-primary">
+                                                <i class="fas fa-edit"></i> Update
+                                            </a>
+                                        </td>
+                                        <td>{{ lead.customer_name }}</td>
+                                        <td>{{ lead.customer_phone_number }}</td>
+                                        <td>{{ lead.lead_status }}</td>
+                                        <td>{{ lead.location }}</td>
+                                        <td>{{ lead.activity_name }}</td>
+                                    </tr>
+                                {% else %}
+                                    <tr>
+                                        <td>
+                                            <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-outline-primary">
+                                                <i class="fas fa-edit"></i> Update
+                                            </a>
+                                        </td>
+                                        <td>{{ lead.customer_name }}</td>
+                                        <td>{{ lead.customer_mobile_number }}</td>
+                                        <td>{{ lead.lead_status }}</td>
+                                        <td>{{ lead.branch }}</td>
+                                        <td></td>
+                                    </tr>
+                                {% endif %}
                             {% endfor %}
                         </tbody>
                     </table>
