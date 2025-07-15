@@ -35,12 +35,15 @@
                         <input type="text" class="form-control" id="username" name="username" required
                                placeholder="Enter your username">
                     </div>
-                    <div class="mb-4">
+                    <div class="mb-4 position-relative">
                         <label for="password" class="form-label">
                             <i class="fas fa-lock text-muted me-2"></i>Password
                         </label>
-                        <input type="password" class="form-control" id="password" name="password" required
-                               placeholder="Enter your password">
+                        <input type="password" class="form-control pr-5" id="password" name="password" required
+                               placeholder="Enter your password" style="padding-right: 2.5rem;">
+                        <span class="toggle-password" onclick="togglePassword()" style="position: absolute; top: 43px; right: 16px; cursor: pointer; color: #888; font-size: 1.2rem;">
+                            <i id="password-eye" class="fas fa-eye"></i>
+                        </span>
                     </div>
                     <div class="d-grid">
                         <button type="submit" class="btn btn-primary btn-lg">
@@ -59,4 +62,22 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function togglePassword() {
+    var pwd = document.getElementById('password');
+    var eye = document.getElementById('password-eye');
+    if (pwd.type === 'password') {
+        pwd.type = 'text';
+        eye.classList.remove('fa-eye');
+        eye.classList.add('fa-eye-slash');
+    } else {
+        pwd.type = 'password';
+        eye.classList.remove('fa-eye-slash');
+        eye.classList.add('fa-eye');
+    }
+}
+</script>
 {% endblock %}
