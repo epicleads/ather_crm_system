@@ -816,25 +816,38 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% if analytics.campaign_stats and analytics.campaign_stats|length > 0 %}
-                            {% for row in analytics.campaign_stats %}
-                                <tr>
-                                    <td>{{ row.campaign }}</td>
-                                    <td>{{ row.source }}</td>
-                                    <td>{{ row.total_leads }}</td>
-                                    <td>{{ row.today_leads }}</td>
-                                    <td>{{ row.lost_leads }}</td>
-                                    <td>{{ row.pending_leads }}</td>
-                                    <td>{{ row.won_leads }}</td>
-                                    <td>
-                                        {% if row.total_leads > 0 %}
-                                            <span style="font-weight:600;">{{ row.conversion_rate }}%</span>
-                                            <span class="text-muted small">({{ row.won_leads }}/{{ row.total_leads }})</span>
-                                        {% else %}
-                                            0% (0/0)
-                                        {% endif %}
-                                    </td>
-                                </tr>
+                        {% if analytics.campaign_platform_counts and analytics.campaign_platform_counts|length > 0 %}
+                            {% for row in analytics.campaign_platform_counts %}
+                                {% set campaign_clean = (row.campaign or '').strip().lower() %}
+                                {% if campaign_clean and campaign_clean != 'none' %}
+                                    <tr>
+                                        <td>{{ row.campaign }}</td>
+                                        <td>{{ row.platform }}</td>
+                                        <td>
+                                            <strong>{{ row.total_leads }}</strong>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-info text-dark">{{ row.todays_leads }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-danger">{{ row.lost }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-warning text-dark">{{ row.pending }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge" style="background-color:#00b894;color:white;">{{ row.won }}</span>
+                                        </td>
+                                        <td>
+                                            {% if row.total_leads > 0 %}
+                                                <span style="font-weight:600;">{{ row.conversion_rate }}%</span>
+                                                <span style="font-size:11px;opacity:0.7;">({{ row.won }}/{{ row.total_leads }})</span>
+                                            {% else %}
+                                                0%
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endif %}
                             {% endfor %}
                         {% else %}
                             <tr><td colspan="8" class="text-center">No campaign/platform data available.</td></tr>
@@ -1837,102 +1850,42 @@
             ctx.fill();
         }
 
-        function fetchNegativeFeedbackStats(params={}) {
-            let url = '/negative_feedback_stats';
-            const search = [];
-            if (params.start_date) search.push('start_date=' + encodeURIComponent(params.start_date));
-            if (params.end_date) search.push('end_date=' + encodeURIComponent(params.end_date));
-            if (search.length) url += '?' + search.join('&');
+        // --- Negative Feedback Analysis (CRE & PS Follow-ups) ---
+        function fetchNegativeCallAttempts() {
+            const fromDate = document.getElementById('nf_start_date').value;
+            const toDate = document.getElementById('nf_end_date').value;
+            let url = '/negative_call_attempt_history';
+            const params = [];
+            if (fromDate) params.push('from_date=' + encodeURIComponent(fromDate));
+            if (toDate) params.push('to_date=' + encodeURIComponent(toDate));
+            if (params.length) url += '?' + params.join('&');
+
             fetch(url)
                 .then(res => res.json())
                 .then(data => {
-                    const reasons = [
-                        'Discount Issue', 'Delayed', 'Lost to Competition', 'Finance Rejected',
-                        'Dropped', 'Lost to Co-Dealer', 'RNR', 'Not Interested', 'Call Disconnected'
-                    ];
-                    const tbody = document.getElementById('negative-feedback-tbody');
-                    tbody.innerHTML = '';
-                    reasons.forEach(reason => {
-                        const tr = document.createElement('tr');
-                        tr.style.background = (reasons.indexOf(reason) % 2 === 0) ? '#fff5f5' : '#fbeee6';
-                        const tdReason = document.createElement('td');
-                        tdReason.style.fontWeight = '600';
-                        tdReason.style.textAlign = 'left';
-                        tdReason.style.color = '#c0392b';
-                        tdReason.textContent = reason;
-                        tr.appendChild(tdReason);
-                        // CRE buckets
-                        for (let i = 0; i < 7; i++) {
-                            const cell = data.CRE[reason][i];
-                            const td = document.createElement('td');
-                            td.className = 'cre-cell';
-                            td.setAttribute('data-role', 'CRE');
-                            td.setAttribute('data-reason', reason);
-                            td.setAttribute('data-fup', 'F'+(i+1));
-                            td.setAttribute('data-total', cell.total);
-                            td.setAttribute('data-percent', cell.percent);
-                            td.setAttribute('data-denom', cell.denom);
-                            td.innerHTML = `<div class='cell-content' style='display:flex;flex-direction:column;align-items:center;justify-content:center;'>
-                                <canvas class='mini-donut' data-pct='${cell.percent}'></canvas>
-                                <span class='countup' data-count='${cell.total}'>${cell.total}</span>
-                                <span class='percent' data-count='${cell.percent}'>${cell.percent}%</span>
-                            </div>`;
-                            tr.appendChild(td);
-                        }
-                        // PS buckets
-                        for (let i = 0; i < 7; i++) {
-                            const cell = data.PS[reason][i];
-                            const td = document.createElement('td');
-                            td.className = 'ps-cell';
-                            td.setAttribute('data-role', 'PS');
-                            td.setAttribute('data-reason', reason);
-                            td.setAttribute('data-fup', 'F'+(i+1));
-                            td.setAttribute('data-total', cell.total);
-                            td.setAttribute('data-percent', cell.percent);
-                            td.setAttribute('data-denom', cell.denom);
-                            td.innerHTML = `<div class='cell-content' style='display:flex;flex-direction:column;align-items:center;justify-content:center;'>
-                                <canvas class='mini-donut' data-pct='${cell.percent}'></canvas>
-                                <span class='countup' data-count='${cell.total}'>${cell.total}</span>
-                                <span class='percent' data-count='${cell.percent}'>${cell.percent}%</span>
-                            </div>`;
-                            tr.appendChild(td);
-                        }
-                        tbody.appendChild(tr);
+                    let html = '';
+                    data.reasons.forEach(reason => {
+                        html += `<tr><td style="font-weight:600;text-align:left;color:#c0392b;">${reason}</td>`;
+                        for (let i = 0; i < 7; i++) html += `<td>${data.CRE[reason][i]}</td>`;
+                        for (let i = 0; i < 7; i++) html += `<td>${data.PS[reason][i]}</td>`;
+                        html += '</tr>';
                     });
-                    // Render mini donuts after DOM update
-                    setTimeout(() => {
-                        document.querySelectorAll('.mini-donut').forEach(canvas => {
-                            const pct = parseFloat(canvas.getAttribute('data-pct')) || 0;
-                            const color = canvas.closest('td').classList.contains('cre-cell') ? '#e74c3c' : '#2980b9';
-                            renderMiniDonut(canvas, pct, color);
-                        });
-                    }, 100);
+                    document.getElementById('negative-feedback-tbody').innerHTML = html;
                 })
                 .catch(err => {
-                    document.getElementById('negative-feedback-tbody').innerHTML = `<tr><td colspan='15' class='text-center'>Error loading data</td></tr>`;
+                    document.getElementById('negative-feedback-tbody').innerHTML = '<tr><td colspan="15" class="text-center">Error loading data</td></tr>';
                     console.error(err);
                 });
         }
         function applyNegativeFeedbackFilter() {
-            const start = document.getElementById('nf_start_date').value;
-            const end = document.getElementById('nf_end_date').value;
-            fetchNegativeFeedbackStats({start_date: start, end_date: end});
+            fetchNegativeCallAttempts();
         }
         function resetNegativeFeedbackFilter() {
             document.getElementById('nf_start_date').value = '';
             document.getElementById('nf_end_date').value = '';
-            fetchNegativeFeedbackStats();
+            fetchNegativeCallAttempts();
         }
-        document.addEventListener('DOMContentLoaded', function() { fetchNegativeFeedbackStats(); });
-
-        document.getElementById('analytics-date-form').addEventListener('submit', function(e) {
-            var start = document.getElementById('analytics_start_date').value;
-            var end = document.getElementById('analytics_end_date').value;
-            if (!start && !end) {
-                window.location.href = this.action; // reload as Live
-                e.preventDefault();
-            }
-        });
+        document.addEventListener('DOMContentLoaded', function() { fetchNegativeCallAttempts(); });
         </script>
     </div>
 

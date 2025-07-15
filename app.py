@@ -3435,6 +3435,105 @@ def analytics():
         # Calculate leads growth (mock calculation)
         leads_growth = 15
 
+        # Calculate Campaign & Platform Lead Counts
+        def parse_timestamp(timestamp_str):
+            """Parse timestamp string to datetime object"""
+            if not timestamp_str:
+                return None
+            try:
+                if 'T' in timestamp_str:
+                    return datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                else:
+                    return datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+            except (ValueError, TypeError):
+                return None
+
+        def is_within_date_filter(target_date, start_date, end_date):
+            """Check if target date is within the filter range"""
+            if not target_date:
+                return False
+            if start_date and end_date:
+                return start_date <= target_date.date() <= end_date
+            elif start_date:
+                return target_date.date() >= start_date
+            return True
+
+        # Get today's date for "Today's Leads" calculation
+        today = datetime.now().date()
+        
+        # Group leads by campaign and source
+        campaign_platform_data = {}
+        
+        for lead in all_leads:
+            campaign = lead.get('campaign')
+            source = lead.get('source')
+            # Normalize and check for None, empty, whitespace, or 'none' (case-insensitive)
+            campaign_clean = str(campaign).strip().lower() if campaign is not None else ''
+            source_clean = str(source).strip().lower() if source is not None else ''
+            if not campaign_clean or campaign_clean == 'none' or not source_clean or source_clean == 'none':
+                continue
+            key = f"{campaign}|{source}"
+            
+            if key not in campaign_platform_data:
+                campaign_platform_data[key] = {
+                    'campaign': campaign,
+                    'platform': source,
+                    'total_leads': 0,
+                    'todays_leads': 0,
+                    'lost': 0,
+                    'pending': 0,
+                    'won': 0
+                }
+            
+            # Parse timestamps
+            created_at = parse_timestamp(lead.get('created_at'))
+            won_timestamp = parse_timestamp(lead.get('won_timestamp'))
+            lost_timestamp = parse_timestamp(lead.get('lost_timestamp'))
+            final_status = lead.get('final_status', '').strip()
+            
+            # Total Leads (respects date filter)
+            if created_at and is_within_date_filter(created_at, start_date, end_date):
+                campaign_platform_data[key]['total_leads'] += 1
+            
+            # Today's Leads (ignores date filter)
+            if created_at and created_at.date() == today:
+                campaign_platform_data[key]['todays_leads'] += 1
+            
+            # Lost leads (lost_timestamp within date filter)
+            if lost_timestamp and is_within_date_filter(lost_timestamp, start_date, end_date):
+                campaign_platform_data[key]['lost'] += 1
+            
+            # Pending leads (final_status = 'Pending', no won/lost timestamp, created_at within filter)
+            if (final_status == 'Pending' and 
+                not won_timestamp and 
+                not lost_timestamp and 
+                created_at and 
+                is_within_date_filter(created_at, start_date, end_date)):
+                campaign_platform_data[key]['pending'] += 1
+            
+            # Won leads (won_timestamp within date filter)
+            if won_timestamp and is_within_date_filter(won_timestamp, start_date, end_date):
+                campaign_platform_data[key]['won'] += 1
+        
+        # Calculate conversion rates and format data
+        campaign_platform_counts = []
+        for key, data in campaign_platform_data.items():
+            conversion_rate = round((data['won'] / data['total_leads'] * 100) if data['total_leads'] > 0 else 0, 1)
+            
+            campaign_platform_counts.append({
+                'campaign': data['campaign'],
+                'platform': data['platform'],
+                'total_leads': data['total_leads'],
+                'todays_leads': data['todays_leads'],
+                'lost': data['lost'],
+                'pending': data['pending'],
+                'won': data['won'],
+                'conversion_rate': conversion_rate
+            })
+        
+        # Sort by total leads descending
+        campaign_platform_counts.sort(key=lambda x: x['total_leads'], reverse=True)
+
         # Create analytics object that matches template expectations
         analytics = {
             'total_leads': total_leads,
@@ -3452,7 +3551,9 @@ def analytics():
             'model_interest': model_interest,
             'branch_performance': branch_performance,
             'funnel': funnel,
-            'recent_activities': recent_activities
+            'recent_activities': recent_activities,
+            'campaign_platform_counts': campaign_platform_counts,
+            'all_leads_count': len(all_leads)
         }
 
         # Log analytics access
@@ -3496,7 +3597,9 @@ def analytics():
                 'won': 0,
                 'won_percent': 0
             },
-            'recent_activities': []
+            'recent_activities': [],
+            'campaign_platform_counts': [],
+            'all_leads_count': 0
         }
         return render_template('analytics.html', analytics=empty_analytics)
 
@@ -5244,6 +5347,90 @@ def cre_analytics_data():
             'error': str(e)
         })
 
+@app.route('/negative_call_attempt_history')
+@require_admin
+def negative_call_attempt_history():
+    from_date = request.args.get('from_date')
+    to_date = request.args.get('to_date')
+    call_no_map = {
+        'first': 'F1', 'second': 'F2', 'third': 'F3',
+        'fourth': 'F4', 'fifth': 'F5', 'sixth': 'F6', 'seventh': 'F7'
+    }
+    def parse_ts(ts):
+        if not ts: return None
+        try:
+            if 'T' in ts:
+                return datetime.fromisoformat(ts.replace('Z', '+00:00'))
+            else:
+                return datetime.strptime(ts, '%Y-%m-%d %H:%M:%S')
+        except Exception:
+            return None
+    def in_range(ts):
+        if not ts: return False
+        if from_date and to_date:
+            try:
+                from_dt = datetime.strptime(from_date, '%Y-%m-%d')
+                to_dt = datetime.strptime(to_date, '%Y-%m-%d')
+                return from_dt <= ts.date() <= to_dt
+            except Exception:
+                return True
+        return True
+    cre_attempts = safe_get_data('cre_call_attempt_history', select_fields='call_no,created_at,remarks,status,lead_status')
+    ps_attempts = safe_get_data('ps_call_attempt_history', select_fields='call_no,created_at,remarks,status,lead_status')
+    # Dynamically build the list of all unique statuses
+    all_statuses = set()
+    for att in cre_attempts + ps_attempts:
+        feedback = (att.get('remarks') or att.get('status') or att.get('lead_status') or '').strip()
+        if feedback:
+            all_statuses.add(feedback)
+    negative_reasons = sorted(all_statuses)
+    def count_negatives(attempts):
+        result = {reason: [0]*7 for reason in negative_reasons}
+        for att in attempts:
+            call_no = (att.get('call_no') or '').strip().lower()
+            created_at = parse_ts(att.get('created_at'))
+            feedback = (att.get('remarks') or att.get('status') or att.get('lead_status') or '').strip()
+            if call_no in call_no_map and in_range(created_at) and feedback in negative_reasons:
+                idx = int(call_no_map[call_no][1]) - 1  # F1->0, F2->1, ...
+                result[feedback][idx] += 1
+        return result
+    def count_totals(attempts):
+        totals = [0]*7
+        call_no_map_idx = {
+            'first': 0, 'second': 1, 'third': 2,
+            'fourth': 3, 'fifth': 4, 'sixth': 5, 'seventh': 6
+        }
+        for att in attempts:
+            call_no = (att.get('call_no') or '').strip().lower()
+            idx = call_no_map_idx.get(call_no)
+            if idx is not None:
+                totals[idx] += 1
+        return totals
+    cre_data = count_negatives(cre_attempts)
+    ps_data = count_negatives(ps_attempts)
+    cre_totals = count_totals(cre_attempts)
+    ps_totals = count_totals(ps_attempts)
+    return jsonify({
+        'CRE': cre_data,
+        'PS': ps_data,
+        'reasons': negative_reasons,
+        'CRE_totals': cre_totals,
+        'PS_totals': ps_totals
+    })
+
+@app.route('/get_cre_list')
+@require_admin
+def get_cre_list():
+    cres = safe_get_data('cre_users', select_fields='name')
+    cre_list = [{'name': cre.get('name')} for cre in cres if cre.get('name')]
+    return jsonify({'success': True, 'cre_list': cre_list})
+
+@app.route('/cre_analysis_data')
+@require_admin
+def cre_analysis_data():
+    # Return a mock response or implement your actual logic here
+    return jsonify({'success': True, 'data': {}})
+
 @app.route('/update_event_lead/<activity_uid>', methods=['GET', 'POST'])
 @require_ps
 def update_event_lead(activity_uid):
@@ -5308,4 +5495,9 @@ def update_event_lead(activity_uid):
         return redirect(url_for('ps_dashboard'))
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    # socketio.run(app, debug=True)
+    print("�� Starting Ather CRM System...")
+    print("📱 Server will be available at: http://127.0.0.1:5000")
+    print("🌐 You can also try: http://localhost:5000")
+    # socketio.run(app, host='127.0.0.1', port=5000, debug=True)
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True, use_reloader=False)
