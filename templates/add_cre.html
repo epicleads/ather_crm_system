@@ -109,13 +109,16 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 usernameSpinner.style.display = 'none';
-                
-                if (data.available) {
+                if (data.exists === false) {
                     usernameFeedback.innerHTML = '<small class="text-success"><i class="fas fa-check-circle"></i> Username is available</small>';
                     isUsernameAvailable = true;
                     submitBtn.disabled = false;
+                } else if (data.exists === true) {
+                    usernameFeedback.innerHTML = '<small class="text-danger"><i class="fas fa-times-circle"></i> Username is already taken</small>';
+                    isUsernameAvailable = false;
+                    submitBtn.disabled = true;
                 } else {
-                    usernameFeedback.innerHTML = `<small class="text-danger"><i class="fas fa-times-circle"></i> ${data.message}</small>`;
+                    usernameFeedback.innerHTML = '<small class="text-warning"><i class="fas fa-exclamation-triangle"></i> Error checking username</small>';
                     isUsernameAvailable = false;
                     submitBtn.disabled = true;
                 }

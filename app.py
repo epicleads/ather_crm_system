@@ -5819,6 +5819,20 @@ def convert_duplicate_to_fresh(uid):
         flash(f'Error converting lead: {str(e)}', 'error')
     return redirect(url_for('admin_duplicate_leads'))
 
+@app.route('/check_username')
+def check_username():
+    username = request.args.get('username', '').strip()
+    user_type = request.args.get('type', '').strip().lower()
+    if not username or user_type not in ['cre', 'ps']:
+        return jsonify({'error': 'Invalid parameters'}), 400
+    try:
+        table = 'cre_users' if user_type == 'cre' else 'ps_users'
+        result = supabase.table(table).select('username').eq('username', username).execute()
+        exists = bool(result.data)
+        return jsonify({'exists': exists})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     # socketio.run(app, debug=True)
     print("�� Starting Ather CRM System...")
