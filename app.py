@@ -5493,7 +5493,80 @@ def update_event_lead(activity_uid):
     except Exception as e:
         flash(f'Error updating event lead: {str(e)}', 'error')
         return redirect(url_for('ps_dashboard'))
-
+@app.route('/update_event_lead_cre/<activity_uid>', methods=['GET', 'POST'])
+@require_cre
+def update_event_lead_cre(activity_uid):
+    try:
+        # Fetch the event lead by activity_uid
+        result = supabase.table('activity_leads').select('*').eq('activity_uid', activity_uid).execute()
+        if not result.data:
+            flash('Event lead not found', 'error')
+            return redirect(url_for('cre_dashboard'))
+        lead = result.data[0]
+        
+        # Check if this CRE is assigned to this lead
+        cre_name = session.get('cre_name')
+        if lead.get('cre_assigned') != cre_name:
+            flash('You are not authorized to update this event lead', 'error')
+            return redirect(url_for('cre_dashboard'))
+        
+        # Determine next call and completed calls for CRE follow-ups
+        call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
+        completed_calls = []
+        next_call = 'first'
+        for call_num in call_order:
+            call_date_key = f'cre_{call_num}_call_date'
+            if lead.get(call_date_key):
+                completed_calls.append(call_num)
+            else:
+                next_call = call_num
+                break
+        
+        if request.method == 'POST':
+            update_data = {}
+            customer_name = request.form.get('customer_name', '').strip()
+            lead_category = request.form.get('lead_category', '').strip()
+            interested_model = request.form.get('interested_model', '').strip()
+            customer_location = request.form.get('customer_location', '').strip()
+            cre_followup_date_ts = request.form.get('cre_followup_date_ts', '').strip()
+            lead_status = request.form.get('lead_status', '').strip()
+            final_status = request.form.get('final_status', '').strip()
+            call_date = request.form.get('call_date', '').strip()
+            call_remark = request.form.get('call_remark', '').strip()
+            
+            # Update editable fields
+            if customer_name:
+                update_data['customer_name'] = customer_name
+            if lead_category:
+                update_data['lead_category'] = lead_category
+            if interested_model:
+                update_data['interested_model'] = interested_model
+            if customer_location:
+                update_data['customer_location'] = customer_location
+            if cre_followup_date_ts:
+                update_data['cre_followup_date'] = cre_followup_date_ts
+            if lead_status:
+                update_data['lead_status'] = lead_status
+            if final_status:
+                update_data['final_status'] = final_status
+            
+            # Handle CRE call date/remark for the next call
+            if call_date:
+                update_data[f'cre_{next_call}_call_date'] = call_date
+            if call_remark:
+                update_data[f'cre_{next_call}_call_remark'] = call_remark
+            
+            if update_data:
+                supabase.table('activity_leads').update(update_data).eq('activity_uid', activity_uid).execute()
+                flash('Event lead updated successfully', 'success')
+                return redirect(url_for('cre_dashboard'))
+            else:
+                flash('No changes to update', 'info')
+        
+        return render_template('update_event_lead_cre.html', lead=lead, next_call=next_call, completed_calls=completed_calls, today=date.today())
+    except Exception as e:
+        flash(f'Error updating event lead: {str(e)}', 'error')
+        return redirect(url_for('cre_dashboard'))
 if __name__ == '__main__':
     # socketio.run(app, debug=True)
     print("�� Starting Ather CRM System...")

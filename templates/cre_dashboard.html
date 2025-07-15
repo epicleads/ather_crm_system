@@ -741,6 +741,11 @@
                         <tbody>
                             {% for lead in event_event_leads %}
                             <tr>
+                                <td>
+                                    <a href="{{ url_for('update_event_lead_cre', activity_uid=lead.activity_uid) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-edit"></i> Update
+                                    </a>
+                                </td>
                                 <td>{{ lead.activity_name }}</td>
                                 <td>{{ lead.activity_location }}</td>
                                 <td>{{ lead.ps_name }}</td>
