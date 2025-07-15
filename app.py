@@ -40,6 +40,8 @@ matplotlib.use('Agg')  # For headless environments
 import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.backends.backend_pdf import PdfPages
+import pytz
+import pandas as pd
 
 # Load environment variables from .env file
 load_dotenv()
@@ -5347,76 +5349,83 @@ def cre_analytics_data():
             'error': str(e)
         })
 
-@app.route('/negative_call_attempt_history')
+@app.route('/negative_call_attempt_history', methods=['GET'])
 @require_admin
 def negative_call_attempt_history():
     from_date = request.args.get('from_date')
     to_date = request.args.get('to_date')
-    call_no_map = {
-        'first': 'F1', 'second': 'F2', 'third': 'F3',
-        'fourth': 'F4', 'fifth': 'F5', 'sixth': 'F6', 'seventh': 'F7'
-    }
-    def parse_ts(ts):
-        if not ts: return None
-        try:
-            if 'T' in ts:
-                return datetime.fromisoformat(ts.replace('Z', '+00:00'))
-            else:
-                return datetime.strptime(ts, '%Y-%m-%d %H:%M:%S')
-        except Exception:
-            return None
-    def in_range(ts):
-        if not ts: return False
-        if from_date and to_date:
-            try:
-                from_dt = datetime.strptime(from_date, '%Y-%m-%d')
-                to_dt = datetime.strptime(to_date, '%Y-%m-%d')
-                return from_dt <= ts.date() <= to_dt
-            except Exception:
-                return True
-        return True
-    cre_attempts = safe_get_data('cre_call_attempt_history', select_fields='call_no,created_at,remarks,status,lead_status')
-    ps_attempts = safe_get_data('ps_call_attempt_history', select_fields='call_no,created_at,remarks,status,lead_status')
-    # Dynamically build the list of all unique statuses
-    all_statuses = set()
-    for att in cre_attempts + ps_attempts:
-        feedback = (att.get('remarks') or att.get('status') or att.get('lead_status') or '').strip()
-        if feedback:
-            all_statuses.add(feedback)
-    negative_reasons = sorted(all_statuses)
-    def count_negatives(attempts):
-        result = {reason: [0]*7 for reason in negative_reasons}
-        for att in attempts:
-            call_no = (att.get('call_no') or '').strip().lower()
-            created_at = parse_ts(att.get('created_at'))
-            feedback = (att.get('remarks') or att.get('status') or att.get('lead_status') or '').strip()
-            if call_no in call_no_map and in_range(created_at) and feedback in negative_reasons:
-                idx = int(call_no_map[call_no][1]) - 1  # F1->0, F2->1, ...
-                result[feedback][idx] += 1
-        return result
-    def count_totals(attempts):
-        totals = [0]*7
-        call_no_map_idx = {
-            'first': 0, 'second': 1, 'third': 2,
-            'fourth': 3, 'fifth': 4, 'sixth': 5, 'seventh': 6
-        }
-        for att in attempts:
-            call_no = (att.get('call_no') or '').strip().lower()
-            idx = call_no_map_idx.get(call_no)
-            if idx is not None:
-                totals[idx] += 1
-        return totals
-    cre_data = count_negatives(cre_attempts)
-    ps_data = count_negatives(ps_attempts)
-    cre_totals = count_totals(cre_attempts)
-    ps_totals = count_totals(ps_attempts)
+    call_no_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
+    # Fetch data (only columns that exist)
+    cre_attempts = safe_get_data('cre_call_attempt_history', select_fields='call_no,created_at,status')
+    ps_attempts = safe_get_data('ps_call_attempt_history', select_fields='call_no,updated_at,status')
+    # Parse date filters
+    start_date = pd.to_datetime(from_date) if from_date else None
+    end_date = pd.to_datetime(to_date) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1) if to_date else None
+    cre_filtered, cre_statuses = get_cre_feedback_analysis(cre_attempts, call_no_order, start_date, end_date)
+    ps_filtered, ps_statuses = get_ps_feedback_analysis(ps_attempts, call_no_order, start_date, end_date)
+    # Debug prints
+    print('CRE Statuses:', cre_statuses)
+    print('CRE Filtered Data:', cre_filtered)
+    print('PS Statuses:', ps_statuses)
+    print('PS Filtered Data:', ps_filtered)
     return jsonify({
-        'CRE': cre_data,
-        'PS': ps_data,
-        'reasons': negative_reasons,
-        'CRE_totals': cre_totals,
-        'PS_totals': ps_totals
+        'statuses': cre_statuses,  # for CRE table
+        'ps_statuses': ps_statuses,  # for PS table (optional, for symmetry)
+        'call_no_order': call_no_order,
+        'CRE': {'filtered': cre_filtered},
+        'PS': {'filtered': ps_filtered}
     })
+
+def get_cre_feedback_analysis(cre_attempts, call_no_order, start_date, end_date):
+    cre_df = pd.DataFrame(cre_attempts)
+    print("Sample cre_attempts:", cre_attempts[:5])  # Debug: print sample data
+    if cre_df.empty:
+        print("No data in cre_attempts!")
+        return {call_no: {} for call_no in call_no_order}, []
+    cre_df['created_at'] = pd.to_datetime(cre_df['created_at'], errors='coerce')
+    # --- Fix: Localize filter dates if needed ---
+    if start_date is not None and end_date is not None:
+        if pd.api.types.is_datetime64tz_dtype(cre_df['created_at']):
+            if start_date.tzinfo is None:
+                start_date = start_date.tz_localize('UTC')
+            if end_date.tzinfo is None:
+                end_date = end_date.tz_localize('UTC')
+        cre_df = cre_df[(cre_df['created_at'] >= start_date) & (cre_df['created_at'] <= end_date)]
+    cre_df['status'] = cre_df['status'].fillna('').astype(str).str.strip()
+    print("Unique statuses in data:", cre_df['status'].unique())  # Debug: print unique statuses
+    grouped = cre_df.groupby(['call_no', 'status']).size().reset_index(name='count')
+    print("\nGrouped data (call_no, status, count):\n", grouped)  # Debug: print grouped data
+    cre_filtered = {call_no: {} for call_no in call_no_order}
+    for call_no in call_no_order:
+        call_data = grouped[grouped['call_no'] == call_no]
+        for _, row in call_data.iterrows():
+            cre_filtered[call_no][row['status']] = int(row['count'])
+    print("\nCRE Filtered Data:", cre_filtered)  # Debug: print final filtered data
+    return cre_filtered, sorted(cre_df['status'].unique())
+
+def get_ps_feedback_analysis(ps_attempts, call_no_order, start_date, end_date):
+    ps_df = pd.DataFrame(ps_attempts)
+    ps_statuses = []
+    ps_filtered = {call_no: {} for call_no in call_no_order}
+    if not ps_df.empty:
+        ps_df['updated_at'] = pd.to_datetime(ps_df['updated_at'], errors='coerce')
+        # --- Fix: Localize filter dates if needed ---
+        if start_date is not None and end_date is not None:
+            if pd.api.types.is_datetime64tz_dtype(ps_df['updated_at']):
+                if start_date.tzinfo is None:
+                    start_date = start_date.tz_localize('UTC')
+                if end_date.tzinfo is None:
+                    end_date = end_date.tz_localize('UTC')
+            ps_df = ps_df[(ps_df['updated_at'] >= start_date) & (ps_df['updated_at'] <= end_date)]
+        ps_df['status'] = ps_df['status'].fillna('').astype(str).str.strip()
+        ps_statuses = sorted(ps_df['status'].unique())
+        grouped = ps_df.groupby(['call_no', 'status']).size().reset_index(name='count')
+        for call_no in call_no_order:
+            call_data = grouped[grouped['call_no'] == call_no]
+            ps_filtered[call_no] = {status: 0 for status in ps_statuses}
+            for _, row in call_data.iterrows():
+                ps_filtered[call_no][row['status']] = int(row['count'])
+    return ps_filtered, ps_statuses
 
 @app.route('/get_cre_list')
 @require_admin
