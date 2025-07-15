@@ -1904,11 +1904,31 @@ def cre_dashboard():
         reverse=True
     )
     total_fresh_leads = len(fresh_leads_sorted)
-    # Get today's followups
+    # Get today's followups (from lead_master)
     todays_followups = [
         lead for lead in all_leads
         if lead.get('follow_up_date') and str(lead.get('follow_up_date')).startswith(str(today))
     ]
+
+    # Add event leads with today's cre_followup_date
+    event_leads_today = []
+    for lead in event_event_leads:
+        cre_followup_date = lead.get('cre_followup_date')
+        if cre_followup_date and str(cre_followup_date)[:10] == str(today):
+            # Map fields to match event leads table format
+            event_lead_row = {
+                'is_event_lead': True,
+                'activity_uid': lead.get('activity_uid'),
+                'customer_name': lead.get('customer_name'),
+                'customer_phone_number': lead.get('customer_phone_number'),
+                'lead_status': lead.get('lead_status'),
+                'location': lead.get('location'),
+                'activity_name': lead.get('activity_name'),
+            }
+            event_leads_today.append(event_lead_row)
+    # Add to todays_followups
+    for event_lead in event_leads_today:
+        todays_followups.append(event_lead)
 
     # Get attended leads (leads with at least one call)
     attended_leads = [lead for lead in all_leads if lead.get('first_call_date')]
