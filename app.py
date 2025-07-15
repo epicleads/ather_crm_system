@@ -5668,22 +5668,44 @@ def update_event_lead_cre(activity_uid):
 @app.route('/admin_duplicate_leads', methods=['GET'])
 @require_admin
 def admin_duplicate_leads():
-    # Separate search filters
+    # Get filters and pagination params
     search_uid = request.args.get('search_uid', '').strip().lower()
     search_source = request.args.get('search_source', '').strip().lower()
     search_name = request.args.get('search_name', '').strip().lower()
     from_date = request.args.get('from_date', '').strip()
     to_date = request.args.get('to_date', '').strip()
     date_range_type = request.args.get('date_range_type', 'all_time')
+    # Get filters and pagination params
+    try:
+        page = int(request.args.get('page', 1))
+    except (ValueError, TypeError):
+        page = 1
+    page_size = 50
+    offset = (page - 1) * page_size
 
-    # Fetch all duplicate leads
-    result = supabase.table('duplicate_leads').select('*').execute()
+    # Build Supabase query with filters
+    query = supabase.table('duplicate_leads').select('*')
+    if search_uid:
+        query = query.ilike('uid', f'%{search_uid}%')
+    if search_name:
+        query = query.ilike('customer_name', f'%{search_name}%')
+    if search_source:
+        # No ilike for array fields, so filter after fetch for sources
+        pass
+    # Date filter will be applied after fetch (since last_enquiry_date is computed)
+
+    # Fetch total count for pagination (without limit)
+    total_result = query.execute()
+    total_count = len(total_result.data or [])
+
+    # Fetch only the current page
+    query = query.range(offset, offset + page_size - 1)
+    result = query.execute()
     duplicate_leads = result.data or []
 
-    # Prepare leads for display
+    # Prepare leads for display (apply source/date filter in Python if needed)
     leads_display = []
     for lead in duplicate_leads:
-        # Gather all sources, sub_sources, dates
         sources = []
         sub_sources = []
         dates = []
@@ -5697,10 +5719,7 @@ def admin_duplicate_leads():
                 sub_sources.append(sub)
             if dt:
                 dates.append(dt)
-        # Last enquiry date
         last_enquiry_date = max([d for d in dates if d], default=None)
-        # (Removed debug print)
-        # Calculate days old
         days_old = None
         if last_enquiry_date:
             try:
@@ -5708,21 +5727,14 @@ def admin_duplicate_leads():
                 days_old = (date.today() - last_date).days
             except Exception:
                 days_old = None
-        # Assigned CRE (from lead_master)
         cre_name = None
         assigned = False
         lm_result = supabase.table('lead_master').select('cre_name').eq('uid', lead['uid']).execute()
         if lm_result.data and lm_result.data[0].get('cre_name'):
             cre_name = lm_result.data[0]['cre_name']
             assigned = True
-        # Filter by UID
-        if search_uid and search_uid not in str(lead.get('uid', '')).lower():
-            continue
         # Filter by Source (any source)
         if search_source and not any(search_source in (s or '').lower() for s in sources):
-            continue
-        # Filter by Name
-        if search_name and search_name not in str(lead.get('customer_name', '')).lower():
             continue
         # Date range filter (if select_date)
         if date_range_type == 'select_date' and from_date and to_date:
@@ -5748,7 +5760,28 @@ def admin_duplicate_leads():
             'cre_name': cre_name,
             'assigned': assigned
         })
-    return render_template('admin_duplicate_leads.html', duplicate_leads=leads_display)
+    # Calculate total pages
+    total_pages = (total_count + page_size - 1) // page_size
+    current_args = request.args.to_dict()
+    # Previous page URL
+    prev_url = None
+    if page > 1:
+        prev_args = current_args.copy()
+        prev_args['page'] = page - 1
+        prev_url = url_for('admin_duplicate_leads', **prev_args)
+    # Next page URL
+    next_url = None
+    if page < total_pages:
+        next_args = current_args.copy()
+        next_args['page'] = page + 1
+        next_url = url_for('admin_duplicate_leads', **next_args)
+    # Page URLs for numbered links
+    page_urls = []
+    for p in range(1, total_pages + 1):
+        page_args = current_args.copy()
+        page_args['page'] = p
+        page_urls.append(url_for('admin_duplicate_leads', **page_args))
+    return render_template('admin_duplicate_leads.html', duplicate_leads=leads_display, page=page, total_pages=total_pages, total_count=total_count, prev_url=prev_url, next_url=next_url, page_urls=page_urls)
 
 @app.route('/convert_duplicate_to_fresh/<uid>', methods=['POST'])
 @require_admin

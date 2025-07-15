@@ -104,6 +104,23 @@
             </tbody>
         </table>
     </div>
+    <!-- Pagination controls -->
+    <nav aria-label="Duplicate Leads Pagination">
+        <ul class="pagination justify-content-center">
+            <li class="page-item {% if not prev_url %}disabled{% endif %}">
+                <a class="page-link" href="{{ prev_url or '#' }}" tabindex="-1">Previous</a>
+            </li>
+            {% for p in range(1, total_pages+1) %}
+                <li class="page-item {% if p == page %}active{% endif %}">
+                    <a class="page-link" href="{{ page_urls[p-1] }}">{{ p }}</a>
+                </li>
+            {% endfor %}
+            <li class="page-item {% if not next_url %}disabled{% endif %}">
+                <a class="page-link" href="{{ next_url or '#' }}">Next</a>
+            </li>
+        </ul>
+        <div class="text-center text-muted mb-3">Showing page {{ page }} of {{ total_pages }} ({{ total_count }} total records)</div>
+    </nav>
     {% if not duplicate_leads %}
         <div class="alert alert-info text-center">No duplicate leads found.</div>
     {% endif %}
