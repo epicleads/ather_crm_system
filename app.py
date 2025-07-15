@@ -5441,6 +5441,7 @@ def update_event_lead(activity_uid):
             flash('Event lead not found', 'error')
             return redirect(url_for('ps_dashboard'))
         lead = result.data[0]
+        print('[DEBUG] Lead data (PS):', lead)
         # Determine next call and completed calls for PS follow-ups
         call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
         completed_calls = []
@@ -5452,6 +5453,33 @@ def update_event_lead(activity_uid):
             else:
                 next_call = call_num
                 break
+        
+        # Build PS call history
+        ps_call_history = []
+        for call_num in call_order:
+            call_date = lead.get(f'ps_{call_num}_call_date')
+            call_remark = lead.get(f'ps_{call_num}_call_remark')
+            if call_date or call_remark:
+                ps_call_history.append({
+                    'call': call_num,
+                    'date': call_date,
+                    'remark': call_remark
+                })
+        
+        # Build CRE call history
+        cre_call_history = []
+        for call_num in call_order:
+            call_date = lead.get(f'cre_{call_num}_call_date')
+            call_remark = lead.get(f'cre_{call_num}_call_remark')
+            if call_date or call_remark:
+                cre_call_history.append({
+                    'call': call_num,
+                    'date': call_date,
+                    'remark': call_remark
+                })
+        print('[DEBUG] PS call history:', ps_call_history)
+        print('[DEBUG] CRE call history:', cre_call_history)
+        
         if request.method == 'POST':
             update_data = {}
             customer_name = request.form.get('customer_name', '').strip()
@@ -5489,10 +5517,17 @@ def update_event_lead(activity_uid):
                 return redirect(url_for('ps_dashboard'))
             else:
                 flash('No changes to update', 'info')
-        return render_template('update_event_lead.html', lead=lead, next_call=next_call, completed_calls=completed_calls, today=date.today())
+        return render_template('update_event_lead.html', 
+                             lead=lead, 
+                             next_call=next_call, 
+                             completed_calls=completed_calls, 
+                             ps_call_history=ps_call_history,
+                             cre_call_history=cre_call_history,
+                             today=date.today())
     except Exception as e:
         flash(f'Error updating event lead: {str(e)}', 'error')
         return redirect(url_for('ps_dashboard'))
+
 @app.route('/update_event_lead_cre/<activity_uid>', methods=['GET', 'POST'])
 @require_cre
 def update_event_lead_cre(activity_uid):
@@ -5503,6 +5538,7 @@ def update_event_lead_cre(activity_uid):
             flash('Event lead not found', 'error')
             return redirect(url_for('cre_dashboard'))
         lead = result.data[0]
+        print('[DEBUG] Lead data (CRE):', lead)
         
         # Check if this CRE is assigned to this lead
         cre_name = session.get('cre_name')
@@ -5521,6 +5557,32 @@ def update_event_lead_cre(activity_uid):
             else:
                 next_call = call_num
                 break
+        
+        # Build CRE call history
+        cre_call_history = []
+        for call_num in call_order:
+            call_date = lead.get(f'cre_{call_num}_call_date')
+            call_remark = lead.get(f'cre_{call_num}_call_remark')
+            if call_date or call_remark:
+                cre_call_history.append({
+                    'call': call_num,
+                    'date': call_date,
+                    'remark': call_remark
+                })
+        
+        # Build PS call history
+        ps_call_history = []
+        for call_num in call_order:
+            call_date = lead.get(f'ps_{call_num}_call_date')
+            call_remark = lead.get(f'ps_{call_num}_call_remark')
+            if call_date or call_remark:
+                ps_call_history.append({
+                    'call': call_num,
+                    'date': call_date,
+                    'remark': call_remark
+                })
+        print('[DEBUG] CRE call history:', cre_call_history)
+        print('[DEBUG] PS call history:', ps_call_history)
         
         if request.method == 'POST':
             update_data = {}
@@ -5563,7 +5625,13 @@ def update_event_lead_cre(activity_uid):
             else:
                 flash('No changes to update', 'info')
         
-        return render_template('update_event_lead_cre.html', lead=lead, next_call=next_call, completed_calls=completed_calls, today=date.today())
+        return render_template('update_event_lead_cre.html', 
+                             lead=lead, 
+                             next_call=next_call, 
+                             completed_calls=completed_calls, 
+                             cre_call_history=cre_call_history,
+                             ps_call_history=ps_call_history,
+                             today=date.today())
     except Exception as e:
         flash(f'Error updating event lead: {str(e)}', 'error')
         return redirect(url_for('cre_dashboard'))
