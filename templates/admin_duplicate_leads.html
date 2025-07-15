@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Duplicate Leads - Admin{% endblock %}
+{% block content %}
+<div class="container-fluid mt-4 px-4">
+    <h2 class="mb-4"><i class="fas fa-clone text-danger"></i> Duplicate Leads Management</h2>
+    <form class="row g-3 mb-3 align-items-end" method="get" id="filterForm">
+        <div class="col-md-3">
+            <input type="text" class="form-control" name="search_uid" placeholder="Search by UID" value="{{ request.args.get('search_uid', '') }}">
+        </div>
+        <div class="col-md-3">
+            <input type="text" class="form-control" name="search_source" placeholder="Search by Source" value="{{ request.args.get('search_source', '') }}">
+        </div>
+        <div class="col-md-3">
+            <input type="text" class="form-control" name="search_name" placeholder="Search by Name" value="{{ request.args.get('search_name', '') }}">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Date Range</label>
+            <select class="form-select" id="dateRangeType" name="date_range_type" onchange="toggleDateFields()">
+                <option value="all_time" {% if request.args.get('date_range_type', 'all_time') == 'all_time' %}selected{% endif %}>All Time</option>
+                <option value="select_date" {% if request.args.get('date_range_type') == 'select_date' %}selected{% endif %}>Select Date</option>
+            </select>
+            <div id="dateFields" style="display: {% if request.args.get('date_range_type') == 'select_date' %}block{% else %}none{% endif %}; margin-top: 8px;">
+                <div class="row">
+                    <div class="col d-flex align-items-center">
+                        <label for="from_date" class="form-label me-2 mb-0">FROM</label>
+                        <input type="date" class="form-control" id="from_date" name="from_date" value="{{ request.args.get('from_date', '') }}">
+                    </div>
+                    <div class="col d-flex align-items-center">
+                        <label for="to_date" class="form-label me-2 mb-0">TO</label>
+                        <input type="date" class="form-control" id="to_date" name="to_date" value="{{ request.args.get('to_date', '') }}">
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-12 text-end">
+            <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Filter</button>
+        </div>
+    </form>
+    <script>
+    function toggleDateFields() {
+        var type = document.getElementById('dateRangeType').value;
+        document.getElementById('dateFields').style.display = (type === 'select_date') ? 'block' : 'none';
+    }
+    </script>
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover align-middle w-100">
+            <thead class="table-dark">
+                <tr>
+                    <th>UID</th>
+                    <th>Name</th>
+                    <th>Phone</th>
+                    <th>Sources</th>
+                    <th>Sub-Sources</th>
+                    <th>Last Enquiry Date</th>
+                    <th>Days Old</th>
+                    <th>Assigned CRE</th>
+                    <th>Assigned?</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for lead in duplicate_leads %}
+                <tr>
+                    <td>{{ lead.uid }}</td>
+                    <td>{{ lead.customer_name }}</td>
+                    <td>{{ lead.customer_mobile_number }}</td>
+                    <td>
+                        {% for src in lead.sources %}
+                            <span class="badge bg-info">{{ src }}</span> 
+                        {% endfor %}
+                    </td>
+                    <td>
+                        {% for sub in lead.sub_sources %}
+                            {% if sub and sub|lower != 'unknown' %}
+                                <span class="badge bg-secondary">{{ sub }}</span> 
+                            {% endif %}
+                        {% endfor %}
+                    </td>
+                    <td>{{ lead.last_enquiry_date }}</td>
+                    <td>
+                        {% if lead.days_old == 0 %}
+                            <span class="badge bg-success">Fresh</span>
+                        {% else %}
+                            <span class="badge bg-warning">{{ lead.days_old }} days</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ lead.cre_name or 'Unassigned' }}</td>
+                    <td>
+                        {% if lead.cre_name %}
+                            <span class="badge bg-success">Yes</span>
+                        {% else %}
+                            <span class="badge bg-danger">No</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="post" action="{{ url_for('convert_duplicate_to_fresh', uid=lead.uid) }}" style="display:inline;">
+                            <button type="submit" class="btn btn-sm btn-outline-primary" onclick="return confirm('Are you sure you want to convert this duplicate to a fresh lead?')">
+                                <i class="fas fa-plus"></i> Convert to Fresh Lead
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if not duplicate_leads %}
+        <div class="alert alert-info text-center">No duplicate leads found.</div>
+    {% endif %}
+</div>
+{% endblock %} 
