@@ -722,20 +722,12 @@
                     <table class="table table-hover mb-0" id="eventLeadsTable">
                         <thead class="table-dark">
                             <tr>
-                                <th>Activity Name</th>
-                                <th>Activity Location</th>
-                                <th>PS Name</th>
-                                <th>Branch</th>
+                                <th>Action</th>
                                 <th>Customer Name</th>
                                 <th>Mobile</th>
-                                <th>Customer Location</th>
-                                <th>Profession</th>
-                                <th>Gender</th>
-                                <th>Interested Model</th>
-                                <th>Remarks</th>
                                 <th>Lead Status</th>
-                                <th>Month</th>
-                                <th>Date</th>
+                                <th>Branch</th>
+                                <th>Activity Name</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -746,20 +738,11 @@
                                         <i class="fas fa-edit"></i> Update
                                     </a>
                                 </td>
-                                <td>{{ lead.activity_name }}</td>
-                                <td>{{ lead.activity_location }}</td>
-                                <td>{{ lead.ps_name }}</td>
-                                <td>{{ lead.location }}</td>
                                 <td>{{ lead.customer_name }}</td>
                                 <td>{{ lead.customer_phone_number }}</td>
-                                <td>{{ lead.customer_location }}</td>
-                                <td>{{ lead.customer_profession }}</td>
-                                <td>{{ lead.gender }}</td>
-                                <td>{{ lead.interested_model }}</td>
-                                <td>{{ lead.remarks }}</td>
                                 <td>{{ lead.lead_status }}</td>
-                                <td>{{ lead.month }}</td>
-                                <td>{{ lead.date }}</td>
+                                <td>{{ lead.location }}</td>
+                                <td>{{ lead.activity_name }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
