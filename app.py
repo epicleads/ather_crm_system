@@ -5819,6 +5819,57 @@ def convert_duplicate_to_fresh(uid):
         flash(f'Error converting lead: {str(e)}', 'error')
     return redirect(url_for('admin_duplicate_leads'))
 
+@app.route('/api/hot_duplicate_leads')
+@require_admin
+def api_hot_duplicate_leads():
+    """API endpoint to get duplicate leads created in the last 1 day (hot duplicates)"""
+    from datetime import datetime, date
+    try:
+        # Fetch all duplicate leads (limit to 200 for performance)
+        result = supabase.table('duplicate_leads').select('*').limit(200).execute()
+        duplicate_leads = result.data or []
+        hot_leads = []
+        for lead in duplicate_leads:
+            dates = []
+            for i in range(1, 11):
+                dt = lead.get(f'date{i}')
+                if dt:
+                    dates.append(dt)
+            last_enquiry_date = max([d for d in dates if d], default=None)
+            days_old = None
+            if last_enquiry_date:
+                try:
+                    last_date = datetime.strptime(last_enquiry_date, '%Y-%m-%d').date()
+                    days_old = (date.today() - last_date).days
+                except Exception:
+                    days_old = None
+            # Only include if days_old is 0 or 1 (today or yesterday)
+            if days_old is not None and days_old <= 1:
+                hot_leads.append({
+                    'uid': lead.get('uid'),
+                    'customer_name': lead.get('customer_name'),
+                    'customer_mobile_number': lead.get('customer_mobile_number'),
+                    'last_enquiry_date': last_enquiry_date,
+                    'days_old': days_old
+                })
+        # Sort by most recent (days_old, then last_enquiry_date desc)
+        hot_leads.sort(key=lambda x: (x['days_old'], x['last_enquiry_date']), reverse=False)
+        return jsonify({'success': True, 'hot_leads': hot_leads})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e), 'hot_leads': []})
+
+@app.route('/delete_duplicate_lead', methods=['POST'])
+@require_admin
+def delete_duplicate_lead():
+    uid = request.form.get('uid')
+    if not uid:
+        return jsonify({'success': False, 'message': 'No UID provided'})
+    try:
+        supabase.table('duplicate_leads').delete().eq('uid', uid).execute()
+        return jsonify({'success': True, 'message': 'Duplicate lead deleted successfully'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error deleting duplicate lead: {str(e)}'})
+
 if __name__ == '__main__':
     # socketio.run(app, debug=True)
     print("�� Starting Ather CRM System...")
