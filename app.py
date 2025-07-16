@@ -586,15 +586,15 @@ def unified_login() -> Response:
         if not bh['Is Active']:
             flash('User is inactive', 'error')
             return redirect(url_for('index'))
-        from werkzeug.security import check_password_hash
-        if not check_password_hash(bh['Password'], password):
-            flash('Invalid username or password', 'error')
+        # Use plain text password comparison for Branch Head
+        if bh['Password'] != password:
+            flash('Incorrect password', 'error')
             return redirect(url_for('index'))
         session['branch_head_id'] = bh['id']
         session['branch_head_name'] = bh['Name']
         session['branch_head_branch'] = bh['Branch']
         flash('Welcome! Logged in as Branch Head', 'success')
-        return redirect(url_for('branch_head_dashboard'))
+        return redirect('/branch_head_dashboard')
 
     # Existing logic for admin, cre, ps
     t_user = time.time()
@@ -630,7 +630,6 @@ def unified_login() -> Response:
         flash('Invalid username or password', 'error')
         print(f"[PERF] unified_login TOTAL (invalid login) took {time.time() - start_time:.3f} seconds")
         return redirect(url_for('index'))
-
 # Keep the old login routes for backward compatibility (redirect to unified login)
 @app.route('/admin_login', methods=['GET', 'POST'])
 def admin_login():
@@ -5848,7 +5847,7 @@ def convert_duplicate_to_fresh(uid):
         flash(f'Error converting lead: {str(e)}', 'error')
     return redirect(url_for('admin_duplicate_leads'))
 
-<<<<<<< HEAD
+
 @app.route('/check_username')
 def check_username():
     username = request.args.get('username', '').strip()
@@ -6056,7 +6055,6 @@ def delete_duplicate_lead():
         return jsonify({'success': True, 'message': 'Duplicate lead deleted successfully'})
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error deleting duplicate lead: {str(e)}'})
->>>>>>> 9e511c9e3a3cce742ce182aba602d31b05a8e059
 
 if __name__ == '__main__':
     # socketio.run(app, debug=True)
