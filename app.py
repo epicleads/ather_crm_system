@@ -603,6 +603,7 @@ def unified_login() -> Response:
     if success:
         t2 = time.time()
         session_id = auth_manager.create_session(user_data['id'], user_type, user_data)
+        print(f"DEBUG: Logged in as user_type={user_type}, session.user_type={session.get('user_type')}")
         print(f"[PERF] unified_login: create_session took {time.time() - t2:.3f} seconds")
         if session_id:
             flash(f'Welcome! Logged in as {user_type.upper()}', 'success')
@@ -5552,10 +5553,16 @@ def update_event_lead(activity_uid):
             if final_status:
                 update_data['final_status'] = final_status
             # Handle PS call date/remark for the next call
-            if call_date:
-                update_data[f'ps_{next_call}_call_date'] = call_date
-            if call_remark:
-                update_data[f'ps_{next_call}_call_remark'] = call_remark
+            skip_statuses = ["Call not Connected", "RNR", "Call me Back", "Busy on another Call"]
+            if lead_status not in skip_statuses:
+                if call_date:
+                    update_data[f'ps_{next_call}_call_date'] = call_date
+                if call_remark:
+                    update_data[f'ps_{next_call}_call_remark'] = call_remark
+            # Always remove these keys if status is in skip list, even if present
+            if lead_status in skip_statuses:
+                update_data.pop(f'ps_{next_call}_call_date', None)
+                update_data.pop(f'ps_{next_call}_call_remark', None)
             if update_data:
                 supabase.table('activity_leads').update(update_data).eq('activity_uid', activity_uid).execute()
                 flash('Event lead updated successfully', 'success')
@@ -5658,10 +5665,16 @@ def update_event_lead_cre(activity_uid):
                 update_data['final_status'] = final_status
             
             # Handle CRE call date/remark for the next call
-            if call_date:
-                update_data[f'cre_{next_call}_call_date'] = call_date
-            if call_remark:
-                update_data[f'cre_{next_call}_call_remark'] = call_remark
+            skip_statuses = ["Call not Connected", "RNR", "Call me Back", "Busy on another Call"]
+            if lead_status not in skip_statuses:
+                if call_date:
+                    update_data[f'cre_{next_call}_call_date'] = call_date
+                if call_remark:
+                    update_data[f'cre_{next_call}_call_remark'] = call_remark
+            # Always remove these keys if status is in skip list, even if present
+            if lead_status in skip_statuses:
+                update_data.pop(f'cre_{next_call}_call_date', None)
+                update_data.pop(f'cre_{next_call}_call_remark', None)
             
             if update_data:
                 supabase.table('activity_leads').update(update_data).eq('activity_uid', activity_uid).execute()
@@ -5835,6 +5848,7 @@ def convert_duplicate_to_fresh(uid):
         flash(f'Error converting lead: {str(e)}', 'error')
     return redirect(url_for('admin_duplicate_leads'))
 
+<<<<<<< HEAD
 @app.route('/check_username')
 def check_username():
     username = request.args.get('username', '').strip()
@@ -5991,6 +6005,58 @@ def branch_head_dashboard():
     if 'branch_head_id' not in session:
         return redirect(url_for('index'))
     return render_template('branch_head_dashboard.html')
+
+@app.route('/api/hot_duplicate_leads')
+@require_admin
+def api_hot_duplicate_leads():
+    """API endpoint to get duplicate leads created in the last 1 day (hot duplicates)"""
+    from datetime import datetime, date
+    try:
+        # Fetch all duplicate leads (limit to 200 for performance)
+        result = supabase.table('duplicate_leads').select('*').limit(200).execute()
+        duplicate_leads = result.data or []
+        hot_leads = []
+        for lead in duplicate_leads:
+            dates = []
+            for i in range(1, 11):
+                dt = lead.get(f'date{i}')
+                if dt:
+                    dates.append(dt)
+            last_enquiry_date = max([d for d in dates if d], default=None)
+            days_old = None
+            if last_enquiry_date:
+                try:
+                    last_date = datetime.strptime(last_enquiry_date, '%Y-%m-%d').date()
+                    days_old = (date.today() - last_date).days
+                except Exception:
+                    days_old = None
+            # Only include if days_old is 0 or 1 (today or yesterday)
+            if days_old is not None and days_old <= 1:
+                hot_leads.append({
+                    'uid': lead.get('uid'),
+                    'customer_name': lead.get('customer_name'),
+                    'customer_mobile_number': lead.get('customer_mobile_number'),
+                    'last_enquiry_date': last_enquiry_date,
+                    'days_old': days_old
+                })
+        # Sort by most recent (days_old, then last_enquiry_date desc)
+        hot_leads.sort(key=lambda x: (x['days_old'], x['last_enquiry_date']), reverse=False)
+        return jsonify({'success': True, 'hot_leads': hot_leads})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e), 'hot_leads': []})
+
+@app.route('/delete_duplicate_lead', methods=['POST'])
+@require_admin
+def delete_duplicate_lead():
+    uid = request.form.get('uid')
+    if not uid:
+        return jsonify({'success': False, 'message': 'No UID provided'})
+    try:
+        supabase.table('duplicate_leads').delete().eq('uid', uid).execute()
+        return jsonify({'success': True, 'message': 'Duplicate lead deleted successfully'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error deleting duplicate lead: {str(e)}'})
+>>>>>>> 9e511c9e3a3cce742ce182aba602d31b05a8e059
 
 if __name__ == '__main__':
     # socketio.run(app, debug=True)
