@@ -224,13 +224,14 @@
             <a class="navbar-brand" href="#">
                 <i class="fas fa-bolt"></i> Ather CRM
             </a>
-            <div class="navbar-nav ms-auto">
-                <span class="navbar-text me-3">
-                    <i class="fas fa-user"></i> Welcome, {{ session.username }}
-                </span>
-                <a class="btn btn-outline-light btn-sm" href="{{ url_for('logout') }}">
-                    <i class="fas fa-sign-out-alt"></i> Logout
-                </a>
+            <!-- Top bar with bell and welcome -->
+            <div class="d-flex align-items-center justify-content-end mb-3" style="gap: 18px;">
+                <div class="notification-bell" id="notificationBell" title="Hot Duplicate Leads">
+                    <i class="fas fa-bell"></i>
+                    <span class="badge" id="notificationCount">0</span>
+                </div>
+                <span class="fw-semibold" style="font-size:1.15rem;"><i class="fas fa-user me-2"></i>Welcome, admin</span>
+                <a href="{{ url_for('logout') }}" class="btn btn-outline-secondary ms-2"><i class="fas fa-sign-out-alt"></i> Logout</a>
             </div>
         </div>
     </nav>
@@ -408,6 +409,123 @@
             </div>
         </div>
     </div>
+
+    <!-- Notification Bell and Dropdown -->
+    <style>
+        .notification-bell {
+            font-size: 1.7rem;
+            color: #FFC107 !important; /* Golden color */
+            cursor: pointer;
+            position: relative;
+            display: flex;
+            align-items: center;
+            margin-right: 8px;
+        }
+        .notification-bell .badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #dc3545;
+            color: #fff;
+            border-radius: 50%;
+            font-size: 0.8rem;
+            padding: 2px 6px;
+            display: none;
+            z-index: 2;
+        }
+        .notification-dropdown {
+            display: none;
+            position: absolute;
+            top: 48px;
+            right: 0;
+            width: 340px;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+            z-index: 1000;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .notification-dropdown.active {
+            display: block;
+        }
+        .notification-item {
+            padding: 12px 16px;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .notification-item:last-child {
+            border-bottom: none;
+        }
+        .notification-item:hover {
+            background: #f8f9fa;
+        }
+        .notification-title {
+            font-weight: 600;
+            color: #c0392b;
+        }
+        .notification-date {
+            font-size: 0.92em;
+            color: #888;
+        }
+    </style>
+    <div class="notification-dropdown" id="notificationDropdown">
+        <div id="notificationList">
+            <div style="padding: 16px; text-align: center; color: #888;">Loading...</div>
+        </div>
+    </div>
+
+    <script>
+    // Fetch hot duplicate leads
+    function fetchHotLeads() {
+        fetch('/api/hot_duplicate_leads')
+            .then(res => res.json())
+            .then(data => {
+                const list = document.getElementById('notificationList');
+                const countBadge = document.getElementById('notificationCount');
+                if (!data.success || !data.hot_leads || data.hot_leads.length === 0) {
+                    list.innerHTML = '<div style="padding: 16px; text-align: center; color: #888;">No hot duplicate leads</div>';
+                    countBadge.style.display = 'none';
+                    return;
+                }
+                countBadge.textContent = data.hot_leads.length;
+                countBadge.style.display = 'inline-block';
+                list.innerHTML = data.hot_leads.map(lead => `
+                    <div class="notification-item" onclick="window.location.href='/admin_duplicate_leads?hot=1&uid=${encodeURIComponent(lead.uid)}'">
+                        <div class="notification-title">🔥 Duplicate: ${lead.customer_name || 'Unknown'} (${lead.uid})</div>
+                        <div class="notification-date">${lead.last_enquiry_date ? 'Enquiry: ' + lead.last_enquiry_date : ''} | <b>${lead.days_old === 0 ? 'Today' : '1 day ago'}</b></div>
+                        <div style='font-size:0.95em;color:#555;'>Mobile: ${lead.customer_mobile_number || 'N/A'}</div>
+                    </div>
+                `).join('');
+            })
+            .catch(err => {
+                document.getElementById('notificationList').innerHTML = '<div style="padding: 16px; text-align: center; color: #888;">Error loading notifications</div>';
+            });
+    }
+
+    // Toggle dropdown
+    const bell = document.getElementById('notificationBell');
+    const dropdown = document.getElementById('notificationDropdown');
+    bell.addEventListener('click', function(e) {
+        dropdown.classList.toggle('active');
+        if (dropdown.classList.contains('active')) {
+            fetchHotLeads();
+        }
+        e.stopPropagation();
+    });
+    // Hide dropdown when clicking outside
+    window.addEventListener('click', function(e) {
+        if (!dropdown.contains(e.target) && !bell.contains(e.target)) {
+            dropdown.classList.remove('active');
+        }
+    });
+    // Optionally, poll for new notifications every 2 minutes
+    setInterval(fetchHotLeads, 120000);
+    // Initial fetch
+    fetchHotLeads();
+    </script>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
