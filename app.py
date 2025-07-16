@@ -42,6 +42,7 @@ import seaborn as sns
 from matplotlib.backends.backend_pdf import PdfPages
 import pytz
 import pandas as pd
+from werkzeug.security import generate_password_hash
 
 # Load environment variables from .env file
 load_dotenv()
@@ -395,11 +396,9 @@ def safe_get_data(table_name, filters=None, select_fields='*', limit=10000):
 
 
 def create_or_update_ps_followup(lead_data, ps_name, ps_branch):
-    """Create or update PS followup record when lead is assigned to PS"""
+    from datetime import datetime
     try:
-        # Check if PS followup record already exists
         existing = supabase.table('ps_followup_master').select('*').eq('lead_uid', lead_data['uid']).execute()
-
         ps_followup_data = {
             'lead_uid': lead_data['uid'],
             'ps_name': ps_name,
@@ -411,16 +410,13 @@ def create_or_update_ps_followup(lead_data, ps_name, ps_branch):
             'lead_category': lead_data.get('lead_category'),
             'model_interested': lead_data.get('model_interested'),
             'final_status': 'Pending',
-            'ps_assigned_at': lead_data.get('ps_assigned_at')  # Sync assignment timestamp
+            'ps_assigned_at': lead_data.get('ps_assigned_at'),
+            'created_at': lead_data.get('created_at') or datetime.now().isoformat()
         }
-
         if existing.data:
-            # Update existing record
             supabase.table('ps_followup_master').update(ps_followup_data).eq('lead_uid', lead_data['uid']).execute()
         else:
-            # Create new record
             supabase.table('ps_followup_master').insert(ps_followup_data).execute()
-
     except Exception as e:
         print(f"Error creating/updating PS followup: {e}")
 
@@ -576,11 +572,31 @@ def unified_login() -> Response:
     password = request.form.get('password', '').strip()
     user_type = request.form.get('user_type', '').strip().lower()
 
-    valid_user_types = ['admin', 'cre', 'ps']
+    valid_user_types = ['admin', 'cre', 'ps', 'branch_head']
     if user_type not in valid_user_types:
-        flash('Please select a valid role (Admin, CRE, or PS)', 'error')
+        flash('Please select a valid role (Admin, CRE, PS, or Branch Head)', 'error')
         return redirect(url_for('index'))
 
+    if user_type == 'branch_head':
+        bh = supabase.table('Branch Head').select('*').eq('Username', username).execute().data
+        if not bh:
+            flash('Invalid username or password', 'error')
+            return redirect(url_for('index'))
+        bh = bh[0]
+        if not bh['Is Active']:
+            flash('User is inactive', 'error')
+            return redirect(url_for('index'))
+        from werkzeug.security import check_password_hash
+        if not check_password_hash(bh['Password'], password):
+            flash('Invalid username or password', 'error')
+            return redirect(url_for('index'))
+        session['branch_head_id'] = bh['id']
+        session['branch_head_name'] = bh['Name']
+        session['branch_head_branch'] = bh['Branch']
+        flash('Welcome! Logged in as Branch Head', 'success')
+        return redirect(url_for('branch_head_dashboard'))
+
+    # Existing logic for admin, cre, ps
     t_user = time.time()
     success, message, user_data = auth_manager.authenticate_user(username, password, user_type)
     print(f"[PERF] unified_login: authenticate_user({user_type}) took {time.time() - t_user:.3f} seconds")
@@ -613,7 +629,6 @@ def unified_login() -> Response:
         flash('Invalid username or password', 'error')
         print(f"[PERF] unified_login TOTAL (invalid login) took {time.time() - start_time:.3f} seconds")
         return redirect(url_for('index'))
-
 
 # Keep the old login routes for backward compatibility (redirect to unified login)
 @app.route('/admin_login', methods=['GET', 'POST'])
@@ -3076,7 +3091,8 @@ def walkin_customers():
                 'remarks': remarks if remarks else None,
                 'follow_up_date': follow_up_date if follow_up_date else None,
                 'status': status,
-                'pdf_path': None  # Will be updated in background
+                'pdf_path': None,  # Will be updated in background
+                'created_at': datetime.now().isoformat()
             }
 
             # --- Walk-in Follow-up Assignment Logic ---
@@ -5833,9 +5849,152 @@ def check_username():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/ps_analytics')
+@require_ps
+def ps_analytics():
+    try:
+        ps_name = session.get('ps_name')
+        # Get all relevant data
+        ps_followups = safe_get_data('ps_followup_master')
+        walkin_data = safe_get_data('walkin_data')
+        activity_leads = safe_get_data('activity_leads')
+
+        # Date filter (from/to) for won cases and assigned leads
+        from_date = request.args.get('from_date')
+        to_date = request.args.get('to_date')
+        def in_date_range(ts):
+            if not ts:
+                return False
+            from datetime import datetime
+            try:
+                dt = datetime.fromisoformat(ts.replace('Z', '+00:00')) if 'T' in ts else datetime.strptime(ts, '%Y-%m-%d')
+                if from_date:
+                    from_dt = datetime.strptime(from_date, '%Y-%m-%d')
+                    if dt < from_dt:
+                        return False
+                if to_date:
+                    to_dt = datetime.strptime(to_date, '%Y-%m-%d')
+                    if dt > to_dt:
+                        return False
+                return True
+            except Exception:
+                return False
+
+        # PS Won Cases (date filtered)
+        if not from_date and not to_date:
+            won_ps_followups = [lead for lead in ps_followups if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Won']
+            won_walkins = [lead for lead in walkin_data if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Won']
+            won_activities = [lead for lead in activity_leads if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Won']
+        else:
+            won_ps_followups = [lead for lead in ps_followups if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Won' and in_date_range(lead.get('won_timestamp'))]
+            won_walkins = [lead for lead in walkin_data if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Won' and in_date_range(lead.get('won_timestamp'))]
+            won_activities = [lead for lead in activity_leads if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Won' and in_date_range(lead.get('won_timestamp'))]
+        total_won_cases = len(won_ps_followups) + len(won_walkins) + len(won_activities)
+
+        # Conversion Rate (live, not date filtered)
+        total_won_all = len([lead for lead in ps_followups if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Won']) \
+            + len([lead for lead in walkin_data if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Won']) \
+            + len([lead for lead in activity_leads if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Won'])
+        total_assigned_live = len([lead for lead in ps_followups if lead.get('ps_name') == ps_name]) \
+            + len([lead for lead in walkin_data if lead.get('ps_name') == ps_name]) \
+            + len([lead for lead in activity_leads if lead.get('ps_name') == ps_name])
+        conversion_rate = round((total_won_all / total_assigned_live * 100), 2) if total_assigned_live > 0 else 0
+
+        # Walk-In Conversion Rate (live, not date filtered)
+        walkin_total = len([lead for lead in walkin_data if lead.get('ps_name') == ps_name])
+        walkin_won = len([lead for lead in walkin_data if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Won'])
+        walkin_conversion_rate = round((walkin_won / walkin_total * 100), 2) if walkin_total > 0 else 0
+
+        # Total Leads Assigned (date filtered by created_at)
+        def in_created_range(ts):
+            if not ts:
+                return False
+            from datetime import datetime
+            try:
+                dt = datetime.fromisoformat(ts.replace('Z', '+00:00')) if 'T' in ts else datetime.strptime(ts, '%Y-%m-%d')
+                if from_date:
+                    from_dt = datetime.strptime(from_date, '%Y-%m-%d')
+                    if dt < from_dt:
+                        return False
+                if to_date:
+                    to_dt = datetime.strptime(to_date, '%Y-%m-%d')
+                    if dt > to_dt:
+                        return False
+                return True
+            except Exception:
+                return False
+        assigned_ps_followups = [lead for lead in ps_followups if lead.get('ps_name') == ps_name and in_created_range(lead.get('created_at'))]
+        assigned_walkins = [lead for lead in walkin_data if lead.get('ps_name') == ps_name and in_created_range(lead.get('created_at'))]
+        assigned_activities = [lead for lead in activity_leads if lead.get('ps_name') == ps_name and in_created_range(lead.get('created_at'))]
+        total_assigned = len(assigned_ps_followups) + len(assigned_walkins) + len(assigned_activities)
+
+        # Total Pending Cases (not date filtered)
+        pending_ps_followups = [lead for lead in ps_followups if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Pending']
+        pending_walkins = [lead for lead in walkin_data if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Pending']
+        pending_activities = [lead for lead in activity_leads if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Pending']
+        total_pending = len(pending_ps_followups) + len(pending_walkins) + len(pending_activities)
+
+        # Walk-In Pending Cases (Live Count)
+        walkin_pending_cases = len([lead for lead in walkin_data if lead.get('ps_name') == ps_name and lead.get('ps_final_status') == 'Pending'])
+        ps_analytics = {
+            'won_cases': total_won_cases,
+            'conversion_rate': conversion_rate,
+            'walkin_conversion_rate': walkin_conversion_rate,
+            'total_assigned': total_assigned,
+            'total_pending': total_pending,
+            'walkin_pending_cases': walkin_pending_cases
+        }
+        return render_template('ps_analytics.html', ps_analytics=ps_analytics)
+    except Exception as e:
+        flash(f'Error loading PS analytics: {str(e)}', 'error')
+        return redirect(url_for('ps_dashboard'))
+
+@app.route('/manage_branch_head')
+def manage_branch_head():
+    # Fetch all branch heads
+    branch_heads = supabase.table('Branch Head').select('*').execute().data
+    branches = get_all_branches()  # This should return a list of branch names
+    return render_template('manage_branch_head.html', branch_heads=branch_heads, branches=branches)
+
+def get_all_branches():
+    # Replace with a DB fetch if you have a branches table
+    return ['KOMPALLY', 'SOMAJIGUDA', 'ATTAPUR', 'MALAKPET', 'TOLICHOWKI', 'VANASTHALIPURAM']
+
+@app.route('/add_branch_head', methods=['POST'])
+def add_branch_head():
+    name = request.form.get('name')
+    username = request.form.get('username')
+    password = request.form.get('password')
+    branch = request.form.get('branch')
+    is_active = request.form.get('is_active') == 'on'
+    # Store plain text password for Branch Head (testing only)
+    hashed_pw = password
+    supabase.table('Branch Head').insert({
+        'Name': name,
+        'Username': username,
+        'Password': hashed_pw,
+        'Branch': branch,
+        'Is Active': is_active
+    }).execute()
+    flash('Branch Head added successfully!', 'success')
+    return redirect(url_for('manage_branch_head'))
+
+@app.route('/toggle_branch_head_active/<int:id>', methods=['POST'])
+def toggle_branch_head_active(id):
+    is_active = request.form.get('is_active') == 'True'
+    supabase.table('Branch Head').update({'Is Active': is_active}).eq('id', id).execute()
+    flash('Branch Head status updated!', 'info')
+    return redirect(url_for('manage_branch_head'))
+
+@app.route('/branch_head_dashboard')
+def branch_head_dashboard():
+    if 'branch_head_id' not in session:
+        return redirect(url_for('index'))
+    return render_template('branch_head_dashboard.html')
+
 if __name__ == '__main__':
     # socketio.run(app, debug=True)
-    print("�� Starting Ather CRM System...")
+    print(" Starting Ather CRM System...")
     print("📱 Server will be available at: http://127.0.0.1:5000")
     print("🌐 You can also try: http://localhost:5000")
     # socketio.run(app, host='127.0.0.1', port=5000, debug=True)
