@@ -5536,10 +5536,16 @@ def update_event_lead(activity_uid):
             if final_status:
                 update_data['final_status'] = final_status
             # Handle PS call date/remark for the next call
-            if call_date:
-                update_data[f'ps_{next_call}_call_date'] = call_date
-            if call_remark:
-                update_data[f'ps_{next_call}_call_remark'] = call_remark
+            skip_statuses = ["Call not Connected", "RNR", "Call me Back", "Busy on another Call"]
+            if lead_status not in skip_statuses:
+                if call_date:
+                    update_data[f'ps_{next_call}_call_date'] = call_date
+                if call_remark:
+                    update_data[f'ps_{next_call}_call_remark'] = call_remark
+            # Always remove these keys if status is in skip list, even if present
+            if lead_status in skip_statuses:
+                update_data.pop(f'ps_{next_call}_call_date', None)
+                update_data.pop(f'ps_{next_call}_call_remark', None)
             if update_data:
                 supabase.table('activity_leads').update(update_data).eq('activity_uid', activity_uid).execute()
                 flash('Event lead updated successfully', 'success')
@@ -5642,10 +5648,16 @@ def update_event_lead_cre(activity_uid):
                 update_data['final_status'] = final_status
             
             # Handle CRE call date/remark for the next call
-            if call_date:
-                update_data[f'cre_{next_call}_call_date'] = call_date
-            if call_remark:
-                update_data[f'cre_{next_call}_call_remark'] = call_remark
+            skip_statuses = ["Call not Connected", "RNR", "Call me Back", "Busy on another Call"]
+            if lead_status not in skip_statuses:
+                if call_date:
+                    update_data[f'cre_{next_call}_call_date'] = call_date
+                if call_remark:
+                    update_data[f'cre_{next_call}_call_remark'] = call_remark
+            # Always remove these keys if status is in skip list, even if present
+            if lead_status in skip_statuses:
+                update_data.pop(f'cre_{next_call}_call_date', None)
+                update_data.pop(f'cre_{next_call}_call_remark', None)
             
             if update_data:
                 supabase.table('activity_leads').update(update_data).eq('activity_uid', activity_uid).execute()
