@@ -37,22 +37,26 @@
         letter-spacing: 1px;
     }
     .badge-source {
-        background: #0d6efd;
-        color: #fff;
-        font-weight: 500;
-        border-radius: 12px;
-        padding: 4px 12px;
-        margin-right: 4px;
-        font-size: 0.95rem;
+        background: #e3f0ff !important;
+        color: #1976d2 !important;
+        font-weight: 600;
+        border-radius: 10px;
+        padding: 2px 8px;
+        margin: 1px;
+        font-size: 0.8rem;
+        display: inline-block;
+        white-space: nowrap;
     }
     .badge-subsource {
-        background: #adb5bd;
-        color: #fff;
-        font-weight: 500;
-        border-radius: 12px;
-        padding: 4px 12px;
-        margin-right: 4px;
-        font-size: 0.95rem;
+        background: #f0f0f0 !important;
+        color: #555 !important;
+        font-weight: 600;
+        border-radius: 10px;
+        padding: 2px 8px;
+        margin: 1px;
+        font-size: 0.8rem;
+        display: inline-block;
+        white-space: nowrap;
     }
     .badge-days {
         background: #ffc107;
@@ -272,10 +276,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     </td>
                     <td>{{ lead.cre_name or '-' }}</td>
                     <td>
-                        <form method="post" action="{{ url_for('convert_duplicate_to_fresh', uid=lead.uid) }}" style="display:inline;">
-                            <button type="submit" class="action-btn-convert"><i class="fas fa-plus"></i> Convert to Fresh Lead</button>
-                        </form>
-                        <button type="button" class="action-btn-delete ms-2 delete-dup-btn" data-uid="{{ lead.uid }}"><i class="fas fa-trash"></i> Delete</button>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <form method="post" action="{{ url_for('convert_duplicate_to_fresh', uid=lead.uid) }}" style="display:inline;">
+                                <button type="submit" class="action-btn-convert" title="Convert to Fresh Lead">
+                                    <i class="fas fa-plus"></i> Convert
+                                </button>
+                            </form>
+                            <button type="button" class="action-btn-delete delete-dup-btn" data-uid="{{ lead.uid }}" title="Delete Duplicate Lead">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}
