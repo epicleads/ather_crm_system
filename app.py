@@ -587,6 +587,7 @@ def unified_login() -> Response:
     if success:
         t2 = time.time()
         session_id = auth_manager.create_session(user_data['id'], user_type, user_data)
+        print(f"DEBUG: Logged in as user_type={user_type}, session.user_type={session.get('user_type')}")
         print(f"[PERF] unified_login: create_session took {time.time() - t2:.3f} seconds")
         if session_id:
             flash(f'Welcome! Logged in as {user_type.upper()}', 'success')

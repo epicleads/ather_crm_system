@@ -1,468 +1,1613 @@
 {% extends "base.html" %}
-{% block title %}Duplicate Leads - Admin{% endblock %}
-{% block content %}
+
+{% block title %}CRE Dashboard - Ather CRM{% endblock %}
+
+{% block extra_css %}
 <style>
-    .container-fluid {
-        padding: 0 15px;
-        max-width: 100%;
-        overflow-x: hidden;
+    /* Style for low priority fresh leads */
+    .fresh-lead-row[data-lead-status="RNR"],
+    .fresh-lead-row[data-lead-status="Busy on another Call"],
+    .fresh-lead-row[data-lead-status="Call me Back"] {
+        background-color: #f8f9fa !important;
+        opacity: 0.8;
     }
     
-    .table-container {
-        width: 100%;
-        overflow-x: auto;
-        margin-bottom: 20px;
-        border-radius: 10px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    .fresh-lead-row[data-lead-status="RNR"]:hover,
+    .fresh-lead-row[data-lead-status="Busy on another Call"]:hover,
+    .fresh-lead-row[data-lead-status="Call me Back"]:hover {
+        background-color: #e9ecef !important;
+        opacity: 1;
     }
     
-    .table-duplicate-leads {
-        width: 100%;
-        min-width: 1200px;
-        font-size: 0.9rem;
-        border-radius: 10px;
-        overflow: hidden;
-        margin-bottom: 0;
-        table-layout: fixed;
+    /* Add a subtle border to distinguish low priority leads */
+    .fresh-lead-row[data-lead-status="RNR"],
+    .fresh-lead-row[data-lead-status="Busy on another Call"],
+    .fresh-lead-row[data-lead-status="Call me Back"] {
+        border-left: 3px solid #6c757d;
     }
-    
-    .table-duplicate-leads th {
-        background: #0d6efd;
-        color: #fff;
-        font-weight: bold;
-        padding: 12px 8px;
-        font-size: 0.95rem;
-        letter-spacing: 0.3px;
-        text-align: center;
-        white-space: nowrap;
-        position: sticky;
-        top: 0;
-        z-index: 10;
+
+    /* Fix dropdown positioning and clipping issues */
+    .btn-group .dropdown-menu {
+        position: absolute !important;
+        z-index: 1051 !important;
+        min-width: 150px;
     }
-    
-    .table-duplicate-leads td {
-        padding: 10px 8px;
-        vertical-align: middle;
-        background: #f8f9fa;
-        text-align: center;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+
+    .card-body {
+        overflow: visible !important;
+        padding-bottom: 2rem !important;
     }
-    
-    .table-duplicate-leads tr {
-        border-bottom: 1px solid #e3e3e3;
-        transition: background 0.2s;
+
+    .tab-pane {
+        overflow: visible !important;
+        padding-bottom: 1rem !important;
     }
-    
-    .table-duplicate-leads tr:hover {
-        background: #e9f2ff;
+
+    /* Ensure Fresh Leads section has enough space for dropdown */
+    #fresh-leads {
+        min-height: 400px !important;
+        position: relative;
     }
-    
-    .table-duplicate-leads tr:hover td {
-        background: #e9f2ff;
-    }
-    
-    /* Column widths */
-    .table-duplicate-leads th:nth-child(1), .table-duplicate-leads td:nth-child(1) { width: 12%; } /* UID */
-    .table-duplicate-leads th:nth-child(2), .table-duplicate-leads td:nth-child(2) { width: 12%; } /* Name */
-    .table-duplicate-leads th:nth-child(3), .table-duplicate-leads td:nth-child(3) { width: 11%; } /* Phone */
-    .table-duplicate-leads th:nth-child(4), .table-duplicate-leads td:nth-child(4) { width: 15%; } /* Sources */
-    .table-duplicate-leads th:nth-child(5), .table-duplicate-leads td:nth-child(5) { width: 15%; } /* Sub-Sources */
-    .table-duplicate-leads th:nth-child(6), .table-duplicate-leads td:nth-child(6) { width: 10%; } /* Date */
-    .table-duplicate-leads th:nth-child(7), .table-duplicate-leads td:nth-child(7) { width: 8%; } /* Days */
-    .table-duplicate-leads th:nth-child(8), .table-duplicate-leads td:nth-child(8) { width: 10%; } /* CRE */
-    .table-duplicate-leads th:nth-child(9), .table-duplicate-leads td:nth-child(9) { width: 7%; } /* Actions */
-    
-    .uid-cell {
-        background: #e3f0ff !important;
-        font-weight: bold;
-        font-size: 0.9rem;
-        border-left: 4px solid #0d6efd;
-        color: #0d6efd;
-        letter-spacing: 0.5px;
-        text-align: left !important;
-        padding-left: 12px !important;
-    }
-    
-    .name-cell {
-        text-align: left !important;
-        padding-left: 12px !important;
-        font-weight: 500;
-    }
-    
-    .phone-cell {
-        font-family: monospace;
-        font-size: 0.9rem;
-        color: #495057;
-    }
-    
-    .badge-source {
-        background: #0d6efd;
-        color: #fff;
-        font-weight: 500;
-        border-radius: 10px;
-        padding: 2px 8px;
-        margin: 1px;
-        font-size: 0.8rem;
-        display: inline-block;
-        white-space: nowrap;
-    }
-    
-    .badge-subsource {
-        background: #6c757d;
-        color: #fff;
-        font-weight: 500;
-        border-radius: 10px;
-        padding: 2px 8px;
-        margin: 1px;
-        font-size: 0.8rem;
-        display: inline-block;
-        white-space: nowrap;
-    }
-    
-    .badge-days {
-        background: #ffc107;
-        color: #222;
-        font-weight: bold;
-        border-radius: 10px;
-        padding: 4px 10px;
-        font-size: 0.85rem;
-        white-space: nowrap;
-        display: inline-block;
-    }
-    
-    .badge-days.fresh {
-        background: #28a745;
-        color: #fff;
-    }
-    
-    .action-btn {
-        background: #28a745;
-        color: #fff;
-        border: none;
-        border-radius: 6px;
-        padding: 6px 12px;
-        font-size: 0.8rem;
-        font-weight: 600;
-        box-shadow: 0 2px 6px rgba(40,167,69,0.2);
-        transition: all 0.2s;
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        white-space: nowrap;
-        cursor: pointer;
-    }
-    
-    .action-btn:hover {
-        background: #218838;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(40,167,69,0.3);
-    }
-    
-    .action-btn i {
-        font-size: 0.9rem;
-    }
-    
-    .badges-container {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 2px;
-        justify-content: center;
-        align-items: center;
-        max-height: 50px;
-        overflow-y: auto;
-    }
-    
-    .date-cell {
-        font-size: 0.85rem;
-        color: #495057;
-        white-space: nowrap;
-    }
-    
-    .cre-cell {
-        font-weight: 500;
-        color: #495057;
-    }
-    
-    /* Filter form styles */
-    .filter-form {
-        background: #f8f9fa;
-        padding: 20px;
-        border-radius: 10px;
-        margin-bottom: 20px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    
-    .filter-form .form-control, .filter-form .form-select {
-        border-radius: 6px;
-        border: 1px solid #ced4da;
-        font-size: 0.9rem;
-    }
-    
-    .filter-form .form-control:focus, .filter-form .form-select:focus {
-        border-color: #0d6efd;
-        box-shadow: 0 0 0 0.2rem rgba(13,110,253,0.15);
-    }
-    
-    .filter-btn {
-        background: #0d6efd;
-        border: none;
-        border-radius: 6px;
-        padding: 8px 20px;
-        font-weight: 600;
-        color: #fff;
-        transition: all 0.2s;
-    }
-    
-    .filter-btn:hover {
-        background: #0b5ed7;
-        transform: translateY(-1px);
-    }
-    
-    /* Pagination styles */
-    .pagination {
-        margin-top: 20px;
-    }
-    
-    .pagination .page-link {
-        border-radius: 6px;
-        margin: 0 2px;
-        border: 1px solid #dee2e6;
-        color: #0d6efd;
-    }
-    
-    .pagination .page-item.active .page-link {
-        background: #0d6efd;
-        border-color: #0d6efd;
-    }
-    
-    .pagination .page-link:hover {
-        background: #e9f2ff;
-        border-color: #0d6efd;
-    }
-    
-    /* Responsive adjustments */
-    @media (max-width: 1400px) {
-        .table-duplicate-leads {
-            font-size: 0.85rem;
-        }
-        
-        .table-duplicate-leads th, .table-duplicate-leads td {
-            padding: 8px 6px;
-        }
-        
-        .badge-source, .badge-subsource {
-            font-size: 0.75rem;
-            padding: 2px 6px;
-        }
-        
-        .action-btn {
-            font-size: 0.75rem;
-            padding: 5px 10px;
-        }
-    }
-    
-    @media (max-width: 1200px) {
-        .table-duplicate-leads {
-            font-size: 0.8rem;
-        }
-        
-        .table-duplicate-leads th, .table-duplicate-leads td {
-            padding: 6px 4px;
-        }
-        
-        .uid-cell {
-            padding-left: 8px !important;
-        }
-        
-        .name-cell {
-            padding-left: 8px !important;
-        }
-    }
-    
-    /* Empty state */
-    .empty-state {
-        text-align: center;
-        padding: 40px 20px;
-        color: #6c757d;
-        background: #f8f9fa;
-        border-radius: 10px;
-        margin-top: 20px;
-    }
-    
-    .empty-state i {
-        font-size: 3rem;
-        margin-bottom: 20px;
-        color: #adb5bd;
-    }
-    
-    /* Header styling */
-    .page-header {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 20px;
-        padding-bottom: 10px;
-        border-bottom: 2px solid #e9ecef;
-    }
-    
-    .page-header h2 {
-        margin: 0;
-        color: #495057;
-        font-weight: 600;
-    }
-    
-    .page-header i {
-        font-size: 1.5rem;
+
+    /* Additional dropdown fixes */
+    .dropdown-menu-end {
+        right: 0 !important;
+        left: auto !important;
+        transform: none !important;
     }
 </style>
+{% endblock %}
 
-<div class="container-fluid mt-4">
-    <div class="page-header">
-        <i class="fas fa-clone text-danger"></i>
-        <h2>Duplicate Leads Management</h2>
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2><i class="fas fa-headset text-success"></i> CRE Dashboard</h2>
+                <p class="text-muted">Welcome back, {{ session.cre_name }}!</p>
+            </div>
+            <div class="btn-group">
+                <a href="{{ url_for('add_lead') }}" class="btn btn-outline-success">
+                    <i class="fas fa-plus"></i> Add Lead
+                </a>
+                <a href="{{ url_for('cre_analytics') }}" class="btn btn-outline-primary">
+                    <i class="fas fa-chart-line"></i> Analytics
+                </a>
+            </div>
+        </div>
     </div>
-    
-    <div class="filter-form">
-        <form class="row g-3 align-items-end" method="get" id="filterForm">
-            <div class="col-md-3">
-                <label class="form-label">Search by UID</label>
-                <input type="text" class="form-control" name="search_uid" placeholder="Enter UID" value="{{ request.args.get('search_uid', '') }}">
+</div>
+<!-- Stats Row: Now a single horizontal flex line -->
+<div class="dashboard-cards-container">
+    <!-- Fresh Leads -->
+    <div class="dashboard-card fresh-leads" style="background: linear-gradient(135deg, #2196f3 60%, #21cbf3 100%); color: #fff;">
+        <h6 class="mb-1 fw-bold">Fresh Leads</h6>
+        <div class="fs-4 fw-bold">{{ total_fresh_leads }}</div>
+        <div class="d-flex justify-content-between mt-2">
+            <div class="flex-fill mx-1 rounded p-2" style="background: #d4edda; color: #155724;">
+                <div class="fw-semibold">{{ untouched_count }}</div>
             </div>
-            <div class="col-md-3">
-                <label class="form-label">Search by Source</label>
-                <input type="text" class="form-control" name="search_source" placeholder="Enter Source" value="{{ request.args.get('search_source', '') }}">
+            <div class="flex-fill mx-1 rounded p-2" style="background: #ffe5b4; color: #b26a00;">
+                <div class="fw-semibold">{{ called_count }}</div>
             </div>
-            <div class="col-md-3">
-                <label class="form-label">Search by Name</label>
-                <input type="text" class="form-control" name="search_name" placeholder="Enter Name" value="{{ request.args.get('search_name', '') }}">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Date Range</label>
-                <select class="form-select" id="dateRangeType" name="date_range_type" onchange="toggleDateFields()">
-                    <option value="all_time" {% if request.args.get('date_range_type', 'all_time') == 'all_time' %}selected{% endif %}>All Time</option>
-                    <option value="select_date" {% if request.args.get('date_range_type') == 'select_date' %}selected{% endif %}>Select Date</option>
-                </select>
-                <div id="dateFields" style="display: {% if request.args.get('date_range_type') == 'select_date' %}block{% else %}none{% endif %}; margin-top: 8px;">
-                    <div class="row g-2">
-                        <div class="col-6">
-                            <input type="date" class="form-control form-control-sm" id="from_date" name="from_date" value="{{ request.args.get('from_date', '') }}" placeholder="From">
+        </div>
+    </div>
+    <!-- Today's Follow-ups -->
+    <div class="dashboard-card follow-ups" style="background: #ffc107; color: #fff;">
+        <div class="fs-4 fw-bold">{{ todays_followups|length }}</div>
+        <div class="fw-semibold">Today's Follow-ups</div>
+        <i class="fas fa-calendar-check fa-lg mt-2"></i>
+    </div>
+    <!-- Pending Leads -->
+    <div class="dashboard-card pending-leads" style="background: #17a2b8; color: #fff;">
+        {% set pending_leads_list = [] %}
+        {% for lead in attended_leads %}
+            {% if lead.final_status != 'Won' and lead.final_status != 'Lost' %}
+                {% if pending_leads_list.append(lead) %}{% endif %}
+            {% endif %}
+        {% endfor %}
+        <div class="fs-4 fw-bold">{{ pending_leads_list|length }}</div>
+        <div class="fw-semibold">Pending Leads</div>
+        <i class="fas fa-hourglass-half fa-lg mt-2"></i>
+    </div>
+    <!-- Assigned to PS -->
+    <div class="dashboard-card assigned-ps" style="background: #00796b; color: #fff;">
+        <div class="fs-4 fw-bold">{{ assigned_to_ps|length }}</div>
+        <div class="fw-semibold">Assigned to PS</div>
+        <i class="fas fa-user-tie fa-lg mt-2"></i>
+    </div>
+    <!-- Won Leads -->
+    <div class="dashboard-card won-leads" style="background: #28a745; color: #fff;">
+        <div class="fs-4 fw-bold">{{ won_leads|length }}</div>
+        <div class="fw-semibold">Won Leads</div>
+        <i class="fas fa-trophy fa-lg mt-2"></i>
+    </div>
+    <!-- Lost Leads -->
+    <div class="dashboard-card lost-leads" style="background: #dc3545; color: #fff;">
+        <div class="fs-4 fw-bold">{{ lost_leads|length }}</div>
+        <div class="fw-semibold">Lost Leads</div>
+        <i class="fas fa-ban fa-lg mt-2"></i>
+    </div>
+</div>
+<style>
+.dashboard-cards-container {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 16px;
+  justify-content: space-between;
+  align-items: stretch;
+  overflow-x: auto;
+  padding: 8px 0 24px 0;
+}
+.dashboard-card {
+  flex: 1 1 0;
+  min-width: 160px;
+  max-width: 220px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  padding: 18px 10px 14px 10px;
+  text-align: center;
+  margin: 0;
+  transition: box-shadow 0.2s;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.dashboard-card i {
+  font-size: 1.5rem;
+  margin-top: 8px;
+}
+@media (max-width: 1200px) {
+  .dashboard-card { min-width: 140px; max-width: 180px; padding: 12px 6px; }
+}
+@media (max-width: 900px) {
+  .dashboard-cards-container { flex-wrap: wrap; }
+  .dashboard-card { min-width: 45vw; max-width: 48vw; margin-bottom: 12px; }
+}
+@media (max-width: 600px) {
+  .dashboard-card { min-width: 90vw; max-width: 98vw; }
+}
+</style>
+
+
+<!-- Tabs for different lead views -->
+<div class="card shadow">
+    <div class="card-header">
+        <ul class="nav nav-tabs card-header-tabs" id="creLeadTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="fresh-leads-tab" data-bs-toggle="tab" data-bs-target="#fresh-leads" type="button" role="tab" aria-controls="fresh-leads" aria-selected="true">
+                    <i class="fas fa-star"></i> Fresh Leads
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="followups-tab" data-bs-toggle="tab" data-bs-target="#followups" type="button" role="tab" aria-controls="followups" aria-selected="false">
+                    <i class="fas fa-calendar-check"></i> Today's Follow-ups
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending" type="button" role="tab" aria-controls="pending" aria-selected="false">
+                    <i class="fas fa-hourglass-half"></i> Pending Leads
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="ps-assigned-tab" data-bs-toggle="tab" data-bs-target="#ps-assigned" type="button" role="tab" aria-controls="ps-assigned" aria-selected="false">
+                    <i class="fas fa-user-tie"></i> PS Assigned
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="won-leads-tab" data-bs-toggle="tab" data-bs-target="#won-leads" type="button" role="tab" aria-controls="won-leads" aria-selected="false">
+                    <i class="fas fa-trophy"></i> Won Leads
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="event-leads-tab" data-bs-toggle="tab" data-bs-target="#event-leads" type="button" role="tab" aria-controls="event-leads" aria-selected="false">
+                    <i class="fas fa-calendar-alt"></i> Event Leads
+                </button>
+            </li>
+        </ul>
+    </div>
+    <div class="card-body">
+        <div class="tab-content" id="creLeadTabsContent">
+            <!-- Fresh Leads Tab -->
+            <div class="tab-pane fade show active" id="fresh-leads" role="tabpanel" aria-labelledby="fresh-leads-tab" style="min-height: 400px;">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="mb-0">Fresh Leads (<span id="freshLeadsCount">{{ total_fresh_leads }}</span>)</h5>
+                    <div class="d-flex gap-2">
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" style="z-index: 1050;">
+                                <span id="freshTimeFilterText">Today</span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end" style="z-index: 1051;">
+                                <li><a class="dropdown-item fresh-time-filter" href="#" data-filter="today">Today</a></li>
+                                <li><a class="dropdown-item fresh-time-filter" href="#" data-filter="all">All Time</a></li>
+                                <li><a class="dropdown-item fresh-time-filter" href="#" data-filter="range">Date Range</a></li>
+                            </ul>
                         </div>
-                        <div class="col-6">
-                            <input type="date" class="form-control form-control-sm" id="to_date" name="to_date" value="{{ request.args.get('to_date', '') }}" placeholder="To">
+                        <div id="freshDateRangeInputs" class="d-flex gap-2" style="display: none; z-index: 1050;">
+                            <input type="date" class="form-control" id="freshStartDate" style="max-width: 150px;">
+                            <input type="date" class="form-control" id="freshEndDate" style="max-width: 150px;">
+                            <button class="btn btn-outline-primary" type="button" id="applyFreshDateRange">
+                                <i class="fas fa-filter"></i> Apply
+                            </button>
+                        </div>
+                        <div class="input-group" style="max-width: 300px;">
+                            <input type="text" class="form-control" id="freshLeadSearchInput" placeholder="Search by UID, name, mobile...">
+                            <button class="btn btn-outline-secondary" type="button" id="freshLeadSearchButton">
+                                <i class="fas fa-search"></i>
+                            </button>
+                            <button class="btn btn-outline-warning" type="button" id="freshLeadClearButton">
+                                <i class="fas fa-times"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
-            </div>
-            <div class="col-12 text-end">
-                <button type="submit" class="btn filter-btn">
-                    <i class="fas fa-search"></i> Apply Filters
-                </button>
-            </div>
-        </form>
-    </div>
 
-    <script>
-    function toggleDateFields() {
-        var type = document.getElementById('dateRangeType').value;
-        document.getElementById('dateFields').style.display = (type === 'select_date') ? 'block' : 'none';
-    }
-    </script>
-
-    <div class="table-container">
-        <table class="table table-duplicate-leads">
-            <thead>
-                <tr>
-                    <th>UID</th>
-                    <th>Name</th>
-                    <th>Phone</th>
-                    <th>Sources</th>
-                    <th>Sub-Sources</th>
-                    <th>Enquiry Date</th>
-                    <th>Days Old</th>
-                    <th>Assigned CRE</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for lead in duplicate_leads %}
-                <tr>
-                    <td class="uid-cell">{{ lead.uid }}</td>
-                    <td class="name-cell">{{ lead.customer_name }}</td>
-                    <td class="phone-cell">{{ lead.customer_mobile_number }}</td>
-                    <td>
-                        <div class="badges-container">
-                            {% for src in lead.sources %}
-                                <span class="badge badge-source">{{ src }}</span>
-                            {% endfor %}
-                        </div>
-                    </td>
-                    <td>
-                        <div class="badges-container">
-                            {% for sub in lead.sub_sources %}
-                                <span class="badge badge-subsource">{{ sub }}</span>
-                            {% endfor %}
-                        </div>
-                    </td>
-                    <td class="date-cell">{{ lead.last_enquiry_date or '-' }}</td>
-                    <td>
-                        {% if lead.days_old is not none %}
-                            <span class="badge badge-days {% if lead.days_old == 0 %}fresh{% endif %}">
-                                {{ lead.days_old == 0 and 'Fresh' or (lead.days_old ~ ' DAYS') }}
-                            </span>
-                        {% else %}
-                            <span class="text-muted">-</span>
-                        {% endif %}
-                    </td>
-                    <td class="cre-cell">{{ lead.cre_name or '-' }}</td>
-                    <td>
-                        <form method="post" action="{{ url_for('convert_duplicate_to_fresh', uid=lead.uid) }}" style="display:inline;">
-                            <button type="submit" class="action-btn" title="Convert to Fresh Lead">
-                                <i class="fas fa-plus"></i>
-                                Convert
-                            </button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-
-    {% if duplicate_leads %}
-        <!-- Pagination controls -->
-        <nav aria-label="Duplicate Leads Pagination">
-            <ul class="pagination justify-content-center">
-                <li class="page-item {% if not prev_url %}disabled{% endif %}">
-                    <a class="page-link" href="{{ prev_url or '#' }}" tabindex="-1">
-                        <i class="fas fa-chevron-left"></i> Previous
-                    </a>
-                </li>
-                {% for p in range(1, total_pages+1) %}
-                    <li class="page-item {% if p == page %}active{% endif %}">
-                        <a class="page-link" href="{{ page_urls[p-1] }}">{{ p }}</a>
+                <!-- Fresh Leads Tab Navigation -->
+                <ul class="nav nav-tabs mb-3" id="freshLeadsSubTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="untouched-leads-tab" data-bs-toggle="tab" data-bs-target="#untouched-leads" type="button" role="tab" aria-controls="untouched-leads" aria-selected="true">
+                            Untouched <span class="badge bg-secondary">{{ untouched_count }}</span>
+                        </button>
                     </li>
-                {% endfor %}
-                <li class="page-item {% if not next_url %}disabled{% endif %}">
-                    <a class="page-link" href="{{ next_url or '#' }}">
-                        Next <i class="fas fa-chevron-right"></i>
-                    </a>
-                </li>
-            </ul>
-            <div class="text-center text-muted mb-3">
-                Showing page {{ page }} of {{ total_pages }} ({{ total_count }} total records)
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="called-leads-tab" data-bs-toggle="tab" data-bs-target="#called-leads" type="button" role="tab" aria-controls="called-leads" aria-selected="false">
+                            Called <span class="badge bg-secondary">{{ called_count }}</span>
+                        </button>
+                    </li>
+                </ul>
+                <div class="tab-content" id="freshLeadsSubTabContent">
+                    <!-- Untouched Leads Table -->
+                    <div class="tab-pane fade show active" id="untouched-leads" role="tabpanel" aria-labelledby="untouched-leads-tab">
+                        {% if untouched_leads %}
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover" id="untouchedLeadsTable">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Action</th>
+                                        <th>Lead Status</th>
+                                        <th>Customer Name</th>
+                                        <th>Mobile</th>
+                                        <th>Source</th>
+                                        <th>Campaign</th>
+                                        <th>Date</th>
+                                        <th>UID</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for lead in untouched_leads %}
+                                    <tr data-search="{{ lead.uid }} {{ lead.customer_name }} {{ lead.customer_mobile_number }} {{ lead.source or '' }}" data-assigned-date="{{ lead.cre_assigned_at[:10] if lead.cre_assigned_at else '' }}">
+                                        <td>
+                                            <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-primary">Update</a>
+                                        </td>
+                                        <td>{{ lead.lead_status }}</td>
+                                        <td>{{ lead.customer_name }}</td>
+                                        <td>{{ lead.customer_mobile_number }}</td>
+                                        <td>{{ lead.source }}</td>
+                                        <td>{{ lead.lead_category }}</td>
+                                        <td>{{ lead.date }}</td>
+                                        <td>{{ lead.uid }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="alert alert-info">No untouched leads found.</div>
+                        {% endif %}
+                    </div>
+                    <!-- Called Leads Table -->
+                    <div class="tab-pane fade" id="called-leads" role="tabpanel" aria-labelledby="called-leads-tab">
+                        {% if called_leads %}
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover" id="calledLeadsTable">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Action</th>
+                                        <th>Lead Status</th>
+                                        <th>Customer Name</th>
+                                        <th>Mobile</th>
+                                        <th>Source</th>
+                                        <th>Campaign</th>
+                                        <th>Date</th>
+                                        <th>UID</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for lead in called_leads %}
+                                    <tr data-search="{{ lead.uid }} {{ lead.customer_name }} {{ lead.customer_mobile_number }} {{ lead.source or '' }}" data-assigned-date="{{ lead.cre_assigned_at[:10] if lead.cre_assigned_at else '' }}">
+                                        <td>
+                                            <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-primary">Update</a>
+                                        </td>
+                                        <td>{{ lead.lead_status }}</td>
+                                        <td>{{ lead.customer_name }}</td>
+                                        <td>{{ lead.customer_mobile_number }}</td>
+                                        <td>{{ lead.source }}</td>
+                                        <td>{{ lead.lead_category }}</td>
+                                        <td>{{ lead.date }}</td>
+                                        <td>{{ lead.uid }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="alert alert-info">No called leads found.</div>
+                        {% endif %}
+                    </div>
+                </div>
+                <!-- The filter dropdown remains unchanged and works for both tables -->
             </div>
-        </nav>
-    {% endif %}
 
-    {% if not duplicate_leads %}
-        <div class="empty-state">
-            <i class="fas fa-search"></i>
-            <h4>No duplicate leads found</h4>
-            <p>Try adjusting your search filters or check back later for new duplicate leads.</p>
+            <!-- Today's Follow-ups Tab -->
+            <div class="tab-pane fade" id="followups" role="tabpanel" aria-labelledby="followups-tab">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="mb-0">Today's Follow-ups ({{ todays_followups|length }})</h5>
+                    <div class="input-group" style="max-width: 300px;">
+                        <input type="text" class="form-control" id="followupSearchInput" placeholder="Search by UID, name, mobile...">
+                        <button class="btn btn-outline-secondary" type="button" id="followupSearchButton">
+                            <i class="fas fa-search"></i>
+                        </button>
+                        <button class="btn btn-outline-warning" type="button" id="followupClearButton">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+
+                {% if todays_followups %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover" id="followupTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Action</th>
+                                <th>Customer Name</th>
+                                <th>Mobile</th>
+                                <th>Lead Status</th>
+                                <th>Branch</th>
+                                <th>Activity Name</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for lead in todays_followups %}
+                                {% if lead.is_event_lead %}
+                                    <tr>
+                                        <td>
+                                            <a href="{{ url_for('update_event_lead_cre', activity_uid=lead.activity_uid) }}" class="btn btn-sm btn-outline-primary">
+                                                <i class="fas fa-edit"></i> Update
+                                            </a>
+                                        </td>
+                                        <td>{{ lead.customer_name }}</td>
+                                        <td>{{ lead.customer_phone_number }}</td>
+                                        <td>{{ lead.lead_status }}</td>
+                                        <td>{{ lead.location }}</td>
+                                        <td>{{ lead.activity_name }}</td>
+                                    </tr>
+                                {% else %}
+                                    <tr>
+                                        <td>
+                                            <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-outline-primary">
+                                                <i class="fas fa-edit"></i> Update
+                                            </a>
+                                        </td>
+                                        <td>{{ lead.customer_name }}</td>
+                                        <td>{{ lead.customer_mobile_number }}</td>
+                                        <td>{{ lead.lead_status }}</td>
+                                        <td>{{ lead.branch }}</td>
+                                        <td></td>
+                                    </tr>
+                                {% endif %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-calendar-check fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No follow-ups scheduled for today</h5>
+                    <p class="text-muted">Set follow-up dates when updating leads</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Pending Leads Tab (formerly Attended Leads) -->
+            <div class="tab-pane fade" id="pending" role="tabpanel" aria-labelledby="pending-tab">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    {% set pending_count = 0 %}
+                    {% for lead in attended_leads %}
+                        {% if lead.final_status != 'Won' and lead.final_status != 'Lost' %}
+                            {% set pending_count = pending_count + 1 %}
+                        {% endif %}
+                    {% endfor %}
+                    <h5 class="mb-0">Pending Leads (<span id="pendingLeadsCount">{{ pending_count }}</span>)</h5>
+                    <div class="d-flex gap-2">
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-outline-warning dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                                <span id="pendingTimeFilterText">Today</span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item pending-time-filter" href="#" data-filter="today">Today</a></li>
+                                <li><a class="dropdown-item pending-time-filter" href="#" data-filter="all">All Time</a></li>
+                                <li><a class="dropdown-item pending-time-filter" href="#" data-filter="range">Date Range</a></li>
+                            </ul>
+                        </div>
+                        <div id="pendingDateRangeInputs" class="d-flex gap-2" style="display: none;">
+                            <input type="date" class="form-control" id="pendingStartDate" style="max-width: 150px;">
+                            <input type="date" class="form-control" id="pendingEndDate" style="max-width: 150px;">
+                            <button class="btn btn-outline-primary" type="button" id="applyPendingDateRange">
+                                <i class="fas fa-filter"></i> Apply
+                            </button>
+                        </div>
+                        <div class="input-group" style="max-width: 300px;">
+                            <input type="text" class="form-control" id="pendingSearchInput" placeholder="Search by UID, name, mobile...">
+                            <button class="btn btn-outline-secondary" type="button" id="pendingSearchButton">
+                                <i class="fas fa-search"></i>
+                            </button>
+                            <button class="btn btn-outline-warning" type="button" id="pendingClearButton">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Check if there are any pending leads -->
+                {% set pending_leads_exist = [] %}
+                {% for lead in attended_leads %}
+                    {% if lead.final_status != 'Won' and lead.final_status != 'Lost' %}
+                        {% if pending_leads_exist.append(1) %}{% endif %}
+                    {% endif %}
+                {% endfor %}
+
+                {% if pending_leads_exist %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover" id="pendingLeadsTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Action</th>
+                                <th>Lead Status</th>
+                                <th>Customer Name</th>
+                                <th>Mobile</th>
+                                <th>First Call Date</th>
+                                <th>Last Call Date</th>
+                                <th>Category</th>
+                                <th>Date</th>
+                                <th>UID</th>
+                                <th>Call History</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for lead in attended_leads %}
+                            {% if lead.final_status != 'Won' and lead.final_status != 'Lost' %}
+                            <tr class="pending-lead-row"
+                                data-first-call-date="{{ lead.first_call_date or '' }}"
+                                data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or '') + ' ' + (lead.campaign or '') + ' ' + (lead.lead_category or ''))|lower }}">
+                                <td>
+                                    <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-edit"></i> Update
+                                    </a>
+                                </td>
+                                <td>
+                                    {% if lead.lead_status %}
+                                        <span class="badge bg-info">{{ lead.lead_status }}</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Not Set</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ lead.customer_name }}</td>
+                                <td>{{ lead.customer_mobile_number }}</td>
+                                <td>{{ lead.first_call_date or 'N/A' }}</td>
+                                <td>{{ lead.seventh_call_date or lead.sixth_call_date or lead.fifth_call_date or lead.fourth_call_date or lead.third_call_date or lead.second_call_date or lead.first_call_date or 'N/A' }}</td>
+                                <td>
+                                    {% if lead.lead_category == 'Hot' %}
+                                        <span class="badge bg-danger">{{ lead.lead_category }}</span>
+                                    {% elif lead.lead_category == 'Warm' %}
+                                        <span class="badge bg-warning">{{ lead.lead_category }}</span>
+                                    {% elif lead.lead_category == 'Cold' %}
+                                        <span class="badge bg-info">{{ lead.lead_category }}</span>
+                                    {% else %}
+                                        <span class="badge bg-dark">{{ lead.lead_category or 'Not Set' }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ lead.date }}</td>
+                                <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-info view-call-history-btn" data-uid="{{ lead.uid }}">
+                                        <i class="fas fa-history"></i> View
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endif %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-hourglass-half fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No pending leads</h5>
+                    <p class="text-muted">Leads will appear here after your first call and are still in progress</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- PS Assigned Tab -->
+            <div class="tab-pane fade" id="ps-assigned" role="tabpanel" aria-labelledby="ps-assigned-tab">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="mb-0">Leads Assigned to PS (<span id="psAssignedCount">{{ assigned_to_ps|length }}</span>)</h5>
+                    <div class="d-flex gap-2">
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-outline-info dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                                <span id="psTimeFilterText">Today</span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item ps-time-filter" href="#" data-filter="today">Today</a></li>
+                                <li><a class="dropdown-item ps-time-filter" href="#" data-filter="all">All Time</a></li>
+                                <li><a class="dropdown-item ps-time-filter" href="#" data-filter="range">Date Range</a></li>
+                            </ul>
+                        </div>
+                        <div id="psDateRangeInputs" class="d-flex gap-2" style="display: none;">
+                            <input type="date" class="form-control" id="psStartDate" style="max-width: 150px;">
+                            <input type="date" class="form-control" id="psEndDate" style="max-width: 150px;">
+                            <button class="btn btn-outline-primary" type="button" id="applyPsDateRange">
+                                <i class="fas fa-filter"></i> Apply
+                            </button>
+                        </div>
+                        <div class="input-group" style="max-width: 300px;">
+                            <input type="text" class="form-control" id="psSearchInput" placeholder="Search by UID, name, mobile...">
+                            <button class="btn btn-outline-secondary" type="button" id="psSearchButton">
+                                <i class="fas fa-search"></i>
+                            </button>
+                            <button class="btn btn-outline-warning" type="button" id="psClearButton">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {% if assigned_to_ps %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover" id="psAssignedTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Action</th>
+                                <th>Lead Status</th>
+                                <th>Customer Name</th>
+                                <th>Mobile</th>
+                                <th>PS Name</th>
+                                <th>Branch</th>
+                                <th>Category</th>
+                                <th>Model Interested</th>
+                                <th>Date</th>
+                                <th>UID</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for lead in assigned_to_ps %}
+                            <tr class="ps-lead-row"
+                                data-ps-assigned-date="{{ lead.ps_assigned_at[:10] if lead.ps_assigned_at else '' }}"
+                                data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.ps_name or '') + ' ' + (lead.branch or '') + ' ' + (lead.campaign or ''))|lower }}">
+                                <td>
+                                    <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-edit"></i> Update
+                                    </a>
+                                </td>
+                                <td>
+                                    {% if lead.lead_status %}
+                                        <span class="badge bg-info">{{ lead.lead_status }}</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Not Set</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ lead.customer_name }}</td>
+                                <td>{{ lead.customer_mobile_number }}</td>
+                                <td>{{ lead.ps_name }}</td>
+                                <td>{{ lead.branch }}</td>
+                                <td>
+                                    {% if lead.lead_category == 'Hot' %}
+                                        <span class="badge bg-danger">{{ lead.lead_category }}</span>
+                                    {% elif lead.lead_category == 'Warm' %}
+                                        <span class="badge bg-warning">{{ lead.lead_category }}</span>
+                                    {% elif lead.lead_category == 'Cold' %}
+                                        <span class="badge bg-info">{{ lead.lead_category }}</span>
+                                    {% else %}
+                                        <span class="badge bg-dark">{{ lead.lead_category or 'Not Set' }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ lead.date }}</td>
+                                <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-user-tie fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No leads assigned to PS</h5>
+                    <p class="text-muted">Assign leads to PS when updating them</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Won Leads Tab -->
+            <div class="tab-pane fade" id="won-leads" role="tabpanel" aria-labelledby="won-leads-tab">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="mb-0">Won Leads (<span id="wonLeadsCount">{{ won_leads|length }}</span>)</h5>
+                    <div class="d-flex gap-2">
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-outline-success dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                                <span id="wonTimeFilterText">Today</span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item won-time-filter" href="#" data-filter="today">Today</a></li>
+                                <li><a class="dropdown-item won-time-filter" href="#" data-filter="all">All Time</a></li>
+                                <li><a class="dropdown-item won-time-filter" href="#" data-filter="range">Date Range</a></li>
+                            </ul>
+                        </div>
+                        <div id="dateRangeInputs" class="d-flex gap-2" style="display: none;">
+                            <input type="date" class="form-control" id="wonStartDate" style="max-width: 150px;">
+                            <input type="date" class="form-control" id="wonEndDate" style="max-width: 150px;">
+                            <button class="btn btn-outline-primary" type="button" id="applyDateRange">
+                                <i class="fas fa-filter"></i> Apply
+                            </button>
+                        </div>
+                        <div class="input-group" style="max-width: 300px;">
+                            <input type="text" class="form-control" id="wonSearchInput" placeholder="Search by UID, name, mobile...">
+                            <button class="btn btn-outline-secondary" type="button" id="wonSearchButton">
+                                <i class="fas fa-search"></i>
+                            </button>
+                            <button class="btn btn-outline-warning" type="button" id="wonClearButton">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {% if won_leads %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover" id="wonLeadsTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Action</th>
+                                <th>Lead Status</th>
+                                <th>Customer Name</th>
+                                <th>Mobile</th>
+                                <th>Model Interested</th>
+                                <th>PS Name</th>
+                                <th>Branch</th>
+                                <th>Date</th>
+                                <th>UID</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for lead in won_leads %}
+                            <tr class="won-lead-row"
+                                data-won-date="{{ lead.won_timestamp[:10] if lead.won_timestamp else '' }}"
+                                data-won-timestamp="{{ lead.won_timestamp or '' }}"
+                                data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.ps_name or '') + ' ' + (lead.model_interested or '') + ' ' + (lead.campaign or ''))|lower }}">
+                                <td>
+                                    <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-edit"></i> View
+                                    </a>
+                                </td>
+                                <td>
+                                    {% if lead.lead_status %}
+                                        <span class="badge bg-info">{{ lead.lead_status }}</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Not Set</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ lead.customer_name }}</td>
+                                <td>{{ lead.customer_mobile_number }}</td>
+                                <td>{{ lead.model_interested or 'Not specified' }}</td>
+                                <td>{{ lead.ps_name or 'N/A' }}</td>
+                                <td>{{ lead.branch or 'N/A' }}</td>
+                                <td>{{ lead.date }}</td>
+                                <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-trophy fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No won leads yet</h5>
+                    <p class="text-muted">Leads will appear here when their final status is changed to "Won"</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Event Leads Tab -->
+            <div class="tab-pane fade" id="event-leads" role="tabpanel" aria-labelledby="event-leads-tab">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="mb-0">Event Leads ({{ event_event_leads|length }})</h5>
+                    <div class="d-flex gap-2">
+                        <div class="input-group" style="max-width: 300px;">
+                            <input type="text" class="form-control" id="eventLeadSearchInput" placeholder="Search by name, mobile, model...">
+                            <button class="btn btn-outline-secondary" type="button" id="eventLeadSearchButton">
+                                <i class="fas fa-search"></i>
+                            </button>
+                            <button class="btn btn-outline-warning" type="button" id="eventLeadClearButton">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% if event_event_leads %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0" id="eventLeadsTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Action</th>
+                                <th>Customer Name</th>
+                                <th>Mobile</th>
+                                <th>Lead Status</th>
+                                <th>Branch</th>
+                                <th>Activity Name</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for lead in event_event_leads %}
+                            <tr>
+                                <td>
+                                    <a href="{{ url_for('update_event_lead_cre', activity_uid=lead.activity_uid) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-edit"></i> Update
+                                    </a>
+                                </td>
+                                <td>{{ lead.customer_name }}</td>
+                                <td>{{ lead.customer_phone_number }}</td>
+                                <td>{{ lead.lead_status }}</td>
+                                <td>{{ lead.location }}</td>
+                                <td>{{ lead.activity_name }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-calendar-alt fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No event leads</h5>
+                    <p class="text-muted">Event leads will appear here when assigned</p>
+                </div>
+                {% endif %}
+            </div>
         </div>
-    {% endif %}
+    </div>
 </div>
 
+<!-- Toast container for follow-up notifications -->
+<div id="followup-toast-container" style="position: fixed; top: 20px; right: 20px; z-index: 9999;"></div>
+<audio id="followup-audio" src="https://cdn.pixabay.com/audio/2022/07/26/audio_124bfae5b6.mp3" preload="auto"></audio>
+
+<!-- Modal for Call History -->
+<div class="modal fade" id="callHistoryModal" tabindex="-1" aria-labelledby="callHistoryModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="callHistoryModalLabel">Call Attempt History</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="callHistoryTotal" class="mb-2"></div>
+        <div id="callHistoryTableContainer">
+          <div class="text-center text-muted">Loading...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.stats-card {
+    transition: all 0.3s ease;
+    border-radius: 10px;
+}
+
+.stats-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.nav-tabs .nav-link {
+    color: var(--ather-text);
+}
+
+.nav-tabs .nav-link.active {
+    color: var(--ather-primary);
+    background-color: var(--ather-card);
+    border-color: var(--ather-border) var(--ather-border) var(--ather-card);
+}
+
+.nav-tabs .nav-link:hover:not(.active) {
+    border-color: transparent;
+    color: var(--ather-primary);
+}
+
+/* Fix dropdown positioning and clipping issues */
+.btn-group .dropdown-menu {
+    position: absolute !important;
+    z-index: 1051 !important;
+    min-width: 150px;
+}
+
+.card-body {
+    overflow: visible !important;
+    padding-bottom: 2rem !important;
+}
+
+.tab-pane {
+    overflow: visible !important;
+    padding-bottom: 1rem !important;
+}
+
+/* Ensure Fresh Leads section has enough space for dropdown */
+#fresh-leads {
+    min-height: 400px !important;
+    position: relative;
+}
+
+/* Additional dropdown fixes */
+.dropdown-menu-end {
+    right: 0 !important;
+    left: auto !important;
+    transform: none !important;
+}
+</style>
+
+<script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Get current date in YYYY-MM-DD format (this will always be the actual current date)
+    function getCurrentDate() {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    console.log('Current date for filtering:', getCurrentDate());
+
+    // Filter state management using localStorage
+    const filterState = {
+        fresh: localStorage.getItem('cre_dashboard_fresh_filter') || 'today',
+        pending: localStorage.getItem('cre_dashboard_pending_filter') || 'today',
+        ps: localStorage.getItem('cre_dashboard_ps_filter') || 'today',
+        won: localStorage.getItem('cre_dashboard_won_filter') || 'today'
+    };
+
+    // Save filter state to localStorage
+    function saveFilterState(section, filterType) {
+        filterState[section] = filterType;
+        localStorage.setItem(`cre_dashboard_${section}_filter`, filterType);
+    }
+
+    // Generic search function
+    function setupSearch(inputId, buttonId, clearId, tableId) {
+        const searchInput = document.getElementById(inputId);
+        const searchButton = document.getElementById(buttonId);
+        const clearButton = document.getElementById(clearId);
+
+        if (!searchInput || !searchButton || !clearButton) return;
+
+        function performSearch() {
+            const searchTerm = searchInput.value.toLowerCase().trim();
+            const tableRows = document.querySelectorAll(`#${tableId} tbody tr`);
+
+            tableRows.forEach(row => {
+                const searchData = row.getAttribute('data-search') || '';
+                if (searchData.includes(searchTerm) || searchTerm === '') {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+
+        function clearSearch() {
+            searchInput.value = '';
+            performSearch();
+        }
+
+        searchButton.addEventListener('click', performSearch);
+        clearButton.addEventListener('click', clearSearch);
+
+        searchInput.addEventListener('keyup', function(e) {
+            if (e.key === 'Enter') {
+                performSearch();
+            }
+        });
+
+        // Real-time search as user types
+        searchInput.addEventListener('input', performSearch);
+    }
+
+    // Setup search for all tabs (updated IDs)
+    setupSearch('followupSearchInput', 'followupSearchButton', 'followupClearButton', 'followupTable');
+    setupSearch('pendingSearchInput', 'pendingSearchButton', 'pendingClearButton', 'pendingLeadsTable');
+    setupSearch('psSearchInput', 'psSearchButton', 'psClearButton', 'psAssignedTable');
+    setupSearch('wonSearchInput', 'wonSearchButton', 'wonClearButton', 'wonLeadsTable');
+    setupSearch('lostSearchInput', 'lostSearchButton', 'lostClearButton', 'lostLeadsTable');
+    setupSearch('eventLeadSearchInput', 'eventLeadSearchButton', 'eventLeadClearButton', 'eventLeadsTable');
+
+    // Custom search for fresh leads (both untouched and called tables)
+    const freshLeadSearchInput = document.getElementById('freshLeadSearchInput');
+    const freshLeadSearchButton = document.getElementById('freshLeadSearchButton');
+    const freshLeadClearButton = document.getElementById('freshLeadClearButton');
+
+    if (freshLeadSearchInput && freshLeadSearchButton && freshLeadClearButton) {
+        function performFreshLeadsSearch() {
+            const searchTerm = freshLeadSearchInput.value.toLowerCase().trim();
+            const untouchedRows = document.querySelectorAll('#untouchedLeadsTable tbody tr');
+            const calledRows = document.querySelectorAll('#calledLeadsTable tbody tr');
+
+            let untouchedVisibleCount = 0;
+            let calledVisibleCount = 0;
+
+            // Search in untouched leads
+            untouchedRows.forEach(row => {
+                const searchData = (row.getAttribute('data-search') || '').toLowerCase();
+                if (searchData.includes(searchTerm) || searchTerm === '') {
+                    row.style.display = '';
+                    untouchedVisibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            // Search in called leads
+            calledRows.forEach(row => {
+                const searchData = (row.getAttribute('data-search') || '').toLowerCase();
+                if (searchData.includes(searchTerm) || searchTerm === '') {
+                    row.style.display = '';
+                    calledVisibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            // Update counts
+            const totalVisibleCount = untouchedVisibleCount + calledVisibleCount;
+            document.getElementById('freshLeadsCount').textContent = totalVisibleCount;
+            document.querySelector('#untouched-leads-tab .badge').textContent = untouchedVisibleCount;
+            document.querySelector('#called-leads-tab .badge').textContent = calledVisibleCount;
+        }
+
+        function clearFreshLeadsSearch() {
+            freshLeadSearchInput.value = '';
+            performFreshLeadsSearch();
+        }
+
+        freshLeadSearchButton.addEventListener('click', performFreshLeadsSearch);
+        freshLeadClearButton.addEventListener('click', clearFreshLeadsSearch);
+
+        freshLeadSearchInput.addEventListener('keyup', function(e) {
+            if (e.key === 'Enter') {
+                performFreshLeadsSearch();
+            }
+        });
+
+        // Real-time search as user types
+        freshLeadSearchInput.addEventListener('input', performFreshLeadsSearch);
+    }
+
+    // Fresh leads time filter functionality
+    const freshTimeFilters = document.querySelectorAll('.fresh-time-filter');
+    const freshTimeFilterText = document.getElementById('freshTimeFilterText');
+    const freshDateRangeInputs = document.getElementById('freshDateRangeInputs');
+    const freshStartDate = document.getElementById('freshStartDate');
+    const freshEndDate = document.getElementById('freshEndDate');
+    const applyFreshDateRange = document.getElementById('applyFreshDateRange');
+
+    function filterFreshLeads(filterType, startDate = null, endDate = null) {
+        const today = getCurrentDate(); // Use the function to get current date
+        console.log('=== FRESH LEADS FILTER ===');
+        console.log('Filter Type:', filterType, 'Today:', today);
+        console.log('Start Date:', startDate, 'End Date:', endDate);
+
+        // Get rows from both untouched and called tables
+        const untouchedRows = document.querySelectorAll('#untouchedLeadsTable tbody tr');
+        const calledRows = document.querySelectorAll('#calledLeadsTable tbody tr');
+        
+        let totalVisibleCount = 0;
+        let untouchedVisibleCount = 0;
+        let calledVisibleCount = 0;
+
+        // Filter untouched leads
+        untouchedRows.forEach(row => {
+            const leadDate = row.getAttribute('data-assigned-date');
+            console.log('Untouched Lead - Date:', leadDate);
+
+            let showRow = false;
+
+            switch(filterType) {
+                case 'today':
+                    showRow = leadDate === today;
+                    console.log('Today filter - Untouched Match:', showRow, 'for date:', leadDate);
+                    break;
+                case 'all':
+                    showRow = true;
+                    console.log('All Time filter - Showing all untouched leads');
+                    break;
+                case 'range':
+                    if (startDate && endDate && leadDate) {
+                        showRow = leadDate >= startDate && leadDate <= endDate;
+                        console.log('Range filter - Untouched Match:', showRow, 'for date:', leadDate, 'in range:', startDate, 'to', endDate);
+                    } else {
+                        showRow = false;
+                        console.log('Range filter - Invalid range or date for untouched, hiding');
+                    }
+                    break;
+                default:
+                    showRow = true;
+            }
+
+            if (showRow) {
+                untouchedVisibleCount++;
+            }
+
+            row.style.display = showRow ? '' : 'none';
+        });
+
+        // Filter called leads
+        calledRows.forEach(row => {
+            const leadDate = row.getAttribute('data-assigned-date');
+            console.log('Called Lead - Date:', leadDate);
+
+            let showRow = false;
+
+            switch(filterType) {
+                case 'today':
+                    showRow = leadDate === today;
+                    console.log('Today filter - Called Match:', showRow, 'for date:', leadDate);
+                    break;
+                case 'all':
+                    showRow = true;
+                    console.log('All Time filter - Showing all called leads');
+                    break;
+                case 'range':
+                    if (startDate && endDate && leadDate) {
+                        showRow = leadDate >= startDate && leadDate <= endDate;
+                        console.log('Range filter - Called Match:', showRow, 'for date:', leadDate, 'in range:', startDate, 'to', endDate);
+                    } else {
+                        showRow = false;
+                        console.log('Range filter - Invalid range or date for called, hiding');
+                    }
+                    break;
+                default:
+                    showRow = true;
+            }
+
+            if (showRow) {
+                calledVisibleCount++;
+            }
+
+            row.style.display = showRow ? '' : 'none';
+        });
+
+        totalVisibleCount = untouchedVisibleCount + calledVisibleCount;
+
+        console.log('Total visible fresh leads after filter:', totalVisibleCount);
+        console.log('Untouched visible:', untouchedVisibleCount, 'Called visible:', calledVisibleCount);
+        console.log('=== END FRESH LEADS FILTER ===');
+
+        // Update the count display and badges
+        document.getElementById('freshLeadsCount').textContent = totalVisibleCount;
+        document.querySelector('#untouched-leads-tab .badge').textContent = untouchedVisibleCount;
+        document.querySelector('#called-leads-tab .badge').textContent = calledVisibleCount;
+    }
+
+    freshTimeFilters.forEach(filter => {
+        filter.addEventListener('click', function(e) {
+            e.preventDefault();
+            const filterType = this.getAttribute('data-filter');
+            freshTimeFilterText.textContent = this.textContent;
+            saveFilterState('fresh', filterType);
+
+            console.log('Fresh leads filter clicked:', filterType);
+
+            if (filterType === 'range') {
+                freshDateRangeInputs.style.display = 'flex';
+            } else {
+                freshDateRangeInputs.style.display = 'none';
+                filterFreshLeads(filterType);
+            }
+        });
+    });
+
+    if (applyFreshDateRange) {
+        applyFreshDateRange.addEventListener('click', function() {
+            const startDate = freshStartDate.value;
+            const endDate = freshEndDate.value;
+
+            if (!startDate || !endDate) {
+                alert('Please select both start and end dates');
+                return;
+            }
+
+            if (startDate > endDate) {
+                alert('Start date cannot be later than end date');
+                return;
+            }
+
+            console.log('Applying fresh leads date range filter:', startDate, 'to', endDate);
+            filterFreshLeads('range', startDate, endDate);
+            saveFilterState('fresh', 'range');
+        });
+    }
+
+    // Won leads time filter functionality
+    const wonTimeFilters = document.querySelectorAll('.won-time-filter');
+    const wonTimeFilterText = document.getElementById('wonTimeFilterText');
+    const wonRows = document.querySelectorAll('.won-lead-row');
+    const dateRangeInputs = document.getElementById('dateRangeInputs');
+    const wonStartDate = document.getElementById('wonStartDate');
+    const wonEndDate = document.getElementById('wonEndDate');
+    const applyDateRange = document.getElementById('applyDateRange');
+    const wonLeadsCount = document.getElementById('wonLeadsCount');
+
+    function updateWonLeadsCount() {
+        const visibleRows = document.querySelectorAll('.won-lead-row[style=""], .won-lead-row:not([style*="display: none"])');
+        wonLeadsCount.textContent = visibleRows.length;
+    }
+
+    function filterWonLeads(filterType, startDate = null, endDate = null) {
+        const today = getCurrentDate(); // Use the function to get current date
+        console.log('Won Leads Filter - Type:', filterType, 'Today:', today);
+
+        wonRows.forEach(row => {
+            const wonTimestamp = row.getAttribute('data-won-timestamp');
+            const wonDate = row.getAttribute('data-won-date');
+
+            // Extract date from timestamp if available
+            let extractedDate = '';
+            if (wonTimestamp) {
+                try {
+                    // Handle different timestamp formats
+                    if (wonTimestamp.includes('T')) {
+                        // ISO format: 2025-01-15T10:30:00 or 2025-01-15T10:30:00.000Z
+                        extractedDate = wonTimestamp.split('T')[0];
+                    } else if (wonTimestamp.includes(' ')) {
+                        // Format: 2025-01-15 10:30:00
+                        extractedDate = wonTimestamp.split(' ')[0];
+                    } else if (wonTimestamp.length >= 10) {
+                        // Just date: 2025-01-15
+                        extractedDate = wonTimestamp.substring(0, 10);
+                    }
+                } catch (e) {
+                    console.log('Error parsing timestamp:', wonTimestamp, e);
+                    extractedDate = wonDate; // Fallback to data-won-date
+                }
+            } else {
+                extractedDate = wonDate;
+            }
+
+            console.log('Won Lead - Timestamp:', wonTimestamp, 'Extracted date:', extractedDate, 'Today:', today);
+
+            if (!extractedDate && filterType !== 'all') {
+                row.style.display = 'none';
+                return;
+            }
+
+            let showRow = false;
+
+            switch(filterType) {
+                case 'today':
+                    showRow = extractedDate === today;
+                    console.log('Won Today filter - Match:', showRow, 'for date:', extractedDate);
+                    break;
+                case 'all':
+                    showRow = true;
+                    break;
+                case 'range':
+                    if (startDate && endDate && extractedDate) {
+                        showRow = extractedDate >= startDate && extractedDate <= endDate;
+                    } else {
+                        showRow = false;
+                    }
+                    break;
+                default:
+                    showRow = true;
+            }
+
+            row.style.display = showRow ? '' : 'none';
+        });
+
+        updateWonLeadsCount();
+    }
+
+    wonTimeFilters.forEach(filter => {
+        filter.addEventListener('click', function(e) {
+            e.preventDefault();
+            const filterType = this.getAttribute('data-filter');
+            wonTimeFilterText.textContent = this.textContent;
+            saveFilterState('won', filterType);
+
+            if (filterType === 'range') {
+                dateRangeInputs.style.display = 'flex';
+            } else {
+                dateRangeInputs.style.display = 'none';
+                filterWonLeads(filterType);
+            }
+        });
+    });
+
+    if (applyDateRange) {
+        applyDateRange.addEventListener('click', function() {
+            const startDate = wonStartDate.value;
+            const endDate = wonEndDate.value;
+
+            if (!startDate || !endDate) {
+                alert('Please select both start and end dates');
+                return;
+            }
+
+            if (startDate > endDate) {
+                alert('Start date cannot be later than end date');
+                return;
+            }
+
+            filterWonLeads('range', startDate, endDate);
+            saveFilterState('won', 'range');
+        });
+    }
+
+    // Pending leads time filter functionality
+    const pendingTimeFilters = document.querySelectorAll('.pending-time-filter');
+    const pendingTimeFilterText = document.getElementById('pendingTimeFilterText');
+    const pendingRows = document.querySelectorAll('.pending-lead-row');
+    const pendingDateRangeInputs = document.getElementById('pendingDateRangeInputs');
+    const pendingStartDate = document.getElementById('pendingStartDate');
+    const pendingEndDate = document.getElementById('pendingEndDate');
+    const applyPendingDateRange = document.getElementById('applyPendingDateRange');
+    const pendingLeadsCount = document.getElementById('pendingLeadsCount');
+
+    function updatePendingLeadsCount() {
+        const visibleRows = document.querySelectorAll('.pending-lead-row[style=""], .pending-lead-row:not([style*="display: none"])');
+        pendingLeadsCount.textContent = visibleRows.length;
+    }
+
+    function filterPendingLeads(filterType, startDate = null, endDate = null) {
+        const today = getCurrentDate(); // Use the function to get current date
+        console.log('Pending Leads Filter - Type:', filterType, 'Today:', today);
+
+        pendingRows.forEach(row => {
+            const firstCallDate = row.getAttribute('data-first-call-date');
+            console.log('Pending Lead - First Call Date:', firstCallDate, 'Today:', today);
+
+            if (!firstCallDate && filterType !== 'all') {
+                row.style.display = 'none';
+                return;
+            }
+
+            let showRow = false;
+
+            switch(filterType) {
+                case 'today':
+                    showRow = firstCallDate === today;
+                    console.log('Pending Today filter - Match:', showRow, 'for date:', firstCallDate);
+                    break;
+                case 'all':
+                    showRow = true;
+                    break;
+                case 'range':
+                    if (startDate && endDate && firstCallDate) {
+                        showRow = firstCallDate >= startDate && firstCallDate <= endDate;
+                    } else {
+                        showRow = false;
+                    }
+                    break;
+                default:
+                    showRow = true;
+            }
+
+            row.style.display = showRow ? '' : 'none';
+        });
+
+        updatePendingLeadsCount();
+    }
+
+    pendingTimeFilters.forEach(filter => {
+        filter.addEventListener('click', function(e) {
+            e.preventDefault();
+            const filterType = this.getAttribute('data-filter');
+            pendingTimeFilterText.textContent = this.textContent;
+            saveFilterState('pending', filterType);
+
+            if (filterType === 'range') {
+                pendingDateRangeInputs.style.display = 'flex';
+            } else {
+                pendingDateRangeInputs.style.display = 'none';
+                filterPendingLeads(filterType);
+            }
+        });
+    });
+
+    if (applyPendingDateRange) {
+        applyPendingDateRange.addEventListener('click', function() {
+            const startDate = pendingStartDate.value;
+            const endDate = pendingEndDate.value;
+
+            if (!startDate || !endDate) {
+                alert('Please select both start and end dates');
+                return;
+            }
+
+            if (startDate > endDate) {
+                alert('Start date cannot be later than end date');
+                return;
+            }
+
+            filterPendingLeads('range', startDate, endDate);
+            saveFilterState('pending', 'range');
+        });
+    }
+
+    // PS Assigned leads time filter functionality
+    const psTimeFilters = document.querySelectorAll('.ps-time-filter');
+    const psTimeFilterText = document.getElementById('psTimeFilterText');
+    const psRows = document.querySelectorAll('.ps-lead-row');
+    const psDateRangeInputs = document.getElementById('psDateRangeInputs');
+    const psStartDate = document.getElementById('psStartDate');
+    const psEndDate = document.getElementById('psEndDate');
+    const applyPsDateRange = document.getElementById('applyPsDateRange');
+    const psAssignedCount = document.getElementById('psAssignedCount');
+
+    function updatePsAssignedCount() {
+        const visibleRows = document.querySelectorAll('.ps-lead-row[style=""], .ps-lead-row:not([style*="display: none"])');
+        psAssignedCount.textContent = visibleRows.length;
+    }
+
+    function filterPsAssignedLeads(filterType, startDate = null, endDate = null) {
+        const today = getCurrentDate(); // Use the function to get current date
+        console.log('PS Assigned Filter - Type:', filterType, 'Today:', today);
+
+        psRows.forEach(row => {
+            const psAssignedDate = row.getAttribute('data-ps-assigned-date');
+            console.log('PS Assigned Lead - PS Assigned Date:', psAssignedDate, 'Today:', today);
+
+            if (!psAssignedDate && filterType !== 'all') {
+                row.style.display = 'none';
+                return;
+            }
+
+            let showRow = false;
+
+            switch(filterType) {
+                case 'today':
+                    showRow = psAssignedDate === today;
+                    console.log('PS Assigned Today filter - Match:', showRow, 'for date:', psAssignedDate);
+                    break;
+                case 'all':
+                    showRow = true;
+                    break;
+                case 'range':
+                    if (startDate && endDate && psAssignedDate) {
+                        showRow = psAssignedDate >= startDate && psAssignedDate <= endDate;
+                    } else {
+                        showRow = false;
+                    }
+                    break;
+                default:
+                    showRow = true;
+            }
+
+            row.style.display = showRow ? '' : 'none';
+        });
+
+        updatePsAssignedCount();
+    }
+
+    psTimeFilters.forEach(filter => {
+        filter.addEventListener('click', function(e) {
+            e.preventDefault();
+            const filterType = this.getAttribute('data-filter');
+            psTimeFilterText.textContent = this.textContent;
+            saveFilterState('ps', filterType);
+
+            if (filterType === 'range') {
+                psDateRangeInputs.style.display = 'flex';
+            } else {
+                psDateRangeInputs.style.display = 'none';
+                filterPsAssignedLeads(filterType);
+            }
+        });
+    });
+
+    if (applyPsDateRange) {
+        applyPsDateRange.addEventListener('click', function() {
+            const startDate = psStartDate.value;
+            const endDate = psEndDate.value;
+
+            if (!startDate || !endDate) {
+                alert('Please select both start and end dates');
+                return;
+            }
+
+            if (startDate > endDate) {
+                alert('Start date cannot be later than end date');
+                return;
+            }
+
+            filterPsAssignedLeads('range', startDate, endDate);
+            saveFilterState('ps', 'range');
+        });
+    }
+
+    // Apply saved filter states on page load instead of defaulting to "Today"
+    console.log('Applying saved filter states on page load...');
+    
+    // Set filter text based on saved state
+    freshTimeFilterText.textContent = filterState.fresh === 'today' ? 'Today' : 
+                                   filterState.fresh === 'all' ? 'All Time' : 'Date Range';
+    pendingTimeFilterText.textContent = filterState.pending === 'today' ? 'Today' : 
+                                      filterState.pending === 'all' ? 'All Time' : 'Date Range';
+    psTimeFilterText.textContent = filterState.ps === 'today' ? 'Today' : 
+                                 filterState.ps === 'all' ? 'All Time' : 'Date Range';
+    wonTimeFilterText.textContent = filterState.won === 'today' ? 'Today' : 
+                                  filterState.won === 'all' ? 'All Time' : 'Date Range';
+
+    // Apply the saved filters
+    filterFreshLeads(filterState.fresh);
+    filterPendingLeads(filterState.pending);
+    filterPsAssignedLeads(filterState.ps);
+    filterWonLeads(filterState.won);
+
+    // Initialize counts
+    updateFreshLeadsCount();
+    updatePendingLeadsCount();
+    updatePsAssignedCount();
+    updateWonLeadsCount();
+
+    // Connect to SocketIO
+    var socket = io();
+    socket.on('ps_remark_added', function(data) {
+        // Show a toast or alert with the info
+        const toastHtml = `
+            <div class="toast align-items-center text-bg-info border-0 show" role="alert" aria-live="assertive" aria-atomic="true" style="min-width: 300px; margin-bottom: 10px;">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <strong>New PS Remark!</strong><br>
+                        Customer: <b>${data.customer_name}</b><br>
+                        PS: <b>${data.ps_name}</b><br>
+                        Remark: <i>${data.ps_remark}</i>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        `;
+        document.getElementById('followup-toast-container').insertAdjacentHTML('beforeend', toastHtml);
+        // Optionally play a sound or vibrate
+        const audio = document.getElementById('followup-audio');
+        if (audio) { audio.currentTime = 0; audio.play(); }
+    });
+
+    const callHistoryModal = new bootstrap.Modal(document.getElementById('callHistoryModal'));
+    const callHistoryTableContainer = document.getElementById('callHistoryTableContainer');
+    document.querySelectorAll('.view-call-history-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const uid = this.getAttribute('data-uid');
+            callHistoryTableContainer.innerHTML = '<div class="text-center text-muted">Loading...</div>';
+            document.getElementById('callHistoryTotal').innerHTML = '';
+            callHistoryModal.show();
+            fetch(`/cre_call_attempt_history_json/${uid}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.history.length > 0) {
+                        // Count RNR calls
+                        const rnrCount = data.history.filter(row => row.status && row.status.trim().toUpperCase() === 'RNR').length;
+                        const busyCount = data.history.filter(row => row.status && row.status.trim().toLowerCase() === 'busy on another call').length;
+                        const callMeBackCount = data.history.filter(row => row.status && row.status.trim().toLowerCase() === 'call me back').length;
+                        const callNotConnectedCount = data.history.filter(row => row.status && row.status.trim().toLowerCase() === 'call not connected').length;
+                        const excludedStatuses = ['rnr', 'busy on another call', 'call me back', 'call not connected'];
+                        const connectedCallsCount = data.history.filter(row =>
+                             row.status && !excludedStatuses.includes(row.status.trim().toLowerCase())
+                        ).length;
+                        document.getElementById('callHistoryTotal').innerHTML = 
+                            `<strong>Total Calls Made:</strong> ${data.history.length} &nbsp; | &nbsp; <strong>RNR Calls:</strong> ${rnrCount} &nbsp; | &nbsp; <strong>Busy on another Call:</strong> ${busyCount} &nbsp; | &nbsp; <strong>Call me Back:</strong> ${callMeBackCount} &nbsp; | &nbsp; <strong>Call not Connected:</strong> ${callNotConnectedCount} &nbsp; | &nbsp; <strong>Connected Calls:</strong> ${connectedCallsCount}`;
+                        let table = `<div class='table-responsive'><table class='table table-bordered table-striped'><thead><tr><th>UID</th><th>Call No</th><th>Attempt</th><th>Status</th><th>CRE Name</th><th>Update TS</th></tr></thead><tbody>`;
+                        data.history.forEach(row => {
+                            table += `<tr><td>${row.uid}</td><td>${row.call_no}</td><td>${row.attempt}</td><td>${row.status}</td><td>${row.cre_name}</td><td>${row.update_ts ? row.update_ts.replace('T', ' ').slice(0, 19) : ''}</td></tr>`;
+                        });
+                        table += '</tbody></table></div>';
+                        callHistoryTableContainer.innerHTML = table;
+                    } else {
+                        document.getElementById('callHistoryTotal').innerHTML = '';
+                        callHistoryTableContainer.innerHTML = '<div class="alert alert-info">No call attempt history found for this lead.</div>';
+                    }
+                })
+                .catch(() => {
+                    document.getElementById('callHistoryTotal').innerHTML = '';
+                    callHistoryTableContainer.innerHTML = '<div class="alert alert-danger">Failed to load call attempt history.</div>';
+                });
+        });
+    });
+});
+
+// Request browser notification permission on page load
+if (window.Notification && Notification.permission !== 'granted') {
+    Notification.requestPermission();
+}
+
+function showFollowupToast(lead) {
+    // Bootstrap Toast with clickable area
+    const toastHtml = `
+        <div class="toast align-items-center text-bg-warning border-0 show followup-toast" role="alert" aria-live="assertive" aria-atomic="true" style="min-width: 300px; margin-bottom: 10px; cursor: pointer;" data-uid="${lead.uid}">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <strong>Upcoming Follow-up!</strong><br>
+                    Lead: <b>${lead.customer_name}</b> (${lead.customer_mobile_number})<br>
+                    Due at: <b>${lead.follow_up_date}</b>
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    `;
+    document.getElementById('followup-toast-container').insertAdjacentHTML('beforeend', toastHtml);
+    // Play sound
+    const audio = document.getElementById('followup-audio');
+    if (audio) { audio.currentTime = 0; audio.play(); }
+    // Browser notification
+    if (window.Notification && Notification.permission === 'granted') {
+        new Notification('Upcoming Follow-up!', {
+            body: `Lead: ${lead.customer_name} (${lead.customer_mobile_number})\nDue at: ${lead.follow_up_date}`,
+            icon: '/static/images/raam-ather-logo.png',
+            data: { url: lead.update_url }
+        }).onclick = function(e) {
+            window.open(lead.update_url, '_blank');
+        };
+    }
+    // Vibrate (mobile)
+    if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(200);
+}
+
+function parseISODateTime(dt) {
+    if (!dt) return null;
+    // Accepts 'YYYY-MM-DD HH:mm' or 'YYYY-MM-DDTHH:mm'
+    return new Date(dt.replace(' ', 'T'));
+}
+
+function checkUpcomingFollowups() {
+    // Only check the "Today's Follow-ups" tab
+    const tab = document.getElementById('followups');
+    if (!tab || tab.style.display === 'none') return;
+    tab.querySelectorAll('tbody tr').forEach(row => {
+        const badge = row.querySelector('.badge.bg-warning');
+        if (!badge) return;
+        const followupText = badge.textContent.trim();
+        const followupDate = parseISODateTime(followupText);
+        if (!followupDate) return;
+        const now = new Date();
+        const diffMs = followupDate - now;
+        const diffMin = diffMs / 60000;
+        if (diffMin > 0 && diffMin <= 2 && !row.dataset.notified) {
+            const uid = row.querySelector('td .badge.bg-primary')?.textContent.trim();
+            const lead = {
+                customer_name: row.querySelector('td:nth-child(2)').textContent.trim(),
+                customer_mobile_number: row.querySelector('td:nth-child(3)').textContent.trim(),
+                follow_up_date: followupText,
+                uid: uid,
+                update_url: `/update_lead/${uid}`
+            };
+            showFollowupToast(lead);
+            row.dataset.notified = 'true';
+        }
+    });
+}
+
+// Check every 30 seconds
+setInterval(checkUpcomingFollowups, 30000);
+// Also check immediately on page load
+checkUpcomingFollowups();
+
+// Make toast clickable to go to update page
+// Delegate event to container
+
+document.getElementById('followup-toast-container').addEventListener('click', function(e) {
+    let toast = e.target.closest('.followup-toast');
+    if (toast && toast.dataset.uid) {
+        window.location.href = `/update_lead/${toast.dataset.uid}`;
+    }
+});
+</script>
 {% endblock %}
