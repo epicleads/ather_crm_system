@@ -16,7 +16,7 @@
                 <h4 class="card-title mb-3">Login to CRM</h4>
                 <p class="card-text mb-4">Access your dashboard with your username and password.</p>
 
-                <form method="POST" action="{{ url_for('unified_login') }}" class="text-start">
+                <form method="POST" action="{{ url_for('unified_login') }}" class="text-start" id="loginForm">
                     <div class="mb-3">
                         <label for="user_type" class="form-label">
                             <i class="fas fa-user-tag text-muted me-2"></i>Role
@@ -26,6 +26,7 @@
                             <option value="admin">Admin</option>
                             <option value="cre">CRE</option>
                             <option value="ps">Product Specialist (PS)</option>
+                            <option value="branch_head">Branch Head</option>
                         </select>
                     </div>
                     <div class="mb-3">

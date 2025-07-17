@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}PS Analytics - Ather CRM{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2><i class="fas fa-chart-line text-primary"></i> PS Analytics Dashboard</h2>
+                <p class="text-muted">Performance insights and metrics for Product Specialists</p>
+            </div>
+            <div>
+                <a href="{{ url_for('ps_dashboard') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Date Filter -->
+<div class="card mb-4">
+    <div class="card-body">
+        <h5 class="mb-3"><i class="fas fa-calendar-alt"></i> Date Filter</h5>
+        <form class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label for="fromDate" class="form-label">From Date:</label>
+                <input type="date" class="form-control" id="fromDate" name="from_date">
+            </div>
+            <div class="col-md-4">
+                <label for="toDate" class="form-label">To Date:</label>
+                <input type="date" class="form-control" id="toDate" name="to_date">
+            </div>
+            <div class="col-md-4 d-flex gap-2">
+                <button type="submit" class="btn btn-success"><i class="fas fa-search"></i> Apply Filter</button>
+                <button type="reset" class="btn btn-warning"><i class="fas fa-times"></i> Clear Filter</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- KPI Cards for PS Analytics -->
+<div class="kpi-cards-row d-flex flex-nowrap gap-3 mb-4" style="overflow-x: auto;">
+    <div class="card analytics-card bg-primary text-white min-width-kpi">
+        <div class="card-body text-center">
+            <div class="stats-number" id="psWonCases">{{ ps_analytics.won_cases }}</div>
+            <div class="stats-label">🏆 PS Won Cases</div>
+            <small class="text-white-50">Date Filtered</small>
+        </div>
+    </div>
+    <div class="card analytics-card bg-success text-white min-width-kpi">
+        <div class="card-body text-center">
+            <div class="stats-number" id="psConversionRate">{{ ps_analytics.conversion_rate }}%</div>
+            <div class="stats-label">Conversion Rate</div>
+            <small class="text-white-50">Live Rate</small>
+        </div>
+    </div>
+    <div class="card analytics-card bg-info text-white min-width-kpi">
+        <div class="card-body text-center">
+            <div class="stats-number" id="psWalkinConversionRate">{{ ps_analytics.walkin_conversion_rate }}%</div>
+            <div class="stats-label">Walk-In Conversion Rate</div>
+            <small class="text-white-50">Live Rate</small>
+        </div>
+    </div>
+    <div class="card analytics-card bg-warning text-white min-width-kpi">
+        <div class="card-body text-center">
+            <div class="stats-number" id="psTotalAssigned">{{ ps_analytics.total_assigned }}</div>
+            <div class="stats-label">Total Leads Assigned</div>
+            <small class="text-white-50">Date Filtered</small>
+        </div>
+    </div>
+    <div class="card analytics-card bg-danger text-white min-width-kpi">
+        <div class="card-body text-center">
+            <div class="stats-number" id="psTotalPending">{{ ps_analytics.total_pending }}</div>
+            <div class="stats-label">Total Pending Cases</div>
+            <small class="text-white-50">Live Count</small>
+        </div>
+    </div>
+    <div class="card analytics-card bg-secondary text-white min-width-kpi">
+        <div class="card-body text-center">
+            <div class="stats-number" id="psWalkinPendingCases">{{ ps_analytics.walkin_pending_cases }}</div>
+            <div class="stats-label">Walk-In Pending Cases</div>
+            <small class="text-white-50">Live Count</small>
+        </div>
+    </div>
+</div>
+<style>
+.min-width-kpi { min-width: 260px; }
+.kpi-cards-row::-webkit-scrollbar { height: 8px; }
+.kpi-cards-row::-webkit-scrollbar-thumb { background: #e0e0e0; border-radius: 4px; }
+</style>
+
+<!-- Add analytics content here -->
+
+{% endblock %} 

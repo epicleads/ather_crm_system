@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Manage Branch Heads - Ather CRM{% endblock %}
+{% block content %}
+<div class="container py-4">
+    <h2 class="mb-4"><i class="fas fa-user-tie text-primary"></i> Manage Branch Heads</h2>
+    <!-- Add Branch Head Form -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title mb-3">Add New Branch Head</h5>
+            <form method="post" action="{{ url_for('add_branch_head') }}">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-3">
+                        <label for="name" class="form-label">Name</label>
+                        <input type="text" class="form-control" id="name" name="name" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="username" class="form-label">Username</label>
+                        <input type="text" class="form-control" id="username" name="username" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" class="form-control" id="password" name="password" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="branch" class="form-label">Branch</label>
+                        <select class="form-select" id="branch" name="branch" required>
+                            {% for branch in branches %}
+                            <option value="{{ branch }}">{{ branch }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-check mt-4">
+                            <input class="form-check-input" type="checkbox" id="is_active" name="is_active" checked>
+                            <label class="form-check-label" for="is_active">Is Active</label>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary">Add Branch Head</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    <!-- Branch Head List Table -->
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title mb-3">Branch Head Users</h5>
+            <div class="table-responsive">
+                <table class="table table-bordered align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Name</th>
+                            <th>Username</th>
+                            <th>Branch</th>
+                            <th>Is Active</th>
+                            <th>Created</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for bh in branch_heads %}
+                        <tr>
+                            <td>{{ bh['Name'] }}</td>
+                            <td>{{ bh['Username'] }}</td>
+                            <td>{{ bh['Branch'] }}</td>
+                            <td>
+                                <form method="post" action="{{ url_for('toggle_branch_head_active', id=bh['id']) }}">
+                                    <input type="hidden" name="is_active" value="{{ not bh['Is Active'] }}">
+                                    <button type="submit" class="btn btn-sm {{ 'btn-success' if bh['Is Active'] else 'btn-secondary' }}">
+                                        {{ 'Active' if bh['Is Active'] else 'Inactive' }}
+                                    </button>
+                                </form>
+                            </td>
+                            <td>{{ bh['created_at'] }}</td>
+                            <td><!-- Future: Edit/Delete --></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 
