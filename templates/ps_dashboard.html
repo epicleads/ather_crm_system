@@ -238,7 +238,7 @@
                                 </td>
                                 <td>{{ lead.customer_name }}</td>
                                 <td>{{ lead.customer_mobile_number }}</td>
-                                <td><span class="badge bg-secondary">{{ lead.source }}</span></td>
+                                <td><span class="badge bg-secondary">{{ lead.source or 'N/A' }}</span></td>
                                 <td>{{ lead.cre_name }}</td>
                                 <td>
                                     {% if lead.lead_category == 'Hot' %}
