@@ -2195,47 +2195,6 @@ def ps_dashboard():
     try:
         t0 = time.time()
         # Get all assigned leads
-        assigned_leads = safe_get_data('ps_followup_master', {'ps_name': ps_name})
-        print(f"[PERF] ps_dashboard: safe_get_data('ps_followup_master') took {time.time() - t0:.3f} seconds")
-
-        # Filter by ps_assigned_at for all sections except Today's Follow-ups
-        def filter_by_assigned_at(leads):
-            if filter_type == 'all':
-                return leads
-            elif filter_type == 'today':
-                today_str = today.strftime('%Y-%m-%d')
-                return [l for l in leads if l.get('ps_assigned_at', '').startswith(today_str)]
-            elif filter_type == 'range' and start_date and end_date:
-                filtered = []
-                for l in leads:
-                    ts = l.get('ps_assigned_at')
-                    if ts:
-                        try:
-                            date_val = ts[:10]
-                            if start_date <= date_val <= end_date:
-                                filtered.append(l)
-                        except Exception:
-                            continue
-                return filtered
-            else:
-                return leads
-
-        filtered_leads = filter_by_assigned_at(assigned_leads)
-
-        t1 = time.time()
-        pending_leads = [lead for lead in filtered_leads if not lead.get('first_call_date')]
-        print(f"[PERF] ps_dashboard: pending_leads filter took {time.time() - t1:.3f} seconds")
-
-        t2 = time.time()
-        # Today's Follow-ups (not filtered by ps_assigned_at)
-        # Regular leads
-        todays_followups_regular = [
-            lead for lead in assigned_leads
-            if lead.get('follow_up_date') and str(lead.get('follow_up_date')).startswith(str(today))
-        ]
-        # Walk-in leads for this PS
-        walkin_leads = safe_get_data('walkin_data', {'ps_name': ps_name})
-        todays_followups_walkin = []
         for lead in walkin_leads:
             if (
                 (lead.get('walkin_followup_date') and str(lead.get('walkin_followup_date')).startswith(str(today))) or
