@@ -157,6 +157,7 @@
                             <option value="Booked" {% if lead.lead_status == 'Booked' %}selected{% endif %}>Booked</option>
                             <option value="Test Drive" {% if lead.lead_status == 'Test Drive' %}selected{% endif %}>Test Drive</option>
                             <option value="Planning in Next Month" {% if lead.lead_status == 'Planning in Next Month' %}selected{% endif %}>Planning in Next Month</option>
+                            <option value="Interested" {% if lead.lead_status == 'Interested' %}selected{% endif %}>Interested</option>
                             <option value="Lost to Competition" {% if lead.lead_status == 'Lost to Competition' %}selected{% endif %}>Lost to Competition</option>
                             <option value="Finance Rejected" {% if lead.lead_status == 'Finance Rejected' %}selected{% endif %}>Finance Rejected</option>
                             <option value="Dropped" {% if lead.lead_status == 'Dropped' %}selected{% endif %}>Dropped</option>
@@ -278,6 +279,71 @@ document.addEventListener('DOMContentLoaded', function() {
         followUpDate.min = today;
     }
 
+    // Declare leadStatus and finalStatus only once
+    const leadStatus = document.getElementById('lead_status');
+    const finalStatus = document.getElementById('final_status');
+    function handleLeadStatusChange() {
+        if (!leadStatus || !finalStatus) return;
+        // Lock Final Status for Booked, Dropped, Retailed
+        if (leadStatus.value === 'Booked' || leadStatus.value === 'Retailed') {
+            finalStatus.value = 'Won';
+            finalStatus.setAttribute('readonly', 'readonly');
+            // Add hidden input to always submit value
+            let hiddenFinalStatus = document.getElementById('hidden_final_status');
+            if (!hiddenFinalStatus) {
+                hiddenFinalStatus = document.createElement('input');
+                hiddenFinalStatus.type = 'hidden';
+                hiddenFinalStatus.id = 'hidden_final_status';
+                hiddenFinalStatus.name = 'final_status';
+                finalStatus.parentNode.appendChild(hiddenFinalStatus);
+            }
+            hiddenFinalStatus.value = 'Won';
+        } else if (
+            leadStatus.value === 'Dropped' ||
+            leadStatus.value === 'Lost to Competition' ||
+            leadStatus.value === 'Lost to codealer'
+        ) {
+            finalStatus.value = 'Lost';
+            finalStatus.setAttribute('readonly', 'readonly');
+            let hiddenFinalStatus = document.getElementById('hidden_final_status');
+            if (!hiddenFinalStatus) {
+                hiddenFinalStatus = document.createElement('input');
+                hiddenFinalStatus.type = 'hidden';
+                hiddenFinalStatus.id = 'hidden_final_status';
+                hiddenFinalStatus.name = 'final_status';
+                finalStatus.parentNode.appendChild(hiddenFinalStatus);
+            }
+            hiddenFinalStatus.value = 'Lost';
+        } else {
+            finalStatus.removeAttribute('readonly');
+            let hiddenFinalStatus = document.getElementById('hidden_final_status');
+            if (hiddenFinalStatus) hiddenFinalStatus.remove();
+        }
+        // Lock follow-up date for Won, Lost, Retailed, Lost to Competition, Lost to codealer
+        if (["Won", "Lost", "Retailed", "Lost to Competition", "Lost to codealer"].includes(leadStatus.value) || finalStatus.value === 'Won' || finalStatus.value === 'Lost') {
+            if (followUpDate) {
+                followUpDate.setAttribute('disabled', 'disabled');
+            }
+        } else {
+            if (followUpDate) {
+                followUpDate.removeAttribute('disabled');
+            }
+        }
+        // Auto-set follow-up date for Planning in Next Month
+        if (leadStatus.value === 'Planning in Next Month') {
+            if (followUpDate) {
+                const now = new Date();
+                const nextMonth = new Date(now.setMonth(now.getMonth() + 1));
+                followUpDate.value = nextMonth.toISOString().slice(0, 16);
+            }
+        }
+    }
+    if (leadStatus) {
+        leadStatus.addEventListener('change', handleLeadStatusChange);
+        // Initial check
+        handleLeadStatusChange();
+    }
+
     // Form validation
     document.getElementById('psLeadUpdateForm').addEventListener('submit', function(e) {
         // Show loading state
@@ -293,7 +359,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 10000);
     });
 
-    const leadStatus = document.getElementById('lead_status');
     const callDateInput = document.getElementById('call_date');
     const skipStatuses = [
         'Call not Connected',
@@ -337,7 +402,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Make follow-up date required only if final status is not 'Lost'
-    const finalStatus = document.getElementById('final_status');
     if (finalStatus && followUpDate) {
         function toggleFollowUpRequired() {
             if (finalStatus.value === 'Lost') {
