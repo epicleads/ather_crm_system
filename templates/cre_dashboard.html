@@ -271,6 +271,7 @@
                                         <th>Campaign</th>
                                         <th>Date</th>
                                         <th>UID</th>
+                                        <th>Call History</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -286,6 +287,11 @@
                                         <td>{{ lead.lead_category }}</td>
                                         <td>{{ lead.date }}</td>
                                         <td>{{ lead.uid }}</td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-info view-call-history-btn" data-uid="{{ lead.uid }}" title="View Call History">
+                                                <i class="fas fa-history"></i> View
+                                            </button>
+                                        </td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -310,6 +316,7 @@
                                         <th>Campaign</th>
                                         <th>Date</th>
                                         <th>UID</th>
+                                        <th>Call History</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -325,6 +332,11 @@
                                         <td>{{ lead.lead_category }}</td>
                                         <td>{{ lead.date }}</td>
                                         <td>{{ lead.uid }}</td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-info view-call-history-btn" data-uid="{{ lead.uid }}" title="View Call History">
+                                                <i class="fas fa-history"></i> View
+                                            </button>
+                                        </td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -1454,7 +1466,7 @@ document.addEventListener('DOMContentLoaded', function() {
     filterWonLeads(filterState.won);
 
     // Initialize counts
-    updateFreshLeadsCount();
+    // updateFreshLeadsCount();
     updatePendingLeadsCount();
     updatePsAssignedCount();
     updateWonLeadsCount();
