@@ -2489,6 +2489,9 @@ def update_ps_lead(uid):
                     update_data['status'] = 'Converted'
                 elif final_status == 'Lost':
                     update_data['status'] = 'Lost'
+            elif final_status == 'Pending':
+                update_data['ps_final_status'] = 'Pending'
+                update_data['status'] = 'Pending'
             else:
                 update_data['ps_final_status'] = 'Pending'
             skip_first_call_statuses = [
