@@ -2194,7 +2194,43 @@ def ps_dashboard():
 
     try:
         t0 = time.time()
-        # Get all assigned leads
+        # Get all assigned leads for this PS
+        assigned_leads = safe_get_data('ps_followup_master', {'ps_name': ps_name})
+        
+        # Apply date filtering to assigned leads
+        filtered_leads = filter_leads_by_date(assigned_leads, filter_type, 'created_at')
+        
+        # Initialize lists for today's followups
+        todays_followups_regular = []
+        todays_followups_walkin = []
+        
+        # Define statuses that should be excluded from Today's Follow-up and Pending Leads
+        excluded_statuses = ['Lost to Codealer', 'Lost to Competition', 'Dropped', 'Booked', 'Retailed']
+        
+        # Filter regular leads for today's followups (exclude Won/Lost leads and specific statuses)
+        for lead in filtered_leads:
+            if (
+                lead.get('follow_up_date') and 
+                str(lead.get('follow_up_date')).startswith(str(today)) and
+                lead.get('final_status') not in ['Won', 'Lost'] and
+                lead.get('lead_status') not in excluded_statuses
+            ):
+                lead = dict(lead)  # Make a copy to avoid mutating the original
+                lead['lead_uid'] = lead.get('lead_uid')  # Add lead_uid for template compatibility
+                todays_followups_regular.append(lead)
+        
+        # Get pending leads (leads without first_call_date, excluding specific statuses)
+        pending_leads = [
+            lead for lead in filtered_leads 
+            if not lead.get('first_call_date') and 
+            lead.get('lead_status') not in excluded_statuses
+        ]
+        
+        t2 = time.time()
+        # Fetch walk-in leads for this PS
+        walkin_leads = safe_get_data('walkin_data', {'ps_name': ps_name})
+        
+        # Filter walk-in leads for today's followups
         for lead in walkin_leads:
             if (
                 (lead.get('walkin_followup_date') and str(lead.get('walkin_followup_date')).startswith(str(today))) or
@@ -2203,6 +2239,7 @@ def ps_dashboard():
                 lead = dict(lead)  # Make a copy to avoid mutating the original
                 lead['lead_uid'] = lead.get('uid')  # Add lead_uid for template compatibility
                 todays_followups_walkin.append(lead)
+        
         # Merge both lists
         todays_followups = todays_followups_regular + todays_followups_walkin
         print(f"[PERF] ps_dashboard: todays_followups filter took {time.time() - t2:.3f} seconds")
@@ -2239,8 +2276,6 @@ def ps_dashboard():
         print(f"[PERF] ps_dashboard: lost_leads filter took {time.time() - t4:.3f} seconds")
 
         t5 = time.time()
-        # Fetch walk-in leads for this PS
-        walkin_leads = safe_get_data('walkin_data', {'ps_name': ps_name})
         # Fetch event leads for this PS
         event_leads = safe_get_data('activity_leads', {'ps_name': ps_name})
         result = render_template('ps_dashboard.html',
@@ -2414,7 +2449,8 @@ def update_ps_lead(uid):
             final_status = request.form.get('final_status', '')
             call_date = request.form.get('call_date', '')
             lead_category = request.form.get('lead_category', '')
-            update_data['lead_source'] = 'Walk-in'
+            # Use the actual source from walkin_data instead of hardcoding 'Walk-in'
+            update_data['lead_source'] = walkin_data.get('lead_source', 'Walk-in')
             if lead_category:
                 update_data['lead_category'] = lead_category
             if status:
