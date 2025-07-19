@@ -623,6 +623,7 @@
                                         <span class="badge bg-dark">{{ lead.lead_category or 'Not Set' }}</span>
                                     {% endif %}
                                 </td>
+                                <td>{{ lead.model_interested or 'Not specified' }}</td>
                                 <td>{{ lead.date }}</td>
                                 <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
                             </tr>
@@ -1446,6 +1447,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Ensure date range inputs are hidden by default
+    console.log('Hiding date range inputs by default...');
+    if (freshDateRangeInputs) freshDateRangeInputs.style.display = 'none';
+    if (pendingDateRangeInputs) pendingDateRangeInputs.style.display = 'none';
+    if (psDateRangeInputs) psDateRangeInputs.style.display = 'none';
+    if (dateRangeInputs) dateRangeInputs.style.display = 'none';
+
     // Apply saved filter states on page load instead of defaulting to "Today"
     console.log('Applying saved filter states on page load...');
     
@@ -1459,7 +1467,20 @@ document.addEventListener('DOMContentLoaded', function() {
     wonTimeFilterText.textContent = filterState.won === 'today' ? 'Today' : 
                                   filterState.won === 'all' ? 'All Time' : 'Date Range';
 
-    // Apply the saved filters
+    // Apply the saved filters and ensure date inputs are hidden for non-range filters
+    if (filterState.fresh !== 'range') {
+        if (freshDateRangeInputs) freshDateRangeInputs.style.display = 'none';
+    }
+    if (filterState.pending !== 'range') {
+        if (pendingDateRangeInputs) pendingDateRangeInputs.style.display = 'none';
+    }
+    if (filterState.ps !== 'range') {
+        if (psDateRangeInputs) psDateRangeInputs.style.display = 'none';
+    }
+    if (filterState.won !== 'range') {
+        if (dateRangeInputs) dateRangeInputs.style.display = 'none';
+    }
+    
     filterFreshLeads(filterState.fresh);
     filterPendingLeads(filterState.pending);
     filterPsAssignedLeads(filterState.ps);
