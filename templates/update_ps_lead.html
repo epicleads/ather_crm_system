@@ -83,7 +83,7 @@
                 <div class="col-md-4">
                     <div class="mb-3">
                         <label class="form-label">Source</label>
-                        <input type="text" class="form-control" value="{{ lead.source or '' }}" readonly>
+                        <input type="text" class="form-control" value="{{ lead.lead_source or lead.source or '' }}" readonly>
                     </div>
                 </div>
                 <div class="col-md-4">
