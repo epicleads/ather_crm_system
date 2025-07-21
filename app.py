@@ -420,16 +420,20 @@ def create_or_update_ps_followup(lead_data, ps_name, ps_branch):
     except Exception as e:
         print(f"Error creating/updating PS followup: {e}")
 
-
 def track_cre_call_attempt(uid, cre_name, call_no, lead_status, call_was_recorded=False, follow_up_date=None, remarks=None):
     """Track CRE call attempt in the history table and update TAT for first attempt"""
     try:
         # Get the next attempt number for this call
         attempt_result = supabase.table('cre_call_attempt_history').select('attempt').eq('uid', uid).eq('call_no', call_no).order('attempt', desc=True).limit(1).execute()
-        
         next_attempt = 1
         if attempt_result.data:
             next_attempt = attempt_result.data[0]['attempt'] + 1
+
+        # Fetch the current final_status from lead_master
+        final_status = None
+        lead_result = supabase.table('lead_master').select('final_status').eq('uid', uid).limit(1).execute()
+        if lead_result.data and 'final_status' in lead_result.data[0]:
+            final_status = lead_result.data[0]['final_status']
 
         # Prepare attempt data
         attempt_data = {
@@ -440,7 +444,8 @@ def track_cre_call_attempt(uid, cre_name, call_no, lead_status, call_was_recorde
             'cre_name': cre_name,
             'call_was_recorded': call_was_recorded,
             'follow_up_date': follow_up_date,
-            'remarks': remarks
+            'remarks': remarks,
+            'final_status': final_status
         }
 
         # Insert the attempt record
@@ -483,16 +488,86 @@ def track_cre_call_attempt(uid, cre_name, call_no, lead_status, call_was_recorde
     except Exception as e:
         print(f"Error tracking CRE call attempt: {e}")
 
+# def track_cre_call_attempt(uid, cre_name, call_no, lead_status, call_was_recorded=False, follow_up_date=None, remarks=None):
+#     """Track CRE call attempt in the history table and update TAT for first attempt"""
+#     try:
+#         # Get the next attempt number for this call
+#         attempt_result = supabase.table('cre_call_attempt_history').select('attempt').eq('uid', uid).eq('call_no', call_no).order('attempt', desc=True).limit(1).execute()
+        
+#         next_attempt = 1
+#         if attempt_result.data:
+#             next_attempt = attempt_result.data[0]['attempt'] + 1
+
+#         # Prepare attempt data
+#         attempt_data = {
+#             'uid': uid,
+#             'call_no': call_no,
+#             'attempt': next_attempt,
+#             'status': lead_status,
+#             'cre_name': cre_name,
+#             'call_was_recorded': call_was_recorded,
+#             'follow_up_date': follow_up_date,
+#             'remarks': remarks
+#         }
+
+#         # Insert the attempt record
+#         insert_result = supabase.table('cre_call_attempt_history').insert(attempt_data).execute()
+#         print(f"Tracked call attempt: {uid} - {call_no} call, attempt {next_attempt}, status: {lead_status}")
+
+#         # --- TAT Calculation and Update ---
+#         if call_no == 'first' and next_attempt == 1:
+#             # Fetch lead's created_at
+#             lead_result = supabase.table('lead_master').select('created_at').eq('uid', uid).limit(1).execute()
+#             if lead_result.data and lead_result.data[0].get('created_at'):
+#                 created_at_str = lead_result.data[0]['created_at']
+#                 from datetime import datetime
+#                 try:
+#                     if 'T' in created_at_str:
+#                         created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+#                     else:
+#                         created_at = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S')
+#                 except Exception:
+#                     created_at = None
+#                 # Get updated_at from inserted attempt (if available), else use now
+#                 updated_at_str = None
+#                 if insert_result.data and insert_result.data[0].get('updated_at'):
+#                     updated_at_str = insert_result.data[0]['updated_at']
+#                 else:
+#                     from datetime import datetime
+#                     updated_at_str = datetime.now().isoformat()
+#                 try:
+#                     if 'T' in updated_at_str:
+#                         updated_at = datetime.fromisoformat(updated_at_str.replace('Z', '+00:00'))
+#                     else:
+#                         updated_at = datetime.strptime(updated_at_str, '%Y-%m-%d %H:%M:%S')
+#                 except Exception:
+#                     updated_at = datetime.now()
+#                 if created_at:
+#                     tat_seconds = (updated_at - created_at).total_seconds()
+#                     # Update lead_master with TAT
+#                     supabase.table('lead_master').update({'tat': tat_seconds}).eq('uid', uid).execute()
+#                     print(f"TAT updated for lead {uid}: {tat_seconds} seconds")
+#     except Exception as e:
+#         print(f"Error tracking CRE call attempt: {e}")
 
 def track_ps_call_attempt(uid, ps_name, call_no, lead_status, call_was_recorded=False, follow_up_date=None, remarks=None):
     """Track PS call attempt in the history table"""
     try:
         # Get the next attempt number for this call
         attempt_result = supabase.table('ps_call_attempt_history').select('attempt').eq('uid', uid).eq('call_no', call_no).order('attempt', desc=True).limit(1).execute()
-        
         next_attempt = 1
         if attempt_result.data:
             next_attempt = attempt_result.data[0]['attempt'] + 1
+
+        # Fetch the current final_status from ps_followup_master, fallback to lead_master
+        final_status = None
+        ps_result = supabase.table('ps_followup_master').select('final_status').eq('lead_uid', uid).limit(1).execute()
+        if ps_result.data and 'final_status' in ps_result.data[0]:
+            final_status = ps_result.data[0]['final_status']
+        else:
+            lead_result = supabase.table('lead_master').select('final_status').eq('uid', uid).limit(1).execute()
+            if lead_result.data and 'final_status' in lead_result.data[0]:
+                final_status = lead_result.data[0]['final_status']
 
         # Prepare attempt data
         attempt_data = {
@@ -503,16 +578,46 @@ def track_ps_call_attempt(uid, ps_name, call_no, lead_status, call_was_recorded=
             'ps_name': ps_name,
             'call_was_recorded': call_was_recorded,
             'follow_up_date': follow_up_date,
-            'remarks': remarks
+            'remarks': remarks,
+            'final_status': final_status
         }
 
         # Insert the attempt record
         supabase.table('ps_call_attempt_history').insert(attempt_data).execute()
-        
         print(f"Tracked PS call attempt: {uid} - {call_no} call, attempt {next_attempt}, status: {lead_status}")
-        
     except Exception as e:
         print(f"Error tracking PS call attempt: {e}")
+
+
+# def track_ps_call_attempt(uid, ps_name, call_no, lead_status, call_was_recorded=False, follow_up_date=None, remarks=None):
+#     """Track PS call attempt in the history table"""
+#     try:
+#         # Get the next attempt number for this call
+#         attempt_result = supabase.table('ps_call_attempt_history').select('attempt').eq('uid', uid).eq('call_no', call_no).order('attempt', desc=True).limit(1).execute()
+        
+#         next_attempt = 1
+#         if attempt_result.data:
+#             next_attempt = attempt_result.data[0]['attempt'] + 1
+
+#         # Prepare attempt data
+#         attempt_data = {
+#             'uid': uid,
+#             'call_no': call_no,
+#             'attempt': next_attempt,
+#             'status': lead_status,
+#             'ps_name': ps_name,
+#             'call_was_recorded': call_was_recorded,
+#             'follow_up_date': follow_up_date,
+#             'remarks': remarks
+#         }
+
+#         # Insert the attempt record
+#         supabase.table('ps_call_attempt_history').insert(attempt_data).execute()
+        
+#         print(f"Tracked PS call attempt: {uid} - {call_no} call, attempt {next_attempt}, status: {lead_status}")
+        
+#     except Exception as e:
+#         print(f"Error tracking PS call attempt: {e}")
 
 
 def filter_leads_by_date(leads, filter_type, date_field='created_at'):
