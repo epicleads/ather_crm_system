@@ -1994,50 +1994,103 @@ def add_lead_with_cre():
 @require_cre
 def cre_dashboard():
     import time
-    from datetime import datetime
+    from datetime import datetime, date
     start_time = time.time()
     cre_name = session.get('cre_name')
-    today = datetime.now().date()
+    
+    # --- Date Filter Logic ---
+    filter_type = request.args.get('filter_type', 'all')
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
+
     all_leads = safe_get_data('lead_master', {'cre_name': cre_name})
+    
+    # Apply date filtering using the 'date' column
+    if filter_type == 'today':
+        today_str = date.today().isoformat()
+        all_leads = [lead for lead in all_leads if lead.get('date') == today_str]
+    elif filter_type == 'range' and start_date_str and end_date_str:
+        # Filter leads where lead['date'] falls within the range
+        all_leads = [
+            lead for lead in all_leads 
+            if lead.get('date') and start_date_str <= lead['date'] <= end_date_str
+        ]
+    # For 'all' filter type, we keep all leads without date filtering
+
+    print(f"Date filter applied - Type: {filter_type}, Leads count: {len(all_leads)}")
+    if filter_type == 'range':
+        print(f"Date range: {start_date_str} to {end_date_str}")
 
     # Fetch event leads assigned to this CRE
     event_event_leads = safe_get_data('activity_leads', {'cre_assigned': cre_name})
 
     print("Fetched leads for CRE:", cre_name, "Count:", len(all_leads))
-    for lead in all_leads[:5]:  # Print first 5 leads for inspection
-        print("Lead:", lead.get('uid'), "Status:", lead.get('lead_status'))
 
-    untouched_leads = [lead for lead in all_leads if (lead.get('lead_status') or '').strip() == 'Pending']
+    # Initialize buckets for leads for mutual exclusivity
+    untouched_leads = []
+    called_leads = []
+    attended_leads = []
+    assigned_to_ps = []
+    won_leads = []
+    lost_leads = []
+
+    non_contact_statuses = ['RNR', 'Busy on another Call', 'Call me Back', 'Call Disconnected', 'Call not Connected']
+
+    for lead in all_leads:
+        status = (lead.get('lead_status') or '').strip()
+        final_status = lead.get('final_status')
+        has_first_call = lead.get('first_call_date') is not None
+
+        if final_status == 'Won':
+            won_leads.append(lead)
+            continue
+        if final_status == 'Lost':
+            lost_leads.append(lead)
+            continue
+
+        # PS Assigned: any lead with a PS assigned
+        if lead.get('ps_name'):
+            assigned_to_ps.append(lead)
+
+        # Pending Leads: any lead with final_status == 'Pending'
+        if final_status == 'Pending':
+            attended_leads.append(lead)
+
+        # Untouched Leads (Fresh leads that are still pending)
+        if not has_first_call and status == 'Pending':
+            untouched_leads.append(lead)
+            continue
+
+        # Called Fresh Leads: Non-contact status on FIRST update only
+        if status in non_contact_statuses and not has_first_call:
+            called_leads.append(lead)
+            continue
+
+        
+    
     untouched_count = len(untouched_leads)
-
-    called_leads = [lead for lead in all_leads if (lead.get('lead_status') or '').strip() == 'RNR' or (lead.get('lead_status') or '').strip() == 'Busy on another Call' or (lead.get('lead_status') or '').strip() == 'Call me Back' or (lead.get('lead_status') or '').strip() == 'Call Disconnected' ]
     called_count = len(called_leads)
+    total_fresh_leads = untouched_count + called_count
 
-    print("Untouched count:", untouched_count, "Called count:", called_count)
-    fresh_leads = called_leads + untouched_leads
-    total_fresh_leads = len(fresh_leads)
-
-    # Get pending leads (assigned but no first call date), sorted by priority
-    low_priority_statuses = ['RNR', 'Busy on another Call', 'Call me Back', 'Call Disconnected']
-    pending_leads = [lead for lead in all_leads if not lead.get('first_call_date')]
     fresh_leads_sorted = sorted(
-        fresh_leads,
-        key=lambda l: l.get('cre_assigned_at') or l.get('created_at') or '',
+        untouched_leads + called_leads,
+        key=lambda l: l.get('date') or '',  # Sort by 'date' column
         reverse=True
     )
-    total_fresh_leads = len(fresh_leads_sorted)
-    # Get today's followups (from lead_master)
+
+    # Get today's followups
+    today = date.today()
+    today_str = today.isoformat()
     todays_followups = [
         lead for lead in all_leads
-        if lead.get('follow_up_date') and str(lead.get('follow_up_date')).startswith(str(today))
+        if lead.get('follow_up_date') and str(lead.get('follow_up_date')).startswith(today_str)
     ]
 
-    # Add event leads with today's cre_followup_date
+    # Add event leads with today's cre_followup_date to the follow-up list
     event_leads_today = []
     for lead in event_event_leads:
         cre_followup_date = lead.get('cre_followup_date')
-        if cre_followup_date and str(cre_followup_date)[:10] == str(today):
-            # Map fields to match event leads table format
+        if cre_followup_date and str(cre_followup_date)[:10] == today_str:
             event_lead_row = {
                 'is_event_lead': True,
                 'activity_uid': lead.get('activity_uid'),
@@ -2048,20 +2101,8 @@ def cre_dashboard():
                 'activity_name': lead.get('activity_name'),
             }
             event_leads_today.append(event_lead_row)
-    # Add to todays_followups
-    for event_lead in event_leads_today:
-        todays_followups.append(event_lead)
-
-    # Get attended leads (leads with at least one call)
-    attended_leads = [lead for lead in all_leads if lead.get('first_call_date')]
-
-    # Get leads assigned to PS
-    assigned_to_ps = [lead for lead in all_leads if lead.get('ps_name')]
-
-    # Get won leads (leads with final status "Won")
-    won_leads = [lead for lead in all_leads if lead.get('final_status') == 'Won']
-    # Get lost leads (leads with final status "Lost")
-    lost_leads = [lead for lead in all_leads if lead.get('final_status') == 'Lost']
+    
+    todays_followups.extend(event_leads_today)
 
     print(f"[PERF] cre_dashboard TOTAL took {time.time() - start_time:.3f} seconds")
     return render_template(
@@ -2072,13 +2113,16 @@ def cre_dashboard():
         fresh_leads_sorted=fresh_leads_sorted,
         untouched_leads=untouched_leads,
         called_leads=called_leads,
-        pending_leads=pending_leads,
+        pending_leads=attended_leads,
         todays_followups=todays_followups,
         attended_leads=attended_leads,
         assigned_to_ps=assigned_to_ps,
         won_leads=won_leads,
         lost_leads=lost_leads,
-        event_event_leads=event_event_leads
+        event_event_leads=event_event_leads,
+        filter_type=filter_type,  # Pass filter type to template
+        start_date=start_date_str,  # Pass start date to template
+        end_date=end_date_str  # Pass end date to template
     )
 
 @app.route('/update_lead/<uid>', methods=['GET', 'POST'])
