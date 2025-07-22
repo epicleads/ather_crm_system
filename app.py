@@ -3847,7 +3847,26 @@ def api_branch_head_dashboard_data():
         return jsonify(response)
 
     elif section == 'cre_assigned_leads':
-        query = query.eq('assigned', 'Yes')
+        # Fetch all rows from ps_followup_master for the current branch (and filters), with all columns
+        all_rows = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).execute().data or []
+        # Add journey button field
+        rows = [
+            {**row, 'journey': 'Journey', 'uid': row.get('lead_uid', '')} for row in all_rows
+        ]
+        total_count = len(rows)
+        offset = (page - 1) * per_page
+        paged_rows = rows[offset:offset + per_page]
+        total_pages = 1 if total_count == 0 else math.ceil(total_count / per_page)
+        response = {
+            'success': True,
+            'rows': paged_rows,
+            'total_count': total_count,
+            'total_pages': total_pages,
+            'current_page': page,
+            'per_page': per_page,
+            'cre_assigned_leads_count': total_count
+        }
+        return jsonify(response)
     elif section == 'pending_leads':
         query = query.eq('final_status', 'Pending')
     elif section == 'followup_leads':
@@ -3873,7 +3892,7 @@ def api_branch_head_dashboard_data():
         'per_page': per_page
     }
     return jsonify(response)
-    
+
 @app.route('/branch_performance/<branch_name>')
 @require_admin
 def branch_performance(branch_name):
