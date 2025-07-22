@@ -25,7 +25,7 @@
         <div class="stats-card bg-primary text-white p-3 rounded">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <h4>{{ pending_leads|length }}</h4>
+                    <h4>{{ fresh_leads|length }}</h4>
                     <small class="text-white">Fresh Leads</small>
                 </div>
                 <i class="fas fa-clock fa-2x"></i>
@@ -189,7 +189,7 @@
                     <button class="btn btn-outline-primary" id="freshFilterApplyBtn">Apply</button>
                 </div>
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="mb-0">Fresh Leads ({{ pending_leads|length }})</h5>
+                    <h5 class="mb-0">Fresh Leads ({{ fresh_leads|length }})</h5>
                     <div class="d-flex gap-2">
                         <div class="input-group" style="max-width: 300px;">
                             <input type="text" class="form-control" id="pendingLeadSearchInput" placeholder="Search by UID, name, mobile...">
@@ -203,7 +203,7 @@
                     </div>
                 </div>
 
-                {% if pending_leads %}
+                {% if fresh_leads %}
                 <div class="table-responsive">
                     <table class="table table-striped table-hover" id="pendingLeadsTable">
                         <thead class="table-dark">
@@ -221,7 +221,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for lead in pending_leads %}
+                            {% for lead in fresh_leads %}
                             <tr class="pending-lead-row" data-created="{{ lead.created_at[:10] if lead.created_at else '' }}"
                                 data-search="{{ (lead.lead_uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or '') + ' ' + (lead.cre_name or ''))|lower }}">
                                 <td>
@@ -303,9 +303,15 @@
                             {% for lead in todays_followups %}
                             <tr data-search="{{ (lead.lead_uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or ''))|lower }}">
                                 <td>
-                                    <a href="{{ url_for('update_ps_lead', uid=lead.lead_uid) }}" class="btn btn-sm btn-outline-primary">
-                                        <i class="fas fa-edit"></i> Update
-                                    </a>
+                                    {% if lead.activity_uid %}
+                                        <a href="{{ url_for('update_event_lead', activity_uid=lead.activity_uid) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-edit"></i> Update
+                                        </a>
+                                    {% else %}
+                                        <a href="{{ url_for('update_ps_lead', uid=lead.lead_uid) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-edit"></i> Update
+                                        </a>
+                                    {% endif %}
                                 </td>
                                 <td>
                                     {% if lead.lead_status %}
@@ -420,9 +426,15 @@
                                 data-last-call="{{ lead.third_call_date or lead.second_call_date or lead.first_call_date or '' }}"
                                 data-search="{{ (lead.lead_uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or ''))|lower }}">
                                 <td>
-                                    <a href="{{ url_for('update_ps_lead', uid=lead.lead_uid) }}" class="btn btn-sm btn-outline-primary">
-                                        <i class="fas fa-edit"></i> Update
-                                    </a>
+                                    {% if lead.activity_uid %}
+                                        <a href="{{ url_for('update_event_lead', activity_uid=lead.activity_uid) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-edit"></i> Update
+                                        </a>
+                                    {% else %}
+                                        <a href="{{ url_for('update_ps_lead', uid=lead.lead_uid) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-edit"></i> Update
+                                        </a>
+                                    {% endif %}
                                 </td>
                                 <td>
                                     {% if lead.lead_status %}
@@ -530,9 +542,15 @@
                                 data-lost-timestamp="{{ lead.lost_timestamp or '' }}"
                                 data-search="{{ (lead.lead_uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.cre_name or '') + ' ' + (lead.model_interested or ''))|lower }}">
                                 <td>
-                                    <a href="{{ url_for('update_ps_lead', uid=lead.lead_uid) }}" class="btn btn-sm btn-outline-primary">
-                                        <i class="fas fa-edit"></i> View
-                                    </a>
+                                    {% if lead.activity_uid %}
+                                        <a href="{{ url_for('update_event_lead', activity_uid=lead.activity_uid) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-edit"></i> View
+                                        </a>
+                                    {% else %}
+                                        <a href="{{ url_for('update_ps_lead', uid=lead.lead_uid) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-edit"></i> View
+                                        </a>
+                                    {% endif %}
                                 </td>
                                 <td>
                                     {% if lead.lead_status %}
@@ -599,7 +617,6 @@
                                 <th>Created Date</th>
                                 <th>UID</th>
                                 <th>Call Progress</th>
-                                <th>Final Status</th>
                                 <th>Call History</th>
                             </tr>
                         </thead>
@@ -980,7 +997,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function renderPSCallHistoryTable(history, uid) {
         const tbody = document.querySelector('#psCallHistoryTable tbody');
         if (!history.length) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center">No call attempts found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center">No call attempts found</td></tr>';
             document.getElementById('psCallHistoryStats').innerHTML = '';
             return;
         }
@@ -1007,6 +1024,21 @@ document.addEventListener('DOMContentLoaded', function() {
              Call me Back: ${callback} |
              Call not Connected: ${notConnected} |
              Connected Calls: ${connected}`;
+
+        // Render table rows
+        tbody.innerHTML = '';
+        history.forEach(attempt => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${attempt.uid || ''}</td>
+                <td>${attempt.call_no || ''}</td>
+                <td>${attempt.attempt || ''}</td>
+                <td>${attempt.status || ''}</td>
+                <td>${attempt.ps_name || ''}</td>
+                <td>${attempt.updated_at ? (attempt.updated_at.split('T')[0] + (attempt.updated_at.includes('T') ? '<br>' + attempt.updated_at.split('T')[1].slice(0,8) : '')) : ''}</td>
+            `;
+            tbody.appendChild(row);
+        });
     }
 });
 </script>

@@ -1857,7 +1857,7 @@ def add_lead_with_cre():
             'customer_name': customer_name,
             'customer_mobile_number': mobile_digits,
             'source': source,
-            'date': date_now,
+            'date': date_now,   
             'assigned': assigned,
             'final_status': 'Pending',
             'cre_name': cre_name,
@@ -1961,7 +1961,6 @@ def cre_dashboard():
             called_leads.append(lead)
             continue
 
-        
     
     untouched_count = len(untouched_leads)
     called_count = len(called_leads)
@@ -2223,7 +2222,6 @@ def update_lead(uid):
         flash(f'Error loading lead: {str(e)}', 'error')
         return redirect(url_for('cre_dashboard'))
 
-
 @app.route('/ps_dashboard')
 @require_ps
 def ps_dashboard():
@@ -2238,78 +2236,253 @@ def ps_dashboard():
     end_date = request.args.get('end_date')
 
     try:
-        # Get all data for this PS
+        t0 = time.time()
+        # Get all assigned leads for this PS
         assigned_leads = safe_get_data('ps_followup_master', {'ps_name': ps_name})
-        walkin_leads = safe_get_data('walkin_data', {'ps_name': ps_name})
-        event_leads = safe_get_data('activity_leads', {'ps_name': ps_name})
 
-        # --- Initialize Lead Buckets ---
-        todays_followups = []
+        # Apply date filtering to assigned leads
+        filtered_leads = filter_leads_by_date(assigned_leads, filter_type, 'created_at')
+
+        # Initialize lists for different lead categories
+        todays_followups_regular = []
+        todays_followups_walkin = []
+        todays_followups_event = []  # Separate list for event followups
         fresh_leads = []
         pending_leads = []
         attended_leads = []
         won_leads = []
         lost_leads = []
 
+        # Define statuses that should be excluded from Today's Follow-up and Pending Leads
+        excluded_statuses = ['Lost to Codealer', 'Lost to Competition', 'Dropped', 'Booked', 'Retailed']
+
+        # Define walk-in statuses that should be excluded from Today's Follow-up
+        excluded_walkin_statuses = ['Converted', 'Lost']
+
+        print(f"[PERF] ps_dashboard: data fetching took {time.time() - t0:.3f} seconds")
+        print(f"[DEBUG] Total assigned leads fetched: {len(assigned_leads)}")
+        print(f"[DEBUG] Total filtered leads: {len(filtered_leads)}")
+        print(f"[DEBUG] PS Name: {ps_name}")
+        print(f"[DEBUG] Filter type: {filter_type}")
+
+        t1 = time.time()
         # --- Process Regular Assigned Leads ---
-        for lead in assigned_leads:
+        for lead in filtered_leads:
+            lead_dict = dict(lead)  # Make a copy to avoid mutating the original
+            lead_dict['lead_uid'] = lead.get('lead_uid')  # Ensure lead_uid for template compatibility
+
             final_status = lead.get('final_status')
-            
+            lead_status = lead.get('lead_status')
+
+            # DEBUG: Print lead details for troubleshooting
+            print(f"[DEBUG] Processing lead: {lead.get('lead_uid')} | final_status: {final_status} | lead_status: {lead_status} | first_call_date: {lead.get('first_call_date')} | ps_name: {lead.get('ps_name')}")
+
+            # Categorize leads based on final_status
             if final_status == 'Won':
-                won_leads.append(lead)
+                won_leads.append(lead_dict)
             elif final_status == 'Lost':
-                lost_leads.append(lead)
-            elif final_status == 'Pending':
-                 if lead.get('first_call_date'):
-                    attended_leads.append(lead)
-                 else:
-                    fresh_leads.append(lead)
-            
-            if lead.get('follow_up_date') and str(lead.get('follow_up_date')).startswith(today_str):
-                todays_followups.append(lead)
+                lost_leads.append(lead_dict)
+            elif final_status == 'Pending' or not final_status:  # Include leads with no final_status
+                if lead.get('first_call_date'):
+                    attended_leads.append(lead_dict)
+                else:
+                    # Fresh leads: no first_call_date and not excluded status
+                    if not lead_status or lead_status not in excluded_statuses:
+                        fresh_leads.append(lead_dict)
+                        print(f"[DEBUG] Added to fresh_leads: {lead.get('lead_uid')}")
+
+            # Add to today's followups if applicable (exclude Won/Lost and specific statuses)
+            if (lead.get('follow_up_date') and
+                str(lead.get('follow_up_date')).startswith(today_str) and
+                final_status not in ['Won', 'Lost'] and
+                (not lead_status or lead_status not in excluded_statuses)):
+                todays_followups_regular.append(lead_dict)
+
+        # Get additional pending leads (leads without first_call_date, excluding specific statuses)
+        for lead in filtered_leads:
+            if (not lead.get('first_call_date') and
+                lead.get('lead_status') not in excluded_statuses and
+                lead.get('final_status') not in ['Won', 'Lost']):
+                lead_dict = dict(lead)
+                lead_dict['lead_uid'] = lead.get('lead_uid')
+                if lead_dict not in fresh_leads:  # Avoid duplicates
+                    pending_leads.append(lead_dict)
+
+        print(f"[PERF] ps_dashboard: regular leads processing took {time.time() - t1:.3f} seconds")
+        print(f"[DEBUG] Fresh leads count: {len(fresh_leads)}")
+        print(f"[DEBUG] Attended leads count: {len(attended_leads)}")
+        print(f"[DEBUG] Won leads count: {len(won_leads)}")
+        print(f"[DEBUG] Lost leads count: {len(lost_leads)}")
+        print(f"[DEBUG] Today's followups (regular) count: {len(todays_followups_regular)}")
+
+        t2 = time.time()
+        # Fetch walk-in leads for this PS
+        walkin_leads = safe_get_data('walkin_data', {'ps_name': ps_name})
 
         # --- Process Walk-in Leads ---
         for lead in walkin_leads:
-            lead['lead_uid'] = lead.get('uid') 
-            final_status = lead.get('ps_final_status')
+            lead_dict = dict(lead)  # Make a copy to avoid mutating the original
+            lead_dict['lead_uid'] = lead.get('uid')  # Add lead_uid for template compatibility
 
-            if final_status == 'Won':
-                won_leads.append(lead)
-            elif final_status == 'Lost':
-                lost_leads.append(lead)
-            elif final_status == 'Pending':
+            ps_final_status = lead.get('ps_final_status')
+            status = lead.get('status')
+            lead_status = lead.get('lead_status')
+
+            # Categorize walk-in leads
+            if ps_final_status == 'Won' or status == 'Converted':
+                won_leads.append(lead_dict)
+            elif ps_final_status == 'Lost' or status == 'Lost':
+                lost_leads.append(lead_dict)
+            elif ps_final_status == 'Pending' or status == 'Pending':
                 if lead.get('first_call_date'):
-                    attended_leads.append(lead)
+                    attended_leads.append(lead_dict)
                 else:
-                    fresh_leads.append(lead)
-            
-            follow_up = lead.get('walkin_followup_date') or lead.get('follow_up_date')
-            if follow_up and str(follow_up).startswith(today_str):
-                todays_followups.append(lead)
+                    if lead_status not in excluded_statuses:
+                        fresh_leads.append(lead_dict)
 
-        # --- Render Template ---
-        return render_template('ps_dashboard.html',
+            # Add to today's followups if applicable
+            follow_up = lead.get('walkin_followup_date') or lead.get('follow_up_date')
+            if (follow_up and
+                str(follow_up).startswith(today_str) and
+                lead_status not in excluded_statuses and
+                status not in excluded_walkin_statuses):
+                todays_followups_walkin.append(lead_dict)
+
+        # Add walk-in leads to pending leads (leads without first_call_date and with status 'Pending')
+        for lead in walkin_leads:
+            if (not lead.get('first_call_date') and
+                (lead.get('status') == 'Pending' or lead.get('ps_final_status') == 'Pending') and
+                lead.get('lead_status') not in excluded_statuses):
+                lead_dict = dict(lead)
+                lead_dict['lead_uid'] = lead.get('uid')
+                pending_leads.append(lead_dict)
+
+        print(f"[PERF] ps_dashboard: walkin leads processing took {time.time() - t2:.3f} seconds")
+
+        t3 = time.time()
+        # Fetch event leads for this PS
+        event_leads = safe_get_data('activity_leads', {'ps_name': ps_name})
+
+        # --- Process Event Leads ---
+        print(f"[DEBUG] Processing {len(event_leads)} event leads")
+        for lead in event_leads:
+            lead_dict = dict(lead)  # Make a copy to avoid mutating the original
+            lead_dict['lead_uid'] = lead.get('activity_uid') or lead.get('uid')
+            lead_dict['customer_mobile_number'] = lead.get('customer_phone_number')  # For template compatibility
+            
+            # For event leads, use 'final_status' instead of 'ps_final_status'
+            final_status = lead.get('final_status')
+            lead_status = lead.get('lead_status')
+            ps_first_call_date = lead.get('ps_first_call_date')
+            
+            print(f"[DEBUG] Event lead: {lead_dict['lead_uid']} | final_status: {final_status} | lead_status: {lead_status} | ps_first_call_date: {ps_first_call_date}")
+
+            # Categorize event leads based on final_status
+            if final_status == 'Won':
+                won_leads.append(lead_dict)
+                print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to won_leads")
+            elif final_status == 'Lost':
+                lost_leads.append(lead_dict)
+                print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to lost_leads")
+            elif final_status == 'Pending' or not final_status:  # Include leads with no final_status
+                if ps_first_call_date:
+                    attended_leads.append(lead_dict)
+                    print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to attended_leads")
+                else:
+                    # Fresh/Pending event leads: no ps_first_call_date and not excluded status
+                    if not lead_status or lead_status not in excluded_statuses:
+                        pending_leads.append(lead_dict)  # Event leads without first call go to pending
+                        print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to pending_leads")
+
+            # Add event leads with today's ps_followup_date_ts to today's followups
+            ps_followup_date_ts = lead.get('ps_followup_date_ts')
+            if (ps_followup_date_ts and
+                str(ps_followup_date_ts)[:10] == today_str and
+                final_status not in ['Won', 'Lost'] and
+                (not lead_status or lead_status not in excluded_statuses)):
+                # Set follow_up_date for template compatibility
+                lead_dict['follow_up_date'] = str(ps_followup_date_ts)
+                todays_followups_event.append(lead_dict)
+                print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to today's followups")
+
+        print(f"[PERF] ps_dashboard: event leads processing took {time.time() - t3:.3f} seconds")
+
+        t4 = time.time()
+        # Apply date filtering to lost leads using lost_timestamp
+        def filter_lost_by_timestamp(leads_list):
+            if filter_type == 'all':
+                return leads_list
+            elif filter_type == 'today':
+                return [lead for lead in leads_list if lead.get('lost_timestamp', '').startswith(today_str)]
+            elif filter_type == 'range' and start_date and end_date:
+                filtered = []
+                for lead in leads_list:
+                    ts = lead.get('lost_timestamp')
+                    if ts:
+                        try:
+                            date_val = ts[:10]
+                            if start_date <= date_val <= end_date:
+                                filtered.append(lead)
+                        except Exception:
+                            continue
+                return filtered
+            else:
+                return leads_list
+
+        # Apply timestamp filtering to lost leads
+        lost_leads = filter_lost_by_timestamp(lost_leads)
+
+        print(f"[PERF] ps_dashboard: lost leads timestamp filtering took {time.time() - t4:.3f} seconds")
+
+        t5 = time.time()
+        # Merge today's followup lists
+        todays_followups = todays_followups_regular + todays_followups_walkin + todays_followups_event
+
+        print(f"[PERF] ps_dashboard: final processing took {time.time() - t5:.3f} seconds")
+
+        t6 = time.time()
+        # Render template with all lead categories
+        result = render_template('ps_dashboard.html',
                                assigned_leads=assigned_leads,
                                fresh_leads=fresh_leads,
                                pending_leads=pending_leads,
                                todays_followups=todays_followups,
                                attended_leads=attended_leads,
-                               lost_leads=lost_leads,
                                won_leads=won_leads,
+                               lost_leads=lost_leads,
                                walkin_leads=walkin_leads,
                                event_leads=event_leads,
                                filter_type=filter_type,
                                start_date=start_date,
                                end_date=end_date)
-                               
+
+        print(f"[PERF] ps_dashboard: render_template took {time.time() - t6:.3f} seconds")
+        print(f"[DEBUG] FINAL COUNTS - Fresh: {len(fresh_leads)}, Pending: {len(pending_leads)}, Attended: {len(attended_leads)}, Won: {len(won_leads)}, Lost: {len(lost_leads)}")
+        print(f"[DEBUG] Fresh leads being sent to template: {[lead.get('lead_uid') for lead in fresh_leads]}")
+        print(f"[DEBUG] Pending leads being sent to template: {[lead.get('lead_uid') for lead in pending_leads]}")
+        print(f"[DEBUG] Won leads being sent to template: {[lead.get('lead_uid') for lead in won_leads]}")
+        print(f"[DEBUG] Lost leads being sent to template: {[lead.get('lead_uid') for lead in lost_leads]}")
+        print(f"[PERF] ps_dashboard TOTAL took {time.time() - start_time:.3f} seconds")
+        return result
+
     except Exception as e:
         print(f"[PERF] ps_dashboard failed after {time.time() - start_time:.3f} seconds: {e}")
         flash(f'Error loading dashboard: {str(e)}', 'error')
         return render_template('ps_dashboard.html',
-                               assigned_leads=[], fresh_leads=[], pending_leads=[],
-                               todays_followups=[], attended_leads=[],
-                               lost_leads=[], won_leads=[], walkin_leads=[], event_leads=[],
-                               filter_type=filter_type, start_date=start_date, end_date=end_date)
+                             assigned_leads=[],
+                             fresh_leads=[],
+                             pending_leads=[],
+                             todays_followups=[],
+                             attended_leads=[],
+                             won_leads=[],
+                             lost_leads=[],
+                             walkin_leads=[],
+                             event_leads=[],
+                             filter_type=filter_type,
+                             start_date=start_date,
+                             end_date=end_date)
+
+
 
 @app.route('/update_ps_lead/<uid>', methods=['GET', 'POST'])
 @require_ps
@@ -2433,6 +2606,8 @@ def update_ps_lead(uid):
         if walkin_data.get('ps_name') != session.get('ps_name'):
             flash('Access denied - This walk-in lead is not assigned to you', 'error')
             return redirect(url_for('ps_dashboard'))
+        # Ensure lead_uid is set for template compatibility
+        walkin_data['lead_uid'] = walkin_data.get('uid')
         # Determine next call info for walk-in (up to 7 calls)
         call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
         completed_calls = []
