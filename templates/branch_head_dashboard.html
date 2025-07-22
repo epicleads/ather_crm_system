@@ -1,20 +1,750 @@
+
 {% extends "base.html" %}
 {% block title %}Branch Head Dashboard - Ather CRM{% endblock %}
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <h2><i class="fas fa-user-tie text-info"></i> Branch Head Dashboard</h2>
-                <p class="text-muted">Welcome, {{ session.branch_head_name }} | Branch: {{ session.branch_head_branch }}</p>
+
+<div class="container-fluid">
+    <!-- Profile Info Header -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card shadow-sm mb-2 border-info">
+                <div class="card-body d-flex flex-column flex-md-row align-items-md-center justify-content-between p-3 bg-light">
+                    <div>
+                        <h4 class="mb-1 text-primary"><i class="fas fa-user-tie me-2"></i>{{ session.branch_head_name }}</h4>
+                        <div class="text-muted">Branch: <span class="fw-bold">{{ session.branch_head_branch }}</span></div>
+                    </div>
+                    <div class="mt-2 mt-md-0">
+                        <span class="badge bg-info text-dark fs-6 py-2 px-3">Branch Head Dashboard</span>
+                    </div>
+                    <span class="me-4 text-dark"><i class="fas fa-user-circle me-1"></i> Welcome, {{ session.branch_head_name }}</span>
+            <a href="{{ url_for('logout') }}" class="text-dark text-decoration-none"><i class="fas fa-sign-out-alt me-1"></i> Logout</a>
+                </div>
             </div>
-            <div>
-                <a href="{{ url_for('logout') }}" class="btn btn-outline-danger">
-                    <i class="fas fa-sign-out-alt"></i> Logout
-                </a>
+        </div>
+    </div>
+    <!-- Universal Filter Section (no UID search or rows per page) -->
+    <div class="row mb-3" id="universalFilterSection">
+      <div class="col-md-3 mb-2">
+        <label for="psSelect" class="fw-semibold">Product Specialist:</label>
+        <select id="psSelect" class="form-select">
+          <option value="">-- All PS --</option>
+          {% for ps in ps_users %}
+            <option value="{{ ps.name }}">{{ ps.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3 mb-2">
+        <label for="dateFrom" class="fw-semibold">From:</label>
+        <input type="date" id="dateFrom" class="form-control">
+      </div>
+      <div class="col-md-3 mb-2">
+        <label for="dateTo" class="fw-semibold">To:</label>
+        <input type="date" id="dateTo" class="form-control">
+      </div>
+      <div class="col-md-3 mb-2 d-flex align-items-end">
+        <button id="applyFiltersBtn" class="btn btn-primary me-2">Apply</button>
+        <button id="resetFiltersBtn" class="btn btn-outline-secondary">Reset</button>
+      </div>
+    </div>
+    <!-- Per-section filter for Fresh Leads (add UID search and rows per page) -->
+    <!-- <div class="row mb-2" id="freshLeadsFilterRow">
+      <div class="col-md-4 mb-2">
+        <input type="text" id="freshLeadsUidSearch" class="form-control" placeholder="Search by UID">
+      </div>
+      <div class="col-md-2 mb-2">
+        <select id="freshLeadsRowsPerPage" class="form-select">
+          <option value="10">10</option>
+          <option value="25" selected>25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </div>
+      <div class="col-md-2 mb-2 d-flex align-items-end">
+        <button id="freshLeadsApplyBtn" class="btn btn-outline-primary">Apply</button>
+      </div>
+    </div> -->
+    <!-- KPI Cards -->
+    <div class="row mb-3">
+        <div class="col">
+            <div class="card text-center bg-primary text-white mb-2">
+                <div class="card-body p-2">Fresh<br><span class="h5" id="freshLeadsKPI">0</span></div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card text-center bg-success text-white mb-2"><div class="card-body p-2">Walk-in<br><span class="h5" id="walkinLeadsKPI">{{ walkin_leads|length if walkin_leads is defined else 0 }}</span></div></div>
+        </div>
+        <div class="col">
+            <div class="card text-center bg-info text-white mb-2"><div class="card-body p-2">CRE Assigned<br><span class="h5" id="creAssignedLeadsKPI">{{ cre_assigned_leads|length if cre_assigned_leads is defined else 0 }}</span></div></div>
+        </div>
+        <div class="col">
+            <div class="card text-center bg-warning text-dark mb-2"><div class="card-body p-2">Pending<br><span class="h5" id="pendingLeadsKPI">{{ pending_leads|length if pending_leads is defined else 0 }}</span></div></div>
+        </div>
+        <div class="col">
+            <div class="card text-center bg-secondary text-white mb-2"><div class="card-body p-2">Today's Follow-ups<br><span class="h5" id="followupLeadsKPI">{{ followup_leads|length if followup_leads is defined else 0 }}</span></div></div>
+        </div>
+        <div class="col">
+            <div class="card text-center bg-dark text-white mb-2"><div class="card-body p-2">Event<br><span class="h5" id="eventLeadsKPI">{{ event_leads|length if event_leads is defined else 0 }}</span></div></div>
+        </div>
+        <div class="col">
+            <div class="card text-center bg-success text-white mb-2"><div class="card-body p-2">Won<br><span class="h5" id="wonLeadsKPI">{{ won_leads|length if won_leads is defined else 0 }}</span></div></div>
+        </div>
+        <div class="col">
+            <div class="card text-center bg-danger text-white mb-2"><div class="card-body p-2">Lost<br><span class="h5" id="lostLeadsKPI">{{ lost_leads|length if lost_leads is defined else 0 }}</span></div></div>
+        </div>
+    </div>
+    <!-- Tab Navigation -->
+    <ul class="nav nav-tabs mb-3" id="leadTabs" role="tablist">
+        <li class="nav-item"><a class="nav-link active" id="fresh-tab" data-bs-toggle="tab" href="#fresh" role="tab">Fresh Leads</a></li>
+        <li class="nav-item"><a class="nav-link" id="walkin-tab" data-bs-toggle="tab" href="#walkin" role="tab">Walk-in Leads</a></li>
+        <li class="nav-item"><a class="nav-link" id="creassigned-tab" data-bs-toggle="tab" href="#creassigned" role="tab">CRE Assigned Leads</a></li>
+        <li class="nav-item"><a class="nav-link" id="pending-tab" data-bs-toggle="tab" href="#pending" role="tab">Pending Leads</a></li>
+        <li class="nav-item"><a class="nav-link" id="followup-tab" data-bs-toggle="tab" href="#followup" role="tab">Today's Follow-ups</a></li>
+        <li class="nav-item"><a class="nav-link" id="event-tab" data-bs-toggle="tab" href="#event" role="tab">Event Leads</a></li>
+        <li class="nav-item"><a class="nav-link" id="won-tab" data-bs-toggle="tab" href="#won" role="tab">Won Leads</a></li>
+        <li class="nav-item"><a class="nav-link" id="lost-tab" data-bs-toggle="tab" href="#lost" role="tab">Lost Leads</a></li>
+    </ul>
+    <div class="tab-content" id="leadTabsContent">
+        <!-- Fresh Leads Tab -->
+        <div class="tab-pane fade show active" id="fresh" role="tabpanel">
+            
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="row mb-2" id="freshLeadsFilterRow">
+                        <div class="col-md-4 mb-2">
+                          <input type="text" id="freshLeadsUidSearch" class="form-control" placeholder="Search by UID">
+                        </div>
+                        <div class="col-md-2 mb-2">
+                          <select id="freshLeadsRowsPerPage" class="form-select">
+                            <option value="10">10</option>
+                            <option value="25" selected>25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                          </select>
+                        </div>
+                        <div class="col-md-2 mb-2 d-flex align-items-end">
+                          <button id="freshLeadsApplyBtn" class="btn btn-outline-primary">Apply</button>
+                        </div>
+                      </div>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover mb-0">
+                            <thead class="thead-dark">
+                                <tr>
+                                    <th>UID</th>
+                                    <th>Customer Name</th>
+                                    <th>Phone No.</th>
+                                    <th>Final Status</th>
+                                    <th>PS Name</th>
+                                    <th>Created At</th>
+                                    <th>Branch</th>
+                                </tr>
+                            </thead>
+                            <tbody id="freshLeadsTableBody">
+                                <tr><td colspan="7">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Walk-in Leads Tab -->
+        <div class="tab-pane fade" id="walkin" role="tabpanel">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <!-- Add UID search and rows-per-page selector for Walk-in Leads -->
+                    <div class="row mb-2" id="walkinLeadsFilterRow">
+                      <div class="col-md-4 mb-2">
+                        <input type="text" id="walkinLeadsUidSearch" class="form-control" placeholder="Search by UID">
+                      </div>
+                      <div class="col-md-2 mb-2">
+                        <select id="walkinLeadsRowsPerPage" class="form-select">
+                          <option value="10">10</option>
+                          <option value="25" selected>25</option>
+                          <option value="50">50</option>
+                          <option value="100">100</option>
+                        </select>
+                      </div>
+                      <div class="col-md-2 mb-2 d-flex align-items-end">
+                        <button id="walkinLeadsApplyBtn" class="btn btn-outline-primary">Apply</button>
+                      </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover mb-0">
+                            <thead class="thead-dark">
+                                <tr>
+                                    <th>Journey</th>
+                                    <th>UID</th>
+                                    <th>Customer Name</th>
+                                    <th>Mobile</th>
+                                    <th>Email</th>
+                                    <th>Model Interested</th>
+                                    <th>Lead Source</th>
+                                    <th>Status</th>
+                                    <th>PS Name</th>
+                                    <th>Created At</th>
+                                </tr>
+                            </thead>
+                            <tbody id="walkinLeadsTableBody">
+                                <tr><td colspan="10">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                        <div id="walkinLeadsPagination"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- After the walk-in leads table, add modals for each lead -->
+        {% for lead in walkin_leads %}
+        <div class="modal fade" id="journeyModal-{{ lead.uid }}" tabindex="-1" aria-labelledby="journeyModalLabel-{{ lead.uid }}" aria-hidden="true">
+          <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title" id="journeyModalLabel-{{ lead.uid }}">PS Call Attempt History - {{ lead.customer_name }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div class="modal-body">
+                {% set call_history = ps_call_history_by_uid[lead.uid] if ps_call_history_by_uid and lead.uid in ps_call_history_by_uid else [] %}
+                {% if call_history %}
+                <div class="table-responsive">
+                  <table class="table table-striped table-hover">
+                    <thead class="thead-dark">
+                      <tr>
+                        <th>Call #</th>
+                        <th>Attempt</th>
+                        <th>PS Name</th>
+                        <th>Status</th>
+                        <th>Call Recorded</th>
+                        <th>Follow-up Date</th>
+                        <th>Remarks</th>
+                        <th>Date/Time</th>
+                        <th>Final Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for attempt in call_history %}
+                      <tr>
+                        <td>{{ attempt.call_no|title }}</td>
+                        <td>{{ attempt.attempt }}</td>
+                        <td>{{ attempt.ps_name }}</td>
+                        <td>{{ attempt.status }}</td>
+                        <td>{% if attempt.call_was_recorded %}Yes{% else %}No{% endif %}</td>
+                        <td>{{ attempt.follow_up_date or '-' }}</td>
+                        <td>{{ attempt.remarks or '-' }}</td>
+                        <td>{{ attempt.created_at or '-' }}</td>
+                        <td>{{ lead.final_status or 'Pending' }}</td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info"><i class="fas fa-info-circle"></i> No PS call attempts recorded for this lead yet.</div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+        <!-- Pagination controls -->
+        <!-- Remove old Jinja pagination navs that use total_pages, walkin_page, etc. -->
+        <!-- (Pagination is now handled by JS) -->
+        <!-- CRE Assigned Leads Tab -->
+        <div class="tab-pane fade" id="creassigned" role="tabpanel">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <!-- Filters -->
+                    <form class="row g-2 mb-2">
+                        <div class="col-auto">
+                            <input type="text" class="form-control" name="creassigned_uid_search" value="{{ request.args.get('creassigned_uid_search', '') }}" placeholder="Search by UID">
+                        </div>
+                        <div class="col-auto">
+                            <select class="form-select" name="creassigned_rows" onchange="this.form.submit()">
+                                {% for n in [10, 25, 50, 100] %}
+                                <option value="{{ n }}" {% if request.args.get('creassigned_rows', '25') == n|string %}selected{% endif %}>Show {{ n }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-auto">
+                            <button type="submit" class="btn btn-outline-primary">Apply</button>
+                        </div>
+                    </form>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover mb-0">
+                            <thead class="thead-dark">
+                                <tr>
+                                    <th>Journey</th>
+                                    <th>Customer Name</th>
+                                    <th>Phone No.</th>
+                                    <th>Final Status</th>
+                                    <th>UID</th>
+                                    <th>Source</th>
+                                    <th>Lead Status</th>
+                                    <th>PS Name</th>
+                                </tr>
+                            </thead>
+                            <tbody id="creAssignedLeadsTableBody">
+                                <tr><td colspan="8">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Pending Leads Tab -->
+        <div class="tab-pane fade" id="pending" role="tabpanel">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <!-- Filters -->
+                    <form class="row g-2 mb-2">
+                        <div class="col-auto">
+                            <input type="text" class="form-control" name="pending_uid_search" value="{{ request.args.get('pending_uid_search', '') }}" placeholder="Search by UID">
+                        </div>
+                        <div class="col-auto">
+                            <select class="form-select" name="pending_rows" onchange="this.form.submit()">
+                                {% for n in [10, 25, 50, 100] %}
+                                <option value="{{ n }}" {% if request.args.get('pending_rows', '25') == n|string %}selected{% endif %}>Show {{ n }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-auto">
+                            <button type="submit" class="btn btn-outline-primary">Apply</button>
+                        </div>
+                    </form>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover mb-0">
+                            <thead class="thead-dark">
+                                <tr>
+                                    <th>Journey</th>
+                                    <th>Customer Name</th>
+                                    <th>Phone No.</th>
+                                    <th>Final Status</th>
+                                    <th>UID</th>
+                                    <th>Source</th>
+                                    <th>Lead Status</th>
+                                    <th>PS Name</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pendingLeadsTableBody">
+                                <tr><td colspan="8">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Today's Follow-ups Tab -->
+        <div class="tab-pane fade" id="followup" role="tabpanel">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <!-- Filters -->
+                    <form class="row g-2 mb-2">
+                        <div class="col-auto">
+                            <input type="text" class="form-control" name="followup_uid_search" value="{{ request.args.get('followup_uid_search', '') }}" placeholder="Search by UID">
+                        </div>
+                        <div class="col-auto">
+                            <select class="form-select" name="followup_rows" onchange="this.form.submit()">
+                                {% for n in [10, 25, 50, 100] %}
+                                <option value="{{ n }}" {% if request.args.get('followup_rows', '25') == n|string %}selected{% endif %}>Show {{ n }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-auto">
+                            <button type="submit" class="btn btn-outline-primary">Apply</button>
+                        </div>
+                    </form>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover mb-0">
+                            <thead class="thead-dark">
+                                <tr>
+                                    <th>Journey</th>
+                                    <th>Customer Name</th>
+                                    <th>Phone No.</th>
+                                    <th>Final Status</th>
+                                    <th>UID</th>
+                                    <th>Source</th>
+                                    <th>Lead Status</th>
+                                    <th>PS Name</th>
+                                </tr>
+                            </thead>
+                            <tbody id="followupLeadsTableBody">
+                                <tr><td colspan="8">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Event Leads Tab -->
+        <div class="tab-pane fade" id="event" role="tabpanel">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <!-- Filters -->
+                    <form class="row g-2 mb-2">
+                        <div class="col-auto">
+                            <input type="text" class="form-control" name="event_uid_search" value="{{ request.args.get('event_uid_search', '') }}" placeholder="Search by UID">
+                        </div>
+                        <div class="col-auto">
+                            <select class="form-select" name="event_rows" onchange="this.form.submit()">
+                                {% for n in [10, 25, 50, 100] %}
+                                <option value="{{ n }}" {% if request.args.get('event_rows', '25') == n|string %}selected{% endif %}>Show {{ n }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-auto">
+                            <button type="submit" class="btn btn-outline-primary">Apply</button>
+                        </div>
+                    </form>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover mb-0">
+                            <thead class="thead-dark">
+                                <tr>
+                                    <th>Journey</th>
+                                    <th>Customer Name</th>
+                                    <th>Phone No.</th>
+                                    <th>Final Status</th>
+                                    <th>UID</th>
+                                    <th>Source</th>
+                                    <th>Lead Status</th>
+                                    <th>PS Name</th>
+                                </tr>
+                            </thead>
+                            <tbody id="eventLeadsTableBody">
+                                <tr><td colspan="8">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Won Leads Tab -->
+        <div class="tab-pane fade" id="won" role="tabpanel">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <!-- Filters -->
+                    <form class="row g-2 mb-2">
+                        <div class="col-auto">
+                            <input type="text" class="form-control" name="won_uid_search" value="{{ request.args.get('won_uid_search', '') }}" placeholder="Search by UID">
+                        </div>
+                        <div class="col-auto">
+                            <select class="form-select" name="won_rows" onchange="this.form.submit()">
+                                {% for n in [10, 25, 50, 100] %}
+                                <option value="{{ n }}" {% if request.args.get('won_rows', '25') == n|string %}selected{% endif %}>Show {{ n }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-auto">
+                            <button type="submit" class="btn btn-outline-primary">Apply</button>
+                        </div>
+                    </form>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover mb-0">
+                            <thead class="thead-dark">
+                                <tr>
+                                    <th>Journey</th>
+                                    <th>Customer Name</th>
+                                    <th>Phone No.</th>
+                                    <th>Final Status</th>
+                                    <th>UID</th>
+                                    <th>Source</th>
+                                    <th>Lead Status</th>
+                                    <th>PS Name</th>
+                                </tr>
+                            </thead>
+                            <tbody id="wonLeadsTableBody">
+                                <tr><td colspan="8">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Lost Leads Tab -->
+        <div class="tab-pane fade" id="lost" role="tabpanel">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <!-- Filters -->
+                    <form class="row g-2 mb-2">
+                        <div class="col-auto">
+                            <input type="text" class="form-control" name="lost_uid_search" value="{{ request.args.get('lost_uid_search', '') }}" placeholder="Search by UID">
+                        </div>
+                        <div class="col-auto">
+                            <select class="form-select" name="lost_rows" onchange="this.form.submit()">
+                                {% for n in [10, 25, 50, 100] %}
+                                <option value="{{ n }}" {% if request.args.get('lost_rows', '25') == n|string %}selected{% endif %}>Show {{ n }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-auto">
+                            <button type="submit" class="btn btn-outline-primary">Apply</button>
+                        </div>
+                    </form>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover mb-0">
+                            <thead class="thead-dark">
+                                <tr>
+                                    <th>Journey</th>
+                                    <th>Customer Name</th>
+                                    <th>Phone No.</th>
+                                    <th>Final Status</th>
+                                    <th>UID</th>
+                                    <th>Source</th>
+                                    <th>Lead Status</th>
+                                    <th>PS Name</th>
+                                </tr>
+                            </thead>
+                            <tbody id="lostLeadsTableBody">
+                                <tr><td colspan="8">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
-<!-- You can add more dashboard content here as needed -->
+
+<script>
+// Utility to get universal filters
+function getUniversalFilters() {
+  return {
+    ps_name: document.getElementById('psSelect').value,
+    date_from: document.getElementById('dateFrom').value,
+    date_to: document.getElementById('dateTo').value
+  };
+}
+
+// Section config: section name, table body id, columns
+const sectionConfig = {
+  fresh_leads: {
+    tab: 'fresh-tab',
+    tbody: 'freshLeadsTableBody',
+    pagination: 'freshLeadsPagination',
+    columns: ['uid', 'customer_name', 'customer_mobile_number', 'final_status', 'ps_name', 'created_at', 'branch']
+  },
+  walkin_leads: {
+    tab: 'walkin-tab',
+    tbody: 'walkinLeadsTableBody',
+    pagination: 'walkinLeadsPagination',
+    columns: ['journey', 'uid', 'customer_name', 'customer_mobile_number', 'customer_email', 'model_interested', 'lead_source', 'status', 'ps_name', 'created_at']
+  },
+  cre_assigned_leads: {
+    tab: 'creassigned-tab',
+    tbody: 'creAssignedLeadsTableBody',
+    pagination: 'creAssignedLeadsPagination',
+    columns: ['uid', 'customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source', 'lead_status', 'ps_name']
+  },
+  pending_leads: {
+    tab: 'pending-tab',
+    tbody: 'pendingLeadsTableBody',
+    pagination: 'pendingLeadsPagination',
+    columns: ['uid', 'customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source', 'lead_status', 'ps_name']
+  },
+  followup_leads: {
+    tab: 'followup-tab',
+    tbody: 'followupLeadsTableBody',
+    pagination: 'followupLeadsPagination',
+    columns: ['uid', 'customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source', 'lead_status', 'ps_name']
+  },
+  won_leads: {
+    tab: 'won-tab',
+    tbody: 'wonLeadsTableBody',
+    pagination: 'wonLeadsPagination',
+    columns: ['uid', 'customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source', 'lead_status', 'ps_name']
+  },
+  lost_leads: {
+    tab: 'lost-tab',
+    tbody: 'lostLeadsTableBody',
+    pagination: 'lostLeadsPagination',
+    columns: ['uid', 'customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source', 'lead_status', 'ps_name']
+  }
+};
+
+function loadSection(section, page = 1, per_page = 25) {
+  const config = sectionConfig[section];
+  if (!config) return;
+  const tbody = document.getElementById(config.tbody);
+  if (tbody) tbody.innerHTML = `<tr><td colspan="${config.columns.length}">Loading...</td></tr>`;
+  const filters = getUniversalFilters();
+  fetch(`/api/branch_head_dashboard_data?section=${section}&page=${page}&per_page=${per_page}&ps_name=${filters.ps_name}&date_from=${filters.date_from}&date_to=${filters.date_to}`)
+    .then(res => {
+      if (!res.ok) throw new Error('API error');
+      return res.json();
+    })
+    .then(data => {
+      if (section === 'fresh_leads') {
+        // Show all rows, including those with final_status 'Pending'
+        const filteredRows = data.rows || [];
+        document.getElementById('freshLeadsKPI').textContent = data.fresh_leads_count || 0;
+        if (tbody) {
+          if (filteredRows.length > 0) {
+            tbody.innerHTML = '';
+            filteredRows.forEach(row => {
+              const tr = document.createElement('tr');
+              tr.innerHTML = sectionConfig.fresh_leads.columns.map(col => `<td>${row[col] || ''}</td>`).join('');
+              tbody.appendChild(tr);
+            });
+          } else {
+            tbody.innerHTML = `<tr><td colspan="${sectionConfig.fresh_leads.columns.length}">No data found.</td></tr>`;
+          }
+        }
+        // Pagination controls (unchanged)
+        let pagDiv = document.getElementById(sectionConfig.fresh_leads.pagination);
+        if (!pagDiv) {
+          pagDiv = document.createElement('div');
+          pagDiv.id = sectionConfig.fresh_leads.pagination;
+          tbody.parentElement.appendChild(pagDiv);
+        }
+        let html = '';
+        for (let p = 1; p <= data.total_pages; p++) {
+          html += `<button onclick="loadSection('fresh_leads', ${p}, ${data.per_page})" ${p === data.page ? 'disabled' : ''}>${p}</button> `;
+        }
+        pagDiv.innerHTML = html;
+        return; // Don't run the generic code below for fresh_leads
+      }
+      if (section === 'walkin_leads') {
+        document.getElementById('walkinLeadsKPI').textContent = data.walkin_leads_count || 0;
+        if (tbody) {
+          if (data.rows && data.rows.length > 0) {
+            tbody.innerHTML = '';
+            data.rows.forEach(row => {
+              const tr = document.createElement('tr');
+              tr.innerHTML = sectionConfig.walkin_leads.columns.map(col => {
+                if (col === 'journey') {
+                  return `<td><button class='btn btn-sm btn-primary'>Journey</button></td>`;
+                } else {
+                  return `<td>${row[col] || ''}</td>`;
+                }
+              }).join('');
+              tbody.appendChild(tr);
+            });
+          } else {
+            tbody.innerHTML = `<tr><td colspan="${sectionConfig.walkin_leads.columns.length}">No data found.</td></tr>`;
+          }
+        }
+        // Pagination controls (unchanged)
+        let pagDiv = document.getElementById(sectionConfig.walkin_leads.pagination);
+        if (!pagDiv) {
+          pagDiv = document.createElement('div');
+          pagDiv.id = sectionConfig.walkin_leads.pagination;
+          tbody.parentElement.appendChild(pagDiv);
+        }
+        let html = '';
+        for (let p = 1; p <= data.total_pages; p++) {
+          html += `<button onclick="loadSection('walkin_leads', ${p}, ${data.per_page})" ${p === data.page ? 'disabled' : ''}>${p}</button> `;
+        }
+        pagDiv.innerHTML = html;
+        return;
+      }
+      if (tbody) {
+        if (data.rows && data.rows.length > 0) {
+          tbody.innerHTML = '';
+          data.rows.forEach(row => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = config.columns.map(col => `<td>${row[col] || ''}</td>`).join('');
+            tbody.appendChild(tr);
+          });
+        } else {
+          tbody.innerHTML = `<tr><td colspan="${config.columns.length}">No data found.</td></tr>`;
+        }
+      }
+      // Pagination controls
+      let pagDiv = document.getElementById(config.pagination);
+      if (!pagDiv) {
+        pagDiv = document.createElement('div');
+        pagDiv.id = config.pagination;
+        tbody.parentElement.appendChild(pagDiv);
+      }
+      let html = '';
+      for (let p = 1; p <= data.total_pages; p++) {
+        html += `<button onclick="loadSection('${section}', ${p}, ${data.per_page})" ${p === data.page ? 'disabled' : ''}>${p}</button> `;
+      }
+      pagDiv.innerHTML = html;
+    })
+    .catch(err => {
+      if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="${config.columns.length}">No data found.</td></tr>`;
+      }
+      let pagDiv = document.getElementById(config.pagination);
+      if (pagDiv) pagDiv.innerHTML = '';
+    });
+}
+
+// Tab click handlers
+Object.keys(sectionConfig).forEach(section => {
+  const tab = document.getElementById(sectionConfig[section].tab);
+  if (tab) {
+    tab.addEventListener('click', function() {
+      loadSection(section, 1);
+    });
+  }
+});
+
+// Initial load
+window.addEventListener('DOMContentLoaded', function() {
+  loadSection('fresh_leads', 1);
+  // Fresh Leads rows per page Apply button
+  const freshApplyBtn = document.getElementById('freshLeadsApplyBtn');
+  if (freshApplyBtn) {
+    freshApplyBtn.addEventListener('click', function() {
+      const perPage = parseInt(document.getElementById('freshLeadsRowsPerPage').value, 10) || 25;
+      loadSection('fresh_leads', 1, perPage);
+    });
+  }
+  // Walk-in Leads rows per page Apply button
+  const walkinApplyBtn = document.getElementById('walkinLeadsApplyBtn');
+  if (walkinApplyBtn) {
+    walkinApplyBtn.addEventListener('click', function() {
+      const perPage = parseInt(document.getElementById('walkinLeadsRowsPerPage').value, 10) || 25;
+      const uid = encodeURIComponent(document.getElementById('walkinLeadsUidSearch').value.trim());
+      let url = `/api/branch_head_dashboard_data?section=walkin_leads&page=1&per_page=${perPage}`;
+      if (uid) url += `&uid=${uid}`;
+      loadSectionWithUrl('walkin_leads', url);
+    });
+  }
+});
+
+// Add a helper to load section with a custom URL for walk-in leads
+function loadSectionWithUrl(section, url) {
+  const config = sectionConfig[section];
+  const tbody = document.getElementById(config.tbody);
+  if (tbody) tbody.innerHTML = `<tr><td colspan="${config.columns.length}">Loading...</td></tr>`;
+  fetch(url)
+    .then(res => {
+      if (!res.ok) throw new Error('API error');
+      return res.json();
+    })
+    .then(data => {
+      if (tbody) {
+        if (data.rows && data.rows.length > 0) {
+          tbody.innerHTML = '';
+          data.rows.forEach(row => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = config.columns.map(col => `<td>${row[col] || ''}</td>`).join('');
+            tbody.appendChild(tr);
+          });
+        } else {
+          tbody.innerHTML = `<tr><td colspan="${config.columns.length}">No data found.</td></tr>`;
+        }
+      }
+      // Pagination controls
+      let pagDiv = document.getElementById(config.pagination);
+      if (!pagDiv) {
+        pagDiv = document.createElement('div');
+        pagDiv.id = config.pagination;
+        tbody.parentElement.appendChild(pagDiv);
+      }
+      let html = '';
+      for (let p = 1; p <= data.total_pages; p++) {
+        html += `<button onclick="loadSectionWithUrl('${section}', '${url.replace(/page=\d+/, 'page=' + p)}')" ${p === data.page ? 'disabled' : ''}>${p}</button> `;
+      }
+      pagDiv.innerHTML = html;
+    })
+    .catch(err => {
+      if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="${config.columns.length}">No data found.</td></tr>`;
+      }
+      let pagDiv = document.getElementById(config.pagination);
+      if (pagDiv) pagDiv.innerHTML = '';
+    });
+}
+</script>
 {% endblock %} 
