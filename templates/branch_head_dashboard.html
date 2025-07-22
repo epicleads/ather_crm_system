@@ -77,7 +77,17 @@
             <div class="card text-center bg-info text-white mb-2"><div class="card-body p-2">CRE Assigned<br><span class="h5" id="creAssignedLeadsKPI">{{ cre_assigned_leads|length if cre_assigned_leads is defined else 0 }}</span></div></div>
         </div>
         <div class="col">
-            <div class="card text-center bg-warning text-dark mb-2"><div class="card-body p-2">Pending<br><span class="h5" id="pendingLeadsKPI">{{ pending_leads|length if pending_leads is defined else 0 }}</span></div></div>
+            <div class="card text-center bg-warning text-dark mb-2">
+                <div class="card-body p-2">
+                    Pending<br>
+                    <span class="h5" id="pendingLeadsKPI">0</span>
+                    <div class="d-flex justify-content-center mt-2" style="gap: 8px;">
+                        <span class="badge bg-secondary text-white" id="pendingLeadsKPI_CRE" title="CRE Assigned Pending Leads">CRE: 0</span>
+                        <span class="badge bg-info text-dark" id="pendingLeadsKPI_Event" title="Event Pending Leads">Event: 0</span>
+                        <span class="badge bg-success text-white" id="pendingLeadsKPI_Walkin" title="Walk-in Pending Leads">Walk-in: 0</span>
+                    </div>
+                </div>
+            </div>
         </div>
         <div class="col">
             <div class="card text-center bg-secondary text-white mb-2"><div class="card-body p-2">Today's Follow-ups<br><span class="h5" id="followupLeadsKPI">{{ followup_leads|length if followup_leads is defined else 0 }}</span></div></div>
@@ -295,32 +305,33 @@
             <div class="card mb-3">
                 <div class="card-body">
                     <!-- Filters -->
-                    <form class="row g-2 mb-2">
+                    <div class="row g-2 mb-2" id="pendingLeadsFilterRow">
                         <div class="col-auto">
-                            <input type="text" class="form-control" name="pending_uid_search" value="{{ request.args.get('pending_uid_search', '') }}" placeholder="Search by UID">
+                            <input type="text" class="form-control" id="pendingLeadsUidSearch" placeholder="Search by UID">
                         </div>
                         <div class="col-auto">
-                            <select class="form-select" name="pending_rows" onchange="this.form.submit()">
-                                {% for n in [10, 25, 50, 100] %}
-                                <option value="{{ n }}" {% if request.args.get('pending_rows', '25') == n|string %}selected{% endif %}>Show {{ n }}</option>
-                                {% endfor %}
+                            <select class="form-select" id="pendingLeadsRowsPerPage">
+                                <option value="10">10</option>
+                                <option value="25" selected>25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
                             </select>
                         </div>
                         <div class="col-auto">
-                            <button type="submit" class="btn btn-outline-primary">Apply</button>
+                            <button id="pendingLeadsApplyBtn" class="btn btn-outline-primary">Apply</button>
                         </div>
-                    </form>
+                    </div>
                     <div class="table-responsive">
                         <table class="table table-striped table-hover mb-0">
                             <thead class="thead-dark">
                                 <tr>
                                     <th>Journey</th>
+                                    <th>UID</th>
                                     <th>Customer Name</th>
                                     <th>Phone No.</th>
                                     <th>Final Status</th>
-                                    <th>UID</th>
                                     <th>Source</th>
-                                    <th>Lead Status</th>
+                                    <th>Assigned Time</th>
                                     <th>PS Name</th>
                                 </tr>
                             </thead>
@@ -328,6 +339,7 @@
                                 <tr><td colspan="8">Loading...</td></tr>
                             </tbody>
                         </table>
+                        <div id="pendingLeadsPagination"></div>
                     </div>
                 </div>
             </div>
@@ -537,7 +549,7 @@ const sectionConfig = {
     tab: 'pending-tab',
     tbody: 'pendingLeadsTableBody',
     pagination: 'pendingLeadsPagination',
-    columns: ['uid', 'customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source', 'lead_status', 'ps_name']
+    columns: ['journey', 'uid', 'customer_name', 'customer_mobile_number', 'final_status', 'source', 'assigned_time', 'ps_name']
   },
   followup_leads: {
     tab: 'followup-tab',
@@ -669,6 +681,48 @@ function loadSection(section, page = 1, per_page = 25) {
         pagDiv.innerHTML = html;
         return;
       }
+      if (section === 'pending_leads') {
+        document.getElementById('pendingLeadsKPI').textContent = data.pending_leads_count || 0;
+        document.getElementById('pendingLeadsKPI_CRE').textContent = data.pending_leads_cre_assigned_count || 0;
+        document.getElementById('pendingLeadsKPI_Event').textContent = data.pending_leads_event_count || 0;
+        document.getElementById('pendingLeadsKPI_Walkin').textContent = data.pending_leads_walkin_count || 0;
+        if (tbody) {
+          if (data.rows && data.rows.length > 0) {
+            tbody.innerHTML = '';
+            data.rows.forEach(row => {
+              const tr = document.createElement('tr');
+              let uid = row.uid || row.lead_uid || row.activity_uid || '';
+              let assignedTime = row.ps_assigned_at || row.created_at || '';
+              tr.innerHTML = `
+                <td><button class='btn btn-sm btn-primary'>Journey</button></td>
+                <td>${uid}</td>
+                <td>${row.customer_name || ''}</td>
+                <td>${row.customer_mobile_number || ''}</td>
+                <td>${row.final_status || ''}</td>
+                <td>${row.source_type || ''}</td>
+                <td>${assignedTime}</td>
+                <td>${row.ps_name || ''}</td>
+              `;
+              tbody.appendChild(tr);
+            });
+          } else {
+            tbody.innerHTML = `<tr><td colspan="8">No data found.</td></tr>`;
+          }
+        }
+        // Pagination controls (unchanged)
+        let pagDiv = document.getElementById(config.pagination);
+        if (!pagDiv) {
+          pagDiv = document.createElement('div');
+          pagDiv.id = config.pagination;
+          tbody.parentElement.appendChild(pagDiv);
+        }
+        let html = '';
+        for (let p = 1; p <= data.total_pages; p++) {
+          html += `<button onclick=\"loadSection('pending_leads', ${p}, ${data.per_page})\" ${p === data.page ? 'disabled' : ''}>${p}</button> `;
+        }
+        pagDiv.innerHTML = html;
+        return;
+      }
       if (tbody) {
         if (data.rows && data.rows.length > 0) {
         tbody.innerHTML = '';
@@ -753,6 +807,14 @@ window.addEventListener('DOMContentLoaded', function() {
     creAssignedApplyBtn.addEventListener('click', function() {
       const perPage = parseInt(document.getElementById('creAssignedLeadsRowsPerPage').value, 10) || 25;
       loadSection('cre_assigned_leads', 1, perPage);
+    });
+  }
+  // Pending Leads rows per page Apply button
+  const pendingApplyBtn = document.getElementById('pendingLeadsApplyBtn');
+  if (pendingApplyBtn) {
+    pendingApplyBtn.addEventListener('click', function() {
+      const perPage = parseInt(document.getElementById('pendingLeadsRowsPerPage').value, 10) || 25;
+      loadSection('pending_leads', 1, perPage);
     });
   }
 });

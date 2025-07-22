@@ -3868,9 +3868,83 @@ def api_branch_head_dashboard_data():
         }
         return jsonify(response)
     elif section == 'pending_leads':
-        query = query.eq('final_status', 'Pending')
+        # ps_followup_master
+        followup_rows = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Pending').execute().data or []
+        followup_rows = [{**row, 'journey': 'Journey', 'source_type': row.get('source', '')} for row in followup_rows]
+
+        # activity_leads
+        event_rows = supabase.table('activity_leads').select('*').eq('location', branch).eq('final_status', 'Pending').execute().data or []
+        event_rows = [{**row, 'journey': 'Journey', 'source_type': 'Event', 'customer_mobile_number': row.get('customer_phone_number', row.get('customer_mobile_number', ''))} for row in event_rows]
+
+        # walkin_data
+        walkin_rows = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('ps_final_status', 'Pending').execute().data or []
+        walkin_rows = [{**row, 'journey': 'Journey', 'source_type': 'Walk-in'} for row in walkin_rows]
+
+        # Merge all
+        all_rows = followup_rows + event_rows + walkin_rows
+
+        # Counts for KPI sub-boxes
+        cre_assigned_count = len(followup_rows)
+        event_count = len(event_rows)
+        walkin_count = len(walkin_rows)
+        total_count = len(all_rows)
+
+        # Pagination
+        offset = (page - 1) * per_page
+        paged_rows = all_rows[offset:offset + per_page]
+        total_pages = 1 if total_count == 0 else math.ceil(total_count / per_page)
+
+        response = {
+            'success': True,
+            'rows': paged_rows,
+            'total_count': total_count,
+            'total_pages': total_pages,
+            'current_page': page,
+            'per_page': per_page,
+            'pending_leads_count': total_count,
+            'pending_leads_cre_assigned_count': cre_assigned_count,
+            'pending_leads_event_count': event_count,
+            'pending_leads_walkin_count': walkin_count
+        }
+        return jsonify(response)
+
     elif section == 'followup_leads':
-        query = query.eq('follow_up_date', datetime.now().strftime('%Y-%m-%d'))
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        yesterday_str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+        # ps_followup_master today
+        ps_today = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).execute().data or []
+        # activity_leads today (use 'ps_followup_date_ts' column)
+        act_today = supabase.table('activity_leads').select('*').eq('location', branch).eq('ps_followup_date_ts', today_str).execute().data or []
+        # walkin_data today
+        walkin_today = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).execute().data or []
+        # Missed follow-ups (yesterday, not completed)
+        ps_missed = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('follow_up_date', yesterday_str).eq('final_status', 'Pending').execute().data or []
+        act_missed = supabase.table('activity_leads').select('*').eq('location', branch).eq('ps_followup_date_ts', yesterday_str).eq('final_status', 'Pending').execute().data or []
+        walkin_missed = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('follow_up_date', yesterday_str).eq('ps_final_status', 'Pending').execute().data or []
+        # Mark missed
+        ps_missed = [{**row, 'missed': True} for row in ps_missed]
+        act_missed = [{**row, 'missed': True} for row in act_missed]
+        walkin_missed = [{**row, 'missed': True} for row in walkin_missed]
+        # Mark today
+        ps_today = [{**row, 'missed': False} for row in ps_today]
+        act_today = [{**row, 'missed': False} for row in act_today]
+        walkin_today = [{**row, 'missed': False} for row in walkin_today]
+        # Merge: missed first, then today
+        all_rows = ps_missed + act_missed + walkin_missed + ps_today + act_today + walkin_today
+        total_count = len(all_rows)
+        offset = (page - 1) * per_page
+        paged_rows = all_rows[offset:offset + per_page]
+        total_pages = 1 if total_count == 0 else math.ceil(total_count / per_page)
+        response = {
+            'success': True,
+            'rows': paged_rows,
+            'total_count': total_count,
+            'total_pages': total_pages,
+            'current_page': page,
+            'per_page': per_page
+        }
+        return jsonify(response)
+
     elif section == 'event_leads':
         query = supabase.table('activity_leads').select('*').eq('location', branch)
     elif section == 'won_leads':
@@ -5665,7 +5739,7 @@ def negative_call_attempt_history():
 
 def get_cre_feedback_analysis(cre_attempts, call_no_order, start_date, end_date):
     cre_df = pd.DataFrame(cre_attempts)
-    print("Sample cre_attempts:", cre_attempts[:5])  # Debug: print sample data
+    # print("Sample cre_attempts:", cre_attempts[:5])  # Debug: print sample data
     if cre_df.empty:
         print("No data in cre_attempts!")
         return {call_no: {} for call_no in call_no_order}, []
