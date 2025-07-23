@@ -2011,6 +2011,9 @@ def cre_dashboard():
     
     todays_followups.extend(event_leads_today)
 
+    # Fetch walk-in leads assigned to this CRE
+    walkin_leads = safe_get_data('walkin_data', {'cre_name': cre_name})
+
     print(f"[PERF] cre_dashboard TOTAL took {time.time() - start_time:.3f} seconds")
     return render_template(
         'cre_dashboard.html',
@@ -2029,7 +2032,8 @@ def cre_dashboard():
         event_event_leads=event_event_leads,
         filter_type=filter_type,  # Pass filter type to template
         start_date=start_date_str,  # Pass start date to template
-        end_date=end_date_str  # Pass end date to template
+        end_date=end_date_str,  # Pass end date to template
+        walkin_leads=walkin_leads  # Pass walk-in leads to template
     )
 
 @app.route('/update_lead/<uid>', methods=['GET', 'POST'])
@@ -6134,7 +6138,28 @@ def walkin_customers():
             }
 
             # --- Walk-in Follow-up Assignment Logic ---
- 
+            # Assign to CRE using round robin (across all CREs)
+            cres = safe_get_data('cre_users')
+            cre_names = [cre['name'] for cre in cres] if cres else []
+            assigned_cre = None
+            if cre_names:
+                # Get last assigned CRE index from a file (or cycle from 0)
+                rr_file = 'walkin_cre_rr.txt'
+                try:
+                    with open(rr_file, 'r') as f:
+                        last_index = int(f.read().strip())
+                except Exception:
+                    last_index = -1
+                next_index = (last_index + 1) % len(cre_names)
+                assigned_cre = cre_names[next_index]
+                # Save the new index
+                try:
+                    with open(rr_file, 'w') as f:
+                        f.write(str(next_index))
+                except Exception as e:
+                    print(f'Could not write round robin file: {e}')
+            walkin_data['cre_name'] = assigned_cre
+            walkin_data['cre_assigned_at'] = datetime.now().isoformat() if assigned_cre else None
 
             # Insert walk-in data into the database
             result = supabase.table('walkin_data').insert(walkin_data).execute()
@@ -9500,6 +9525,88 @@ def delete_duplicate_lead():
         return jsonify({'success': True, 'message': 'Duplicate lead deleted successfully'})
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error deleting duplicate lead: {str(e)}'})
+
+@app.route('/update_walkin_lead/<uid>', methods=['GET', 'POST'])
+@require_cre
+def update_walkin_lead(uid):
+    try:
+        # Fetch the walk-in lead
+        walkin_result = supabase.table('walkin_data').select('*').eq('uid', uid).execute()
+        if not walkin_result.data:
+            flash('Walk-in lead not found', 'error')
+            return redirect(url_for('cre_dashboard'))
+        walkin_data = walkin_result.data[0]
+        # Only allow the CRE assigned to this walk-in lead
+        if walkin_data.get('cre_name') != session.get('cre_name'):
+            flash('Access denied - This walk-in lead is not assigned to you', 'error')
+            return redirect(url_for('cre_dashboard'))
+        # Determine next call info for walk-in (up to 7 calls)
+        call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
+        completed_calls = []
+        next_call = 'first'
+        for call_num in call_order:
+            call_date_key = f'{call_num}_call_date'
+            if walkin_data.get(call_date_key):
+                completed_calls.append(call_num)
+            else:
+                next_call = call_num
+                break
+        if request.method == 'POST':
+            update_data = {}
+            status = request.form.get('lead_status', '')
+            follow_up_date = request.form.get('follow_up_date', '')
+            call_remark = request.form.get('call_remark', '')
+            final_status = request.form.get('final_status', '')
+            call_date = request.form.get('call_date', '')
+            lead_category = request.form.get('lead_category', '')
+            model_interested = request.form.get('model_interested', '')
+            remarks = request.form.get('remarks', '')
+            # Allow CRE to update these fields
+            if lead_category:
+                update_data['lead_category'] = lead_category
+            if model_interested:
+                update_data['model_interested'] = model_interested
+            if remarks:
+                update_data['remarks'] = remarks
+            if status:
+                update_data['lead_status'] = status
+            if follow_up_date:
+                update_data['follow_up_date'] = follow_up_date
+            if final_status in ['Won', 'Lost']:
+                update_data['final_status'] = final_status
+                if final_status == 'Won':
+                    update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                elif final_status == 'Lost':
+                    update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            elif final_status == 'Pending':
+                update_data['final_status'] = 'Pending'
+            skip_first_call_statuses = [
+                'Call not Connected',
+                'Busy on another call',
+                'RNR',
+                'Call me Back'
+            ]
+            if call_date and status and status not in skip_first_call_statuses:
+                update_data[f'{next_call}_call_date'] = call_date
+            if call_remark:
+                update_data[f'{next_call}_call_remark'] = f"{status}, {call_remark}"
+            try:
+                if update_data:
+                    supabase.table('walkin_data').update(update_data).eq('uid', uid).execute()
+                    flash('Walk-in lead updated successfully', 'success')
+                    return redirect(url_for('cre_dashboard'))
+                else:
+                    flash('No changes to update', 'info')
+            except Exception as e:
+                flash(f'Error updating walk-in lead: {str(e)}', 'error')
+        return render_template('update_walkin_lead.html',
+                               lead=walkin_data,
+                               next_call=next_call,
+                               completed_calls=completed_calls,
+                               today=date.today())
+    except Exception as e:
+        flash(f'Error loading walk-in lead: {str(e)}', 'error')
+        return redirect(url_for('cre_dashboard'))
 
 if __name__ == '__main__':
     # socketio.run(app, debug=True)
