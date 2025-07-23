@@ -204,6 +204,11 @@
                     <i class="fas fa-calendar-alt"></i> Event Leads
                 </button>
             </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="walkin-leads-tab" data-bs-toggle="tab" data-bs-target="#walkin-leads" type="button" role="tab" aria-controls="walkin-leads" aria-selected="false">
+                    <i class="fas fa-store"></i> Walk-in Leads
+                </button>
+            </li>
         </ul>
     </div>
     <div class="card-body">
@@ -232,10 +237,10 @@
                         </div>
                         <div class="input-group" style="max-width: 300px;">
                             <input type="text" class="form-control" id="freshLeadSearchInput" placeholder="Search by UID, name, mobile...">
-                            <button class="btn btn-outline-secondary" type="button" id="freshLeadSearchButton">
+                            <button class="btn btn-outline-secondary" type="button" id="freshLeadSearchButton" title="Search">
                                 <i class="fas fa-search"></i>
                             </button>
-                            <button class="btn btn-outline-warning" type="button" id="freshLeadClearButton">
+                            <button class="btn btn-outline-warning" type="button" id="freshLeadClearButton" title="Clear">
                                 <i class="fas fa-times"></i>
                             </button>
                         </div>
@@ -356,10 +361,10 @@
                     <h5 class="mb-0">Today's Follow-ups ({{ todays_followups|length }})</h5>
                     <div class="input-group" style="max-width: 300px;">
                         <input type="text" class="form-control" id="followupSearchInput" placeholder="Search by UID, name, mobile...">
-                        <button class="btn btn-outline-secondary" type="button" id="followupSearchButton">
+                        <button class="btn btn-outline-secondary" type="button" id="followupSearchButton" title="Search">
                             <i class="fas fa-search"></i>
                         </button>
-                        <button class="btn btn-outline-warning" type="button" id="followupClearButton">
+                        <button class="btn btn-outline-warning" type="button" id="followupClearButton" title="Clear">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
@@ -450,10 +455,10 @@
                         </div>
                         <div class="input-group" style="max-width: 300px;">
                             <input type="text" class="form-control" id="pendingSearchInput" placeholder="Search by UID, name, mobile...">
-                            <button class="btn btn-outline-secondary" type="button" id="pendingSearchButton">
+                            <button class="btn btn-outline-secondary" type="button" id="pendingSearchButton" title="Search">
                                 <i class="fas fa-search"></i>
                             </button>
-                            <button class="btn btn-outline-warning" type="button" id="pendingClearButton">
+                            <button class="btn btn-outline-warning" type="button" id="pendingClearButton" title="Clear">
                                 <i class="fas fa-times"></i>
                             </button>
                         </div>
@@ -564,10 +569,10 @@
                         </div>
                         <div class="input-group" style="max-width: 300px;">
                             <input type="text" class="form-control" id="psSearchInput" placeholder="Search by UID, name, mobile...">
-                            <button class="btn btn-outline-secondary" type="button" id="psSearchButton">
+                            <button class="btn btn-outline-secondary" type="button" id="psSearchButton" title="Search">
                                 <i class="fas fa-search"></i>
                             </button>
-                            <button class="btn btn-outline-warning" type="button" id="psClearButton">
+                            <button class="btn btn-outline-warning" type="button" id="psClearButton" title="Clear">
                                 <i class="fas fa-times"></i>
                             </button>
                         </div>
@@ -664,10 +669,10 @@
                         </div>
                         <div class="input-group" style="max-width: 300px;">
                             <input type="text" class="form-control" id="wonSearchInput" placeholder="Search by UID, name, mobile...">
-                            <button class="btn btn-outline-secondary" type="button" id="wonSearchButton">
+                            <button class="btn btn-outline-secondary" type="button" id="wonSearchButton" title="Search">
                                 <i class="fas fa-search"></i>
                             </button>
-                            <button class="btn btn-outline-warning" type="button" id="wonClearButton">
+                            <button class="btn btn-outline-warning" type="button" id="wonClearButton" title="Clear">
                                 <i class="fas fa-times"></i>
                             </button>
                         </div>
@@ -736,10 +741,10 @@
                     <div class="d-flex gap-2">
                         <div class="input-group" style="max-width: 300px;">
                             <input type="text" class="form-control" id="eventLeadSearchInput" placeholder="Search by name, mobile, model...">
-                            <button class="btn btn-outline-secondary" type="button" id="eventLeadSearchButton">
+                            <button class="btn btn-outline-secondary" type="button" id="eventLeadSearchButton" title="Search">
                                 <i class="fas fa-search"></i>
                             </button>
-                            <button class="btn btn-outline-warning" type="button" id="eventLeadClearButton">
+                            <button class="btn btn-outline-warning" type="button" id="eventLeadClearButton" title="Clear">
                                 <i class="fas fa-times"></i>
                             </button>
                         </div>
@@ -781,6 +786,61 @@
                     <i class="fas fa-calendar-alt fa-3x text-muted mb-3"></i>
                     <h5 class="text-muted">No event leads</h5>
                     <p class="text-muted">Event leads will appear here when assigned</p>
+                </div>
+                {% endif %}
+            </div>
+            <!-- Walk-in Leads Tab -->
+            <div class="tab-pane fade" id="walkin-leads" role="tabpanel" aria-labelledby="walkin-leads-tab">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="mb-0">Walk-in Leads ({{ walkin_leads|length }})</h5>
+                    <div class="input-group" style="max-width: 300px;">
+                        <input type="text" class="form-control" id="walkinLeadSearchInput" placeholder="Search by name, mobile, model...">
+                        <button class="btn btn-outline-secondary" type="button" id="walkinLeadSearchButton" title="Search">
+                            <i class="fas fa-search"></i>
+                        </button>
+                        <button class="btn btn-outline-warning" type="button" id="walkinLeadClearButton" title="Clear">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                {% if walkin_leads %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0" id="walkinLeadsTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Customer Name</th>
+                                <th>Mobile</th>
+                                <th>Lead Source</th>
+                                <th>Model Interested</th>
+                                <th>Status</th>
+                                <th>Assigned At</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for lead in walkin_leads %}
+                            <tr>
+                                <td>{{ lead.customer_name }}</td>
+                                <td>{{ lead.customer_mobile_number }}</td>
+                                <td>{{ lead.lead_source }}</td>
+                                <td>{{ lead.model_interested }}</td>
+                                <td>{{ lead.status or lead.ps_final_status or 'Pending' }}</td>
+                                <td>{{ lead.cre_assigned_at or 'N/A' }}</td>
+                                <td>
+                                    <a href="{{ url_for('update_walkin_lead', uid=lead.uid) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-edit"></i> Update
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-store fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No walk-in leads assigned to you</h5>
+                    <p class="text-muted">Walk-in leads assigned to you will appear here</p>
                 </div>
                 {% endif %}
             </div>
@@ -942,6 +1002,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupSearch('wonSearchInput', 'wonSearchButton', 'wonClearButton', 'wonLeadsTable');
     setupSearch('lostSearchInput', 'lostSearchButton', 'lostClearButton', 'lostLeadsTable');
     setupSearch('eventLeadSearchInput', 'eventLeadSearchButton', 'eventLeadClearButton', 'eventLeadsTable');
+    setupSearch('walkinLeadSearchInput', 'walkinLeadSearchButton', 'walkinLeadClearButton', 'walkinLeadsTable');
 
     // Custom search for fresh leads (both untouched and called tables)
     const freshLeadSearchInput = document.getElementById('freshLeadSearchInput');
@@ -1555,6 +1616,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
         });
     });
+
+    setupSearch('walkinLeadSearchInput', 'walkinLeadSearchButton', 'walkinLeadClearButton', 'walkinLeadsTable');
 });
 
 // Request browser notification permission on page load
