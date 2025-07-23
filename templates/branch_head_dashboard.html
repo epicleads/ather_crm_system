@@ -349,19 +349,19 @@
             <div class="card mb-3">
                 <div class="card-body">
                     <!-- Filters -->
-                    <form class="row g-2 mb-2">
+                    <form class="row g-2 mb-2" onsubmit="return false;">
                         <div class="col-auto">
                             <input type="text" class="form-control" name="followup_uid_search" value="{{ request.args.get('followup_uid_search', '') }}" placeholder="Search by UID">
                         </div>
                         <div class="col-auto">
-                            <select class="form-select" name="followup_rows" onchange="this.form.submit()">
+                            <select class="form-select" id="followupLeadsRowsPerPage" onchange="loadSection('followup_leads', 1, this.value)">
                                 {% for n in [10, 25, 50, 100] %}
                                 <option value="{{ n }}" {% if request.args.get('followup_rows', '25') == n|string %}selected{% endif %}>Show {{ n }}</option>
                                 {% endfor %}
                             </select>
                         </div>
                         <div class="col-auto">
-                            <button type="submit" class="btn btn-outline-primary">Apply</button>
+                            <button type="button" class="btn btn-outline-primary" onclick="loadSection('followup_leads', 1, document.getElementById('followupLeadsRowsPerPage').value)">Apply</button>
                         </div>
                     </form>
                     <div class="table-responsive">
@@ -374,12 +374,11 @@
                                     <th>Final Status</th>
                                     <th>UID</th>
                                     <th>Source</th>
-                                    <th>Lead Status</th>
                                     <th>PS Name</th>
                                 </tr>
                             </thead>
                             <tbody id="followupLeadsTableBody">
-                                <tr><td colspan="8">Loading...</td></tr>
+                                <tr><td colspan="6">Loading...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -555,7 +554,7 @@ const sectionConfig = {
     tab: 'followup-tab',
     tbody: 'followupLeadsTableBody',
     pagination: 'followupLeadsPagination',
-    columns: ['uid', 'customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source', 'lead_status', 'ps_name']
+    columns: ['journey', 'customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source_type', 'ps_name']
   },
   won_leads: {
     tab: 'won-tab',
@@ -728,11 +727,7 @@ function loadSection(section, page = 1, per_page = 25) {
         if (tbody) {
           if (data.rows && data.rows.length > 0) {
             tbody.innerHTML = '';
-            const today = new Date().toISOString().slice(0, 10);
             data.rows.forEach(row => {
-              // Only show rows where follow_up_date is today (if present)
-              let followUpDate = row.follow_up_date ? String(row.follow_up_date).slice(0, 10) : '';
-              if (followUpDate && followUpDate !== today) return;
               const tr = document.createElement('tr');
               let uid = row.uid || row.lead_uid || row.activity_uid || '';
               tr.innerHTML = `
@@ -742,13 +737,12 @@ function loadSection(section, page = 1, per_page = 25) {
                 <td>${row.final_status || ''}</td>
                 <td>${uid}</td>
                 <td>${row.source_type || row.source || ''}</td>
-                <td>${followUpDate}</td>
                 <td>${row.ps_name || ''}</td>
               `;
               tbody.appendChild(tr);
             });
           } else {
-            tbody.innerHTML = `<tr><td colspan="8">No data found.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7">No data found.</td></tr>`;
           }
         }
         // Pagination controls (unchanged)

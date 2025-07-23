@@ -4022,14 +4022,25 @@ def api_branch_head_dashboard_data():
 
     elif section == 'followup_leads':
         today_str = datetime.now().strftime('%Y-%m-%d')
-        # Only today's follow-ups
-        ps_today = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).execute().data or []
-        act_today = supabase.table('activity_leads').select('*').eq('location', branch).eq('ps_followup_date_ts', today_str).execute().data or []
-        walkin_today = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).execute().data or []
-        # Mark all as not missed
-        ps_today = [{**row, 'missed': False} for row in ps_today]
-        act_today = [{**row, 'missed': False} for row in act_today]
-        walkin_today = [{**row, 'missed': False} for row in walkin_today]
+        tomorrow_str = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+        # Only today's follow-ups with correct status
+        ps_today = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).eq('final_status', 'Pending').execute().data or []
+        act_today_raw = supabase.table('activity_leads').select('*') \
+            .eq('location', branch) \
+            .gte('ps_followup_date_ts', f'{today_str} 00:00:00') \
+            .lt('ps_followup_date_ts', f'{tomorrow_str} 00:00:00') \
+            .eq('final_status', 'Pending').execute().data or []
+        walkin_today_raw = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).eq('ps_final_status', 'Pending').execute().data or []
+        # Mark all as not missed and set source_type and phone
+        ps_today = [{**row, 'missed': False, 'lead_status': row.get('lead_status', '')} for row in ps_today]
+        act_today = [
+            {**row, 'missed': False, 'source_type': 'Event', 'customer_mobile_number': row.get('customer_phone_number', ''), 'lead_status': row.get('lead_status', '')}
+            for row in act_today_raw
+        ]
+        walkin_today = [
+            {**row, 'missed': False, 'source_type': 'Walk-in', 'final_status': row.get('ps_final_status', ''), 'lead_status': row.get('lead_status', '')}
+            for row in walkin_today_raw
+        ]
         # Merge only today's followups
         all_rows = ps_today + act_today + walkin_today
         total_count = len(all_rows)
@@ -6404,6 +6415,8 @@ def add_branch_head():
     name = request.form.get('name')
     username = request.form.get('username')
     password = request.form.get('password')
+    email = request.form.get('email')
+    phone = request.form.get('phone')
     branch = request.form.get('branch')
     is_active = request.form.get('is_active') == 'on'
     # Store plain text password for Branch Head (testing only)
@@ -6412,6 +6425,8 @@ def add_branch_head():
         'Name': name,
         'Username': username,
         'Password': hashed_pw,
+        'email': email,
+        'Phone No.': phone,
         'Branch': branch,
         'Is Active': is_active
     }).execute()
@@ -6425,13 +6440,22 @@ def toggle_branch_head_active(id):
     flash('Branch Head status updated!', 'info')
     return redirect(url_for('manage_branch_head'))
 
-# @app.route('/branch_head_dashboard')
-# def branch_head_dashboard():
-#     if 'branch_head_id' not in session:
-#         return redirect(url_for('index'))
-#     branch = session.get('branch_head_branch')
-#     ps_users = supabase.table('ps_users').select('*').eq('branch', branch).execute().data or []
-#     return render_template('branch_head_dashboard.html', ps_users=ps_users)
+@app.route('/edit_branch_head/<int:id>', methods=['POST'])
+def edit_branch_head(id):
+    email = request.form.get('email')
+    phone = request.form.get('phone')
+    supabase.table('Branch Head').update({'email': email, 'Phone No.': phone}).eq('id', id).execute()
+    flash('Branch Head updated successfully!', 'success')
+    return redirect(url_for('manage_branch_head'))
+
+@app.route('/delete_branch_head/<int:id>', methods=['POST'])
+def delete_branch_head(id):
+    try:
+        supabase.table('Branch Head').delete().eq('id', id).execute()
+        flash('Branch Head deleted successfully!', 'success')
+    except Exception as e:
+        flash(f'Error deleting Branch Head: {str(e)}', 'error')
+    return redirect(url_for('manage_branch_head'))
 
 @app.route('/api/hot_duplicate_leads')
 @require_admin
