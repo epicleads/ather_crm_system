@@ -372,13 +372,14 @@
                                     <th>Customer Name</th>
                                     <th>Phone No.</th>
                                     <th>Final Status</th>
+                                    <th>Lead Status</th>
                                     <th>UID</th>
                                     <th>Source</th>
                                     <th>PS Name</th>
                                 </tr>
                             </thead>
                             <tbody id="followupLeadsTableBody">
-                                <tr><td colspan="6">Loading...</td></tr>
+                                <tr><td colspan="8">Loading...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -390,19 +391,19 @@
             <div class="card mb-3">
                 <div class="card-body">
                     <!-- Filters -->
-                    <form class="row g-2 mb-2">
+                    <form class="row g-2 mb-2" onsubmit="return false;">
                         <div class="col-auto">
                             <input type="text" class="form-control" name="event_uid_search" value="{{ request.args.get('event_uid_search', '') }}" placeholder="Search by UID">
                         </div>
                         <div class="col-auto">
-                            <select class="form-select" name="event_rows" onchange="this.form.submit()">
+                            <select class="form-select" id="eventLeadsRowsPerPage" onchange="loadSection('event_leads', 1, this.value)">
                                 {% for n in [10, 25, 50, 100] %}
                                 <option value="{{ n }}" {% if request.args.get('event_rows', '25') == n|string %}selected{% endif %}>Show {{ n }}</option>
                                 {% endfor %}
                             </select>
                         </div>
                         <div class="col-auto">
-                            <button type="submit" class="btn btn-outline-primary">Apply</button>
+                            <button type="button" class="btn btn-outline-primary" onclick="loadSection('event_leads', 1, document.getElementById('eventLeadsRowsPerPage').value)">Apply</button>
                         </div>
                     </form>
                     <div class="table-responsive">
@@ -414,7 +415,7 @@
                                     <th>Phone No.</th>
                                     <th>Final Status</th>
                                     <th>UID</th>
-                                    <th>Source</th>
+                                    <th>Created Time</th>
                                     <th>Lead Status</th>
                                     <th>PS Name</th>
                                 </tr>
@@ -431,20 +432,21 @@
         <div class="tab-pane fade" id="won" role="tabpanel">
             <div class="card mb-3">
                 <div class="card-body">
-                    <!-- Filters -->
-                    <form class="row g-2 mb-2">
+                    <!-- Filters for Won Leads -->
+                    <form class="row g-2 mb-2" onsubmit="return false;">
                         <div class="col-auto">
-                            <input type="text" class="form-control" name="won_uid_search" value="{{ request.args.get('won_uid_search', '') }}" placeholder="Search by UID">
+                            <input type="text" class="form-control" id="wonUidSearch" placeholder="Search by UID">
                         </div>
                         <div class="col-auto">
-                            <select class="form-select" name="won_rows" onchange="this.form.submit()">
-                                {% for n in [10, 25, 50, 100] %}
-                                <option value="{{ n }}" {% if request.args.get('won_rows', '25') == n|string %}selected{% endif %}>Show {{ n }}</option>
-                                {% endfor %}
+                            <select class="form-select" id="wonLeadsRowsPerPage">
+                                <option value="10">Show 10</option>
+                                <option value="25" selected>Show 25</option>
+                                <option value="50">Show 50</option>
+                                <option value="100">Show 100</option>
                             </select>
                         </div>
                         <div class="col-auto">
-                            <button type="submit" class="btn btn-outline-primary">Apply</button>
+                            <button type="button" class="btn btn-outline-primary" onclick="loadSection('won_leads', 1, document.getElementById('wonLeadsRowsPerPage').value)">Apply</button>
                         </div>
                     </form>
                     <div class="table-responsive">
@@ -457,8 +459,8 @@
                                     <th>Final Status</th>
                                     <th>UID</th>
                                     <th>Source</th>
-                                    <th>Lead Status</th>
                                     <th>PS Name</th>
+                                    <th>Won Timestamp</th>
                                 </tr>
                             </thead>
                             <tbody id="wonLeadsTableBody">
@@ -473,20 +475,21 @@
         <div class="tab-pane fade" id="lost" role="tabpanel">
             <div class="card mb-3">
                 <div class="card-body">
-                    <!-- Filters -->
-                    <form class="row g-2 mb-2">
+                    <!-- Filters for Lost Leads -->
+                    <form class="row g-2 mb-2" onsubmit="return false;">
                         <div class="col-auto">
-                            <input type="text" class="form-control" name="lost_uid_search" value="{{ request.args.get('lost_uid_search', '') }}" placeholder="Search by UID">
+                            <input type="text" class="form-control" id="lostUidSearch" placeholder="Search by UID">
                         </div>
                         <div class="col-auto">
-                            <select class="form-select" name="lost_rows" onchange="this.form.submit()">
-                                {% for n in [10, 25, 50, 100] %}
-                                <option value="{{ n }}" {% if request.args.get('lost_rows', '25') == n|string %}selected{% endif %}>Show {{ n }}</option>
-                                {% endfor %}
+                            <select class="form-select" id="lostLeadsRowsPerPage">
+                                <option value="10">Show 10</option>
+                                <option value="25" selected>Show 25</option>
+                                <option value="50">Show 50</option>
+                                <option value="100">Show 100</option>
                             </select>
                         </div>
                         <div class="col-auto">
-                            <button type="submit" class="btn btn-outline-primary">Apply</button>
+                            <button type="button" class="btn btn-outline-primary" onclick="loadSection('lost_leads', 1, document.getElementById('lostLeadsRowsPerPage').value)">Apply</button>
                         </div>
                     </form>
                     <div class="table-responsive">
@@ -499,8 +502,8 @@
                                     <th>Final Status</th>
                                     <th>UID</th>
                                     <th>Source</th>
-                                    <th>Lead Status</th>
                                     <th>PS Name</th>
+                                    <th>Lost Timestamp</th>
                                 </tr>
                             </thead>
                             <tbody id="lostLeadsTableBody">
@@ -554,19 +557,25 @@ const sectionConfig = {
     tab: 'followup-tab',
     tbody: 'followupLeadsTableBody',
     pagination: 'followupLeadsPagination',
-    columns: ['journey', 'customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source_type', 'ps_name']
+    columns: ['journey', 'customer_name', 'customer_mobile_number', 'final_status', 'lead_status', 'uid', 'source_type', 'ps_name']
   },
   won_leads: {
     tab: 'won-tab',
     tbody: 'wonLeadsTableBody',
     pagination: 'wonLeadsPagination',
-    columns: ['uid', 'customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source', 'lead_status', 'ps_name']
+    columns: ['journey', 'customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source', 'ps_name', 'won_timestamp']
   },
   lost_leads: {
     tab: 'lost-tab',
     tbody: 'lostLeadsTableBody',
     pagination: 'lostLeadsPagination',
-    columns: ['uid', 'customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source', 'lead_status', 'ps_name']
+    columns: ['journey', 'customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source', 'ps_name', 'lost_timestamp']
+  },
+  event_leads: {
+    tab: 'event-tab',
+    tbody: 'eventLeadsTableBody',
+    pagination: 'eventLeadsPagination',
+    columns: ['journey', 'customer_name', 'customer_mobile_number', 'final_status', 'uid', 'created_time', 'lead_status', 'ps_name']
   }
 };
 
@@ -582,6 +591,13 @@ function loadSection(section, page = 1, per_page = 25) {
       return res.json();
     })
     .then(data => {
+      // Always update KPI counts if present in response
+      if (data.won_leads_count !== undefined) {
+        document.getElementById('wonLeadsKPI').textContent = data.won_leads_count;
+      }
+      if (data.lost_leads_count !== undefined) {
+        document.getElementById('lostLeadsKPI').textContent = data.lost_leads_count;
+      }
       if (section === 'fresh_leads') {
         // Show all rows, including those with final_status 'Pending'
         const filteredRows = data.rows || [];
@@ -685,6 +701,7 @@ function loadSection(section, page = 1, per_page = 25) {
         document.getElementById('pendingLeadsKPI_CRE').textContent = data.pending_leads_cre_assigned_count || 0;
         document.getElementById('pendingLeadsKPI_Event').textContent = data.pending_leads_event_count || 0;
         document.getElementById('pendingLeadsKPI_Walkin').textContent = data.pending_leads_walkin_count || 0;
+        document.getElementById('totalLeadsKPI').textContent = data.total_leads_count || 0;
         if (tbody) {
           if (data.rows && data.rows.length > 0) {
             tbody.innerHTML = '';
@@ -735,6 +752,7 @@ function loadSection(section, page = 1, per_page = 25) {
                 <td>${row.customer_name || ''}</td>
                 <td>${row.customer_mobile_number || ''}</td>
                 <td>${row.final_status || ''}</td>
+                <td>${row.lead_status || ''}</td>
                 <td>${uid}</td>
                 <td>${row.source_type || row.source || ''}</td>
                 <td>${row.ps_name || ''}</td>
@@ -742,7 +760,7 @@ function loadSection(section, page = 1, per_page = 25) {
               tbody.appendChild(tr);
             });
           } else {
-            tbody.innerHTML = `<tr><td colspan="7">No data found.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8">No data found.</td></tr>`;
           }
         }
         // Pagination controls (unchanged)
@@ -766,11 +784,20 @@ function loadSection(section, page = 1, per_page = 25) {
             tbody.innerHTML = '';
             data.rows.forEach(row => {
               const tr = document.createElement('tr');
-              tr.innerHTML = sectionConfig.event_leads.columns.map(col => `<td>${row[col] || ''}</td>`).join('');
+              tr.innerHTML = `
+                <td><button class='btn btn-sm btn-primary'>Journey</button></td>
+                <td>${row.customer_name !== undefined ? row.customer_name : ''}</td>
+                <td>${row.customer_mobile_number !== undefined ? row.customer_mobile_number : ''}</td>
+                <td>${row.final_status !== undefined ? row.final_status : ''}</td>
+                <td>${row.uid ?? ''}</td>
+                <td>${row.created_time !== undefined ? row.created_time : ''}</td>
+                <td>${row.lead_status !== undefined ? row.lead_status : ''}</td>
+                <td>${row.ps_name !== undefined ? row.ps_name : ''}</td>
+              `;
               tbody.appendChild(tr);
             });
           } else {
-            tbody.innerHTML = `<tr><td colspan="${sectionConfig.event_leads.columns.length}">No data found.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8">No data found.</td></tr>`;
           }
         }
         // Pagination controls (unchanged)
@@ -782,7 +809,7 @@ function loadSection(section, page = 1, per_page = 25) {
         }
         let html = '';
         for (let p = 1; p <= data.total_pages; p++) {
-          html += `<button onclick="loadSection('event_leads', ${p}, ${data.per_page})" ${p === data.page ? 'disabled' : ''}>${p}</button> `;
+          html += `<button onclick=\"loadSection('event_leads', ${p}, ${data.per_page})\" ${p === data.page ? 'disabled' : ''}>${p}</button> `;
         }
         pagDiv.innerHTML = html;
         return;
@@ -794,11 +821,17 @@ function loadSection(section, page = 1, per_page = 25) {
             tbody.innerHTML = '';
             data.rows.forEach(row => {
               const tr = document.createElement('tr');
-              tr.innerHTML = sectionConfig.won_leads.columns.map(col => `<td>${row[col] || ''}</td>`).join('');
+              tr.innerHTML = sectionConfig.won_leads.columns.map(col => {
+                if (col === 'journey') {
+                  return `<td><button class='btn btn-sm btn-primary'>Journey</button></td>`;
+                } else {
+                  return `<td>${row[col] || ''}</td>`;
+                }
+              }).join('');
               tbody.appendChild(tr);
             });
           } else {
-            tbody.innerHTML = `<tr><td colspan="${sectionConfig.won_leads.columns.length}">No data found.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8">No data found.</td></tr>`;
           }
         }
         // Pagination controls (unchanged)
@@ -810,23 +843,28 @@ function loadSection(section, page = 1, per_page = 25) {
         }
         let html = '';
         for (let p = 1; p <= data.total_pages; p++) {
-          html += `<button onclick="loadSection('won_leads', ${p}, ${data.per_page})" ${p === data.page ? 'disabled' : ''}>${p}</button> `;
+          html += `<button onclick=\"loadSection('won_leads', ${p}, ${data.per_page})\" ${p === data.page ? 'disabled' : ''}>${p}</button> `;
         }
         pagDiv.innerHTML = html;
         return;
       }
       if (section === 'lost_leads') {
-        document.getElementById('lostLeadsKPI').textContent = data.lost_leads_count || 0;
         if (tbody) {
           if (data.rows && data.rows.length > 0) {
             tbody.innerHTML = '';
             data.rows.forEach(row => {
               const tr = document.createElement('tr');
-              tr.innerHTML = sectionConfig.lost_leads.columns.map(col => `<td>${row[col] || ''}</td>`).join('');
+              tr.innerHTML = sectionConfig.lost_leads.columns.map(col => {
+                if (col === 'journey') {
+                  return `<td><button class='btn btn-sm btn-primary'>Journey</button></td>`;
+                } else {
+                  return `<td>${row[col] || ''}</td>`;
+                }
+              }).join('');
               tbody.appendChild(tr);
             });
           } else {
-            tbody.innerHTML = `<tr><td colspan="${sectionConfig.lost_leads.columns.length}">No data found.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan=\"8\">No data found.</td></tr>`;
           }
         }
         // Pagination controls (unchanged)
@@ -838,7 +876,7 @@ function loadSection(section, page = 1, per_page = 25) {
         }
         let html = '';
         for (let p = 1; p <= data.total_pages; p++) {
-          html += `<button onclick="loadSection('lost_leads', ${p}, ${data.per_page})" ${p === data.page ? 'disabled' : ''}>${p}</button> `;
+          html += `<button onclick=\"loadSection('lost_leads', ${p}, ${data.per_page})\" ${p === data.page ? 'disabled' : ''}>${p}</button> `;
         }
         pagDiv.innerHTML = html;
         return;
