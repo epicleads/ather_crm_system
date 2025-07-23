@@ -723,6 +723,132 @@ function loadSection(section, page = 1, per_page = 25) {
         pagDiv.innerHTML = html;
         return;
       }
+      if (section === 'followup_leads') {
+        document.getElementById('followupLeadsKPI').textContent = data.total_count || 0;
+        if (tbody) {
+          if (data.rows && data.rows.length > 0) {
+            tbody.innerHTML = '';
+            const today = new Date().toISOString().slice(0, 10);
+            data.rows.forEach(row => {
+              // Only show rows where follow_up_date is today (if present)
+              let followUpDate = row.follow_up_date ? String(row.follow_up_date).slice(0, 10) : '';
+              if (followUpDate && followUpDate !== today) return;
+              const tr = document.createElement('tr');
+              let uid = row.uid || row.lead_uid || row.activity_uid || '';
+              tr.innerHTML = `
+                <td><button class='btn btn-sm btn-primary'>Journey</button></td>
+                <td>${row.customer_name || ''}</td>
+                <td>${row.customer_mobile_number || ''}</td>
+                <td>${row.final_status || ''}</td>
+                <td>${uid}</td>
+                <td>${row.source_type || row.source || ''}</td>
+                <td>${followUpDate}</td>
+                <td>${row.ps_name || ''}</td>
+              `;
+              tbody.appendChild(tr);
+            });
+          } else {
+            tbody.innerHTML = `<tr><td colspan="8">No data found.</td></tr>`;
+          }
+        }
+        // Pagination controls (unchanged)
+        let pagDiv = document.getElementById(config.pagination);
+        if (!pagDiv) {
+          pagDiv = document.createElement('div');
+          pagDiv.id = config.pagination;
+          tbody.parentElement.appendChild(pagDiv);
+        }
+        let html = '';
+        for (let p = 1; p <= data.total_pages; p++) {
+          html += `<button onclick=\"loadSection('followup_leads', ${p}, ${data.per_page})\" ${p === data.page ? 'disabled' : ''}>${p}</button> `;
+        }
+        pagDiv.innerHTML = html;
+        return;
+      }
+      if (section === 'event_leads') {
+        document.getElementById('eventLeadsKPI').textContent = data.event_leads_count || 0;
+        if (tbody) {
+          if (data.rows && data.rows.length > 0) {
+            tbody.innerHTML = '';
+            data.rows.forEach(row => {
+              const tr = document.createElement('tr');
+              tr.innerHTML = sectionConfig.event_leads.columns.map(col => `<td>${row[col] || ''}</td>`).join('');
+              tbody.appendChild(tr);
+            });
+          } else {
+            tbody.innerHTML = `<tr><td colspan="${sectionConfig.event_leads.columns.length}">No data found.</td></tr>`;
+          }
+        }
+        // Pagination controls (unchanged)
+        let pagDiv = document.getElementById(sectionConfig.event_leads.pagination);
+        if (!pagDiv) {
+          pagDiv = document.createElement('div');
+          pagDiv.id = sectionConfig.event_leads.pagination;
+          tbody.parentElement.appendChild(pagDiv);
+        }
+        let html = '';
+        for (let p = 1; p <= data.total_pages; p++) {
+          html += `<button onclick="loadSection('event_leads', ${p}, ${data.per_page})" ${p === data.page ? 'disabled' : ''}>${p}</button> `;
+        }
+        pagDiv.innerHTML = html;
+        return;
+      }
+      if (section === 'won_leads') {
+        document.getElementById('wonLeadsKPI').textContent = data.won_leads_count || 0;
+        if (tbody) {
+          if (data.rows && data.rows.length > 0) {
+            tbody.innerHTML = '';
+            data.rows.forEach(row => {
+              const tr = document.createElement('tr');
+              tr.innerHTML = sectionConfig.won_leads.columns.map(col => `<td>${row[col] || ''}</td>`).join('');
+              tbody.appendChild(tr);
+            });
+          } else {
+            tbody.innerHTML = `<tr><td colspan="${sectionConfig.won_leads.columns.length}">No data found.</td></tr>`;
+          }
+        }
+        // Pagination controls (unchanged)
+        let pagDiv = document.getElementById(sectionConfig.won_leads.pagination);
+        if (!pagDiv) {
+          pagDiv = document.createElement('div');
+          pagDiv.id = sectionConfig.won_leads.pagination;
+          tbody.parentElement.appendChild(pagDiv);
+        }
+        let html = '';
+        for (let p = 1; p <= data.total_pages; p++) {
+          html += `<button onclick="loadSection('won_leads', ${p}, ${data.per_page})" ${p === data.page ? 'disabled' : ''}>${p}</button> `;
+        }
+        pagDiv.innerHTML = html;
+        return;
+      }
+      if (section === 'lost_leads') {
+        document.getElementById('lostLeadsKPI').textContent = data.lost_leads_count || 0;
+        if (tbody) {
+          if (data.rows && data.rows.length > 0) {
+            tbody.innerHTML = '';
+            data.rows.forEach(row => {
+              const tr = document.createElement('tr');
+              tr.innerHTML = sectionConfig.lost_leads.columns.map(col => `<td>${row[col] || ''}</td>`).join('');
+              tbody.appendChild(tr);
+            });
+          } else {
+            tbody.innerHTML = `<tr><td colspan="${sectionConfig.lost_leads.columns.length}">No data found.</td></tr>`;
+          }
+        }
+        // Pagination controls (unchanged)
+        let pagDiv = document.getElementById(sectionConfig.lost_leads.pagination);
+        if (!pagDiv) {
+          pagDiv = document.createElement('div');
+          pagDiv.id = sectionConfig.lost_leads.pagination;
+          tbody.parentElement.appendChild(pagDiv);
+        }
+        let html = '';
+        for (let p = 1; p <= data.total_pages; p++) {
+          html += `<button onclick="loadSection('lost_leads', ${p}, ${data.per_page})" ${p === data.page ? 'disabled' : ''}>${p}</button> `;
+        }
+        pagDiv.innerHTML = html;
+        return;
+      }
       if (tbody) {
         if (data.rows && data.rows.length > 0) {
         tbody.innerHTML = '';

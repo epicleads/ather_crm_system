@@ -2755,6 +2755,7 @@ def generate_walkin_uid(source, mobile_number, sequence):
 
 def send_quotation_email(customer_email, customer_name, quotation_data, pdf_path=None):
     """Send quotation email to walk-in customer with PDF attachment"""
+    server = None
     try:
         if not EMAIL_USER or not EMAIL_PASSWORD:
             print("Email credentials not configured. Skipping quotation email.")
@@ -2824,25 +2825,22 @@ def send_quotation_email(customer_email, customer_name, quotation_data, pdf_path
         # Send email
         server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
         server.starttls()
-        try:
-            server.login(EMAIL_USER, EMAIL_PASSWORD)
-            text = msg.as_string()
-            server.sendmail(EMAIL_USER, customer_email, text)
-            print(f"Quotation email sent successfully to {customer_email}")
-            return True
-        except Exception as e:
-            print(f"Error logging in or sending email: {e}")
-            return False
-        finally:
-            try:
-                server.quit()
-            except Exception as e:
-                print(f"Error quitting server: {e}")
+        server.login(EMAIL_USER, EMAIL_PASSWORD)
+        text = msg.as_string()
+        server.sendmail(EMAIL_USER, customer_email, text)
+        print(f"Quotation email sent successfully to {customer_email}")
+        return True
 
     except Exception as e:
         print(f"Error sending quotation email: {e}")
         return False
 
+    finally:
+        if server:
+            try:
+                server.quit()
+            except Exception as e:
+                print(f"Error quitting server: {e}")
 
 # Replace the `generate_quotation_pdf` function with this new implementation:
 def generate_quotation_pdf(quotation_data):
@@ -4024,27 +4022,16 @@ def api_branch_head_dashboard_data():
 
     elif section == 'followup_leads':
         today_str = datetime.now().strftime('%Y-%m-%d')
-        yesterday_str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-        # ps_followup_master today
+        # Only today's follow-ups
         ps_today = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).execute().data or []
-        # activity_leads today (use 'ps_followup_date_ts' column)
         act_today = supabase.table('activity_leads').select('*').eq('location', branch).eq('ps_followup_date_ts', today_str).execute().data or []
-        # walkin_data today
         walkin_today = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).execute().data or []
-        # Missed follow-ups (yesterday, not completed)
-        ps_missed = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('follow_up_date', yesterday_str).eq('final_status', 'Pending').execute().data or []
-        act_missed = supabase.table('activity_leads').select('*').eq('location', branch).eq('ps_followup_date_ts', yesterday_str).eq('final_status', 'Pending').execute().data or []
-        walkin_missed = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('follow_up_date', yesterday_str).eq('ps_final_status', 'Pending').execute().data or []
-        # Mark missed
-        ps_missed = [{**row, 'missed': True} for row in ps_missed]
-        act_missed = [{**row, 'missed': True} for row in act_missed]
-        walkin_missed = [{**row, 'missed': True} for row in walkin_missed]
-        # Mark today
+        # Mark all as not missed
         ps_today = [{**row, 'missed': False} for row in ps_today]
         act_today = [{**row, 'missed': False} for row in act_today]
         walkin_today = [{**row, 'missed': False} for row in walkin_today]
-        # Merge: missed first, then today
-        all_rows = ps_missed + act_missed + walkin_missed + ps_today + act_today + walkin_today
+        # Merge only today's followups
+        all_rows = ps_today + act_today + walkin_today
         total_count = len(all_rows)
         offset = (page - 1) * per_page
         paged_rows = all_rows[offset:offset + per_page]
