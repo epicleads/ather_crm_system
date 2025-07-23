@@ -24,6 +24,7 @@ from security_verification import run_security_verification
 import time
 import gc
 from flask_socketio import SocketIO, emit
+import math
 # from redis import Redis  # REMOVE this line for local development
 
 # Add this instead:
@@ -488,68 +489,6 @@ def track_cre_call_attempt(uid, cre_name, call_no, lead_status, call_was_recorde
     except Exception as e:
         print(f"Error tracking CRE call attempt: {e}")
 
-# def track_cre_call_attempt(uid, cre_name, call_no, lead_status, call_was_recorded=False, follow_up_date=None, remarks=None):
-#     """Track CRE call attempt in the history table and update TAT for first attempt"""
-#     try:
-#         # Get the next attempt number for this call
-#         attempt_result = supabase.table('cre_call_attempt_history').select('attempt').eq('uid', uid).eq('call_no', call_no).order('attempt', desc=True).limit(1).execute()
-        
-#         next_attempt = 1
-#         if attempt_result.data:
-#             next_attempt = attempt_result.data[0]['attempt'] + 1
-
-#         # Prepare attempt data
-#         attempt_data = {
-#             'uid': uid,
-#             'call_no': call_no,
-#             'attempt': next_attempt,
-#             'status': lead_status,
-#             'cre_name': cre_name,
-#             'call_was_recorded': call_was_recorded,
-#             'follow_up_date': follow_up_date,
-#             'remarks': remarks
-#         }
-
-#         # Insert the attempt record
-#         insert_result = supabase.table('cre_call_attempt_history').insert(attempt_data).execute()
-#         print(f"Tracked call attempt: {uid} - {call_no} call, attempt {next_attempt}, status: {lead_status}")
-
-#         # --- TAT Calculation and Update ---
-#         if call_no == 'first' and next_attempt == 1:
-#             # Fetch lead's created_at
-#             lead_result = supabase.table('lead_master').select('created_at').eq('uid', uid).limit(1).execute()
-#             if lead_result.data and lead_result.data[0].get('created_at'):
-#                 created_at_str = lead_result.data[0]['created_at']
-#                 from datetime import datetime
-#                 try:
-#                     if 'T' in created_at_str:
-#                         created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
-#                     else:
-#                         created_at = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S')
-#                 except Exception:
-#                     created_at = None
-#                 # Get updated_at from inserted attempt (if available), else use now
-#                 updated_at_str = None
-#                 if insert_result.data and insert_result.data[0].get('updated_at'):
-#                     updated_at_str = insert_result.data[0]['updated_at']
-#                 else:
-#                     from datetime import datetime
-#                     updated_at_str = datetime.now().isoformat()
-#                 try:
-#                     if 'T' in updated_at_str:
-#                         updated_at = datetime.fromisoformat(updated_at_str.replace('Z', '+00:00'))
-#                     else:
-#                         updated_at = datetime.strptime(updated_at_str, '%Y-%m-%d %H:%M:%S')
-#                 except Exception:
-#                     updated_at = datetime.now()
-#                 if created_at:
-#                     tat_seconds = (updated_at - created_at).total_seconds()
-#                     # Update lead_master with TAT
-#                     supabase.table('lead_master').update({'tat': tat_seconds}).eq('uid', uid).execute()
-#                     print(f"TAT updated for lead {uid}: {tat_seconds} seconds")
-#     except Exception as e:
-#         print(f"Error tracking CRE call attempt: {e}")
-
 def track_ps_call_attempt(uid, ps_name, call_no, lead_status, call_was_recorded=False, follow_up_date=None, remarks=None):
     """Track PS call attempt in the history table"""
     try:
@@ -587,37 +526,6 @@ def track_ps_call_attempt(uid, ps_name, call_no, lead_status, call_was_recorded=
         print(f"Tracked PS call attempt: {uid} - {call_no} call, attempt {next_attempt}, status: {lead_status}")
     except Exception as e:
         print(f"Error tracking PS call attempt: {e}")
-
-
-# def track_ps_call_attempt(uid, ps_name, call_no, lead_status, call_was_recorded=False, follow_up_date=None, remarks=None):
-#     """Track PS call attempt in the history table"""
-#     try:
-#         # Get the next attempt number for this call
-#         attempt_result = supabase.table('ps_call_attempt_history').select('attempt').eq('uid', uid).eq('call_no', call_no).order('attempt', desc=True).limit(1).execute()
-        
-#         next_attempt = 1
-#         if attempt_result.data:
-#             next_attempt = attempt_result.data[0]['attempt'] + 1
-
-#         # Prepare attempt data
-#         attempt_data = {
-#             'uid': uid,
-#             'call_no': call_no,
-#             'attempt': next_attempt,
-#             'status': lead_status,
-#             'ps_name': ps_name,
-#             'call_was_recorded': call_was_recorded,
-#             'follow_up_date': follow_up_date,
-#             'remarks': remarks
-#         }
-
-#         # Insert the attempt record
-#         supabase.table('ps_call_attempt_history').insert(attempt_data).execute()
-        
-#         print(f"Tracked PS call attempt: {uid} - {call_no} call, attempt {next_attempt}, status: {lead_status}")
-        
-#     except Exception as e:
-#         print(f"Error tracking PS call attempt: {e}")
 
 
 def filter_leads_by_date(leads, filter_type, date_field='created_at'):
@@ -2847,6 +2755,7 @@ def generate_walkin_uid(source, mobile_number, sequence):
 
 def send_quotation_email(customer_email, customer_name, quotation_data, pdf_path=None):
     """Send quotation email to walk-in customer with PDF attachment"""
+    server = None
     try:
         if not EMAIL_USER or not EMAIL_PASSWORD:
             print("Email credentials not configured. Skipping quotation email.")
@@ -2916,25 +2825,22 @@ def send_quotation_email(customer_email, customer_name, quotation_data, pdf_path
         # Send email
         server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
         server.starttls()
-        try:
-            server.login(EMAIL_USER, EMAIL_PASSWORD)
-            text = msg.as_string()
-            server.sendmail(EMAIL_USER, customer_email, text)
-            print(f"Quotation email sent successfully to {customer_email}")
-            return True
-        except Exception as e:
-            print(f"Error logging in or sending email: {e}")
-            return False
-        finally:
-            try:
-                server.quit()
-            except Exception as e:
-                print(f"Error quitting server: {e}")
+        server.login(EMAIL_USER, EMAIL_PASSWORD)
+        text = msg.as_string()
+        server.sendmail(EMAIL_USER, customer_email, text)
+        print(f"Quotation email sent successfully to {customer_email}")
+        return True
 
     except Exception as e:
         print(f"Error sending quotation email: {e}")
         return False
 
+    finally:
+        if server:
+            try:
+                server.quit()
+            except Exception as e:
+                print(f"Error quitting server: {e}")
 
 # Replace the `generate_quotation_pdf` function with this new implementation:
 def generate_quotation_pdf(quotation_data):
@@ -3928,6 +3834,239 @@ def analytics():
         }
         return render_template('analytics.html', analytics=empty_analytics)
 
+
+@app.route('/branch_head_dashboard')
+def branch_head_dashboard():
+    if 'branch_head_id' not in session:
+        return redirect(url_for('index'))
+    branch = session.get('branch_head_branch')
+    ps_users = supabase.table('ps_users').select('*').eq('branch', branch).execute().data or []
+    return render_template('branch_head_dashboard.html', ps_users=ps_users)
+
+@app.route('/api/branch_head_dashboard_data')
+def api_branch_head_dashboard_data():
+    """Get data for branch head dashboard"""
+    # Get query parameters
+    section = request.args.get('section', 'fresh_leads')
+    page = int(request.args.get('page', 1))
+    per_page = int(request.args.get('per_page', 25))
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    uid = request.args.get('uid')
+    ps_name = request.args.get('ps_name')
+
+    # Validate and sanitize inputs
+    if not 1 <= page <= 1000:
+        return jsonify({'success': False, 'message': 'Invalid page number'})
+    if not 1 <= per_page <= 100:
+        return jsonify({'success': False, 'message': 'Invalid per_page value'})
+    if start_date and not is_valid_date(start_date):
+        return jsonify({'success': False, 'message': 'Invalid start_date format'})
+    if end_date and not is_valid_date(end_date):
+        return jsonify({'success': False, 'message': 'Invalid end_date format'})
+    if uid and not is_valid_uid(uid):
+        return jsonify({'success': False, 'message': 'Invalid UID format'})
+
+    # Get branch from session
+    branch = session.get('branch_head_branch')
+
+    # Initialize query
+    query = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch)
+
+    # Apply filters
+    if start_date:
+        query = query.gte('first_call_date', start_date)
+    if end_date:
+        query = query.lte('first_call_date', end_date)
+    if uid:
+        query = query.eq('uid', uid)
+    if ps_name:
+        query = query.eq('ps_name', ps_name)
+
+    # Apply section-specific filters
+    if section == 'fresh_leads':
+        all_rows = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).execute().data or []
+        filtered_rows = [
+            {**row, 'uid': row.get('lead_uid', ''), 'branch': row.get('ps_branch', '')}
+            for row in all_rows
+            if (not row.get('first_call_date') or str(row.get('first_call_date')).strip() == '')
+                and row.get('final_status', '').strip().lower() == 'pending'
+        ]
+        total_count = len(filtered_rows)
+        offset = (page - 1) * per_page
+        paged_rows = filtered_rows[offset:offset + per_page]
+        response = {
+            'success': True,
+            'rows': paged_rows,
+            'total_count': total_count,
+            'total_pages': math.ceil(total_count / per_page),
+            'current_page': page,
+            'per_page': per_page,
+            'fresh_leads_count': total_count
+        }
+        auth_manager.log_audit_event(
+            user_id=session.get('user_id'),
+            user_type=session.get('user_type'),
+            action='BRANCH_HEAD_DASHBOARD_DATA_ACCESS',
+            resource='branch_head_dashboard_data',
+            details={
+                'section': section,
+                'page': page,
+                'per_page': per_page,
+                'start_date': start_date,
+                'end_date': end_date,
+                'uid': uid,
+                'ps_name': ps_name,
+                'total_count': total_count
+            }
+        )
+        return jsonify(response)
+
+    elif section == 'walkin_leads':
+        walkin_query = supabase.table('walkin_data').select('*').eq('ps_branch', branch)
+        if uid:
+            walkin_query = walkin_query.eq('uid', uid)
+        all_rows = walkin_query.execute().data or []
+        rows = [
+            {
+                'journey': 'Journey',
+                'uid': row.get('uid', ''),
+                'customer_name': row.get('customer_name', ''),
+                'customer_mobile_number': row.get('customer_mobile_number', ''),
+                'customer_email': row.get('customer_email', ''),
+                'model_interested': row.get('model_interested', ''),
+                'lead_source': row.get('lead_source', ''),
+                'status': row.get('ps_final_status', ''),
+                'ps_name': row.get('ps_name', ''),
+                'created_at': row.get('created_at', ''),
+                'lead_category': row.get('lead_category', '')
+            }
+            for row in all_rows
+        ]
+        total_count = int(len(rows))
+        offset = (page - 1) * per_page
+        paged_rows = rows[offset:offset + per_page]
+        total_pages = 1 if total_count == 0 else math.ceil(total_count / per_page)
+        response = {
+            'success': True,
+            'rows': paged_rows,
+            'total_count': total_count,
+            'total_pages': total_pages,
+            'current_page': page,
+            'per_page': per_page,
+            'walkin_leads_count': total_count
+        }
+        return jsonify(response)
+
+    elif section == 'cre_assigned_leads':
+        # Fetch all rows from ps_followup_master for the current branch (and filters), with all columns
+        all_rows = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).execute().data or []
+        # Add journey button field
+        rows = [
+            {**row, 'journey': 'Journey', 'uid': row.get('lead_uid', '')} for row in all_rows
+        ]
+        total_count = len(rows)
+        offset = (page - 1) * per_page
+        paged_rows = rows[offset:offset + per_page]
+        total_pages = 1 if total_count == 0 else math.ceil(total_count / per_page)
+        response = {
+            'success': True,
+            'rows': paged_rows,
+            'total_count': total_count,
+            'total_pages': total_pages,
+            'current_page': page,
+            'per_page': per_page,
+            'cre_assigned_leads_count': total_count
+        }
+        return jsonify(response)
+    elif section == 'pending_leads':
+        # ps_followup_master
+        followup_rows = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Pending').execute().data or []
+        followup_rows = [{**row, 'journey': 'Journey', 'source_type': row.get('source', '')} for row in followup_rows]
+
+        # activity_leads
+        event_rows = supabase.table('activity_leads').select('*').eq('location', branch).eq('final_status', 'Pending').execute().data or []
+        event_rows = [{**row, 'journey': 'Journey', 'source_type': 'Event', 'customer_mobile_number': row.get('customer_phone_number', row.get('customer_mobile_number', ''))} for row in event_rows]
+
+        # walkin_data
+        walkin_rows = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('ps_final_status', 'Pending').execute().data or []
+        walkin_rows = [{**row, 'journey': 'Journey', 'source_type': 'Walk-in'} for row in walkin_rows]
+
+        # Merge all
+        all_rows = followup_rows + event_rows + walkin_rows
+
+        # Counts for KPI sub-boxes
+        cre_assigned_count = len(followup_rows)
+        event_count = len(event_rows)
+        walkin_count = len(walkin_rows)
+        total_count = len(all_rows)
+
+        # Pagination
+        offset = (page - 1) * per_page
+        paged_rows = all_rows[offset:offset + per_page]
+        total_pages = 1 if total_count == 0 else math.ceil(total_count / per_page)
+
+        response = {
+            'success': True,
+            'rows': paged_rows,
+            'total_count': total_count,
+            'total_pages': total_pages,
+            'current_page': page,
+            'per_page': per_page,
+            'pending_leads_count': total_count,
+            'pending_leads_cre_assigned_count': cre_assigned_count,
+            'pending_leads_event_count': event_count,
+            'pending_leads_walkin_count': walkin_count
+        }
+        return jsonify(response)
+
+    elif section == 'followup_leads':
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        # Only today's follow-ups
+        ps_today = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).execute().data or []
+        act_today = supabase.table('activity_leads').select('*').eq('location', branch).eq('ps_followup_date_ts', today_str).execute().data or []
+        walkin_today = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).execute().data or []
+        # Mark all as not missed
+        ps_today = [{**row, 'missed': False} for row in ps_today]
+        act_today = [{**row, 'missed': False} for row in act_today]
+        walkin_today = [{**row, 'missed': False} for row in walkin_today]
+        # Merge only today's followups
+        all_rows = ps_today + act_today + walkin_today
+        total_count = len(all_rows)
+        offset = (page - 1) * per_page
+        paged_rows = all_rows[offset:offset + per_page]
+        total_pages = 1 if total_count == 0 else math.ceil(total_count / per_page)
+        response = {
+            'success': True,
+            'rows': paged_rows,
+            'total_count': total_count,
+            'total_pages': total_pages,
+            'current_page': page,
+            'per_page': per_page
+        }
+        return jsonify(response)
+
+    elif section == 'event_leads':
+        query = supabase.table('activity_leads').select('*').eq('location', branch)
+    elif section == 'won_leads':
+        query = query.eq('final_status', 'Won')
+    elif section == 'lost_leads':
+        query = query.eq('final_status', 'Lost')
+
+    # For all other sections, apply pagination and return
+    offset = (page - 1) * per_page
+    query = query.range(offset, offset + per_page - 1)
+    result = query.execute()
+    total_count = result.count if hasattr(result, 'count') and result.count is not None else len(result.data)
+    response = {
+        'success': True,
+        'rows': result.data,
+        'total_count': total_count,
+        'total_pages': math.ceil(total_count / per_page) if total_count else 1,
+        'current_page': page,
+        'per_page': per_page
+    }
+    return jsonify(response)
 
 @app.route('/branch_performance/<branch_name>')
 @require_admin
@@ -5701,7 +5840,7 @@ def negative_call_attempt_history():
 
 def get_cre_feedback_analysis(cre_attempts, call_no_order, start_date, end_date):
     cre_df = pd.DataFrame(cre_attempts)
-    print("Sample cre_attempts:", cre_attempts[:5])  # Debug: print sample data
+    # print("Sample cre_attempts:", cre_attempts[:5])  # Debug: print sample data
     if cre_df.empty:
         print("No data in cre_attempts!")
         return {call_no: {} for call_no in call_no_order}, []
@@ -6286,11 +6425,13 @@ def toggle_branch_head_active(id):
     flash('Branch Head status updated!', 'info')
     return redirect(url_for('manage_branch_head'))
 
-@app.route('/branch_head_dashboard')
-def branch_head_dashboard():
-    if 'branch_head_id' not in session:
-        return redirect(url_for('index'))
-    return render_template('branch_head_dashboard.html')
+# @app.route('/branch_head_dashboard')
+# def branch_head_dashboard():
+#     if 'branch_head_id' not in session:
+#         return redirect(url_for('index'))
+#     branch = session.get('branch_head_branch')
+#     ps_users = supabase.table('ps_users').select('*').eq('branch', branch).execute().data or []
+#     return render_template('branch_head_dashboard.html', ps_users=ps_users)
 
 @app.route('/api/hot_duplicate_leads')
 @require_admin
