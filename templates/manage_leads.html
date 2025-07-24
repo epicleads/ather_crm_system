@@ -105,6 +105,7 @@
                                     <th>UID</th>
                                     <th>Customer Name</th>
                                     <th>Mobile</th>
+                                    <th>Subsource</th>
                                     <th>Qualification</th>
                                     <th>CRE TAT</th>
                                     <th>Actions</th>
@@ -134,6 +135,7 @@
                                     <td>{{ lead.uid }}</td>
                                     <td>{{ lead.customer_name }}</td>
                                     <td>{{ lead.customer_mobile_number }}</td>
+                                    <td>{{ lead.subsource }}</td>
                                     <td>{% if lead.first_call_date %}Qualified{% else %}Unqualified{% endif %}</td>
                                     <td>{{ lead.cre_tat_display }}</td>
                                     <td>
