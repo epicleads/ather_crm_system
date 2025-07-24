@@ -6851,31 +6851,56 @@ def api_branch_head_dashboard_data():
         return jsonify(response)
     elif section == 'pending_leads':
         # ps_followup_master
-        followup_rows = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Pending').execute().data or []
-        followup_rows = [{**row, 'journey': 'Journey', 'source_type': row.get('source', '')} for row in followup_rows]
-
+        followup_rows_raw = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Pending').execute().data or []
+        followup_rows = [
+            {
+                'journey': 'Journey',
+                'uid': row.get('lead_uid', '') or row.get('uid', ''),
+                'customer_name': row.get('customer_name', ''),
+                'customer_mobile_number': row.get('customer_mobile_number', ''),
+                'final_status': row.get('final_status', ''),
+                'source': row.get('source', '') or row.get('source_type', ''),
+                'assigned_time': row.get('ps_assigned_at', '') or row.get('created_at', ''),
+                'ps_name': row.get('ps_name', '')
+            }
+            for row in followup_rows_raw
+        ]
         # activity_leads
-        event_rows = supabase.table('activity_leads').select('*').eq('location', branch).eq('final_status', 'Pending').execute().data or []
-        event_rows = [{**row, 'journey': 'Journey', 'source_type': 'Event', 'customer_mobile_number': row.get('customer_phone_number', row.get('customer_mobile_number', ''))} for row in event_rows]
-
+        event_rows_raw = supabase.table('activity_leads').select('*').eq('location', branch).eq('final_status', 'Pending').execute().data or []
+        event_rows = [
+            {
+                'journey': 'Journey',
+                'uid': row.get('activity_uid', '') or row.get('uid', ''),
+                'customer_name': row.get('customer_name', ''),
+                'customer_mobile_number': row.get('customer_phone_number', row.get('customer_mobile_number', '')),
+                'final_status': row.get('final_status', ''),
+                'source': 'Event',
+                'assigned_time': row.get('created_at', ''),
+                'ps_name': row.get('ps_name', '')
+            }
+            for row in event_rows_raw
+        ]
         # walkin_data
-        walkin_rows = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('ps_final_status', 'Pending').execute().data or []
-        walkin_rows = [{**row, 'journey': 'Journey', 'source_type': 'Walk-in'} for row in walkin_rows]
-
+        walkin_rows_raw = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('ps_final_status', 'Pending').execute().data or []
+        walkin_rows = [
+            {
+                'journey': 'Journey',
+                'uid': row.get('uid', ''),
+                'customer_name': row.get('customer_name', ''),
+                'customer_mobile_number': row.get('customer_mobile_number', ''),
+                'final_status': row.get('ps_final_status', ''),
+                'source': 'Walk-in',
+                'assigned_time': row.get('created_at', ''),
+                'ps_name': row.get('ps_name', '')
+            }
+            for row in walkin_rows_raw
+        ]
         # Merge all
         all_rows = followup_rows + event_rows + walkin_rows
-
-        # Counts for KPI sub-boxes
-        cre_assigned_count = len(followup_rows)
-        event_count = len(event_rows)
-        walkin_count = len(walkin_rows)
         total_count = len(all_rows)
-
-        # Pagination
         offset = (page - 1) * per_page
         paged_rows = all_rows[offset:offset + per_page]
         total_pages = 1 if total_count == 0 else math.ceil(total_count / per_page)
-
         response = {
             'success': True,
             'rows': paged_rows,
@@ -6884,9 +6909,9 @@ def api_branch_head_dashboard_data():
             'current_page': page,
             'per_page': per_page,
             'pending_leads_count': total_count,
-            'pending_leads_cre_assigned_count': cre_assigned_count,
-            'pending_leads_event_count': event_count,
-            'pending_leads_walkin_count': walkin_count
+            'pending_leads_cre_assigned_count': len(followup_rows),
+            'pending_leads_event_count': len(event_rows),
+            'pending_leads_walkin_count': len(walkin_rows)
         }
         return jsonify(response)
 
