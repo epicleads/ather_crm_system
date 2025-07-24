@@ -213,6 +213,7 @@
                                 <th>Customer Name</th>
                                 <th>Mobile</th>
                                 <th>Source</th>
+                                <th>Subsource</th>
                                 <th>CRE Name</th>
                                 <th>Category</th>
                                 <th>Model Interested</th>
@@ -223,7 +224,7 @@
                         <tbody>
                             {% for lead in fresh_leads %}
                             <tr class="pending-lead-row" data-created="{{ lead.created_at[:10] if lead.created_at else '' }}"
-                                data-search="{{ (lead.lead_uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or '') + ' ' + (lead.cre_name or ''))|lower }}">
+                                data-search="{{ (lead.lead_uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or '') + ' ' + (lead.cre_name or '') + ' ' + (lead.subsource or ''))|lower }}">
                                 <td>
                                     <a href="{{ url_for('update_ps_lead', uid=lead.lead_uid) }}" class="btn btn-sm btn-outline-primary">
                                         <i class="fas fa-edit"></i> Update
@@ -239,6 +240,7 @@
                                 <td>{{ lead.customer_name }}</td>
                                 <td>{{ lead.customer_mobile_number }}</td>
                                 <td><span class="badge bg-secondary">{{ lead.source or 'N/A' }}</span></td>
+                                <td>{{ lead.subsource }}</td>
                                 <td>{{ lead.cre_name }}</td>
                                 <td>
                                     {% if lead.lead_category == 'Hot' %}
@@ -290,8 +292,7 @@
                             <tr>
                                 <th>Action</th>
                                 <th>Lead Status</th>
-                                <th>Customer Name</th>
-                                <th>Mobile</th>
+                                <th>Subsource</th>
                                 <th>Category</th>
                                 <th>Model Interested</th>
                                 <th>Follow-up Date</th>
@@ -301,7 +302,7 @@
                         </thead>
                         <tbody>
                             {% for lead in todays_followups %}
-                            <tr data-search="{{ (lead.lead_uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or ''))|lower }}">
+                            <tr data-search="{{ (lead.lead_uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or '') + ' ' + (lead.subsource or '') + ' ' + (lead.lead_category or '') + ' ' + (lead.model_interested or ''))|lower }}">
                                 <td>
                                     {% if lead.activity_uid %}
                                         <a href="{{ url_for('update_event_lead', activity_uid=lead.activity_uid) }}" class="btn btn-sm btn-outline-primary">
@@ -320,8 +321,7 @@
                                         <span class="badge bg-secondary">Not Set</span>
                                     {% endif %}
                                 </td>
-                                <td>{{ lead.customer_name }}</td>
-                                <td>{{ lead.customer_mobile_number }}</td>
+                                <td>{{ lead.subsource }}</td>
                                 <td>
                                     {% if lead.lead_category == 'Hot' %}
                                         <span class="badge bg-danger">{{ lead.lead_category }}</span>
@@ -408,8 +408,7 @@
                             <tr>
                                 <th>Action</th>
                                 <th>Lead Status</th>
-                                <th>Customer Name</th>
-                                <th>Mobile</th>
+                                <th>Subsource</th>
                                 <th>First Call Date</th>
                                 <th>Last Call Date</th>
                                 <th>Category</th>
@@ -424,7 +423,7 @@
                             <tr class="attended-lead-row"
                                 data-first-call="{{ lead.first_call_date or '' }}"
                                 data-last-call="{{ lead.third_call_date or lead.second_call_date or lead.first_call_date or '' }}"
-                                data-search="{{ (lead.lead_uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or ''))|lower }}">
+                                data-search="{{ (lead.lead_uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or '') + ' ' + (lead.subsource or '') + ' ' + (lead.lead_category or '') + ' ' + (lead.model_interested or ''))|lower }}">
                                 <td>
                                     {% if lead.activity_uid %}
                                         <a href="{{ url_for('update_event_lead', activity_uid=lead.activity_uid) }}" class="btn btn-sm btn-outline-primary">
@@ -443,8 +442,7 @@
                                         <span class="badge bg-secondary">Not Set</span>
                                     {% endif %}
                                 </td>
-                                <td>{{ lead.customer_name }}</td>
-                                <td>{{ lead.customer_mobile_number }}</td>
+                                <td>{{ lead.subsource }}</td>
                                 <td>{{ lead.first_call_date or 'N/A' }}</td>
                                 <td>{{ lead.third_call_date or lead.second_call_date or lead.first_call_date or 'N/A' }}</td>
                                 <td>
@@ -612,6 +610,7 @@
                                 <th>Customer Name</th>
                                 <th>Mobile</th>
                                 <th>Source</th>
+                                <th>Subsource</th>
                                 <th>Category</th>
                                 <th>Model Interested</th>
                                 <th>Created Date</th>
@@ -623,7 +622,7 @@
                         <tbody>
                             {% for lead in walkin_leads %}
                             <tr class="walkin-lead-row" data-created="{{ lead.created_at[:10] if lead.created_at else '' }}"
-                                data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.lead_source or ''))|lower }}">
+                                data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.lead_source or '') + ' ' + (lead.subsource or '') + ' ' + (lead.lead_category or '') + ' ' + (lead.model_interested or ''))|lower }}">
                                 <td>
                                     <a href="{{ url_for('update_ps_lead', uid=lead.uid) }}" class="btn btn-sm btn-outline-primary">
                                         <i class="fas fa-edit"></i> Update
@@ -642,6 +641,7 @@
                                 <td>{{ lead.customer_name }}</td>
                                 <td>{{ lead.customer_mobile_number }}</td>
                                 <td><span class="badge bg-secondary">{{ lead.lead_source or 'Walk-in' }}</span></td>
+                                <td>{{ lead.subsource }}</td>
                                 <td>
                                     {% if lead.lead_category == 'Hot' %}
                                         <span class="badge bg-danger">{{ lead.lead_category }}</span>
