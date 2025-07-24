@@ -390,7 +390,13 @@ def safe_get_data(table_name, filters=None, select_fields='*', limit=10000):
             query = query.limit(limit)
 
         result = query.execute()
-        return result.data or []
+        data = result.data or []
+        # Map sub_source to subsource for lead_master
+        if table_name == 'lead_master':
+            for row in data:
+                if 'sub_source' in row:
+                    row['subsource'] = row['sub_source']
+        return data
     except Exception as e:
         print(f"Error fetching data from {table_name}: {e}")
         return []
@@ -1971,6 +1977,13 @@ def cre_dashboard():
 
         # Called Fresh Leads: Non-contact status on FIRST update only
         if status in non_contact_statuses and not has_first_call:
+            # Count call attempt statuses for this lead
+            call_history = supabase.table('cre_call_attempt_history').select('status').eq('uid', lead.get('uid')).execute().data or []
+            status_counts = Counter((c.get('status', '').strip() for c in call_history))
+            lead['rnr_count'] = status_counts.get('RNR', 0)
+            lead['busy_count'] = status_counts.get('Busy on another Call', 0)
+            lead['callback_count'] = status_counts.get('Call me Back', 0)
+            lead['not_connected_count'] = status_counts.get('Call not Connected', 0)
             called_leads.append(lead)
             continue
 
@@ -9636,7 +9649,7 @@ def update_walkin_lead(uid):
 if __name__ == '__main__':
     # socketio.run(app, debug=True)
     print(" Starting Ather CRM System...")
-    print("📱 Server will be available at: http://127.0.0.1:5000")
-    print("🌐 You can also try: http://localhost:5000")
+    print("📱 Server will be available at: http://127.0.0.1:8080")
+    print("🌐 You can also try: http://localhost:8080")
     # socketio.run(app, host='127.0.0.1', port=5000, debug=True)
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True, use_reloader=False)
+    socketio.run(app, host='0.0.0.0', port=8080, debug=True, use_reloader=False)

@@ -270,13 +270,14 @@
                                     <tr>
                                         <th>Action</th>
                                         <th>Lead Status</th>
+                                        <th>Call History</th>
                                         <th>Customer Name</th>
                                         <th>Mobile</th>
                                         <th>Source</th>
+                                        <th>Subsource</th>
                                         <th>Campaign</th>
                                         <th>Date</th>
                                         <th>UID</th>
-                                        <th>Call History</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -286,17 +287,18 @@
                                             <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-primary">Update</a>
                                         </td>
                                         <td>{{ lead.lead_status }}</td>
-                                        <td>{{ lead.customer_name }}</td>
-                                        <td>{{ lead.customer_mobile_number }}</td>
-                                        <td>{{ lead.source }}</td>
-                                        <td>{{ lead.lead_category }}</td>
-                                        <td>{{ lead.date }}</td>
-                                        <td>{{ lead.uid }}</td>
                                         <td>
                                             <button class="btn btn-sm btn-outline-info view-call-history-btn" data-uid="{{ lead.uid }}" title="View Call History">
                                                 <i class="fas fa-history"></i> View
                                             </button>
                                         </td>
+                                        <td>{{ lead.customer_name }}</td>
+                                        <td>{{ lead.customer_mobile_number }}</td>
+                                        <td>{{ lead.source }}</td>
+                                        <td>{{ lead.subsource }}</td>
+                                        <td>{{ lead.lead_category }}</td>
+                                        <td>{{ lead.date }}</td>
+                                        <td>{{ lead.uid }}</td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -315,13 +317,14 @@
                                     <tr>
                                         <th>Action</th>
                                         <th>Lead Status</th>
+                                        <th>Call History</th>
                                         <th>Customer Name</th>
                                         <th>Mobile</th>
                                         <th>Source</th>
+                                        <th>Subsource</th>
                                         <th>Campaign</th>
                                         <th>Date</th>
                                         <th>UID</th>
-                                        <th>Call History</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -330,18 +333,31 @@
                                         <td>
                                             <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-primary">Update</a>
                                         </td>
-                                        <td>{{ lead.lead_status }}</td>
-                                        <td>{{ lead.customer_name }}</td>
-                                        <td>{{ lead.customer_mobile_number }}</td>
-                                        <td>{{ lead.source }}</td>
-                                        <td>{{ lead.lead_category }}</td>
-                                        <td>{{ lead.date }}</td>
-                                        <td>{{ lead.uid }}</td>
+                                        <td>
+                                            {% if lead.lead_status == 'RNR' %}
+                                                RNR: {{ lead.rnr_count }}
+                                            {% elif lead.lead_status == 'Busy on another Call' %}
+                                                Busy on another Call: {{ lead.busy_count }}
+                                            {% elif lead.lead_status == 'Call me Back' %}
+                                                Call me Back: {{ lead.callback_count }}
+                                            {% elif lead.lead_status == 'Call not Connected' %}
+                                                Call not Connected: {{ lead.not_connected_count }}
+                                            {% else %}
+                                                {{ lead.lead_status }}
+                                            {% endif %}
+                                        </td>
                                         <td>
                                             <button class="btn btn-sm btn-outline-info view-call-history-btn" data-uid="{{ lead.uid }}" title="View Call History">
                                                 <i class="fas fa-history"></i> View
                                             </button>
                                         </td>
+                                        <td>{{ lead.customer_name }}</td>
+                                        <td>{{ lead.customer_mobile_number }}</td>
+                                        <td>{{ lead.source }}</td>
+                                        <td>{{ lead.subsource }}</td>
+                                        <td>{{ lead.lead_category }}</td>
+                                        <td>{{ lead.date }}</td>
+                                        <td>{{ lead.uid }}</td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -379,6 +395,7 @@
                                 <th>Customer Name</th>
                                 <th>Mobile</th>
                                 <th>Lead Status</th>
+                                <th>Subsource</th>
                                 <th>Branch</th>
                                 <th>Activity Name</th>
                             </tr>
@@ -395,7 +412,8 @@
                                         <td>{{ lead.customer_name }}</td>
                                         <td>{{ lead.customer_phone_number }}</td>
                                         <td>{{ lead.lead_status }}</td>
-                                        <td>{{ lead.location }}</td>
+                                        <td>{{ lead.subsource }}</td>
+                                        <td>{{ lead.branch }}</td>
                                         <td>{{ lead.activity_name }}</td>
                                     </tr>
                                 {% else %}
@@ -408,6 +426,7 @@
                                         <td>{{ lead.customer_name }}</td>
                                         <td>{{ lead.customer_mobile_number }}</td>
                                         <td>{{ lead.lead_status }}</td>
+                                        <td>{{ lead.subsource }}</td>
                                         <td>{{ lead.branch }}</td>
                                         <td></td>
                                     </tr>
@@ -484,6 +503,7 @@
                                 <th>Mobile</th>
                                 <th>First Call Date</th>
                                 <th>Last Call Date</th>
+                                <th>Subsource</th>
                                 <th>Category</th>
                                 <th>Date</th>
                                 <th>UID</th>
@@ -512,6 +532,7 @@
                                 <td>{{ lead.customer_mobile_number }}</td>
                                 <td>{{ lead.first_call_date or 'N/A' }}</td>
                                 <td>{{ lead.seventh_call_date or lead.sixth_call_date or lead.fifth_call_date or lead.fourth_call_date or lead.third_call_date or lead.second_call_date or lead.first_call_date or 'N/A' }}</td>
+                                <td>{{ lead.subsource }}</td>
                                 <td>
                                     {% if lead.lead_category == 'Hot' %}
                                         <span class="badge bg-danger">{{ lead.lead_category }}</span>
