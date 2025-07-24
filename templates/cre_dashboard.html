@@ -270,6 +270,7 @@
                                     <tr>
                                         <th>Action</th>
                                         <th>Lead Status</th>
+                                        <th>Call History</th>
                                         <th>Customer Name</th>
                                         <th>Mobile</th>
                                         <th>Source</th>
@@ -277,7 +278,6 @@
                                         <th>Campaign</th>
                                         <th>Date</th>
                                         <th>UID</th>
-                                        <th>Call History</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -287,6 +287,11 @@
                                             <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-primary">Update</a>
                                         </td>
                                         <td>{{ lead.lead_status }}</td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-info view-call-history-btn" data-uid="{{ lead.uid }}" title="View Call History">
+                                                <i class="fas fa-history"></i> View
+                                            </button>
+                                        </td>
                                         <td>{{ lead.customer_name }}</td>
                                         <td>{{ lead.customer_mobile_number }}</td>
                                         <td>{{ lead.source }}</td>
@@ -294,11 +299,6 @@
                                         <td>{{ lead.lead_category }}</td>
                                         <td>{{ lead.date }}</td>
                                         <td>{{ lead.uid }}</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-outline-info view-call-history-btn" data-uid="{{ lead.uid }}" title="View Call History">
-                                                <i class="fas fa-history"></i> View
-                                            </button>
-                                        </td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -317,6 +317,7 @@
                                     <tr>
                                         <th>Action</th>
                                         <th>Lead Status</th>
+                                        <th>Call History</th>
                                         <th>Customer Name</th>
                                         <th>Mobile</th>
                                         <th>Source</th>
@@ -324,7 +325,6 @@
                                         <th>Campaign</th>
                                         <th>Date</th>
                                         <th>UID</th>
-                                        <th>Call History</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -334,6 +334,11 @@
                                             <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-primary">Update</a>
                                         </td>
                                         <td>{{ lead.lead_status }}</td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-info view-call-history-btn" data-uid="{{ lead.uid }}" title="View Call History">
+                                                <i class="fas fa-history"></i> View
+                                            </button>
+                                        </td>
                                         <td>{{ lead.customer_name }}</td>
                                         <td>{{ lead.customer_mobile_number }}</td>
                                         <td>{{ lead.source }}</td>
@@ -341,11 +346,6 @@
                                         <td>{{ lead.lead_category }}</td>
                                         <td>{{ lead.date }}</td>
                                         <td>{{ lead.uid }}</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-outline-info view-call-history-btn" data-uid="{{ lead.uid }}" title="View Call History">
-                                                <i class="fas fa-history"></i> View
-                                            </button>
-                                        </td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
