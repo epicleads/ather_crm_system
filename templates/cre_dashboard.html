@@ -333,7 +333,19 @@
                                         <td>
                                             <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-primary">Update</a>
                                         </td>
-                                        <td>{{ lead.lead_status }}</td>
+                                        <td>
+                                            {% if lead.lead_status == 'RNR' %}
+                                                RNR: {{ lead.rnr_count }}
+                                            {% elif lead.lead_status == 'Busy on another Call' %}
+                                                Busy on another Call: {{ lead.busy_count }}
+                                            {% elif lead.lead_status == 'Call me Back' %}
+                                                Call me Back: {{ lead.callback_count }}
+                                            {% elif lead.lead_status == 'Call not Connected' %}
+                                                Call not Connected: {{ lead.not_connected_count }}
+                                            {% else %}
+                                                {{ lead.lead_status }}
+                                            {% endif %}
+                                        </td>
                                         <td>
                                             <button class="btn btn-sm btn-outline-info view-call-history-btn" data-uid="{{ lead.uid }}" title="View Call History">
                                                 <i class="fas fa-history"></i> View

@@ -1977,6 +1977,13 @@ def cre_dashboard():
 
         # Called Fresh Leads: Non-contact status on FIRST update only
         if status in non_contact_statuses and not has_first_call:
+            # Count call attempt statuses for this lead
+            call_history = supabase.table('cre_call_attempt_history').select('status').eq('uid', lead.get('uid')).execute().data or []
+            status_counts = Counter((c.get('status', '').strip() for c in call_history))
+            lead['rnr_count'] = status_counts.get('RNR', 0)
+            lead['busy_count'] = status_counts.get('Busy on another Call', 0)
+            lead['callback_count'] = status_counts.get('Call me Back', 0)
+            lead['not_connected_count'] = status_counts.get('Call not Connected', 0)
             called_leads.append(lead)
             continue
 
