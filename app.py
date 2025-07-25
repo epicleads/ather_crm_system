@@ -2349,9 +2349,10 @@ def ps_dashboard():
             elif ps_final_status == 'Pending' or status == 'Pending':
                 if lead.get('first_call_date'):
                     attended_leads.append(lead_dict)
-                else:
-                    if lead_status not in excluded_statuses:
-                        fresh_leads.append(lead_dict)
+                # Do NOT add walk-in leads to fresh_leads
+                # else:
+                #     if lead_status not in excluded_statuses:
+                #         fresh_leads.append(lead_dict)
 
             # Add to today's followups if applicable
             follow_up = lead.get('walkin_followup_date') or lead.get('follow_up_date')
