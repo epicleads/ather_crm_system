@@ -1906,6 +1906,34 @@ def cre_dashboard():
     start_time = time.time()
     cre_name = session.get('cre_name')
     
+    today = date.today()
+    today_str = today.isoformat()
+
+    # --- AUTO-INCREMENT LOGIC FOR UNATTENDED LEADS (CRE) ---
+    # 1. Regular leads (lead_master)
+    all_leads = safe_get_data('lead_master', {'cre_name': cre_name})
+    for lead in all_leads:
+        follow_up_date = lead.get('follow_up_date')
+        final_status = lead.get('final_status')
+        if follow_up_date and str(follow_up_date) < today_str and final_status not in ['Won', 'Lost']:
+            supabase.table('lead_master').update({'follow_up_date': today_str}).eq('uid', lead.get('uid')).execute()
+
+    # 2. Walk-in leads (walkin_data)
+    walkin_leads = safe_get_data('walkin_data', {'cre_name': cre_name})
+    for lead in walkin_leads:
+        cre_follow_up_date = lead.get('cre_follow_up_date')
+        final_status = lead.get('final_status')
+        if cre_follow_up_date and str(cre_follow_up_date) < today_str and final_status not in ['Won', 'Lost']:
+            supabase.table('walkin_data').update({'cre_follow_up_date': today_str}).eq('uid', lead.get('uid')).execute()
+
+    # 3. Event leads (activity_leads)
+    event_event_leads = safe_get_data('activity_leads', {'cre_assigned': cre_name})
+    for lead in event_event_leads:
+        cre_followup_date = lead.get('cre_followup_date')
+        final_status = lead.get('final_status')
+        if cre_followup_date and str(cre_followup_date)[:10] < today_str and final_status not in ['Won', 'Lost']:
+            supabase.table('activity_leads').update({'cre_followup_date': today_str}).eq('activity_uid', lead.get('activity_uid')).execute()
+
     # --- Date Filter Logic ---
     filter_type = request.args.get('filter_type', 'all')
     start_date_str = request.args.get('start_date')
@@ -1991,6 +2019,7 @@ def cre_dashboard():
     todays_followups = [
         lead for lead in all_leads
         if lead.get('follow_up_date') and str(lead.get('follow_up_date')).startswith(today_str)
+        and lead.get('final_status') not in ['Won', 'Lost']
     ]
 
     # Add event leads with today's cre_followup_date to the follow-up list
@@ -2089,8 +2118,20 @@ def update_lead(uid):
             follow_up_date = request.form.get('follow_up_date', '')
             call_remark = request.form.get('call_remark', '')
 
-            if lead_status:
+            # Lock follow_up_date and set final_status for certain statuses
+            lock_statuses = ['Booked', 'Retailed']
+            lost_statuses = ['Not Interested', 'Lost to Codealer', 'Lost to Competition']
+            if lead_status in lock_statuses:
                 update_data['lead_status'] = lead_status
+                update_data['follow_up_date'] = follow_up_date or lead_data.get('follow_up_date')
+                update_data['final_status'] = 'Won' if lead_status in ['Booked', 'Retailed'] else lead_data.get('final_status')
+            elif lead_status in lost_statuses:
+                update_data['lead_status'] = lead_status
+                update_data['follow_up_date'] = follow_up_date or lead_data.get('follow_up_date')
+                update_data['final_status'] = 'Lost'
+            else:
+                if lead_status:
+                    update_data['lead_status'] = lead_status
 
             if request.form.get('customer_name'):
                 update_data['customer_name'] = request.form['customer_name']
@@ -2242,6 +2283,33 @@ def ps_dashboard():
     ps_name = session.get('ps_name')
     today = datetime.now().date()
     today_str = today.isoformat()
+
+    # --- AUTO-INCREMENT LOGIC FOR UNATTENDED LEADS ---
+    # 1. ps_followup_master
+    assigned_leads = safe_get_data('ps_followup_master', {'ps_name': ps_name})
+    for lead in assigned_leads:
+        follow_up_date = lead.get('follow_up_date')
+        final_status = lead.get('final_status')
+        if follow_up_date and str(follow_up_date) < today_str and final_status not in ['Won', 'Lost']:
+            supabase.table('ps_followup_master').update({'follow_up_date': today_str}).eq('lead_uid', lead.get('lead_uid')).execute()
+
+    # 2. walkin_data
+    walkin_leads = safe_get_data('walkin_data', {'ps_name': ps_name})
+    for lead in walkin_leads:
+        follow_up_date = lead.get('walkin_followup_date')
+        status = lead.get('status')
+        ps_final_status = lead.get('ps_final_status')
+        if follow_up_date and str(follow_up_date) < today_str and ps_final_status not in ['Won', 'Lost'] and status not in ['Converted', 'Lost']:
+            supabase.table('walkin_data').update({'walkin_followup_date': today_str}).eq('uid', lead.get('uid')).execute()
+
+    # 3. activity_leads
+    event_leads = safe_get_data('activity_leads', {'ps_name': ps_name})
+    for lead in event_leads:
+        ps_followup_date_ts = lead.get('ps_followup_date_ts')
+        final_status = lead.get('final_status')
+        if ps_followup_date_ts and str(ps_followup_date_ts)[:10] < today_str and final_status not in ['Won', 'Lost']:
+            if not lead.get('ps_first_call_date'):
+                supabase.table('activity_leads').update({'ps_followup_date_ts': today_str}).eq('activity_uid', lead.get('activity_uid')).execute()
 
     # Get filter parameters from query string
     filter_type = request.args.get('filter_type', 'all')
@@ -3050,7 +3118,7 @@ def generate_quotation_pdf(quotation_data):
         pricing_data = [
             ['Description', 'Amount (₹)'],
             ['Ex Showroom Price (incl. GST + Charger)', f'{model_price:,}'],
-            ['PM E-Drive Subsidy', f'-{subsidy:,}'],
+            ['PM-E Drive Subsidy', f'-{subsidy:,}'],
             ['Pro Pack', f'{pro_pack_price:,}'],
             ['RTO Registration', f'{rto:,}'],
             ['Insurance (Add-on)', f'{insurance:,}'],
