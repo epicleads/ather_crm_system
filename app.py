@@ -2323,6 +2323,7 @@ def ps_dashboard():
     filter_type = request.args.get('filter_type', 'all')
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
+    status = request.args.get('status', 'lost')  # <-- Add this line
 
     try:
         t0 = time.time()
@@ -2532,7 +2533,7 @@ def ps_dashboard():
         print(f"[PERF] ps_dashboard: final processing took {time.time() - t5:.3f} seconds")
 
         t6 = time.time()
-        # Render template with all lead categories
+        # Render template with all lead categories and the new status variable
         result = render_template('ps_dashboard.html',
                                assigned_leads=assigned_leads,
                                fresh_leads=fresh_leads,
@@ -2545,7 +2546,8 @@ def ps_dashboard():
                                event_leads=event_leads,
                                filter_type=filter_type,
                                start_date=start_date,
-                               end_date=end_date)
+                               end_date=end_date,
+                               status=status)  # <-- Add status here
 
         print(f"[PERF] ps_dashboard: render_template took {time.time() - t6:.3f} seconds")
         print(f"[DEBUG] FINAL COUNTS - Fresh: {len(fresh_leads)}, Pending: {len(pending_leads)}, Attended: {len(attended_leads)}, Won: {len(won_leads)}, Lost: {len(lost_leads)}")
@@ -2571,7 +2573,8 @@ def ps_dashboard():
                              event_leads=[],
                              filter_type=filter_type,
                              start_date=start_date,
-                             end_date=end_date)
+                             end_date=end_date,
+                             status=status)
 
 
 
@@ -6561,6 +6564,69 @@ def delete_duplicate_lead():
         return jsonify({'success': True, 'message': 'Duplicate lead deleted successfully'})
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error deleting duplicate lead: {str(e)}'})
+
+@app.route('/ps_dashboard_leads')
+@require_ps
+def ps_dashboard_leads():
+    """AJAX endpoint to get leads table HTML for Won/Lost toggle"""
+    status = request.args.get('status', 'lost')
+    ps_name = session.get('ps_name')
+    
+    try:
+        # Get all assigned leads for this PS (reuse logic from ps_dashboard)
+        assigned_leads = safe_get_data('ps_followup_master', {'ps_name': ps_name})
+        walkin_leads = safe_get_data('walkin_data', {'ps_name': ps_name})
+        event_leads = safe_get_data('activity_leads', {'ps_name': ps_name})
+        
+        # Initialize lists
+        won_leads = []
+        lost_leads = []
+        
+        # Process regular assigned leads
+        for lead in assigned_leads:
+            lead_dict = dict(lead)
+            lead_dict['lead_uid'] = lead.get('lead_uid')
+            final_status = lead.get('final_status')
+            
+            if final_status == 'Won':
+                won_leads.append(lead_dict)
+            elif final_status == 'Lost':
+                lost_leads.append(lead_dict)
+        
+        # Process walk-in leads
+        for lead in walkin_leads:
+            lead_dict = dict(lead)
+            lead_dict['lead_uid'] = lead.get('uid')
+            ps_final_status = lead.get('ps_final_status')
+            status_walkin = lead.get('status')
+            
+            if ps_final_status == 'Won' or status_walkin == 'Converted':
+                won_leads.append(lead_dict)
+            elif ps_final_status == 'Lost' or status_walkin == 'Lost':
+                lost_leads.append(lead_dict)
+        
+        # Process event leads
+        for lead in event_leads:
+            lead_dict = dict(lead)
+            lead_dict['lead_uid'] = lead.get('activity_uid') or lead.get('uid')
+            lead_dict['customer_mobile_number'] = lead.get('customer_phone_number')
+            final_status = lead.get('final_status')
+            
+            if final_status == 'Won':
+                won_leads.append(lead_dict)
+            elif final_status == 'Lost':
+                lost_leads.append(lead_dict)
+        
+        # Select the appropriate list based on status
+        leads_list = won_leads if status == 'won' else lost_leads
+        
+        # Render only the table HTML
+        return render_template('ps_dashboard_leads_table.html', 
+                             leads_list=leads_list, 
+                             status=status)
+    
+    except Exception as e:
+        return f'<div class="alert alert-danger">Error loading leads: {str(e)}</div>'
 
 if __name__ == '__main__':
     # socketio.run(app, debug=True)
