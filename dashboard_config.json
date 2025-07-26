@@ -1,0 +1,65 @@
+[
+  {
+    "id": "4596d1df-4675-4ede-a8f6-3e865b938810",
+    "type": "sales",
+    "name": "dash1",
+    "url": "https://analytics.zoho.in/open-view/429819000001207408/21dcd9037acdf131eb1c2a1cad24f793",
+    "created_at": "2025-07-26T23:59:23.010644"
+  },
+  {
+    "id": "5654b47e-a137-4ae3-8181-d464edd605d5",
+    "type": "analytics",
+    "name": "dash2",
+    "url": "https://analytics.zoho.in/open-view/429819000001207408/21dcd9037acdf131eb1c2a1cad24f793",
+    "created_at": "2025-07-26T23:59:50.496587"
+  },
+  {
+    "id": "87d2a88a-7c29-402c-8945-8b5c79799c87",
+    "type": "admin",
+    "name": "DASH1",
+    "url": "https://analytics.zoho.in/open-view/429819000001207071/ab301c281e6e3b2c24162171d7a21991",
+    "created_at": "2025-07-27T00:37:22.009664"
+  },
+  {
+    "id": "7e713633-a006-45ae-92aa-3ac3650a0ff7",
+    "type": "admin",
+    "name": "DASH 2",
+    "url": "https://analytics.zoho.in/open-view/429819000001207071/ab301c281e6e3b2c24162171d7a21991",
+    "created_at": "2025-07-27T00:37:35.485865"
+  },
+  {
+    "id": "c34ad260-8c9f-4bc8-8725-14ce9b43be56",
+    "type": "cre",
+    "name": "DASH1",
+    "url": "https://analytics.zoho.in/open-view/429819000001207071/ab301c281e6e3b2c24162171d7a21991",
+    "created_at": "2025-07-27T00:37:46.974743"
+  },
+  {
+    "id": "c122bfe4-741b-49f8-bb45-f6beeec421e4",
+    "type": "cre",
+    "name": "DASH 2",
+    "url": "https://analytics.zoho.in/open-view/429819000001207071/ab301c281e6e3b2c24162171d7a21991",
+    "created_at": "2025-07-27T00:37:55.101871"
+  },
+  {
+    "id": "c9dbb8db-38b9-4112-abc9-a973e4d3b5d9",
+    "type": "ps",
+    "name": "DASH1",
+    "url": "https://analytics.zoho.in/open-view/429819000001207071/ab301c281e6e3b2c24162171d7a21991",
+    "created_at": "2025-07-27T00:38:03.307350"
+  },
+  {
+    "id": "8488801e-1f9a-4597-8575-43b754cc3702",
+    "type": "ps",
+    "name": "DASH 2",
+    "url": "https://analytics.zoho.in/open-view/429819000001207071/ab301c281e6e3b2c24162171d7a21991",
+    "created_at": "2025-07-27T00:38:11.435510"
+  },
+  {
+    "id": "47c085e1-772f-4fd4-b806-51675b0af1a4",
+    "type": "branch-head",
+    "name": "DASH1",
+    "url": "https://analytics.zoho.in/open-view/429819000001207071/ab301c281e6e3b2c24162171d7a21991",
+    "created_at": "2025-07-27T01:32:51.118064"
+  }
+]

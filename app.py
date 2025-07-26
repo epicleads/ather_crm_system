@@ -614,6 +614,8 @@ def unified_login() -> Response:
         session['branch_head_id'] = bh['id']
         session['branch_head_name'] = bh['Name']
         session['branch_head_branch'] = bh['Branch']
+        session['user_type'] = 'branch_head'  # Add this line to set user_type
+        session['username'] = username  # Add username for consistency
         flash('Welcome! Logged in as Branch Head', 'success')
         return redirect('/branch_head_dashboard')
 
@@ -6528,6 +6530,163 @@ def toggle_branch_head_active(id):
 #     branch = session.get('branch_head_branch')
 #     ps_users = supabase.table('ps_users').select('*').eq('branch', branch).execute().data or []
 #     return render_template('branch_head_dashboard.html', ps_users=ps_users)
+
+@app.route('/manage_dashboards')
+@require_admin
+def manage_dashboards():
+    """Dashboard management page"""
+    return render_template('manage_dashboards.html')
+
+@app.route('/api/dashboards', methods=['GET'])
+def get_dashboards():
+    # Custom authentication for branch head users
+    if 'session_id' not in session:
+        # Check if it's a branch head user
+        if 'branch_head_id' in session:
+            # Branch head user is authenticated
+            pass
+        else:
+            flash('Please log in to access this page', 'error')
+            return redirect(url_for('index'))
+    else:
+        # Regular user authentication
+        auth_manager = current_app.config['AUTH_MANAGER']
+        if not auth_manager.validate_session(session['session_id']):
+            session.clear()
+            flash('Your session has expired. Please log in again', 'error')
+            return redirect(url_for('index'))
+    """Get all dashboards grouped by type"""
+    try:
+        # Debug: Print session info
+        print(f"Session data: {session}")
+        print(f"User role: {session.get('role', 'unknown')}")
+        print(f"Username: {session.get('username', 'unknown')}")
+        print(f"User type: {session.get('user_type', 'unknown')}")
+        print(f"Branch head ID: {session.get('branch_head_id', 'none')}")
+        
+        # Read dashboard config file
+        with open('dashboard_config.json', 'r') as f:
+            dashboards = json.load(f)
+        
+        # Group dashboards by type
+        grouped_dashboards = {}
+        for dashboard in dashboards:
+            dashboard_type = dashboard.get('type', 'admin')
+            if dashboard_type not in grouped_dashboards:
+                grouped_dashboards[dashboard_type] = []
+            grouped_dashboards[dashboard_type].append(dashboard)
+        
+        # Filter dashboards based on user role
+        user_type = session.get('user_type', 'admin')
+        print(f"User type from session: {user_type}") # Debug log
+        print(f"All grouped dashboards: {grouped_dashboards}") # Debug log
+        
+        if user_type == 'cre':
+            # CRE users can only see CRE dashboards
+            filtered_dashboards = {'cre': grouped_dashboards.get('cre', [])}
+        elif user_type == 'ps':
+            # PS users can only see PS dashboards
+            filtered_dashboards = {'ps': grouped_dashboards.get('ps', [])}
+        elif user_type == 'branch_head':
+            # Branch Head users can only see Branch Head dashboards
+            print(f"Branch head user detected, filtering dashboards"); # Debug log
+            filtered_dashboards = {'branch-head': grouped_dashboards.get('branch-head', [])}
+            print(f"Filtered dashboards for branch head: {filtered_dashboards}"); # Debug log
+        else:
+            # Admin users can see all dashboards
+            filtered_dashboards = grouped_dashboards
+            print(f"Admin user - showing all dashboards: {filtered_dashboards}"); # Debug log
+        
+        return jsonify({
+            'success': True,
+            'dashboards': filtered_dashboards
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        })
+
+@app.route('/api/dashboards', methods=['POST'])
+@require_admin
+def add_dashboard():
+    """Add a new dashboard"""
+    try:
+        data = request.get_json()
+        dashboard_type = data.get('type')
+        name = data.get('name')
+        url = data.get('url')
+        
+        if not all([dashboard_type, name, url]):
+            return jsonify({
+                'success': False,
+                'message': 'Missing required fields'
+            })
+        
+        # Read existing dashboards
+        try:
+            with open('dashboard_config.json', 'r') as f:
+                dashboards = json.load(f)
+        except FileNotFoundError:
+            dashboards = []
+        
+        # Check if max dashboards reached for this type
+        type_dashboards = [d for d in dashboards if d.get('type') == dashboard_type]
+        if len(type_dashboards) >= 5:
+            return jsonify({
+                'success': False,
+                'message': 'Maximum of 5 dashboards allowed per type'
+            })
+        
+        # Create new dashboard
+        new_dashboard = {
+            'id': str(uuid.uuid4()),
+            'type': dashboard_type,
+            'name': name,
+            'url': url,
+            'created_at': datetime.now().isoformat()
+        }
+        
+        dashboards.append(new_dashboard)
+        
+        # Write back to file
+        with open('dashboard_config.json', 'w') as f:
+            json.dump(dashboards, f, indent=2)
+        
+        return jsonify({
+            'success': True,
+            'dashboard': new_dashboard
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        })
+
+@app.route('/api/dashboards/<dashboard_id>', methods=['DELETE'])
+@require_admin
+def delete_dashboard(dashboard_id):
+    """Delete a dashboard"""
+    try:
+        # Read existing dashboards
+        with open('dashboard_config.json', 'r') as f:
+            dashboards = json.load(f)
+        
+        # Find and remove dashboard
+        dashboards = [d for d in dashboards if d.get('id') != dashboard_id]
+        
+        # Write back to file
+        with open('dashboard_config.json', 'w') as f:
+            json.dump(dashboards, f, indent=2)
+        
+        return jsonify({
+            'success': True
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        })
 
 @app.route('/api/hot_duplicate_leads')
 @require_admin
