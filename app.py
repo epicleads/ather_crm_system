@@ -535,16 +535,24 @@ def filter_leads_by_date(leads, filter_type, date_field='created_at'):
 
     today = datetime.now().date()
 
-    if filter_type == 'mtd':  # Month to Date
+    if filter_type == 'today':
+        start_date = today
+        end_date = today
+    elif filter_type == 'mtd':  # Month to Date
         start_date = today.replace(day=1)
+        end_date = today
     elif filter_type == 'week':
         start_date = today - timedelta(days=today.weekday())  # Start of current week (Monday)
+        end_date = today
     elif filter_type == 'month':
         start_date = today - timedelta(days=30)
+        end_date = today
     elif filter_type == 'quarter':
         start_date = today - timedelta(days=90)
+        end_date = today
     elif filter_type == 'year':
         start_date = today - timedelta(days=365)
+        end_date = today
     else:
         return leads
 
@@ -559,7 +567,7 @@ def filter_leads_by_date(leads, filter_type, date_field='created_at'):
                 else:  # Date only format
                     lead_date = datetime.strptime(lead_date_str, '%Y-%m-%d').date()
 
-                if lead_date >= start_date:
+                if start_date <= lead_date <= end_date:
                     filtered_leads.append(lead)
             except (ValueError, TypeError):
                 # If date parsing fails, include the lead
@@ -1492,7 +1500,7 @@ def manage_leads():
             # Date filtering
             if date_filter == 'today':
                 today_str = datetime.now().strftime('%Y-%m-%d')
-                leads = [lead for lead in leads if (lead.get('cre_assigned_at') or '').startswith(today_str)]
+                leads = [lead for lead in leads if lead.get('cre_assigned_at') and str(lead.get('cre_assigned_at')).startswith(today_str)]
             elif date_filter == 'range' and start_date and end_date:
                 def in_range(ld):
                     dt = ld.get('cre_assigned_at')
@@ -2018,8 +2026,8 @@ def cre_dashboard():
     today_str = today.isoformat()
     todays_followups = [
         lead for lead in all_leads
-        if lead.get('follow_up_date') and str(lead.get('follow_up_date')).startswith(today_str)
-        and lead.get('final_status') not in ['Won', 'Lost']
+        if (lead.get('follow_up_date') and str(lead.get('follow_up_date')).startswith(today_str)
+        and lead.get('final_status') not in ['Won', 'Lost'])
     ]
 
     # Add event leads with today's cre_followup_date to the follow-up list
@@ -2373,8 +2381,9 @@ def ps_dashboard():
                         print(f"[DEBUG] Added to fresh_leads: {lead.get('lead_uid')}")
 
             # Add to today's followups if applicable (exclude Won/Lost and specific statuses)
-            if (lead.get('follow_up_date') and
-                str(lead.get('follow_up_date')).startswith(today_str) and
+            follow_up_date = lead.get('follow_up_date')
+            if (follow_up_date and
+                str(follow_up_date).startswith(today_str) and
                 final_status not in ['Won', 'Lost'] and
                 (not lead_status or lead_status not in excluded_statuses)):
                 todays_followups_regular.append(lead_dict)
@@ -2495,7 +2504,7 @@ def ps_dashboard():
             if filter_type == 'all':
                 return leads_list
             elif filter_type == 'today':
-                return [lead for lead in leads_list if lead.get('lost_timestamp', '').startswith(today_str)]
+                return [lead for lead in leads_list if lead.get('lost_timestamp') and str(lead.get('lost_timestamp')).startswith(today_str)]
             elif filter_type == 'range' and start_date and end_date:
                 filtered = []
                 for lead in leads_list:
