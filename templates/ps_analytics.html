@@ -85,6 +85,17 @@
         </div>
     </div>
 </div>
+
+<!-- Zoho Dashboards Section -->
+<div class="mb-4">
+    <h5 style="color: var(--airbnb-red); font-weight: 600; margin-bottom: 1rem;">
+        <i class="fas fa-tachometer-alt" style="color: var(--airbnb-red);"></i> Zoho Dashboards
+    </h5>
+    <div id="psDashboardsContainer">
+        <!-- PS dashboards will be loaded here -->
+    </div>
+</div>
+
 <style>
 .min-width-kpi { min-width: 260px; }
 .kpi-cards-row::-webkit-scrollbar { height: 8px; }
@@ -92,5 +103,67 @@
 </style>
 
 <!-- Add analytics content here -->
+
+<script>
+// Load PS dashboards
+function loadPsDashboards() {
+    console.log('Loading PS dashboards...'); // Debug log
+    fetch('/api/dashboards')
+        .then(response => {
+            console.log('PS API Response status:', response.status); // Debug log
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('PS Dashboards data:', data); // Debug log
+            if (data.success && data.dashboards.ps) {
+                const container = document.getElementById('psDashboardsContainer');
+                let html = '';
+                
+                console.log('PS dashboards found:', data.dashboards.ps.length); // Debug log
+                
+                data.dashboards.ps.forEach(dashboard => {
+                    html += `
+                        <div class="card mb-3">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0">${dashboard.name}</h6>
+                                <small class="text-muted">Added: ${new Date(dashboard.created_at).toLocaleDateString()}</small>
+                            </div>
+                            <div class="card-body p-0">
+                                                                    <iframe src="${dashboard.url}" 
+                                            style="width: 100%; height: 800px; border: none;" 
+                                            frameborder="0">
+                                </iframe>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                if (html === '') {
+                    html = '<div class="text-center text-muted py-4"><i class="fas fa-chart-bar fa-3x mb-3"></i><p>No PS dashboards configured yet.</p></div>';
+                }
+                
+                container.innerHTML = html;
+            } else {
+                console.log('No PS dashboards found in response'); // Debug log
+                const container = document.getElementById('psDashboardsContainer');
+                container.innerHTML = '<div class="text-center text-muted py-4"><i class="fas fa-chart-bar fa-3x mb-3"></i><p>No PS dashboards configured yet.</p><small class="text-muted">Debug: Response received but no PS dashboards found</small></div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading PS dashboards:', error);
+            const container = document.getElementById('psDashboardsContainer');
+            container.innerHTML = '<div class="text-center text-danger py-4"><i class="fas fa-exclamation-triangle fa-3x mb-3"></i><p>Error loading dashboards. Please try again.</p></div>';
+        });
+}
+
+// Load dashboards on page load
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, calling loadPsDashboards...'); // Debug log
+    loadPsDashboards();
+});
+</script>
 
 {% endblock %} 

@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Dashboards - Ather CRM</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --airbnb-red: #FF385C;
+            --airbnb-red-dark: #E31C5F;
+            --airbnb-gray-100: #F7F7F7;
+            --airbnb-gray-200: #EBEBEB;
+            --airbnb-gray-300: #DDDDDD;
+            --airbnb-gray-500: #717171;
+            --airbnb-gray-700: #222222;
+            --airbnb-white: #FFFFFF;
+            --airbnb-green: #00A699;
+            --airbnb-blue: #007A87;
+            --airbnb-yellow: #FFB400;
+            --airbnb-border-radius: 12px;
+            --airbnb-border-radius-lg: 16px;
+            --airbnb-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.05);
+            --airbnb-shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.08), 0 8px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            font-family: 'Lexend', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, var(--airbnb-gray-100) 0%, var(--airbnb-white) 100%);
+            min-height: 100vh;
+            color: var(--airbnb-gray-700);
+        }
+
+        .navbar {
+            background: var(--airbnb-white) !important;
+            border-bottom: 1px solid var(--airbnb-gray-200);
+            box-shadow: var(--airbnb-shadow);
+        }
+
+        .navbar-brand {
+            font-weight: 700;
+            color: var(--airbnb-red) !important;
+        }
+
+        .dashboard-container {
+            background: var(--airbnb-white);
+            border-radius: var(--airbnb-border-radius-lg);
+            box-shadow: var(--airbnb-shadow);
+            margin: 20px;
+            padding: 30px;
+            border: 1px solid var(--airbnb-gray-200);
+        }
+
+        .nav-tabs {
+            border-bottom: 2px solid var(--airbnb-gray-200);
+        }
+
+        .nav-tabs .nav-link {
+            border: none;
+            color: var(--airbnb-gray-500);
+            font-weight: 500;
+            padding: 15px 25px;
+            border-radius: var(--airbnb-border-radius) var(--airbnb-border-radius) 0 0;
+            transition: all 0.3s ease;
+        }
+
+        .nav-tabs .nav-link:hover {
+            color: var(--airbnb-red);
+            background-color: var(--airbnb-gray-100);
+        }
+
+        .nav-tabs .nav-link.active {
+            color: var(--airbnb-red);
+            background-color: var(--airbnb-white);
+            border-bottom: 3px solid var(--airbnb-red);
+        }
+
+        .dashboard-card {
+            background: var(--airbnb-white);
+            border: 1px solid var(--airbnb-gray-200);
+            border-radius: var(--airbnb-border-radius);
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: var(--airbnb-shadow);
+            transition: all 0.3s ease;
+        }
+
+        .dashboard-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--airbnb-shadow-hover);
+        }
+
+        .dashboard-card .card-header {
+            background: none;
+            border-bottom: 1px solid var(--airbnb-gray-200);
+            padding-bottom: 15px;
+            margin-bottom: 15px;
+        }
+
+        .dashboard-card .card-title {
+            color: var(--airbnb-gray-700);
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .dashboard-card .card-subtitle {
+            color: var(--airbnb-gray-500);
+            font-size: 0.9rem;
+            margin: 5px 0 0 0;
+        }
+
+        .btn-action {
+            padding: 8px 16px;
+            border-radius: var(--airbnb-border-radius);
+            font-weight: 500;
+            text-transform: none;
+            letter-spacing: 0;
+            transition: all 0.3s ease;
+            border: none;
+            font-size: 0.9rem;
+        }
+
+        .btn-primary {
+            background: var(--airbnb-red);
+            color: var(--airbnb-white);
+        }
+
+        .btn-success {
+            background: var(--airbnb-green);
+            color: var(--airbnb-white);
+        }
+
+        .btn-danger {
+            background: #DC3545;
+            color: var(--airbnb-white);
+        }
+
+        .btn-outline-secondary {
+            border: 1px solid var(--airbnb-gray-300);
+            color: var(--airbnb-gray-700);
+            background: var(--airbnb-white);
+        }
+
+        .btn-outline-secondary:hover {
+            background: var(--airbnb-gray-100);
+            border-color: var(--airbnb-gray-300);
+            color: var(--airbnb-gray-700);
+        }
+
+        .form-control {
+            border: 1px solid var(--airbnb-gray-300);
+            border-radius: var(--airbnb-border-radius);
+            padding: 12px 15px;
+            font-size: 0.95rem;
+        }
+
+        .form-control:focus {
+            border-color: var(--airbnb-red);
+            box-shadow: 0 0 0 0.2rem rgba(255, 56, 92, 0.25);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--airbnb-gray-500);
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 20px;
+            color: var(--airbnb-gray-300);
+        }
+
+        .dashboard-preview {
+            background: var(--airbnb-gray-100);
+            border: 1px solid var(--airbnb-gray-200);
+            border-radius: var(--airbnb-border-radius);
+            padding: 15px;
+            margin-top: 15px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: var(--airbnb-gray-600);
+            word-break: break-all;
+        }
+
+        .max-dashboards-warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: var(--airbnb-border-radius);
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-bolt"></i> Ather CRM
+            </a>
+            <div class="d-flex align-items-center">
+                <span class="fw-semibold me-3"><i class="fas fa-user me-2"></i>Welcome, admin</span>
+                <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary me-2">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </a>
+                <a href="{{ url_for('logout') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="dashboard-container">
+        <div class="text-center mb-5">
+            <h1 class="display-4 mb-3">
+                <i class="fas fa-tachometer-alt text-primary"></i> Manage Dashboards
+            </h1>
+            <p class="lead">Configure Zoho dashboard embeddings for different user types</p>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <ul class="nav nav-tabs" id="dashboardTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="admin-tab" data-bs-toggle="tab" data-bs-target="#admin" type="button" role="tab">
+                    <i class="fas fa-user-shield me-2"></i>Admin Dashboard
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="cre-tab" data-bs-toggle="tab" data-bs-target="#cre" type="button" role="tab">
+                    <i class="fas fa-headset me-2"></i>CRE Dashboard
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="ps-tab" data-bs-toggle="tab" data-bs-target="#ps" type="button" role="tab">
+                    <i class="fas fa-user-tie me-2"></i>PS Dashboard
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="branch-head-tab" data-bs-toggle="tab" data-bs-target="#branch-head" type="button" role="tab">
+                    <i class="fas fa-building me-2"></i>Branch Head Dashboard
+                </button>
+            </li>
+        </ul>
+
+        <!-- Tab Content -->
+        <div class="tab-content mt-4" id="dashboardTabContent">
+            <!-- Admin Dashboard Tab -->
+            <div class="tab-pane fade show active" id="admin" role="tabpanel">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h3><i class="fas fa-user-shield text-primary"></i> Admin Dashboards</h3>
+                    <button class="btn btn-primary" onclick="showAddDashboardModal('admin')" id="addAdminBtn">
+                        <i class="fas fa-plus"></i> Add Dashboard
+                    </button>
+                </div>
+                
+                <div id="adminDashboardsList">
+                    <!-- Admin dashboards will be loaded here -->
+                </div>
+            </div>
+
+            <!-- CRE Dashboard Tab -->
+            <div class="tab-pane fade" id="cre" role="tabpanel">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h3><i class="fas fa-headset text-success"></i> CRE Dashboards</h3>
+                    <button class="btn btn-success" onclick="showAddDashboardModal('cre')" id="addCreBtn">
+                        <i class="fas fa-plus"></i> Add Dashboard
+                    </button>
+                </div>
+                
+                <div id="creDashboardsList">
+                    <!-- CRE dashboards will be loaded here -->
+                </div>
+            </div>
+
+            <!-- PS Dashboard Tab -->
+            <div class="tab-pane fade" id="ps" role="tabpanel">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h3><i class="fas fa-user-tie text-info"></i> PS Dashboards</h3>
+                    <button class="btn btn-info" onclick="showAddDashboardModal('ps')" id="addPsBtn">
+                        <i class="fas fa-plus"></i> Add Dashboard
+                    </button>
+                </div>
+                
+                <div id="psDashboardsList">
+                    <!-- PS dashboards will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Branch Head Dashboard Tab -->
+            <div class="tab-pane fade" id="branch-head" role="tabpanel">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h3><i class="fas fa-building text-warning"></i> Branch Head Dashboards</h3>
+                    <button class="btn btn-warning" onclick="showAddDashboardModal('branch-head')" id="addBranchHeadBtn">
+                        <i class="fas fa-plus"></i> Add Dashboard
+                    </button>
+                </div>
+                
+                <div id="branchHeadDashboardsList">
+                    <!-- Branch Head dashboards will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Dashboard Modal -->
+    <div class="modal fade" id="addDashboardModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">Add Dashboard</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addDashboardForm">
+                        <input type="hidden" id="dashboardType" name="type">
+                        <div class="mb-3">
+                            <label for="dashboardName" class="form-label">Dashboard Name</label>
+                            <input type="text" class="form-control" id="dashboardName" name="name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="dashboardUrl" class="form-label">Zoho Dashboard Embedding URL</label>
+                            <textarea class="form-control" id="dashboardUrl" name="url" rows="4" placeholder="Paste the Zoho dashboard embedding URL here..." required></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">URL Preview</label>
+                            <div class="dashboard-preview" id="urlPreview">
+                                <em>Enter a URL to see preview...</em>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveDashboard()">Save Dashboard</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentDashboards = {};
+
+        // Load dashboards on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAllDashboards();
+        });
+
+        // Load all dashboards
+        function loadAllDashboards() {
+            console.log('Loading all dashboards...'); // Debug log
+            fetch('/api/dashboards')
+                .then(response => {
+                    console.log('API Response status:', response.status); // Debug log
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('All dashboards data:', data); // Debug log
+                    if (data.success) {
+                        currentDashboards = data.dashboards;
+                        console.log('Current dashboards:', currentDashboards); // Debug log
+                        renderDashboards('admin');
+                        renderDashboards('cre');
+                        renderDashboards('ps');
+                        renderDashboards('branch-head');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading dashboards:', error);
+                });
+        }
+
+        // Render dashboards for a specific type
+        function renderDashboards(type) {
+            console.log(`Rendering dashboards for type: ${type}`); // Debug log
+            let containerId;
+            if (type === 'branch-head') {
+                containerId = 'branchHeadDashboardsList';
+            } else {
+                containerId = type + 'DashboardsList';
+            }
+            const container = document.getElementById(containerId);
+            console.log(`Container for ${type} (ID: ${containerId}):`, container); // Debug log
+            const dashboards = currentDashboards[type] || [];
+            console.log(`Dashboards for ${type}:`, dashboards); // Debug log
+            
+            if (dashboards.length === 0) {
+                console.log(`No dashboards found for type: ${type}`); // Debug log
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-chart-bar"></i>
+                        <h4>No dashboards configured</h4>
+                        <p>Click "Add Dashboard" to configure your first Zoho dashboard embedding.</p>
+                        <small class="text-muted">Debug: Type ${type} has no dashboards</small>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            dashboards.forEach((dashboard, index) => {
+                html += `
+                    <div class="dashboard-card">
+                        <div class="card-header d-flex justify-content-between align-items-start">
+                            <div>
+                                <h5 class="card-title">${dashboard.name}</h5>
+                                <p class="card-subtitle">Added on ${new Date(dashboard.created_at).toLocaleDateString()}</p>
+                            </div>
+                            <button class="btn btn-danger btn-sm" onclick="deleteDashboard('${dashboard.id}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                        <div class="dashboard-preview">
+                            ${dashboard.url}
+                        </div>
+                    </div>
+                `;
+            });
+
+            // Show warning if max dashboards reached
+            if (dashboards.length >= 5) {
+                html = `
+                    <div class="max-dashboards-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Maximum of 5 dashboards reached for this type. Remove one to add more.
+                    </div>
+                ` + html;
+            }
+
+            container.innerHTML = html;
+        }
+
+        // Show add dashboard modal
+        function showAddDashboardModal(type) {
+            const dashboards = currentDashboards[type] || [];
+            if (dashboards.length >= 5) {
+                alert('Maximum of 5 dashboards allowed per type. Please remove one first.');
+                return;
+            }
+
+            document.getElementById('dashboardType').value = type;
+            document.getElementById('dashboardName').value = '';
+            document.getElementById('dashboardUrl').value = '';
+            document.getElementById('urlPreview').innerHTML = '<em>Enter a URL to see preview...</em>';
+            
+            const typeNames = {
+                'admin': 'Admin',
+                'cre': 'CRE',
+                'ps': 'PS',
+                'branch-head': 'Branch Head'
+            };
+            
+            document.getElementById('modalTitle').textContent = `Add ${typeNames[type]} Dashboard`;
+            
+            const modal = new bootstrap.Modal(document.getElementById('addDashboardModal'));
+            modal.show();
+        }
+
+        // Preview URL
+        document.getElementById('dashboardUrl').addEventListener('input', function() {
+            const url = this.value;
+            const preview = document.getElementById('urlPreview');
+            
+            if (url.trim()) {
+                preview.textContent = url;
+            } else {
+                preview.innerHTML = '<em>Enter a URL to see preview...</em>';
+            }
+        });
+
+        // Save dashboard
+        function saveDashboard() {
+            const form = document.getElementById('addDashboardForm');
+            const formData = new FormData(form);
+            
+            fetch('/api/dashboards', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    type: formData.get('type'),
+                    name: formData.get('name'),
+                    url: formData.get('url')
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Close modal
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('addDashboardModal'));
+                    modal.hide();
+                    
+                    // Reload dashboards
+                    loadAllDashboards();
+                    
+                    // Show success message
+                    alert('Dashboard saved successfully!');
+                } else {
+                    alert('Error saving dashboard: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error saving dashboard:', error);
+                alert('Error saving dashboard. Please try again.');
+            });
+        }
+
+        // Delete dashboard
+        function deleteDashboard(id) {
+            if (confirm('Are you sure you want to delete this dashboard?')) {
+                fetch(`/api/dashboards/${id}`, {
+                    method: 'DELETE'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        loadAllDashboards();
+                        alert('Dashboard deleted successfully!');
+                    } else {
+                        alert('Error deleting dashboard: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error deleting dashboard:', error);
+                    alert('Error deleting dashboard. Please try again.');
+                });
+            }
+        }
+    </script>
+</body>
+</html> 
