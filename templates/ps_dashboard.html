@@ -389,6 +389,18 @@
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h5 class="mb-0">Pending Leads ({{ attended_leads|length }})</h5>
                     <div class="d-flex gap-2">
+                        <!-- Lead Category Toggle Buttons -->
+                        <div class="btn-group me-2" role="group" aria-label="Lead Category Filters">
+                            <button type="button" class="btn btn-outline-danger category-toggle" data-category="Hot" id="hotToggle">
+                                <i class="fas fa-fire"></i> H
+                            </button>
+                            <button type="button" class="btn btn-outline-warning category-toggle" data-category="Warm" id="warmToggle">
+                                <i class="fas fa-sun"></i> W
+                            </button>
+                            <button type="button" class="btn btn-outline-info category-toggle" data-category="Cold" id="coldToggle">
+                                <i class="fas fa-snowflake"></i> C
+                            </button>
+                        </div>
                         <div class="input-group" style="max-width: 300px;">
                             <input type="text" class="form-control" id="attendedSearchInput" placeholder="Search by UID, name, mobile...">
                             <button class="btn btn-outline-secondary" type="button" id="attendedSearchButton">
@@ -839,6 +851,27 @@
     border-color: transparent;
     color: var(--ather-primary);
 }
+
+/* Category Toggle Button Styles */
+.category-toggle {
+    transition: all 0.3s ease;
+    font-weight: bold;
+    min-width: 50px;
+}
+
+.category-toggle:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.category-toggle.active {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.btn-group .category-toggle:not(:last-child) {
+    border-right: 1px solid rgba(0,0,0,0.1);
+}
 </style>
 
 <script>
@@ -900,12 +933,29 @@ document.addEventListener('DOMContentLoaded', function() {
 
             tableRows.forEach(row => {
                 const searchData = row.getAttribute('data-search') || '';
-                if (searchData.includes(searchTerm) || searchTerm === '') {
+                const shouldShowBySearch = searchData.includes(searchTerm) || searchTerm === '';
+                
+                // For pending leads, also check category filter
+                let shouldShowByCategory = true;
+                if (tableId === 'attendedLeadsTable' && activeCategoryFilter) {
+                    const categoryCell = row.querySelector('td:nth-child(7)');
+                    if (categoryCell) {
+                        const categoryText = categoryCell.textContent.trim();
+                        shouldShowByCategory = categoryText.includes(activeCategoryFilter);
+                    }
+                }
+                
+                if (shouldShowBySearch && shouldShowByCategory) {
                     row.style.display = '';
                 } else {
                     row.style.display = 'none';
                 }
             });
+            
+            // Update count for pending leads
+            if (tableId === 'attendedLeadsTable') {
+                updatePendingLeadsCount();
+            }
         }
 
         function clearSearch() {
@@ -933,6 +983,85 @@ document.addEventListener('DOMContentLoaded', function() {
     setupSearch('lostLeadSearchInput', 'lostLeadSearchButton', 'lostLeadClearButton', 'lostLeadsTable');
     setupSearch('walkinLeadSearchInput', 'walkinLeadSearchButton', 'walkinLeadClearButton', 'walkinLeadsTable');
     setupSearch('eventLeadSearchInput', 'eventLeadSearchButton', 'eventLeadClearButton', 'eventLeadsTable');
+
+    // Lead Category Toggle Functionality for Pending Leads
+    let activeCategoryFilter = null;
+    const categoryToggles = document.querySelectorAll('.category-toggle');
+    
+    categoryToggles.forEach(toggle => {
+        toggle.addEventListener('click', function() {
+            const category = this.getAttribute('data-category');
+            
+            // Toggle active state
+            if (this.classList.contains('active')) {
+                // Deactivate filter
+                this.classList.remove('active');
+                this.classList.remove('btn-danger', 'btn-warning', 'btn-info');
+                this.classList.add('btn-outline-danger', 'btn-outline-warning', 'btn-outline-info');
+                activeCategoryFilter = null;
+            } else {
+                // Deactivate other toggles
+                categoryToggles.forEach(t => {
+                    t.classList.remove('active');
+                    t.classList.remove('btn-danger', 'btn-warning', 'btn-info');
+                    t.classList.add('btn-outline-danger', 'btn-outline-warning', 'btn-outline-info');
+                });
+                
+                // Activate current toggle
+                this.classList.add('active');
+                this.classList.remove('btn-outline-danger', 'btn-outline-warning', 'btn-outline-info');
+                
+                if (category === 'Hot') {
+                    this.classList.add('btn-danger');
+                } else if (category === 'Warm') {
+                    this.classList.add('btn-warning');
+                } else if (category === 'Cold') {
+                    this.classList.add('btn-info');
+                }
+                
+                activeCategoryFilter = category;
+            }
+            
+            // Filter the table
+            filterPendingLeadsByCategory();
+        });
+    });
+    
+    function filterPendingLeadsByCategory() {
+        const tableRows = document.querySelectorAll('#attendedLeadsTable tbody tr');
+        
+        tableRows.forEach(row => {
+            const categoryCell = row.querySelector('td:nth-child(7)'); // Category column
+            if (categoryCell) {
+                const categoryText = categoryCell.textContent.trim();
+                
+                if (!activeCategoryFilter || categoryText.includes(activeCategoryFilter)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            }
+        });
+        
+        updatePendingLeadsCount();
+    }
+    
+    function updatePendingLeadsCount() {
+        const tableRows = document.querySelectorAll('#attendedLeadsTable tbody tr');
+        let visibleCount = 0;
+        
+        tableRows.forEach(row => {
+            if (row.style.display !== 'none') {
+                visibleCount++;
+            }
+        });
+        
+        // Update the count display
+        const countElement = document.querySelector('#pending h5');
+        if (countElement) {
+            countElement.textContent = `Pending Leads (${visibleCount})`;
+        }
+    }
 
     // Hide filter bar for Today's Follow-ups and Pending Leads tabs
     function updateFilterBarVisibility() {
