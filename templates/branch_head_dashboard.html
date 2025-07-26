@@ -1009,18 +1009,14 @@ function loadSectionWithUrl(section, url) {
 
 // Load Branch Head dashboards
 function loadBranchHeadDashboards() {
-    console.log('Loading Branch Head dashboards...'); // Debug log
-    alert('Loading Branch Head dashboards...'); // Temporary alert
     fetch('/api/dashboards')
         .then(response => {
-            console.log('Branch Head API Response status:', response.status); // Debug log
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             return response.json();
         })
         .then(data => {
-            console.log('Branch Head Dashboards data:', data); // Debug log
             if (data.success && data.dashboards['branch-head']) {
                 const container = document.getElementById('branchHeadDashboardsContainer');
                 let html = '';
@@ -1060,12 +1056,10 @@ function loadBranchHeadDashboards() {
         })
         .catch(error => {
             console.error('Error loading Branch Head dashboards:', error);
-            console.log('Error details:', error.message); // Debug log
             const container = document.getElementById('branchHeadDashboardsContainer');
             container.innerHTML = `<div class="text-center text-danger py-4">
                 <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
                 <p>Error loading dashboards. Please try again.</p>
-                <small class="text-muted">Debug: ${error.message}</small>
             </div>`;
         });
 }

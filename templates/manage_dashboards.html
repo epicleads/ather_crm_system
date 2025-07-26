@@ -351,20 +351,16 @@
 
         // Load all dashboards
         function loadAllDashboards() {
-            console.log('Loading all dashboards...'); // Debug log
             fetch('/api/dashboards')
                 .then(response => {
-                    console.log('API Response status:', response.status); // Debug log
                     if (!response.ok) {
                         throw new Error(`HTTP error! status: ${response.status}`);
                     }
                     return response.json();
                 })
                 .then(data => {
-                    console.log('All dashboards data:', data); // Debug log
                     if (data.success) {
                         currentDashboards = data.dashboards;
-                        console.log('Current dashboards:', currentDashboards); // Debug log
                         renderDashboards('admin');
                         renderDashboards('cre');
                         renderDashboards('ps');
@@ -378,7 +374,6 @@
 
         // Render dashboards for a specific type
         function renderDashboards(type) {
-            console.log(`Rendering dashboards for type: ${type}`); // Debug log
             let containerId;
             if (type === 'branch-head') {
                 containerId = 'branchHeadDashboardsList';
@@ -386,18 +381,14 @@
                 containerId = type + 'DashboardsList';
             }
             const container = document.getElementById(containerId);
-            console.log(`Container for ${type} (ID: ${containerId}):`, container); // Debug log
             const dashboards = currentDashboards[type] || [];
-            console.log(`Dashboards for ${type}:`, dashboards); // Debug log
             
             if (dashboards.length === 0) {
-                console.log(`No dashboards found for type: ${type}`); // Debug log
                 container.innerHTML = `
                     <div class="empty-state">
                         <i class="fas fa-chart-bar"></i>
                         <h4>No dashboards configured</h4>
                         <p>Click "Add Dashboard" to configure your first Zoho dashboard embedding.</p>
-                        <small class="text-muted">Debug: Type ${type} has no dashboards</small>
                     </div>
                 `;
                 return;

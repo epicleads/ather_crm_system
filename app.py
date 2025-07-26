@@ -1,6 +1,6 @@
 import eventlet
 eventlet.monkey_patch()
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Response
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Response, current_app
 from supabase.client import create_client, Client
 import csv
 import openpyxl
@@ -6557,20 +6557,35 @@ def get_dashboards():
             return redirect(url_for('index'))
     """Get all dashboards grouped by type"""
     try:
-        # Debug: Print session info
-        print(f"Session data: {session}")
-        print(f"User role: {session.get('role', 'unknown')}")
-        print(f"Username: {session.get('username', 'unknown')}")
-        print(f"User type: {session.get('user_type', 'unknown')}")
-        print(f"Branch head ID: {session.get('branch_head_id', 'none')}")
-        
         # Read dashboard config file
-        with open('dashboard_config.json', 'r') as f:
-            dashboards = json.load(f)
+        try:
+            with open('dashboard_config.json', 'r') as f:
+                dashboards = json.load(f)
+        except FileNotFoundError:
+            # If config file doesn't exist, return empty dashboards
+            return jsonify({
+                'success': True,
+                'dashboards': {}
+            })
+        except json.JSONDecodeError:
+            # If config file is corrupted, return empty dashboards
+            return jsonify({
+                'success': True,
+                'dashboards': {}
+            })
+        
+        # Validate dashboard data
+        if not isinstance(dashboards, list):
+            return jsonify({
+                'success': True,
+                'dashboards': {}
+            })
         
         # Group dashboards by type
         grouped_dashboards = {}
         for dashboard in dashboards:
+            if not isinstance(dashboard, dict):
+                continue
             dashboard_type = dashboard.get('type', 'admin')
             if dashboard_type not in grouped_dashboards:
                 grouped_dashboards[dashboard_type] = []
@@ -6578,8 +6593,6 @@ def get_dashboards():
         
         # Filter dashboards based on user role
         user_type = session.get('user_type', 'admin')
-        print(f"User type from session: {user_type}") # Debug log
-        print(f"All grouped dashboards: {grouped_dashboards}") # Debug log
         
         if user_type == 'cre':
             # CRE users can only see CRE dashboards
@@ -6589,22 +6602,21 @@ def get_dashboards():
             filtered_dashboards = {'ps': grouped_dashboards.get('ps', [])}
         elif user_type == 'branch_head':
             # Branch Head users can only see Branch Head dashboards
-            print(f"Branch head user detected, filtering dashboards"); # Debug log
             filtered_dashboards = {'branch-head': grouped_dashboards.get('branch-head', [])}
-            print(f"Filtered dashboards for branch head: {filtered_dashboards}"); # Debug log
         else:
             # Admin users can see all dashboards
             filtered_dashboards = grouped_dashboards
-            print(f"Admin user - showing all dashboards: {filtered_dashboards}"); # Debug log
         
         return jsonify({
             'success': True,
             'dashboards': filtered_dashboards
         })
     except Exception as e:
+        # Log the error for debugging but don't expose it to the client
+        print(f"Error in get_dashboards: {e}")
         return jsonify({
-            'success': False,
-            'message': str(e)
+            'success': True,
+            'dashboards': {}
         })
 
 @app.route('/api/dashboards', methods=['POST'])
