@@ -1914,6 +1914,10 @@ def cre_dashboard():
     start_time = time.time()
     cre_name = session.get('cre_name')
     
+    # Get tab and sub_tab parameters for redirection
+    tab = request.args.get('tab', '')
+    sub_tab = request.args.get('sub_tab', '')
+    
     today = date.today()
     today_str = today.isoformat()
 
@@ -2066,12 +2070,16 @@ def cre_dashboard():
         event_event_leads=event_event_leads,
         filter_type=filter_type,  # Pass filter type to template
         start_date=start_date_str,  # Pass start date to template
-        end_date=end_date_str  # Pass end date to template
+        end_date=end_date_str,  # Pass end date to template
+        return_tab=tab,  # Pass tab parameter to template
+        return_sub_tab=sub_tab  # Pass sub_tab parameter to template
     )
 
 @app.route('/update_lead/<uid>', methods=['GET', 'POST'])
 @require_cre
 def update_lead(uid):
+    # Get return_tab parameter for redirection
+    return_tab = request.args.get('return_tab', '')
     try:
         # Get lead data
         lead_result = supabase.table('lead_master').select('*').eq('uid', uid).execute()
@@ -2201,15 +2209,7 @@ def update_lead(uid):
                 if next_call in call_names:
                     update_data[f'{next_call}_call_date'] = request.form['call_date']
                     update_data[f'{next_call}_remark'] = combined_remark
-                # Emit notification to CRE dashboard
-                socketio.emit(
-                    'ps_remark_added',
-                    {
-                        'customer_name': update_data.get('customer_name', lead_data.get('customer_name')),
-                        'ps_remark': combined_remark,
-                        'ps_name': update_data.get('ps_name', lead_data.get('ps_name'))
-                    }
-                )
+                # Notification removed - no longer sending notifications between PS and CRE
 
             try:
                 # Track the call attempt before updating the lead
@@ -2249,7 +2249,12 @@ def update_lead(uid):
                     flash('Lead updated successfully', 'success')
                 else:
                     flash('No changes to update', 'info')
-                return redirect(url_for('cre_dashboard'))
+                
+                # Redirect based on return_tab parameter
+                if return_tab:
+                    return redirect(url_for('cre_dashboard', tab='fresh-leads', sub_tab=return_tab))
+                else:
+                    return redirect(url_for('cre_dashboard'))
             except Exception as e:
                 flash(f'Error updating lead: {str(e)}', 'error')
 
@@ -2641,15 +2646,7 @@ def update_ps_lead(uid):
                 if call_remark:
                     combined_remark = f"{lead_status}, {call_remark}"
                     update_data[f'{next_call}_call_remark'] = combined_remark
-                    # Emit notification to CRE dashboard
-                    socketio.emit(
-                        'ps_remark_added',
-                        {
-                            'customer_name': ps_data.get('customer_name'),
-                            'ps_remark': combined_remark,
-                            'ps_name': ps_data.get('ps_name')
-                        }
-                    )
+                    # Notification removed - no longer sending notifications between PS and CRE
                 try:
                     # Track the PS call attempt before updating the lead
                     if lead_status:
