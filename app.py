@@ -2323,6 +2323,7 @@ def ps_dashboard():
     filter_type = request.args.get('filter_type', 'all')
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
+    status_filter = request.args.get('status_filter', '')
     status = request.args.get('status', 'lost')  # <-- Add this line
 
     try:
@@ -2547,6 +2548,7 @@ def ps_dashboard():
                                filter_type=filter_type,
                                start_date=start_date,
                                end_date=end_date,
+                               status_filter=status_filter,
                                status=status)  # <-- Add status here
 
         print(f"[PERF] ps_dashboard: render_template took {time.time() - t6:.3f} seconds")
@@ -2574,6 +2576,7 @@ def ps_dashboard():
                              filter_type=filter_type,
                              start_date=start_date,
                              end_date=end_date,
+                             status_filter=status_filter,
                              status=status)
 
 
@@ -2581,6 +2584,8 @@ def ps_dashboard():
 @app.route('/update_ps_lead/<uid>', methods=['GET', 'POST'])
 @require_ps
 def update_ps_lead(uid):
+    return_tab = request.args.get('return_tab', 'fresh-leads')
+    status_filter = request.args.get('status_filter', '')
     try:
         # Try to get PS followup data (regular leads)
         ps_result = supabase.table('ps_followup_master').select('*').eq('lead_uid', uid).execute()
@@ -2604,7 +2609,10 @@ def update_ps_lead(uid):
             # Verify this lead belongs to the current PS
             if ps_data.get('ps_name') != session.get('ps_name'):
                 flash('Access denied - This lead is not assigned to you', 'error')
-                return redirect(url_for('ps_dashboard'))
+                redirect_url = url_for('ps_dashboard', tab=return_tab)
+                if status_filter:
+                    redirect_url += f'&status_filter={status_filter}'
+                return redirect(redirect_url)
             # Get next call info for PS (only 7 calls)
             next_call, completed_calls = get_next_ps_call_info(ps_data)
             if request.method == 'POST':
@@ -2681,7 +2689,10 @@ def update_ps_lead(uid):
                         flash('Lead updated successfully', 'success')
                     else:
                         flash('No changes to update', 'info')
-                    return redirect(url_for('ps_dashboard'))
+                    redirect_url = url_for('ps_dashboard', tab=return_tab)
+                    if status_filter:
+                        redirect_url += f'&status_filter={status_filter}'
+                    return redirect(redirect_url)
                 except Exception as e:
                     flash(f'Error updating lead: {str(e)}', 'error')
             return render_template('update_ps_lead.html',
@@ -2694,12 +2705,18 @@ def update_ps_lead(uid):
         walkin_result = supabase.table('walkin_data').select('*').eq('uid', uid).execute()
         if not walkin_result.data:
             flash('Lead not found', 'error')
-            return redirect(url_for('ps_dashboard'))
+            redirect_url = url_for('ps_dashboard', tab=return_tab)
+            if status_filter:
+                redirect_url += f'&status_filter={status_filter}'
+            return redirect(redirect_url)
         walkin_data = walkin_result.data[0]
         # Only allow the PS assigned to this walk-in lead
         if walkin_data.get('ps_name') != session.get('ps_name'):
             flash('Access denied - This walk-in lead is not assigned to you', 'error')
-            return redirect(url_for('ps_dashboard'))
+            redirect_url = url_for('ps_dashboard', tab=return_tab)
+            if status_filter:
+                redirect_url += f'&status_filter={status_filter}'
+            return redirect(redirect_url)
         # Ensure lead_uid is set for template compatibility
         walkin_data['lead_uid'] = walkin_data.get('uid')
         # Determine next call info for walk-in (up to 7 calls)
@@ -2758,7 +2775,10 @@ def update_ps_lead(uid):
                 if update_data:
                     supabase.table('walkin_data').update(update_data).eq('uid', uid).execute()
                     flash('Walk-in lead updated successfully', 'success')
-                    return redirect(url_for('ps_dashboard'))  # Always redirect to PS dashboard after update
+                    redirect_url = url_for('ps_dashboard', tab=return_tab)
+                    if status_filter:
+                        redirect_url += f'&status_filter={status_filter}'
+                    return redirect(redirect_url)  # Always redirect to PS dashboard after update
                 else:
                     flash('No changes to update', 'info')
                 walkin_result = supabase.table('walkin_data').select('*').eq('uid', uid).execute()
@@ -5986,12 +6006,13 @@ def cre_analysis_data():
 @app.route('/update_event_lead/<activity_uid>', methods=['GET', 'POST'])
 @require_ps
 def update_event_lead(activity_uid):
+    return_tab = request.args.get('return_tab', 'fresh-leads')
     try:
         # Fetch the event lead by activity_uid
         result = supabase.table('activity_leads').select('*').eq('activity_uid', activity_uid).execute()
         if not result.data:
             flash('Event lead not found', 'error')
-            return redirect(url_for('ps_dashboard'))
+            return redirect(url_for('ps_dashboard', tab=return_tab))
         lead = result.data[0]
         print('[DEBUG] Lead data (PS):', lead)
         # Determine next call and completed calls for PS follow-ups
@@ -6072,7 +6093,7 @@ def update_event_lead(activity_uid):
             if update_data:
                 supabase.table('activity_leads').update(update_data).eq('activity_uid', activity_uid).execute()
                 flash('Event lead updated successfully', 'success')
-                return redirect(url_for('ps_dashboard'))
+                return redirect(url_for('ps_dashboard', tab=return_tab))
             else:
                 flash('No changes to update', 'info')
         return render_template('update_event_lead.html', 
