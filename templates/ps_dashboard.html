@@ -891,11 +891,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 selectedFilter = this.getAttribute('data-filter');
                 filterDropdown.textContent = this.textContent;
                 if (selectedFilter === 'range') {
-                    if (startDateInput) startDateInput.style.display = 'inline-block';
-                    if (endDateInput) endDateInput.style.display = 'inline-block';
+                    if (startDateInput) {
+                        startDateInput.classList.remove('d-none');
+                        startDateInput.style.display = 'inline-block';
+                    }
+                    if (endDateInput) {
+                        endDateInput.classList.remove('d-none');
+                        endDateInput.style.display = 'inline-block';
+                    }
                 } else {
-                    if (startDateInput) startDateInput.style.display = 'none';
-                    if (endDateInput) endDateInput.style.display = 'none';
+                    if (startDateInput) {
+                        startDateInput.classList.add('d-none');
+                        startDateInput.style.display = 'none';
+                    }
+                    if (endDateInput) {
+                        endDateInput.classList.add('d-none');
+                        endDateInput.style.display = 'none';
+                    }
                 }
             });
         });
@@ -918,6 +930,37 @@ document.addEventListener('DOMContentLoaded', function() {
     setupFilterBar('fresh', 'fresh-leads');
     // Setup for Lost Leads
     setupFilterBar('lost', 'lost-leads');
+    
+    // Initialize date inputs visibility based on current filter type
+    function initializeDateInputs() {
+        const currentFilterType = '{{ filter_type }}';
+        if (currentFilterType === 'range') {
+            const freshStartDate = document.getElementById('freshFilterStartDate');
+            const freshEndDate = document.getElementById('freshFilterEndDate');
+            const lostStartDate = document.getElementById('lostFilterStartDate');
+            const lostEndDate = document.getElementById('lostFilterEndDate');
+            
+            if (freshStartDate) {
+                freshStartDate.classList.remove('d-none');
+                freshStartDate.style.display = 'inline-block';
+            }
+            if (freshEndDate) {
+                freshEndDate.classList.remove('d-none');
+                freshEndDate.style.display = 'inline-block';
+            }
+            if (lostStartDate) {
+                lostStartDate.classList.remove('d-none');
+                lostStartDate.style.display = 'inline-block';
+            }
+            if (lostEndDate) {
+                lostEndDate.classList.remove('d-none');
+                lostEndDate.style.display = 'inline-block';
+            }
+        }
+    }
+    
+    // Initialize date inputs on page load
+    initializeDateInputs();
 
     // Generic search function
     function setupSearch(inputId, buttonId, clearId, tableId) {
