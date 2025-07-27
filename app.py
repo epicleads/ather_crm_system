@@ -1916,6 +1916,8 @@ def cre_dashboard():
     start_time = time.time()
     cre_name = session.get('cre_name')
     
+    # Get status parameter for Won/Lost toggle
+    status = request.args.get('status', 'lost')
     # Get tab and sub_tab parameters for redirection
     tab = request.args.get('tab', '')
     sub_tab = request.args.get('sub_tab', '')
@@ -1975,6 +1977,7 @@ def cre_dashboard():
     event_event_leads = safe_get_data('activity_leads', {'cre_assigned': cre_name})
 
     print("Fetched leads for CRE:", cre_name, "Count:", len(all_leads))
+    print("Status parameter from URL:", status)
 
     # Initialize buckets for leads for mutual exclusivity
     untouched_leads = []
@@ -1987,7 +1990,7 @@ def cre_dashboard():
     non_contact_statuses = ['RNR', 'Busy on another Call', 'Call me Back', 'Call Disconnected', 'Call not Connected']
 
     for lead in all_leads:
-        status = (lead.get('lead_status') or '').strip()
+        lead_status = (lead.get('lead_status') or '').strip()
         final_status = lead.get('final_status')
         has_first_call = lead.get('first_call_date') is not None
 
@@ -2007,15 +2010,17 @@ def cre_dashboard():
             attended_leads.append(lead)
 
         # Untouched Leads (Fresh leads that are still pending)
-        if not has_first_call and status == 'Pending':
+        if not has_first_call and lead_status == 'Pending':
             untouched_leads.append(lead)
             continue
 
         # Called Fresh Leads: Non-contact status on FIRST update only
-        if status in non_contact_statuses and not has_first_call:
+        if lead_status in non_contact_statuses and not has_first_call:
             called_leads.append(lead)
             continue
 
+    print(f"Won leads count: {len(won_leads)}")
+    print(f"Lost leads count: {len(lost_leads)}")
     
     untouched_count = len(untouched_leads)
     called_count = len(called_leads)
@@ -2073,6 +2078,7 @@ def cre_dashboard():
         filter_type=filter_type,  # Pass filter type to template
         start_date=start_date_str,  # Pass start date to template
         end_date=end_date_str,  # Pass end date to template
+        status=status,  # Pass status parameter to template
         return_tab=tab,  # Pass tab parameter to template
         return_sub_tab=sub_tab  # Pass sub_tab parameter to template
     )
@@ -2331,6 +2337,7 @@ def ps_dashboard():
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
     status_filter = request.args.get('status_filter', '')
+    status = request.args.get('status', 'lost')  # <-- Add this line
 
     try:
         t0 = time.time()
@@ -2381,6 +2388,10 @@ def ps_dashboard():
                 lost_leads.append(lead_dict)
             elif final_status == 'Pending' or not final_status:  # Include leads with no final_status
                 if lead.get('first_call_date'):
+                    # Regular leads should already have lead_category from the database
+                    # Set default if it's missing, None, or empty
+                    if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
+                        lead_dict['lead_category'] = 'Not Set'
                     attended_leads.append(lead_dict)
                 else:
                     # Fresh leads: no first_call_date and not excluded status
@@ -2412,6 +2423,19 @@ def ps_dashboard():
         print(f"[DEBUG] Won leads count: {len(won_leads)}")
         print(f"[DEBUG] Lost leads count: {len(lost_leads)}")
         print(f"[DEBUG] Today's followups (regular) count: {len(todays_followups_regular)}")
+        
+        # Debug: Check lead_category values in attended_leads
+        print(f"[DEBUG] Attended leads with lead_category:")
+        for lead in attended_leads:
+            category = lead.get('lead_category')
+            source = lead.get('source', 'Unknown')
+            print(f"  - {lead.get('lead_uid')}: {category} (Source: {source})")
+            
+        # Debug: Check raw lead_category values from database
+        print(f"[DEBUG] Raw lead_category values from database:")
+        for lead in assigned_leads:
+            category = lead.get('lead_category')
+            print(f"  - {lead.get('lead_uid')}: {category} (Type: {type(category)})")
 
         t2 = time.time()
         # Fetch walk-in leads for this PS
@@ -2433,6 +2457,10 @@ def ps_dashboard():
                 lost_leads.append(lead_dict)
             elif ps_final_status == 'Pending' or status == 'Pending':
                 if lead.get('first_call_date'):
+                    # Walk-in leads should already have lead_category from the database
+                    # Set default if it's missing, None, or empty
+                    if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
+                        lead_dict['lead_category'] = 'Not Set'
                     attended_leads.append(lead_dict)
                 # Do NOT add walk-in leads to fresh_leads
                 # else:
@@ -2454,6 +2482,9 @@ def ps_dashboard():
                 lead.get('lead_status') not in excluded_statuses):
                 lead_dict = dict(lead)
                 lead_dict['lead_uid'] = lead.get('uid')
+                # Set default lead_category if missing
+                if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
+                    lead_dict['lead_category'] = 'Not Set'
                 pending_leads.append(lead_dict)
 
         print(f"[PERF] ps_dashboard: walkin leads processing took {time.time() - t2:.3f} seconds")
@@ -2485,11 +2516,18 @@ def ps_dashboard():
                 print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to lost_leads")
             elif final_status == 'Pending' or not final_status:  # Include leads with no final_status
                 if ps_first_call_date:
+                    # Event leads should already have lead_category from the database
+                    # Set default if it's missing, None, or empty
+                    if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
+                        lead_dict['lead_category'] = 'Not Set'
                     attended_leads.append(lead_dict)
                     print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to attended_leads")
                 else:
                     # Fresh/Pending event leads: no ps_first_call_date and not excluded status
                     if not lead_status or lead_status not in excluded_statuses:
+                        # Set default lead_category if missing
+                        if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
+                            lead_dict['lead_category'] = 'Not Set'
                         pending_leads.append(lead_dict)  # Event leads without first call go to pending
                         print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to pending_leads")
 
@@ -2540,7 +2578,7 @@ def ps_dashboard():
         print(f"[PERF] ps_dashboard: final processing took {time.time() - t5:.3f} seconds")
 
         t6 = time.time()
-        # Render template with all lead categories
+        # Render template with all lead categories and the new status variable
         result = render_template('ps_dashboard.html',
                                assigned_leads=assigned_leads,
                                fresh_leads=fresh_leads,
@@ -2554,7 +2592,8 @@ def ps_dashboard():
                                filter_type=filter_type,
                                start_date=start_date,
                                end_date=end_date,
-                               status_filter=status_filter)
+                               status_filter=status_filter,
+                               status=status)  # <-- Add status here
 
         print(f"[PERF] ps_dashboard: render_template took {time.time() - t6:.3f} seconds")
         print(f"[DEBUG] FINAL COUNTS - Fresh: {len(fresh_leads)}, Pending: {len(pending_leads)}, Attended: {len(attended_leads)}, Won: {len(won_leads)}, Lost: {len(lost_leads)}")
@@ -2581,7 +2620,8 @@ def ps_dashboard():
                              filter_type=filter_type,
                              start_date=start_date,
                              end_date=end_date,
-                             status_filter=status_filter)
+                             status_filter=status_filter,
+                             status=status)
 
 
 
@@ -2624,9 +2664,16 @@ def update_ps_lead(uid):
                 lead_status = request.form.get('lead_status', '')
                 follow_up_date = request.form.get('follow_up_date', '')
                 call_remark = request.form.get('call_remark', '')
+                lead_category = request.form.get('lead_category', '')
+                model_interested = request.form.get('model_interested', '')
+                
                 # Always update lead_status from the form
                 if lead_status:
                     update_data['lead_status'] = lead_status
+                if lead_category:
+                    update_data['lead_category'] = lead_category
+                if model_interested:
+                    update_data['model_interested'] = model_interested
                 if request.form.get('follow_up_date'):
                     update_data['follow_up_date'] = follow_up_date
                 if request.form.get('final_status'):
@@ -6750,6 +6797,104 @@ def delete_duplicate_lead():
         return jsonify({'success': True, 'message': 'Duplicate lead deleted successfully'})
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error deleting duplicate lead: {str(e)}'})
+
+@app.route('/cre_dashboard_leads')
+@require_cre
+def cre_dashboard_leads():
+    """AJAX endpoint to get leads table HTML for Won/Lost toggle"""
+    status = request.args.get('status', 'lost')
+    cre_name = session.get('cre_name')
+    
+    try:
+        # Get all leads for this CRE
+        all_leads = safe_get_data('lead_master', {'cre_name': cre_name})
+        
+        # Initialize lists
+        won_leads = []
+        lost_leads = []
+        
+        # Process leads
+        for lead in all_leads:
+            final_status = lead.get('final_status')
+            
+            if final_status == 'Won':
+                won_leads.append(lead)
+            elif final_status == 'Lost':
+                lost_leads.append(lead)
+        
+        # Select the appropriate list based on status
+        leads_list = won_leads if status == 'won' else lost_leads
+        
+        # Render only the table HTML
+        return render_template('cre_dashboard_leads_table.html', 
+                             leads_list=leads_list, 
+                             status=status)
+    
+    except Exception as e:
+        return f'<div class="alert alert-danger">Error loading leads: {str(e)}</div>'
+
+@app.route('/ps_dashboard_leads')
+@require_ps
+def ps_dashboard_leads():
+    """AJAX endpoint to get leads table HTML for Won/Lost toggle"""
+    status = request.args.get('status', 'lost')
+    ps_name = session.get('ps_name')
+    
+    try:
+        # Get all assigned leads for this PS (reuse logic from ps_dashboard)
+        assigned_leads = safe_get_data('ps_followup_master', {'ps_name': ps_name})
+        walkin_leads = safe_get_data('walkin_data', {'ps_name': ps_name})
+        event_leads = safe_get_data('activity_leads', {'ps_name': ps_name})
+        
+        # Initialize lists
+        won_leads = []
+        lost_leads = []
+        
+        # Process regular assigned leads
+        for lead in assigned_leads:
+            lead_dict = dict(lead)
+            lead_dict['lead_uid'] = lead.get('lead_uid')
+            final_status = lead.get('final_status')
+            
+            if final_status == 'Won':
+                won_leads.append(lead_dict)
+            elif final_status == 'Lost':
+                lost_leads.append(lead_dict)
+        
+        # Process walk-in leads
+        for lead in walkin_leads:
+            lead_dict = dict(lead)
+            lead_dict['lead_uid'] = lead.get('uid')
+            ps_final_status = lead.get('ps_final_status')
+            status_walkin = lead.get('status')
+            
+            if ps_final_status == 'Won' or status_walkin == 'Converted':
+                won_leads.append(lead_dict)
+            elif ps_final_status == 'Lost' or status_walkin == 'Lost':
+                lost_leads.append(lead_dict)
+        
+        # Process event leads
+        for lead in event_leads:
+            lead_dict = dict(lead)
+            lead_dict['lead_uid'] = lead.get('activity_uid') or lead.get('uid')
+            lead_dict['customer_mobile_number'] = lead.get('customer_phone_number')
+            final_status = lead.get('final_status')
+            
+            if final_status == 'Won':
+                won_leads.append(lead_dict)
+            elif final_status == 'Lost':
+                lost_leads.append(lead_dict)
+        
+        # Select the appropriate list based on status
+        leads_list = won_leads if status == 'won' else lost_leads
+        
+        # Render only the table HTML
+        return render_template('ps_dashboard_leads_table.html', 
+                             leads_list=leads_list, 
+                             status=status)
+    
+    except Exception as e:
+        return f'<div class="alert alert-danger">Error loading leads: {str(e)}</div>'
 
 if __name__ == '__main__':
     # socketio.run(app, debug=True)
