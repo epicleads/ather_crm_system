@@ -396,7 +396,7 @@
                                 {% if lead.is_event_lead %}
                                     <tr>
                                         <td>
-                                            <a href="{{ url_for('update_event_lead_cre', activity_uid=lead.activity_uid) }}" class="btn btn-sm btn-outline-primary">
+                                            <a href="{{ url_for('update_event_lead_cre', activity_uid=lead.activity_uid, return_tab='followups') }}" class="btn btn-sm btn-outline-primary">
                                                 <i class="fas fa-edit"></i> Update
                                             </a>
                                         </td>
@@ -409,7 +409,7 @@
                                 {% else %}
                                     <tr>
                                         <td>
-                                            <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-outline-primary">
+                                            <a href="{{ url_for('update_lead', uid=lead.uid, return_tab='followups') }}" class="btn btn-sm btn-outline-primary">
                                                 <i class="fas fa-edit"></i> Update
                                             </a>
                                         </td>
@@ -517,7 +517,7 @@
                                 data-first-call-date="{{ lead.first_call_date or '' }}"
                                 data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.source or '') + ' ' + (lead.campaign or '') + ' ' + (lead.lead_category or ''))|lower }}">
                                 <td>
-                                    <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-outline-primary">
+                                    <a href="{{ url_for('update_lead', uid=lead.uid, return_tab='pending') }}" class="btn btn-sm btn-outline-primary">
                                         <i class="fas fa-edit"></i> Update
                                     </a>
                                 </td>
@@ -622,7 +622,7 @@
                                 data-ps-assigned-date="{{ lead.ps_assigned_at[:10] if lead.ps_assigned_at else '' }}"
                                 data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.ps_name or '') + ' ' + (lead.branch or '') + ' ' + (lead.campaign or ''))|lower }}">
                                 <td>
-                                    <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-outline-primary">
+                                    <a href="{{ url_for('update_lead', uid=lead.uid, return_tab='ps-assigned') }}" class="btn btn-sm btn-outline-primary">
                                         <i class="fas fa-edit"></i> Update
                                     </a>
                                 </td>
@@ -722,7 +722,7 @@
                                 data-won-timestamp="{{ lead.won_timestamp or '' }}"
                                 data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.ps_name or '') + ' ' + (lead.model_interested or '') + ' ' + (lead.campaign or ''))|lower }}">
                                 <td>
-                                    <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-outline-primary">
+                                    <a href="{{ url_for('update_lead', uid=lead.uid, return_tab='won-leads') }}" class="btn btn-sm btn-outline-primary">
                                         <i class="fas fa-edit"></i> View
                                     </a>
                                 </td>
@@ -787,7 +787,7 @@
                             {% for lead in event_event_leads %}
                             <tr>
                                 <td>
-                                    <a href="{{ url_for('update_event_lead_cre', activity_uid=lead.activity_uid) }}" class="btn btn-sm btn-outline-primary">
+                                    <a href="{{ url_for('update_event_lead_cre', activity_uid=lead.activity_uid, return_tab='event-leads') }}" class="btn btn-sm btn-outline-primary">
                                         <i class="fas fa-edit"></i> Update
                                     </a>
                                 </td>
@@ -1769,21 +1769,23 @@ document.addEventListener('DOMContentLoaded', function() {
     const returnTab = '{{ return_tab }}';
     const returnSubTab = '{{ return_sub_tab }}';
     
-    if (returnTab && returnSubTab) {
+    if (returnTab) {
         // Activate the main tab first
         const mainTab = document.querySelector(`[data-bs-target="#${returnTab}"]`);
         if (mainTab) {
             const tab = new bootstrap.Tab(mainTab);
             tab.show();
             
-            // Wait a bit for the tab to activate, then activate the sub-tab
-            setTimeout(() => {
-                const subTab = document.querySelector(`[data-bs-target="#${returnSubTab}"]`);
-                if (subTab) {
-                    const subTabInstance = new bootstrap.Tab(subTab);
-                    subTabInstance.show();
-                }
-            }, 100);
+            // If there's a sub_tab, activate it after a short delay
+            if (returnSubTab) {
+                setTimeout(() => {
+                    const subTab = document.querySelector(`[data-bs-target="#${returnSubTab}"]`);
+                    if (subTab) {
+                        const subTabInstance = new bootstrap.Tab(subTab);
+                        subTabInstance.show();
+                    }
+                }, 100);
+            }
         }
     }
 });

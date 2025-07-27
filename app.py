@@ -2254,7 +2254,25 @@ def update_lead(uid):
                 
                 # Redirect based on return_tab parameter
                 if return_tab:
-                    return redirect(url_for('cre_dashboard', tab='fresh-leads', sub_tab=return_tab))
+                    # Determine which main tab to redirect to based on return_tab
+                    if return_tab in ['untouched-leads', 'called-leads']:
+                        # Fresh leads section
+                        return redirect(url_for('cre_dashboard', tab='fresh-leads', sub_tab=return_tab))
+                    elif return_tab == 'followups':
+                        # Today's follow-ups section
+                        return redirect(url_for('cre_dashboard', tab='followups'))
+                    elif return_tab == 'pending':
+                        # Pending leads section
+                        return redirect(url_for('cre_dashboard', tab='pending'))
+                    elif return_tab == 'ps-assigned':
+                        # PS assigned section
+                        return redirect(url_for('cre_dashboard', tab='ps-assigned'))
+                    elif return_tab == 'won-leads':
+                        # Won leads section
+                        return redirect(url_for('cre_dashboard', tab='won-leads'))
+                    else:
+                        # Default to fresh leads
+                        return redirect(url_for('cre_dashboard', tab='fresh-leads', sub_tab=return_tab))
                 else:
                     return redirect(url_for('cre_dashboard'))
             except Exception as e:
@@ -6106,6 +6124,8 @@ def update_event_lead(activity_uid):
 @app.route('/update_event_lead_cre/<activity_uid>', methods=['GET', 'POST'])
 @require_cre
 def update_event_lead_cre(activity_uid):
+    # Get return_tab parameter for redirection
+    return_tab = request.args.get('return_tab', '')
     try:
         # Fetch the event lead by activity_uid
         result = supabase.table('activity_leads').select('*').eq('activity_uid', activity_uid).execute()
@@ -6202,7 +6222,21 @@ def update_event_lead_cre(activity_uid):
             if update_data:
                 supabase.table('activity_leads').update(update_data).eq('activity_uid', activity_uid).execute()
                 flash('Event lead updated successfully', 'success')
-                return redirect(url_for('cre_dashboard'))
+                
+                # Redirect based on return_tab parameter
+                if return_tab:
+                    # Determine which main tab to redirect to based on return_tab
+                    if return_tab == 'followups':
+                        # Today's follow-ups section
+                        return redirect(url_for('cre_dashboard', tab='followups'))
+                    elif return_tab == 'event-leads':
+                        # Event leads section
+                        return redirect(url_for('cre_dashboard', tab='event-leads'))
+                    else:
+                        # Default to dashboard
+                        return redirect(url_for('cre_dashboard'))
+                else:
+                    return redirect(url_for('cre_dashboard'))
             else:
                 flash('No changes to update', 'info')
         
