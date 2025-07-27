@@ -55,6 +55,19 @@
         left: auto !important;
         transform: none !important;
     }
+
+    /* Pending Leads Category Toggle Button Styling */
+    .category-toggle {
+        padding: 0.25rem 0.5rem !important;
+        font-size: 0.875rem !important;
+        line-height: 1.2 !important;
+        min-height: auto !important;
+    }
+    
+    .category-toggle i {
+        font-size: 0.75rem !important;
+        margin-right: 0.25rem !important;
+    }
 </style>
 {% endblock %}
 
@@ -278,7 +291,7 @@
                                     {% for lead in untouched_leads %}
                                     <tr data-search="{{ lead.uid }} {{ lead.customer_name }} {{ lead.customer_mobile_number }} {{ lead.source or '' }}" data-assigned-date="{{ lead.cre_assigned_at[:10] if lead.cre_assigned_at else '' }}">
                                         <td>
-                                            <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-primary">Update</a>
+                                            <a href="{{ url_for('update_lead', uid=lead.uid, return_tab='untouched-leads') }}" class="btn btn-sm btn-primary update-untouched-link">Update</a>
                                         </td>
                                         <td>{{ lead.lead_status }}</td>
                                         <td>{{ lead.customer_name }}</td>
@@ -323,7 +336,7 @@
                                     {% for lead in called_leads %}
                                     <tr data-search="{{ lead.uid }} {{ lead.customer_name }} {{ lead.customer_mobile_number }} {{ lead.source or '' }}" data-assigned-date="{{ lead.cre_assigned_at[:10] if lead.cre_assigned_at else '' }}">
                                         <td>
-                                            <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-primary">Update</a>
+                                            <a href="{{ url_for('update_lead', uid=lead.uid, return_tab='called-leads') }}" class="btn btn-sm btn-primary update-called-link">Update</a>
                                         </td>
                                         <td>{{ lead.lead_status }}</td>
                                         <td>{{ lead.customer_name }}</td>
@@ -431,6 +444,18 @@
                     {% endfor %}
                     <h5 class="mb-0">Pending Leads (<span id="pendingLeadsCount">{{ pending_count }}</span>)</h5>
                     <div class="d-flex gap-2">
+                        <!-- Pending Leads Category Toggle Buttons -->
+                        <div class="btn-group me-2" role="group" aria-label="Pending Lead Category Filters">
+                            <button type="button" class="btn btn-outline-danger category-toggle" data-category="Hot" id="hotToggle">
+                                <i class="fas fa-fire"></i> H
+                            </button>
+                            <button type="button" class="btn btn-outline-warning category-toggle" data-category="Warm" id="warmToggle">
+                                <i class="fas fa-sun"></i> W
+                            </button>
+                            <button type="button" class="btn btn-outline-info category-toggle" data-category="Cold" id="coldToggle">
+                                <i class="fas fa-snowflake"></i> C
+                            </button>
+                        </div>
                         <div class="btn-group">
                             <button type="button" class="btn btn-outline-warning dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
                                 <span id="pendingTimeFilterText">Today</span>
@@ -898,7 +923,7 @@ input:checked + .slider:before {
 }
 </style>
 
-<script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <!-- SocketIO removed - no longer needed for notifications -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Get current date in YYYY-MM-DD format (this will always be the actual current date)
@@ -1545,28 +1570,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateWonLeadsCount();
     }
 
-    // Connect to SocketIO
-    var socket = io();
-    socket.on('ps_remark_added', function(data) {
-        // Show a toast or alert with the info
-        const toastHtml = `
-            <div class="toast align-items-center text-bg-info border-0 show" role="alert" aria-live="assertive" aria-atomic="true" style="min-width: 300px; margin-bottom: 10px;">
-                <div class="d-flex">
-                    <div class="toast-body">
-                        <strong>New PS Remark!</strong><br>
-                        Customer: <b>${data.customer_name}</b><br>
-                        PS: <b>${data.ps_name}</b><br>
-                        Remark: <i>${data.ps_remark}</i>
-                    </div>
-                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-                </div>
-            </div>
-        `;
-        document.getElementById('followup-toast-container').insertAdjacentHTML('beforeend', toastHtml);
-        // Optionally play a sound or vibrate
-        const audio = document.getElementById('followup-audio');
-        if (audio) { audio.currentTime = 0; audio.play(); }
-    });
+    // SocketIO notifications removed - no longer receiving notifications between PS and CRE
 
     const callHistoryModal = new bootstrap.Modal(document.getElementById('callHistoryModal'));
     const callHistoryTableContainer = document.getElementById('callHistoryTableContainer');
@@ -1772,6 +1776,147 @@ document.getElementById('followup-toast-container').addEventListener('click', fu
     let toast = e.target.closest('.followup-toast');
     if (toast && toast.dataset.uid) {
         window.location.href = `/update_lead/${toast.dataset.uid}`;
+    }
+});
+
+// Pending Leads Category Toggle Functionality
+let activeCategoryFilter = null;
+const categoryToggles = document.querySelectorAll('.category-toggle');
+
+categoryToggles.forEach(toggle => {
+    toggle.addEventListener('click', function() {
+        const category = this.getAttribute('data-category');
+        
+        // Toggle active state
+        if (this.classList.contains('active')) {
+            // Deactivate filter
+            this.classList.remove('active');
+            this.classList.remove('btn-danger', 'btn-warning', 'btn-info');
+            this.classList.add('btn-outline-danger', 'btn-outline-warning', 'btn-outline-info');
+            activeCategoryFilter = null;
+        } else {
+            // Deactivate other toggles
+            categoryToggles.forEach(t => {
+                t.classList.remove('active');
+                t.classList.remove('btn-danger', 'btn-warning', 'btn-info');
+                t.classList.add('btn-outline-danger', 'btn-outline-warning', 'btn-outline-info');
+            });
+            
+            // Activate current toggle
+            this.classList.add('active');
+            this.classList.remove('btn-outline-danger', 'btn-outline-warning', 'btn-outline-info');
+            
+            if (category === 'Hot') {
+                this.classList.add('btn-danger');
+            } else if (category === 'Warm') {
+                this.classList.add('btn-warning');
+            } else if (category === 'Cold') {
+                this.classList.add('btn-info');
+            }
+            
+            activeCategoryFilter = category;
+        }
+        
+        // Filter the table
+        filterPendingLeadsByCategory();
+    });
+});
+
+function filterPendingLeadsByCategory() {
+    const tableRows = document.querySelectorAll('#pendingLeadsTable tbody tr');
+    
+    tableRows.forEach(row => {
+        const categoryCell = row.querySelector('td:nth-child(7)'); // Category column
+        if (categoryCell) {
+            const categoryText = categoryCell.textContent.trim();
+            
+            if (!activeCategoryFilter || categoryText.includes(activeCategoryFilter)) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        }
+    });
+    
+    updatePendingLeadsCount();
+}
+
+// Update the existing search function to work with category filter
+function setupPendingSearch() {
+    const searchInput = document.getElementById('pendingSearchInput');
+    const searchButton = document.getElementById('pendingSearchButton');
+    const clearButton = document.getElementById('pendingClearButton');
+    
+    function performSearch() {
+        const searchTerm = searchInput.value.toLowerCase();
+        const tableRows = document.querySelectorAll('#pendingLeadsTable tbody tr');
+        
+        tableRows.forEach(row => {
+            const searchData = row.getAttribute('data-search');
+            const categoryCell = row.querySelector('td:nth-child(7)');
+            
+            // Check search term
+            const shouldShowBySearch = !searchTerm || searchData.includes(searchTerm);
+            
+            // Check category filter
+            let shouldShowByCategory = true;
+            if (activeCategoryFilter && categoryCell) {
+                const categoryText = categoryCell.textContent.trim();
+                shouldShowByCategory = categoryText.includes(activeCategoryFilter);
+            }
+            
+            if (shouldShowBySearch && shouldShowByCategory) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+        
+        updatePendingLeadsCount();
+    }
+    
+    function clearSearch() {
+        searchInput.value = '';
+        performSearch();
+    }
+    
+    searchButton.addEventListener('click', performSearch);
+    clearButton.addEventListener('click', clearSearch);
+    
+    searchInput.addEventListener('keyup', function(e) {
+        if (e.key === 'Enter') {
+            performSearch();
+        }
+    });
+    
+    // Real-time search as user types
+    searchInput.addEventListener('input', performSearch);
+}
+
+// Initialize the search functionality
+setupPendingSearch();
+
+// Handle tab and sub_tab redirection on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const returnTab = '{{ return_tab }}';
+    const returnSubTab = '{{ return_sub_tab }}';
+    
+    if (returnTab && returnSubTab) {
+        // Activate the main tab first
+        const mainTab = document.querySelector(`[data-bs-target="#${returnTab}"]`);
+        if (mainTab) {
+            const tab = new bootstrap.Tab(mainTab);
+            tab.show();
+            
+            // Wait a bit for the tab to activate, then activate the sub-tab
+            setTimeout(() => {
+                const subTab = document.querySelector(`[data-bs-target="#${returnSubTab}"]`);
+                if (subTab) {
+                    const subTabInstance = new bootstrap.Tab(subTab);
+                    subTabInstance.show();
+                }
+            }, 100);
+        }
     }
 });
 </script>
