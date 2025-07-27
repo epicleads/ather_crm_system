@@ -20,7 +20,7 @@
                 data-date="{{ lead.won_timestamp[:10] if status == 'won' and lead.won_timestamp else (lead.lost_timestamp[:10] if lead.lost_timestamp else '') }}"
                 data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.ps_name or '') + ' ' + (lead.model_interested or ''))|lower }}">
                 <td>
-                    <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-outline-primary">
+                    <a href="{{ url_for('update_lead', uid=lead.uid, return_tab='won-leads') }}" class="btn btn-sm btn-outline-primary">
                         <i class="fas fa-edit"></i> View
                     </a>
                 </td>
