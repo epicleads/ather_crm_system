@@ -241,11 +241,11 @@
                                 <td><span class="badge bg-secondary">{{ lead.source or 'N/A' }}</span></td>
                                 <td>{{ lead.cre_name }}</td>
                                 <td>
-                                    {% if lead.lead_category == 'Hot' %}
+                                    {% if lead.lead_category and lead.lead_category|lower == 'hot' %}
                                         <span class="badge bg-danger">{{ lead.lead_category }}</span>
-                                    {% elif lead.lead_category == 'Warm' %}
+                                    {% elif lead.lead_category and lead.lead_category|lower == 'warm' %}
                                         <span class="badge bg-warning">{{ lead.lead_category }}</span>
-                                    {% elif lead.lead_category == 'Cold' %}
+                                    {% elif lead.lead_category and lead.lead_category|lower == 'cold' %}
                                         <span class="badge bg-info">{{ lead.lead_category }}</span>
                                     {% else %}
                                         <span class="badge bg-dark">{{ lead.lead_category or 'Not Set' }}</span>
@@ -323,11 +323,11 @@
                                 <td>{{ lead.customer_name }}</td>
                                 <td>{{ lead.customer_mobile_number }}</td>
                                 <td>
-                                    {% if lead.lead_category == 'Hot' %}
+                                    {% if lead.lead_category and lead.lead_category|lower == 'hot' %}
                                         <span class="badge bg-danger">{{ lead.lead_category }}</span>
-                                    {% elif lead.lead_category == 'Warm' %}
+                                    {% elif lead.lead_category and lead.lead_category|lower == 'warm' %}
                                         <span class="badge bg-warning">{{ lead.lead_category }}</span>
-                                    {% elif lead.lead_category == 'Cold' %}
+                                    {% elif lead.lead_category and lead.lead_category|lower == 'cold' %}
                                         <span class="badge bg-info">{{ lead.lead_category }}</span>
                                     {% else %}
                                         <span class="badge bg-dark">{{ lead.lead_category or 'Not Set' }}</span>
@@ -460,12 +460,14 @@
                                 <td>{{ lead.first_call_date or 'N/A' }}</td>
                                 <td>{{ lead.third_call_date or lead.second_call_date or lead.first_call_date or 'N/A' }}</td>
                                 <td>
-                                    {% if lead.lead_category == 'Hot' %}
+                                    {% if lead.lead_category and lead.lead_category|lower == 'hot' %}
                                         <span class="badge bg-danger">{{ lead.lead_category }}</span>
-                                    {% elif lead.lead_category == 'Warm' %}
+                                    {% elif lead.lead_category and lead.lead_category|lower == 'warm' %}
                                         <span class="badge bg-warning">{{ lead.lead_category }}</span>
-                                    {% elif lead.lead_category == 'Cold' %}
+                                    {% elif lead.lead_category and lead.lead_category|lower == 'cold' %}
                                         <span class="badge bg-info">{{ lead.lead_category }}</span>
+                                    {% elif lead.lead_category and lead.lead_category|lower == 'not interested' %}
+                                        <span class="badge bg-secondary">{{ lead.lead_category }}</span>
                                     {% else %}
                                         <span class="badge bg-dark">{{ lead.lead_category or 'Not Set' }}</span>
                                     {% endif %}
@@ -527,71 +529,6 @@
                         </div>
                     </div>
                 </div>
-                {% if lost_leads %}
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover" id="lostLeadsTable">
-                        <thead class="table-dark">
-                            <tr>
-                                <th>Action</th>
-                                <th>Lead Status</th>
-                                <th>Customer Name</th>
-                                <th>Mobile</th>
-                                <th>Model Interested</th>
-                                <th>CRE Name</th>
-                                <th>Branch</th>
-                                <th>Lost Date</th>
-                                <th>UID</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for lead in lost_leads %}
-                            <tr class="lost-lead-row"
-                                data-lost-date="{{ lead.lost_timestamp[:10] if lead.lost_timestamp else '' }}"
-                                data-lost-timestamp="{{ lead.lost_timestamp or '' }}"
-                                data-search="{{ (lead.lead_uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.cre_name or '') + ' ' + (lead.model_interested or ''))|lower }}">
-                                <td>
-                                    {% if lead.activity_uid %}
-                                        <a href="{{ url_for('update_event_lead', activity_uid=lead.activity_uid) }}" class="btn btn-sm btn-outline-primary">
-                                            <i class="fas fa-edit"></i> View
-                                        </a>
-                                    {% else %}
-                                        <a href="{{ url_for('update_ps_lead', uid=lead.lead_uid, return_tab='lost-leads') }}" class="btn btn-sm btn-outline-primary">
-                                            <i class="fas fa-edit"></i> View
-                                        </a>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if lead.lead_status %}
-                                        <span class="badge bg-info">{{ lead.lead_status }}</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">Not Set</span>
-                                    {% endif %}
-                                </td>
-                                <td>{{ lead.customer_name }}</td>
-                                <td>{{ lead.customer_mobile_number }}</td>
-                                <td>{{ lead.model_interested or 'Not specified' }}</td>
-                                <td>{{ lead.cre_name or 'N/A' }}</td>
-                                <td>{{ lead.ps_branch or 'N/A' }}</td>
-                                <td>
-                                    {% if lead.lost_timestamp %}
-                                        <span class="badge bg-danger">{{ lead.lost_timestamp[:10] }}</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">N/A</span>
-                                    {% endif %}
-                                </td>
-                                <td><span class="badge bg-primary">{{ lead.lead_uid }}</span></td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <div class="text-center py-5">
-                    <i class="fas fa-ban fa-3x text-muted mb-3"></i>
-                    <h5 class="text-muted">No lost leads yet</h5>
-                    <p class="text-muted">Leads will appear here when their final status is changed to "Lost"</p>
-                </div>
-                {% endif %}
                 {% set leads_list = won_leads if status == 'won' else lost_leads %}
                 {% include 'ps_dashboard_leads_table.html' %}
             </div>
@@ -665,11 +602,11 @@
                                 <td>{{ lead.customer_mobile_number }}</td>
                                 <td><span class="badge bg-secondary">{{ lead.lead_source or 'Walk-in' }}</span></td>
                                 <td>
-                                    {% if lead.lead_category == 'Hot' %}
+                                    {% if lead.lead_category and lead.lead_category|lower == 'hot' %}
                                         <span class="badge bg-danger">{{ lead.lead_category }}</span>
-                                    {% elif lead.lead_category == 'Warm' %}
+                                    {% elif lead.lead_category and lead.lead_category|lower == 'warm' %}
                                         <span class="badge bg-warning">{{ lead.lead_category }}</span>
-                                    {% elif lead.lead_category == 'Cold' %}
+                                    {% elif lead.lead_category and lead.lead_category|lower == 'cold' %}
                                         <span class="badge bg-info">{{ lead.lead_category }}</span>
                                     {% else %}
                                         <span class="badge bg-dark">{{ lead.lead_category or 'Not Set' }}</span>
@@ -1091,8 +1028,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (tableId === 'attendedLeadsTable' && activeCategoryFilter) {
                     const categoryCell = row.querySelector('td:nth-child(7)');
                     if (categoryCell) {
-                        const categoryText = categoryCell.textContent.trim();
-                        shouldShowByCategory = categoryText.includes(activeCategoryFilter);
+                        // Get the badge text which contains the category
+                        const badge = categoryCell.querySelector('.badge');
+                        const categoryText = badge ? badge.textContent.trim() : categoryCell.textContent.trim();
+                        shouldShowByCategory = categoryText === activeCategoryFilter;
                     }
                 }
                 
@@ -1152,60 +1091,35 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Lead Category Toggle Functionality for Pending Leads
     let activeCategoryFilter = null;
-    const categoryToggles = document.querySelectorAll('.category-toggle');
-    
-    categoryToggles.forEach(toggle => {
-        toggle.addEventListener('click', function() {
-            const category = this.getAttribute('data-category');
-            
-            // Toggle active state
-            if (this.classList.contains('active')) {
-                // Deactivate filter
-                this.classList.remove('active');
-                this.classList.remove('btn-danger', 'btn-warning', 'btn-info');
-                this.classList.add('btn-outline-danger', 'btn-outline-warning', 'btn-outline-info');
-                activeCategoryFilter = null;
-            } else {
-                // Deactivate other toggles
-                categoryToggles.forEach(t => {
-                    t.classList.remove('active');
-                    t.classList.remove('btn-danger', 'btn-warning', 'btn-info');
-                    t.classList.add('btn-outline-danger', 'btn-outline-warning', 'btn-outline-info');
-                });
-                
-                // Activate current toggle
-                this.classList.add('active');
-                this.classList.remove('btn-outline-danger', 'btn-outline-warning', 'btn-outline-info');
-                
-                if (category === 'Hot') {
-                    this.classList.add('btn-danger');
-                } else if (category === 'Warm') {
-                    this.classList.add('btn-warning');
-                } else if (category === 'Cold') {
-                    this.classList.add('btn-info');
-                }
-                
-                activeCategoryFilter = category;
-            }
-            
-            // Filter the table
-            filterPendingLeadsByCategory();
-        });
-    });
     
     function filterPendingLeadsByCategory() {
         const tableRows = document.querySelectorAll('#attendedLeadsTable tbody tr');
+        console.log('Filtering pending leads by category. Active filter:', activeCategoryFilter);
+        console.log('Total rows to check:', tableRows.length);
         
-        tableRows.forEach(row => {
+        tableRows.forEach((row, index) => {
             const categoryCell = row.querySelector('td:nth-child(7)'); // Category column
             if (categoryCell) {
-                const categoryText = categoryCell.textContent.trim();
+                // Get the badge text which contains the category
+                const badge = categoryCell.querySelector('.badge');
+                const categoryText = badge ? badge.textContent.trim() : categoryCell.textContent.trim();
                 
-                if (!activeCategoryFilter || categoryText.includes(activeCategoryFilter)) {
+                console.log(`Row ${index}: Category text: "${categoryText}", Active filter: "${activeCategoryFilter}"`);
+                
+                // Handle cases where category is null, empty, or "Not Set"
+                // Make comparison case-insensitive
+                const categoryTextLower = categoryText.toLowerCase();
+                const activeFilterLower = activeCategoryFilter ? activeCategoryFilter.toLowerCase() : '';
+                
+                if (!activeCategoryFilter || categoryTextLower === activeFilterLower) {
                     row.style.display = '';
+                    console.log(`Row ${index}: Showing row`);
                 } else {
                     row.style.display = 'none';
+                    console.log(`Row ${index}: Hiding row`);
                 }
+            } else {
+                console.log(`Row ${index}: No category cell found`);
             }
         });
         
@@ -1225,7 +1139,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // Update the count display
         const countElement = document.querySelector('#pending h5');
         if (countElement) {
-            countElement.textContent = `Pending Leads (${visibleCount})`;
+            if (activeCategoryFilter) {
+                countElement.textContent = `Pending Leads (${visibleCount}) - Filtered by: ${activeCategoryFilter}`;
+            } else {
+                countElement.textContent = `Pending Leads (${visibleCount})`;
+            }
         }
     }
 
@@ -1436,6 +1354,54 @@ document.addEventListener('DOMContentLoaded', function() {
             tbody.appendChild(row);
         });
     }
+
+    // Lead Category Toggle Functionality for Pending Leads
+    const categoryToggles = document.querySelectorAll('.category-toggle');
+    
+    console.log('Found category toggles:', categoryToggles.length);
+    
+    categoryToggles.forEach(toggle => {
+        console.log('Adding event listener to toggle:', toggle.getAttribute('data-category'));
+        toggle.addEventListener('click', function() {
+            const category = this.getAttribute('data-category');
+            console.log('Category toggle clicked:', category);
+            
+            // Toggle active state
+            if (this.classList.contains('active')) {
+                // Deactivate filter
+                this.classList.remove('active');
+                this.classList.remove('btn-danger', 'btn-warning', 'btn-info');
+                this.classList.add('btn-outline-danger', 'btn-outline-warning', 'btn-outline-info');
+                activeCategoryFilter = null;
+                console.log('Category filter deactivated');
+            } else {
+                // Deactivate other toggles
+                categoryToggles.forEach(t => {
+                    t.classList.remove('active');
+                    t.classList.remove('btn-danger', 'btn-warning', 'btn-info');
+                    t.classList.add('btn-outline-danger', 'btn-outline-warning', 'btn-outline-info');
+                });
+                
+                // Activate current toggle
+                this.classList.add('active');
+                this.classList.remove('btn-outline-danger', 'btn-outline-warning', 'btn-outline-info');
+                
+                if (category === 'Hot') {
+                    this.classList.add('btn-danger');
+                } else if (category === 'Warm') {
+                    this.classList.add('btn-warning');
+                } else if (category === 'Cold') {
+                    this.classList.add('btn-info');
+                }
+                
+                activeCategoryFilter = category;
+                console.log('Category filter activated:', activeCategoryFilter);
+            }
+            
+            // Filter the table
+            filterPendingLeadsByCategory();
+        });
+    });
 
     // Won/Lost Leads Toggle Functionality - AJAX Version
     const wonLostToggle = document.getElementById('wonLostToggle');

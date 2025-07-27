@@ -8,7 +8,7 @@
                 <th>Customer Name</th>
                 <th>Mobile</th>
                 <th>Model Interested</th>
-                <th>CRE Name</th>
+                <th>PS Name</th>
                 <th>Branch</th>
                 <th>{{ 'Won Date' if status == 'won' else 'Lost Date' }}</th>
                 <th>UID</th>
@@ -18,23 +18,11 @@
             {% for lead in leads_list %}
             <tr class="won-lost-lead-row"
                 data-date="{{ lead.won_timestamp[:10] if status == 'won' and lead.won_timestamp else (lead.lost_timestamp[:10] if lead.lost_timestamp else '') }}"
-                data-search="{{ ((lead.lead_uid or lead.uid) + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.cre_name or '') + ' ' + (lead.model_interested or ''))|lower }}">
+                data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.ps_name or '') + ' ' + (lead.model_interested or ''))|lower }}">
                 <td>
-                    {% if lead.activity_uid %}
-                        <a href="{{ url_for('update_event_lead', activity_uid=lead.activity_uid) }}" class="btn btn-sm btn-outline-primary">
-                            <i class="fas fa-edit"></i> View
-                        </a>
-                    {% else %}
-                        {% if dashboard_type == 'cre' %}
-                            <a href="{{ url_for('update_lead', uid=(lead.lead_uid or lead.uid)) }}" class="btn btn-sm btn-outline-primary">
-                                <i class="fas fa-edit"></i> View
-                            </a>
-                        {% else %}
-                            <a href="{{ url_for('update_ps_lead', uid=(lead.lead_uid or lead.uid), return_tab='won-lost') }}" class="btn btn-sm btn-outline-primary">
-                            <i class="fas fa-edit"></i> View
-                        </a>
-                        {% endif %}
-                    {% endif %}
+                    <a href="{{ url_for('update_lead', uid=lead.uid) }}" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-edit"></i> View
+                    </a>
                 </td>
                 <td>
                     {% if lead.lead_status %}
@@ -46,8 +34,8 @@
                 <td>{{ lead.customer_name }}</td>
                 <td>{{ lead.customer_mobile_number }}</td>
                 <td>{{ lead.model_interested or 'Not specified' }}</td>
-                <td>{{ lead.cre_name or 'N/A' }}</td>
-                <td>{{ lead.ps_branch or 'N/A' }}</td>
+                <td>{{ lead.ps_name or 'N/A' }}</td>
+                <td>{{ lead.branch or 'N/A' }}</td>
                 <td>
                     {% if status == 'won' and lead.won_timestamp %}
                         <span class="badge bg-success">{{ lead.won_timestamp[:10] }}</span>
@@ -57,7 +45,7 @@
                         <span class="badge bg-secondary">N/A</span>
                     {% endif %}
                 </td>
-                <td><span class="badge bg-primary">{{ lead.lead_uid or lead.uid }}</span></td>
+                <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
             </tr>
             {% endfor %}
         </tbody>
