@@ -1184,7 +1184,7 @@
                                 <th>Closed Lost</th>
                                 <th>Call%</th>
                                 <th>Interested%</th>
-                                <th>Walkin%</th>
+
                                 <th>Retail%</th>
                             </tr>
                             <tr>
@@ -1424,7 +1424,7 @@
                     <td>${d.closed_lost || 0}</td>
                     <td>${d.call_percentage || 0}%</td>
                     <td>${d.interested_percentage || 0}%</td>
-                    <td>${d.walkin_percentage || 0}%</td>
+
                     <td>${d.retail_percentage || 0}%</td>
                 </tr>`;
             });
@@ -1434,7 +1434,7 @@
                 // Calculate percentages out of 100%
                 const callPct = t.calls_allocated ? ((t.calls_connected / t.calls_allocated) * 100).toFixed(1) : 0;
                 const interestedPct = t.calls_allocated ? ((t.total_leads / t.calls_allocated) * 100).toFixed(1) : 0;
-                const walkinPct = t.calls_allocated ? ((t.pending / t.calls_allocated) * 100).toFixed(1) : 0;
+
                 const retailPct = t.calls_allocated ? ((t.closed_won / t.calls_allocated) * 100).toFixed(1) : 0;
                 html += `<tr class="total-row">
                     <td>Total</td>
@@ -1462,7 +1462,7 @@
                     <td>${t.closed_lost || 0}</td>
                     <td>${callPct}%</td>
                     <td>${interestedPct}%</td>
-                    <td>${walkinPct}%</td>
+
                     <td>${retailPct}%</td>
                 </tr>`;
             }

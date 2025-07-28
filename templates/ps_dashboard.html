@@ -76,40 +76,12 @@
             </div>
         </div>
     </div>
-    <!-- Walk-in Leads Stats Card -->
-    <div class="col-md-2">
-        <div class="stats-card bg-secondary text-white p-3 rounded">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h4>{{ walkin_leads|length }}</h4>
-                    <small class="text-white">Walk-in Leads</small>
-                </div>
-                <i class="fas fa-store fa-2x"></i>
-            </div>
-        </div>
-    </div>
+
+
 </div>
 
 <div class="row g-4 mb-4">
-  <div class="col-md-6">
-      <div class="card border-0 shadow-sm h-100">
-          <div class="card-body text-center">
-              <div class="mb-3">
-                  <i class="fas fa-store fa-3x text-info"></i>
-              </div>
-              <h5 class="card-title">Walk-in Customers</h5>
-              <p class="card-text text-muted">Add new walk-in customers and generate quotations</p>
-              <div class="d-flex gap-2 justify-content-center">
-                  <a href="{{ url_for('walkin_customers') }}" class="btn btn-info">
-                      <i class="fas fa-plus me-2"></i>Add Walk-in
-                  </a>
-                  <a href="{{ url_for('view_walkin_customers') }}" class="btn btn-outline-info">
-                      <i class="fas fa-list me-2"></i>View All
-                  </a>
-              </div>
-          </div>
-      </div>
-  </div>
+
   <div class="col-md-6">
       <div class="card border-0 shadow-sm h-100">
           <div class="card-body text-center">
@@ -155,12 +127,7 @@
                     <i class="fas fa-toggle-on"></i> Won/Lost
                 </button>
             </li>
-            <!-- Walk-in Leads Tab -->
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="walkin-leads-tab" data-bs-toggle="tab" data-bs-target="#walkin-leads" type="button" role="tab" aria-controls="walkin-leads" aria-selected="false" tabindex="-1">
-                    <i class="fas fa-store"></i> Walk-in Leads
-                </button>
-            </li>
+
             <!-- Event Leads Tab -->
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="event-leads-tab" data-bs-toggle="tab" data-bs-target="#event-leads" type="button" role="tab" aria-controls="event-leads" aria-selected="false" tabindex="-1">
@@ -533,131 +500,7 @@
                 {% include 'ps_dashboard_leads_table.html' %}
             </div>
 
-            <!-- Walk-in Leads Tab Content -->
-            <div class="tab-pane fade" id="walkin-leads" role="tabpanel" aria-labelledby="walkin-leads-tab">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="mb-0">Walk-in Leads ({{ walkin_leads|length }})</h5>
-                    <div class="d-flex gap-2">
-                        <!-- Walk-in Status Toggle Buttons -->
-                        <div class="btn-group me-2" role="group" aria-label="Walk-in Status Filters">
-                            <button type="button" class="btn btn-outline-success status-toggle" data-status="Won" id="wonToggle">
-                                <i class="fas fa-trophy"></i> Won
-                            </button>
-                            <button type="button" class="btn btn-outline-danger status-toggle" data-status="Lost" id="lostToggle">
-                                <i class="fas fa-times-circle"></i> Lost
-                            </button>
-                            <button type="button" class="btn btn-outline-warning status-toggle" data-status="Pending" id="pendingToggle">
-                                <i class="fas fa-clock"></i> Pending
-                            </button>
-                        </div>
-                        <div class="input-group" style="max-width: 300px;">
-                            <input type="text" class="form-control" id="walkinLeadSearchInput" placeholder="Search by UID, name, mobile...">
-                            <button class="btn btn-outline-secondary" type="button" id="walkinLeadSearchButton">
-                                <i class="fas fa-search"></i>
-                            </button>
-                            <button class="btn btn-outline-warning" type="button" id="walkinLeadClearButton">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                {% if walkin_leads %}
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover" id="walkinLeadsTable">
-                        <thead class="table-dark">
-                            <tr>
-                                <th>Action</th>
-                                <th>Final Status</th>
-                                <th>Customer Name</th>
-                                <th>Mobile</th>
-                                <th>Source</th>
-                                <th>Category</th>
-                                <th>Model Interested</th>
-                                <th>Created Date</th>
-                                <th>UID</th>
-                                <th>Call Progress</th>
-                                <th>Call History</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for lead in walkin_leads %}
-                            <tr class="walkin-lead-row" data-created="{{ lead.created_at[:10] if lead.created_at else '' }}"
-                                data-search="{{ (lead.uid + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.lead_source or ''))|lower }}">
-                                <td>
-                                    <a href="{{ url_for('update_ps_lead', uid=lead.uid, return_tab='walkin-leads') }}" class="btn btn-sm btn-outline-primary update-walkin-link">
-                                        <i class="fas fa-edit"></i> Update
-                                    </a>
-                                </td>
-                                <td>
-                                    {% set final_status = lead.ps_final_status or 'Pending' %}
-                                    {% if final_status == 'Won' %}
-                                        <span class="badge bg-success">{{ final_status }}</span>
-                                    {% elif final_status == 'Lost' %}
-                                        <span class="badge bg-danger">{{ final_status }}</span>
-                                    {% else %}
-                                        <span class="badge bg-warning">{{ final_status }}</span>
-                                    {% endif %}
-                                </td>
-                                <td>{{ lead.customer_name }}</td>
-                                <td>{{ lead.customer_mobile_number }}</td>
-                                <td><span class="badge bg-secondary">{{ lead.lead_source or 'Walk-in' }}</span></td>
-                                <td>
-                                    {% if lead.lead_category and lead.lead_category|lower == 'hot' %}
-                                        <span class="badge bg-danger">{{ lead.lead_category }}</span>
-                                    {% elif lead.lead_category and lead.lead_category|lower == 'warm' %}
-                                        <span class="badge bg-warning">{{ lead.lead_category }}</span>
-                                    {% elif lead.lead_category and lead.lead_category|lower == 'cold' %}
-                                        <span class="badge bg-info">{{ lead.lead_category }}</span>
-                                    {% else %}
-                                        <span class="badge bg-dark">{{ lead.lead_category or 'Not Set' }}</span>
-                                    {% endif %}
-                                </td>
-                                <td>{{ lead.model_interested or 'Not specified' }}</td>
-                                <td>{{ lead.created_at[:10] if lead.created_at else 'N/A' }}</td>
-                                <td><span class="badge bg-primary">{{ lead.uid }}</span></td>
-                                <td>
-                                    {% set calls_made = 0 %}
-                                    {% if lead.first_call_date %}
-                                        {% set calls_made = calls_made + 1 %}
-                                    {% endif %}
-                                    {% if lead.second_call_date %}
-                                        {% set calls_made = calls_made + 1 %}
-                                    {% endif %}
-                                    {% if lead.third_call_date %}
-                                        {% set calls_made = calls_made + 1 %}
-                                    {% endif %}
-                                    {% set progress_class = 'bg-secondary' %}
-                                    {% if calls_made == 1 %}
-                                        {% set progress_class = 'bg-warning' %}
-                                    {% elif calls_made == 2 %}
-                                        {% set progress_class = 'bg-info' %}
-                                    {% elif calls_made > 2 %}
-                                        {% set progress_class = 'bg-success' %}
-                                    {% endif %}
-                                    <div class="progress" style="height: 20px; min-width: 120px;">
-                                        <div class="progress-bar {{ progress_class }}" role="progressbar" style="width: {{ (calls_made / 3 * 100)|round }}%">
-                                            {{ calls_made }}/3 Calls
-                                        </div>
-                                    </div>
-                                </td>
-                                <td>
-                                    <button class="btn btn-sm btn-outline-info view-ps-call-history-btn" data-uid="{{ lead.uid }}">
-                                        <i class="fas fa-history"></i> View
-                                    </button>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <div class="text-center py-5">
-                    <i class="fas fa-store fa-3x text-muted mb-3"></i>
-                    <h5 class="text-muted">No walk-in leads</h5>
-                    <p class="text-muted">Walk-in leads will appear here when added</p>
-                </div>
-                {% endif %}
-            </div>
+
             <!-- Event Leads Tab Content -->
             <div class="tab-pane fade" id="event-leads" role="tabpanel" aria-labelledby="event-leads-tab">
                 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -1035,15 +878,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
                 
-                // For walk-in leads, also check status filter
-                let shouldShowByStatus = true;
-                if (tableId === 'walkinLeadsTable' && activeStatusFilter) {
-                    const statusCell = row.querySelector('td:nth-child(2)');
-                    if (statusCell) {
-                        const statusText = statusCell.textContent.trim();
-                        shouldShowByStatus = statusText.includes(activeStatusFilter);
-                    }
-                }
+
                 
                 if (shouldShowBySearch && shouldShowByCategory && shouldShowByStatus) {
                     row.style.display = '';
@@ -1057,10 +892,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 updatePendingLeadsCount();
             }
             
-            // Update count for walk-in leads
-            if (tableId === 'walkinLeadsTable') {
-                updateWalkinLeadsCount();
-            }
+
         }
 
         function clearSearch() {
@@ -1086,7 +918,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupSearch('followupSearchInput', 'followupSearchButton', 'followupClearButton', 'followupTable');
     setupSearch('attendedSearchInput', 'attendedSearchButton', 'attendedClearButton', 'attendedLeadsTable');
     setupSearch('wonLostLeadSearchInput', 'wonLostLeadSearchButton', 'wonLostLeadClearButton', 'wonLostLeadsTable');
-    setupSearch('walkinLeadSearchInput', 'walkinLeadSearchButton', 'walkinLeadClearButton', 'walkinLeadsTable');
+
     setupSearch('eventLeadSearchInput', 'eventLeadSearchButton', 'eventLeadClearButton', 'eventLeadsTable');
 
     // Lead Category Toggle Functionality for Pending Leads
@@ -1147,7 +979,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Walk-in Status Toggle Functionality
+
     let activeStatusFilter = null;
     const statusToggles = document.querySelectorAll('.status-toggle');
     
@@ -1186,67 +1018,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // Filter the table
-            filterWalkinLeadsByStatus();
+
         });
     });
     
-    function filterWalkinLeadsByStatus() {
-        const tableRows = document.querySelectorAll('#walkinLeadsTable tbody tr');
-        
-        tableRows.forEach(row => {
-            const statusCell = row.querySelector('td:nth-child(2)'); // Final Status column
-            if (statusCell) {
-                const statusText = statusCell.textContent.trim();
-                
-                if (!activeStatusFilter || statusText.includes(activeStatusFilter)) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
-            }
-        });
-        
-        updateWalkinLeadsCount();
-    }
-    
-    function updateWalkinLeadsCount() {
-        const tableRows = document.querySelectorAll('#walkinLeadsTable tbody tr');
-        let visibleCount = 0;
-        
-        tableRows.forEach(row => {
-            if (row.style.display !== 'none') {
-                visibleCount++;
-            }
-        });
-        
-        // Update the count display
-        const countElement = document.querySelector('#walkin-leads h5');
-        if (countElement) {
-            countElement.textContent = `Walk-in Leads (${visibleCount})`;
-        }
-        
-        // Update all update links with current status filter
-        updateWalkinUpdateLinks();
-    }
-    
-    function updateWalkinUpdateLinks() {
-        const updateLinks = document.querySelectorAll('.update-walkin-link');
-        updateLinks.forEach(link => {
-            let currentHref = link.getAttribute('href');
-            // Remove any existing status parameter
-            currentHref = currentHref.replace(/&status_filter=[^&]*/, '');
-            
-            if (activeStatusFilter) {
-                if (currentHref.includes('?')) {
-                    currentHref += `&status_filter=${activeStatusFilter}`;
-                } else {
-                    currentHref += `?status_filter=${activeStatusFilter}`;
-                }
-            }
-            
-            link.setAttribute('href', currentHref);
-        });
-    }
+
 
     // Hide filter bar for Today's Follow-ups and Pending Leads tabs
     function updateFilterBarVisibility() {
