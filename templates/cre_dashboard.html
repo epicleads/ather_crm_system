@@ -56,6 +56,17 @@
         transform: none !important;
     }
 
+    /* Date Range Inputs - Ensure they are hidden by default */
+    #freshDateRangeInputs,
+    #pendingDateRangeInputs,
+    #psDateRangeInputs {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        position: absolute !important;
+        z-index: -1 !important;
+    }
+
     /* Pending Leads Category Toggle Button Styling */
     .category-toggle {
         padding: 0.25rem 0.5rem !important;
@@ -67,6 +78,39 @@
     .category-toggle i {
         font-size: 0.75rem !important;
         margin-right: 0.25rem !important;
+    }
+
+    /* PS Assigned Filters Styling */
+    .ps-assigned-filters {
+        gap: 0.5rem !important;
+        margin-bottom: 1rem !important;
+    }
+
+    .ps-assigned-filters .btn-group {
+        min-width: 150px;
+    }
+
+    .ps-assigned-filters .dropdown-menu {
+        max-height: 200px;
+        overflow-y: auto;
+    }
+
+    /* PS Assigned Category Filter Buttons Styling */
+    .ps-category-filter {
+        font-size: 0.875rem;
+        padding: 0.375rem 0.75rem;
+        border-radius: 0.375rem;
+        margin-right: 0.25rem;
+        transition: all 0.2s ease-in-out;
+    }
+
+    .ps-category-filter:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .ps-category-filter.active {
+        font-weight: 600;
     }
 </style>
 {% endblock %}
@@ -236,6 +280,7 @@
                                 <li><a class="dropdown-item fresh-time-filter" href="#" data-filter="range">Date Range</a></li>
                             </ul>
                         </div>
+                        <!-- Fresh Leads Date Range Filter -->
                         <div id="freshDateRangeInputs" class="d-flex gap-2" style="display: none; z-index: 1050;">
                             <input type="date" class="form-control" id="freshStartDate" style="max-width: 150px;">
                             <input type="date" class="form-control" id="freshEndDate" style="max-width: 150px;">
@@ -466,6 +511,7 @@
                                 <li><a class="dropdown-item pending-time-filter" href="#" data-filter="range">Date Range</a></li>
                             </ul>
                         </div>
+                        <!-- Pending Leads Date Range Filter -->
                         <div id="pendingDateRangeInputs" class="d-flex gap-2" style="display: none;">
                             <input type="date" class="form-control" id="pendingStartDate" style="max-width: 150px;">
                             <input type="date" class="form-control" id="pendingEndDate" style="max-width: 150px;">
@@ -580,12 +626,57 @@
                                 <li><a class="dropdown-item ps-time-filter" href="#" data-filter="range">Date Range</a></li>
                             </ul>
                         </div>
+                        <!-- PS Assigned Date Range Filter -->
                         <div id="psDateRangeInputs" class="d-flex gap-2" style="display: none;">
                             <input type="date" class="form-control" id="psStartDate" style="max-width: 150px;">
                             <input type="date" class="form-control" id="psEndDate" style="max-width: 150px;">
                             <button class="btn btn-outline-primary" type="button" id="applyPsDateRange">
                                 <i class="fas fa-filter"></i> Apply
                             </button>
+                        </div>
+                        <!-- PS Assigned Branch and PS Filters -->
+                        <div class="ps-assigned-filters d-flex gap-2 flex-wrap" style="margin-bottom: 10px;">
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <span id="psBranchFilterText">All Branches</span>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end" id="psBranchFilterDropdown">
+                                    <li><a class="dropdown-item ps-branch-filter" href="#" data-branch="all">All Branches</a></li>
+                                    {% for branch in assigned_to_ps|map(attribute='branch')|unique|list %}
+                                    {% if branch %}
+                                    <li><a class="dropdown-item ps-branch-filter" href="#" data-branch="{{ branch }}">{{ branch }}</a></li>
+                                    {% endif %}
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <span id="psNameFilterText">All PS</span>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end" id="psNameFilterDropdown">
+                                    <li><a class="dropdown-item ps-name-filter" href="#" data-ps="all">All PS</a></li>
+                                    {% for ps_name in assigned_to_ps|map(attribute='ps_name')|unique|list %}
+                                    {% if ps_name %}
+                                    <li><a class="dropdown-item ps-name-filter" href="#" data-ps="{{ ps_name }}">{{ ps_name }}</a></li>
+                                    {% endif %}
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            <!-- PS Assigned Category Filter Buttons -->
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn btn-outline-danger ps-category-filter" data-category="all" id="psCategoryAll">
+                                    <i class="fas fa-filter"></i> All Categories
+                                </button>
+                                <button type="button" class="btn btn-outline-danger ps-category-filter" data-category="Hot" id="psCategoryHot">
+                                    <i class="fas fa-fire"></i> Hot
+                                </button>
+                                <button type="button" class="btn btn-outline-warning ps-category-filter" data-category="Warm" id="psCategoryWarm">
+                                    <i class="fas fa-sun"></i> Warm
+                                </button>
+                                <button type="button" class="btn btn-outline-info ps-category-filter" data-category="Cold" id="psCategoryCold">
+                                    <i class="fas fa-snowflake"></i> Cold
+                                </button>
+                            </div>
                         </div>
                         <div class="input-group" style="max-width: 300px;">
                             <input type="text" class="form-control" id="psSearchInput" placeholder="Search by UID, name, mobile...">
@@ -865,10 +956,10 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: #dc3545; /* Red for Lost */
+    background-color: #222; /* Black shade for Lost */
     transition: 0.4s ease;
     border-radius: 45px;
-    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3);
+    box-shadow: 0 2px 8px rgba(30, 30, 30, 0.3);
 }
 
 .slider:before {
@@ -878,15 +969,15 @@
     width: 37px;
     left: 4px;
     bottom: 4px;
-    background-color: white;
+    background-color: #888; /* Gray knob */
     transition: 0.4s ease;
     border-radius: 50%;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 input:checked + .slider {
-    background-color: #28a745; /* Green for Won */
-    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
+    background-color: #111; /* Black shade for Won */
+    box-shadow: 0 2px 8px rgba(30, 30, 30, 0.4);
 }
 
 input:checked + .slider:before {
@@ -914,18 +1005,44 @@ input:checked + .slider:before {
 }
 
 /* Hover effects */
-.toggle-switch:hover .slider {
-    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
+.toggle-switch:hover .slider,
+.toggle-switch:hover input:checked + .slider {
+    box-shadow: 0 4px 12px rgba(30, 30, 30, 0.4);
 }
 
 .toggle-switch:hover input:checked + .slider {
-    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+    box-shadow: 0 4px 12px rgba(30, 30, 30, 0.4);
 }
 </style>
 
     <!-- SocketIO removed - no longer needed for notifications -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    function hideAllDateRangeInputs() {
+        console.log('hideAllDateRangeInputs called');
+        console.log('freshDateRangeInputs:', freshDateRangeInputs);
+        console.log('pendingDateRangeInputs:', pendingDateRangeInputs);
+        console.log('psDateRangeInputs:', psDateRangeInputs);
+        
+        if (freshDateRangeInputs) {
+            freshDateRangeInputs.style.setProperty('display', 'none', 'important');
+            freshDateRangeInputs.style.setProperty('visibility', 'hidden', 'important');
+            freshDateRangeInputs.style.setProperty('opacity', '0', 'important');
+            console.log('Hidden freshDateRangeInputs');
+        }
+        if (pendingDateRangeInputs) {
+            pendingDateRangeInputs.style.setProperty('display', 'none', 'important');
+            pendingDateRangeInputs.style.setProperty('visibility', 'hidden', 'important');
+            pendingDateRangeInputs.style.setProperty('opacity', '0', 'important');
+            console.log('Hidden pendingDateRangeInputs');
+        }
+        if (psDateRangeInputs) {
+            psDateRangeInputs.style.setProperty('display', 'none', 'important');
+            psDateRangeInputs.style.setProperty('visibility', 'hidden', 'important');
+            psDateRangeInputs.style.setProperty('opacity', '0', 'important');
+            console.log('Hidden psDateRangeInputs');
+        }
+    }
     // Get current date in YYYY-MM-DD format (this will always be the actual current date)
     function getCurrentDate() {
         const now = new Date();
@@ -1067,6 +1184,36 @@ document.addEventListener('DOMContentLoaded', function() {
     const freshEndDate = document.getElementById('freshEndDate');
     const applyFreshDateRange = document.getElementById('applyFreshDateRange');
 
+    // Pending leads time filter functionality
+    const pendingTimeFilters = document.querySelectorAll('.pending-time-filter');
+    const pendingTimeFilterText = document.getElementById('pendingTimeFilterText');
+    const pendingRows = document.querySelectorAll('.pending-lead-row');
+    const pendingDateRangeInputs = document.getElementById('pendingDateRangeInputs');
+    const pendingStartDate = document.getElementById('pendingStartDate');
+    const pendingEndDate = document.getElementById('pendingEndDate');
+    const applyPendingDateRange = document.getElementById('applyPendingDateRange');
+    const pendingLeadsCount = document.getElementById('pendingLeadsCount');
+
+    // PS Assigned leads time filter functionality
+    const psTimeFilters = document.querySelectorAll('.ps-time-filter');
+    const psTimeFilterText = document.getElementById('psTimeFilterText');
+    const psRows = document.querySelectorAll('.ps-lead-row');
+    const psDateRangeInputs = document.getElementById('psDateRangeInputs');
+    const psStartDate = document.getElementById('psStartDate');
+    const psEndDate = document.getElementById('psEndDate');
+    const applyPsDateRange = document.getElementById('applyPsDateRange');
+
+    // Store current filter states for PS Assigned
+    let currentPsBranchFilter = 'all';
+    let currentPsNameFilter = 'all';
+    let currentPsCategoryFilter = 'all';
+
+    // Initialize filter state for PS Assigned to default to "All Time" if not set
+    if (!filterState.ps) {
+        filterState.ps = 'all';
+        saveFilterState('ps', 'all');
+    }
+
     function filterFreshLeads(filterType, startDate = null, endDate = null) {
         const today = getCurrentDate(); // Use the function to get current date
         console.log('=== FRESH LEADS FILTER ===');
@@ -1168,16 +1315,19 @@ document.addEventListener('DOMContentLoaded', function() {
     freshTimeFilters.forEach(filter => {
         filter.addEventListener('click', function(e) {
             e.preventDefault();
+            console.log('Fresh time filter clicked:', this.getAttribute('data-filter'));
+            hideAllDateRangeInputs();
             const filterType = this.getAttribute('data-filter');
             freshTimeFilterText.textContent = this.textContent;
             saveFilterState('fresh', filterType);
 
-            console.log('Fresh leads filter clicked:', filterType);
-
             if (filterType === 'range') {
-                freshDateRangeInputs.style.display = 'flex';
+                console.log('Showing freshDateRangeInputs');
+                freshDateRangeInputs.style.setProperty('display', 'flex', 'important');
+                freshDateRangeInputs.style.setProperty('visibility', 'visible', 'important');
+                freshDateRangeInputs.style.setProperty('opacity', '1', 'important');
             } else {
-                freshDateRangeInputs.style.display = 'none';
+                console.log('Hiding freshDateRangeInputs, filtering with type:', filterType);
                 filterFreshLeads(filterType);
             }
         });
@@ -1208,7 +1358,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const wonTimeFilters = document.querySelectorAll('.won-time-filter');
     const wonTimeFilterText = document.getElementById('wonTimeFilterText');
     const wonRows = document.querySelectorAll('.won-lead-row');
-    const dateRangeInputs = document.getElementById('dateRangeInputs');
+    
     const wonStartDate = document.getElementById('wonStartDate');
     const wonEndDate = document.getElementById('wonEndDate');
     const applyDateRange = document.getElementById('applyDateRange');
@@ -1287,14 +1437,14 @@ document.addEventListener('DOMContentLoaded', function() {
     wonTimeFilters.forEach(filter => {
         filter.addEventListener('click', function(e) {
             e.preventDefault();
+            hideAllDateRangeInputs();
             const filterType = this.getAttribute('data-filter');
             wonTimeFilterText.textContent = this.textContent;
             saveFilterState('won', filterType);
 
             if (filterType === 'range') {
-                dateRangeInputs.style.display = 'flex';
+    
             } else {
-                dateRangeInputs.style.display = 'none';
                 filterWonLeads(filterType);
             }
         });
@@ -1318,21 +1468,6 @@ document.addEventListener('DOMContentLoaded', function() {
             filterWonLeads('range', startDate, endDate);
             saveFilterState('won', 'range');
         });
-    }
-
-    // Pending leads time filter functionality
-    const pendingTimeFilters = document.querySelectorAll('.pending-time-filter');
-    const pendingTimeFilterText = document.getElementById('pendingTimeFilterText');
-    const pendingRows = document.querySelectorAll('.pending-lead-row');
-    const pendingDateRangeInputs = document.getElementById('pendingDateRangeInputs');
-    const pendingStartDate = document.getElementById('pendingStartDate');
-    const pendingEndDate = document.getElementById('pendingEndDate');
-    const applyPendingDateRange = document.getElementById('applyPendingDateRange');
-    const pendingLeadsCount = document.getElementById('pendingLeadsCount');
-
-    function updatePendingLeadsCount() {
-        const visibleRows = document.querySelectorAll('.pending-lead-row[style=""], .pending-lead-row:not([style*="display: none"])');
-        pendingLeadsCount.textContent = visibleRows.length;
     }
 
     function filterPendingLeads(filterType, startDate = null, endDate = null) {
@@ -1378,14 +1513,16 @@ document.addEventListener('DOMContentLoaded', function() {
     pendingTimeFilters.forEach(filter => {
         filter.addEventListener('click', function(e) {
             e.preventDefault();
+            hideAllDateRangeInputs();
             const filterType = this.getAttribute('data-filter');
             pendingTimeFilterText.textContent = this.textContent;
             saveFilterState('pending', filterType);
 
             if (filterType === 'range') {
-                pendingDateRangeInputs.style.display = 'flex';
+                pendingDateRangeInputs.style.setProperty('display', 'flex', 'important');
+                pendingDateRangeInputs.style.setProperty('visibility', 'visible', 'important');
+                pendingDateRangeInputs.style.setProperty('opacity', '1', 'important');
             } else {
-                pendingDateRangeInputs.style.display = 'none';
                 filterPendingLeads(filterType);
             }
         });
@@ -1411,24 +1548,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // PS Assigned leads time filter functionality
-    const psTimeFilters = document.querySelectorAll('.ps-time-filter');
-    const psTimeFilterText = document.getElementById('psTimeFilterText');
-    const psRows = document.querySelectorAll('.ps-lead-row');
-    const psDateRangeInputs = document.getElementById('psDateRangeInputs');
-    const psStartDate = document.getElementById('psStartDate');
-    const psEndDate = document.getElementById('psEndDate');
-    const applyPsDateRange = document.getElementById('applyPsDateRange');
-    const psAssignedCount = document.getElementById('psAssignedCount');
-
-    function updatePsAssignedCount() {
-        const visibleRows = document.querySelectorAll('.ps-lead-row[style=""], .ps-lead-row:not([style*="display: none"])');
-        psAssignedCount.textContent = visibleRows.length;
-    }
-
     function filterPsAssignedLeads(filterType, startDate = null, endDate = null) {
         const today = getCurrentDate(); // Use the function to get current date
         console.log('PS Assigned Filter - Type:', filterType, 'Today:', today);
+        console.log('Date Range - Start:', startDate, 'End:', endDate);
+
+        let visibleCount = 0;
 
         psRows.forEach(row => {
             const psAssignedDate = row.getAttribute('data-ps-assigned-date');
@@ -1448,35 +1573,80 @@ document.addEventListener('DOMContentLoaded', function() {
                     break;
                 case 'all':
                     showRow = true;
+                    console.log('PS Assigned All Time filter - Showing all leads');
                     break;
                 case 'range':
                     if (startDate && endDate && psAssignedDate) {
                         showRow = psAssignedDate >= startDate && psAssignedDate <= endDate;
+                        console.log('PS Assigned Range filter - Match:', showRow, 'for date:', psAssignedDate, 'in range:', startDate, 'to', endDate);
                     } else {
                         showRow = false;
+                        console.log('PS Assigned Range filter - Invalid range or date, hiding');
                     }
                     break;
                 default:
                     showRow = true;
             }
 
+            // Apply branch and PS name filters
+            if (showRow) {
+                const branchCell = row.querySelector('td:nth-child(6)'); // Branch column
+                const psNameCell = row.querySelector('td:nth-child(5)'); // PS Name column
+                const categoryCell = row.querySelector('td:nth-child(7)'); // Category column
+                
+                if (branchCell && psNameCell && categoryCell) {
+                    const branchText = branchCell.textContent.trim();
+                    const psNameText = psNameCell.textContent.trim();
+                    const categoryText = categoryCell.textContent.trim();
+
+                    // Check branch filter
+                    if (currentPsBranchFilter !== 'all') {
+                        showRow = branchText === currentPsBranchFilter;
+                    }
+
+                    // Check PS name filter
+                    if (showRow && currentPsNameFilter !== 'all') {
+                        showRow = psNameText === currentPsNameFilter;
+                    }
+
+                    // Check category filter
+                    if (showRow && currentPsCategoryFilter !== 'all') {
+                        showRow = categoryText === currentPsCategoryFilter;
+                    }
+                }
+            }
+
             row.style.display = showRow ? '' : 'none';
+            
+            if (showRow) {
+                visibleCount++;
+            }
         });
 
+        console.log('PS Assigned Filter Result - Visible rows:', visibleCount);
         updatePsAssignedCount();
     }
 
     psTimeFilters.forEach(filter => {
         filter.addEventListener('click', function(e) {
             e.preventDefault();
+            console.log('PS time filter clicked:', this.getAttribute('data-filter'));
+            hideAllDateRangeInputs();
             const filterType = this.getAttribute('data-filter');
             psTimeFilterText.textContent = this.textContent;
             saveFilterState('ps', filterType);
 
             if (filterType === 'range') {
-                psDateRangeInputs.style.display = 'flex';
+                console.log('Showing psDateRangeInputs');
+                psDateRangeInputs.style.setProperty('display', 'flex', 'important');
+                psDateRangeInputs.style.setProperty('visibility', 'visible', 'important');
+                psDateRangeInputs.style.setProperty('opacity', '1', 'important');
+                psDateRangeInputs.style.setProperty('position', 'static', 'important');
+                psDateRangeInputs.style.setProperty('z-index', 'auto', 'important');
             } else {
-                psDateRangeInputs.style.display = 'none';
+                console.log('Hiding psDateRangeInputs, filtering with type:', filterType);
+                // Force hide date range inputs for non-range filters
+                forceHidePsDateRangeInputs();
                 filterPsAssignedLeads(filterType);
             }
         });
@@ -1497,8 +1667,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
+            console.log('Applying PS Assigned date range filter:', startDate, 'to', endDate);
+            
+            // Apply date filter first, then apply branch and PS filters
             filterPsAssignedLeads('range', startDate, endDate);
             saveFilterState('ps', 'range');
+            
+            // Update the filter text to show "Date Range"
+            if (psTimeFilterText) {
+                psTimeFilterText.textContent = 'Date Range';
+            }
         });
     }
 
@@ -1507,7 +1685,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (freshDateRangeInputs) freshDateRangeInputs.style.display = 'none';
     if (pendingDateRangeInputs) pendingDateRangeInputs.style.display = 'none';
     if (psDateRangeInputs) psDateRangeInputs.style.display = 'none';
-    if (dateRangeInputs) dateRangeInputs.style.display = 'none';
 
     // Apply saved filter states on page load instead of defaulting to "Today"
     console.log('Applying saved filter states on page load...');
@@ -1541,7 +1718,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (psDateRangeInputs) psDateRangeInputs.style.display = 'none';
     }
     if (filterState.won !== 'range') {
-        if (dateRangeInputs) dateRangeInputs.style.display = 'none';
+
     }
     
     // Only call filter functions if elements exist
@@ -1552,7 +1729,9 @@ document.addEventListener('DOMContentLoaded', function() {
     filterPendingLeads(filterState.pending);
     }
     if (document.querySelectorAll('.ps-lead-row').length > 0) {
-    filterPsAssignedLeads(filterState.ps);
+    // For PS Assigned, ensure "All Time" filter is applied by default if no saved state
+    const psFilterToApply = filterState.ps || 'all';
+    filterPsAssignedLeads(psFilterToApply);
     }
     if (document.querySelectorAll('.won-lead-row').length > 0) {
     filterWonLeads(filterState.won);
@@ -1691,6 +1870,378 @@ document.addEventListener('DOMContentLoaded', function() {
         const currentStatus = window.location.search.includes('status=won') ? 'won' : 'lost';
         wonLostToggle.checked = currentStatus === 'won';
     }
+
+    function updatePendingLeadsCount() {
+        const visibleRows = document.querySelectorAll('.pending-lead-row[style=""], .pending-lead-row:not([style*="display: none"])');
+        if (pendingLeadsCount) {
+            pendingLeadsCount.textContent = visibleRows.length;
+        }
+    }
+
+    function updatePsAssignedCount() {
+        const visibleRows = document.querySelectorAll('.ps-lead-row[style=""], .ps-lead-row:not([style*="display: none"])');
+        const psAssignedCount = document.getElementById('psAssignedCount');
+        if (psAssignedCount) {
+            psAssignedCount.textContent = visibleRows.length;
+        }
+    }
+
+    function filterFreshLeads(filterType, startDate = null, endDate = null) {
+        const today = getCurrentDate(); // Use the function to get current date
+        console.log('=== FRESH LEADS FILTER ===');
+        console.log('Filter Type:', filterType, 'Today:', today);
+        console.log('Start Date:', startDate, 'End Date:', endDate);
+
+        // Get rows from both untouched and called tables
+        const untouchedRows = document.querySelectorAll('#untouchedLeadsTable tbody tr');
+        const calledRows = document.querySelectorAll('#calledLeadsTable tbody tr');
+        
+        let totalVisibleCount = 0;
+        let untouchedVisibleCount = 0;
+        let calledVisibleCount = 0;
+
+        // Filter untouched leads
+        untouchedRows.forEach(row => {
+            const leadDate = row.getAttribute('data-assigned-date');
+            console.log('Untouched Lead - Date:', leadDate);
+
+            let showRow = false;
+
+            switch(filterType) {
+                case 'today':
+                    showRow = leadDate === today;
+                    console.log('Today filter - Untouched Match:', showRow, 'for date:', leadDate);
+                    break;
+                case 'all':
+                    showRow = true;
+                    console.log('All Time filter - Showing all untouched leads');
+                    break;
+                case 'range':
+                    if (startDate && endDate && leadDate) {
+                        showRow = leadDate >= startDate && leadDate <= endDate;
+                        console.log('Range filter - Untouched Match:', showRow, 'for date:', leadDate, 'in range:', startDate, 'to', endDate);
+                    } else {
+                        showRow = false;
+                        console.log('Range filter - Invalid range or date for untouched, hiding');
+                    }
+                    break;
+                default:
+                    showRow = true;
+            }
+
+            if (showRow) {
+                untouchedVisibleCount++;
+            }
+
+            row.style.display = showRow ? '' : 'none';
+        });
+
+        // Filter called leads
+        calledRows.forEach(row => {
+            const leadDate = row.getAttribute('data-assigned-date');
+            console.log('Called Lead - Date:', leadDate);
+
+            let showRow = false;
+
+            switch(filterType) {
+                case 'today':
+                    showRow = leadDate === today;
+                    console.log('Today filter - Called Match:', showRow, 'for date:', leadDate);
+                    break;
+                case 'all':
+                    showRow = true;
+                    console.log('All Time filter - Showing all called leads');
+                    break;
+                case 'range':
+                    if (startDate && endDate && leadDate) {
+                        showRow = leadDate >= startDate && leadDate <= endDate;
+                        console.log('Range filter - Called Match:', showRow, 'for date:', leadDate, 'in range:', startDate, 'to', endDate);
+                    } else {
+                        showRow = false;
+                        console.log('Range filter - Invalid range or date for called, hiding');
+                    }
+                    break;
+                default:
+                    showRow = true;
+            }
+
+            if (showRow) {
+                calledVisibleCount++;
+            }
+
+            row.style.display = showRow ? '' : 'none';
+        });
+
+        totalVisibleCount = untouchedVisibleCount + calledVisibleCount;
+
+        console.log('Total visible fresh leads after filter:', totalVisibleCount);
+        console.log('Untouched visible:', untouchedVisibleCount, 'Called visible:', calledVisibleCount);
+        console.log('=== END FRESH LEADS FILTER ===');
+
+        // Update the count display and badges
+        document.getElementById('freshLeadsCount').textContent = totalVisibleCount;
+        document.querySelector('#untouched-leads-tab .badge').textContent = untouchedVisibleCount;
+        document.querySelector('#called-leads-tab .badge').textContent = calledVisibleCount;
+    }
+
+    // Initialize the search functionality
+    setupPendingSearch();
+
+    // Handle tab and sub_tab redirection on page load
+    const returnTab = '{{ return_tab }}';
+    const returnSubTab = '{{ return_sub_tab }}';
+    
+    if (returnTab && returnSubTab) {
+        // Activate the main tab first
+        const mainTab = document.querySelector(`[data-bs-target="#${returnTab}"]`);
+        if (mainTab) {
+            const tab = new bootstrap.Tab(mainTab);
+            tab.show();
+            
+            // Wait a bit for the tab to activate, then activate the sub-tab
+            setTimeout(() => {
+                const subTab = document.querySelector(`[data-bs-target="#${returnSubTab}"]`);
+                if (subTab) {
+                    const subTabInstance = new bootstrap.Tab(subTab);
+                    subTabInstance.show();
+                }
+            }, 100);
+        }
+    }
+
+    // Ensure all date range inputs are hidden by default
+    console.log('Initializing date range inputs to hidden state');
+    console.log('freshDateRangeInputs element:', freshDateRangeInputs);
+    console.log('pendingDateRangeInputs element:', pendingDateRangeInputs);
+    console.log('psDateRangeInputs element:', psDateRangeInputs);
+    
+    // Test if elements exist
+    const testFresh = document.getElementById('freshDateRangeInputs');
+    const testPending = document.getElementById('pendingDateRangeInputs');
+    const testPs = document.getElementById('psDateRangeInputs');
+    console.log('Direct element test - fresh:', testFresh);
+    console.log('Direct element test - pending:', testPending);
+    console.log('Direct element test - ps:', testPs);
+    
+    // Manual test to hide elements
+    if (testFresh) {
+        testFresh.style.display = 'none';
+        console.log('Manually hid freshDateRangeInputs');
+    }
+    if (testPending) {
+        testPending.style.display = 'none';
+        console.log('Manually hid pendingDateRangeInputs');
+    }
+    if (testPs) {
+        testPs.style.display = 'none';
+        console.log('Manually hid psDateRangeInputs');
+    }
+    
+    // Force hide PS date range inputs specifically
+    const psDateRangeElement = document.getElementById('psDateRangeInputs');
+    if (psDateRangeElement) {
+        psDateRangeElement.style.setProperty('display', 'none', 'important');
+        psDateRangeElement.style.setProperty('visibility', 'hidden', 'important');
+        psDateRangeElement.style.setProperty('opacity', '0', 'important');
+        psDateRangeElement.style.setProperty('position', 'absolute', 'important');
+        psDateRangeElement.style.setProperty('z-index', '-1', 'important');
+        console.log('Force hid psDateRangeInputs with multiple properties');
+    }
+    
+    // Function to force hide PS date range inputs
+    function forceHidePsDateRangeInputs() {
+        const psDateRangeElement = document.getElementById('psDateRangeInputs');
+        if (psDateRangeElement) {
+            psDateRangeElement.style.setProperty('display', 'none', 'important');
+            psDateRangeElement.style.setProperty('visibility', 'hidden', 'important');
+            psDateRangeElement.style.setProperty('opacity', '0', 'important');
+            psDateRangeElement.style.setProperty('position', 'absolute', 'important');
+            psDateRangeElement.style.setProperty('z-index', '-1', 'important');
+            console.log('Force hid psDateRangeInputs using function');
+        }
+    }
+    
+    // Call the function immediately
+    forceHidePsDateRangeInputs();
+    
+    hideAllDateRangeInputs();
+
+    // PS Assigned Branch and PS Name Filter Functionality
+    const psBranchFilters = document.querySelectorAll('.ps-branch-filter');
+    const psNameFilters = document.querySelectorAll('.ps-name-filter');
+    const psBranchFilterText = document.getElementById('psBranchFilterText');
+    const psNameFilterText = document.getElementById('psNameFilterText');
+
+    function filterPsAssignedByBranchAndPS() {
+        const psRows = document.querySelectorAll('.ps-lead-row');
+        let visibleCount = 0;
+
+        psRows.forEach(row => {
+            const branchCell = row.querySelector('td:nth-child(6)'); // Branch column
+            const psNameCell = row.querySelector('td:nth-child(5)'); // PS Name column
+            const categoryCell = row.querySelector('td:nth-child(7)'); // Category column
+            
+            if (!branchCell || !psNameCell || !categoryCell) {
+                row.style.display = 'none';
+                return;
+            }
+
+            const branchText = branchCell.textContent.trim();
+            const psNameText = psNameCell.textContent.trim();
+            const categoryText = categoryCell.textContent.trim();
+
+            // Check branch filter
+            let showByBranch = true;
+            if (currentPsBranchFilter !== 'all') {
+                showByBranch = branchText === currentPsBranchFilter;
+            }
+
+            // Check PS name filter
+            let showByPS = true;
+            if (currentPsNameFilter !== 'all') {
+                showByPS = psNameText === currentPsNameFilter;
+            }
+
+            // Check category filter
+            let showByCategory = true;
+            if (currentPsCategoryFilter !== 'all') {
+                showByCategory = categoryText === currentPsCategoryFilter;
+            }
+
+            // Check date filter (if any date filter is active)
+            let showByDate = true;
+            const psAssignedDate = row.getAttribute('data-ps-assigned-date');
+            const currentDateFilter = filterState.ps;
+            
+            if (currentDateFilter === 'today' && psAssignedDate) {
+                const today = getCurrentDate();
+                showByDate = psAssignedDate === today;
+            } else if (currentDateFilter === 'range') {
+                // For range filter, we'll let the date range apply button handle it
+                // This function will be called after date filtering
+                showByDate = true;
+            }
+
+            // Show row only if all filters match
+            const shouldShow = showByBranch && showByPS && showByCategory && showByDate;
+            row.style.display = shouldShow ? '' : 'none';
+            
+            if (shouldShow) {
+                visibleCount++;
+            }
+        });
+
+        // Update count
+        const psAssignedCount = document.getElementById('psAssignedCount');
+        if (psAssignedCount) {
+            psAssignedCount.textContent = visibleCount;
+        }
+    }
+
+    // Branch filter event listeners
+    psBranchFilters.forEach(filter => {
+        filter.addEventListener('click', function(e) {
+            e.preventDefault();
+            const branch = this.getAttribute('data-branch');
+            currentPsBranchFilter = branch;
+            psBranchFilterText.textContent = this.textContent;
+            filterPsAssignedByBranchAndPS();
+        });
+    });
+
+    // PS name filter event listeners
+    psNameFilters.forEach(filter => {
+        filter.addEventListener('click', function(e) {
+            e.preventDefault();
+            const psName = this.getAttribute('data-ps');
+            currentPsNameFilter = psName;
+            psNameFilterText.textContent = this.textContent;
+            filterPsAssignedByBranchAndPS();
+        });
+    });
+
+    // PS Assigned Category Filter Functionality
+    const psCategoryFilters = document.querySelectorAll('.ps-category-filter');
+
+    function updatePsCategoryFilterButtons() {
+        // Remove active class from all buttons
+        psCategoryFilters.forEach(btn => {
+            btn.classList.remove('active');
+            btn.classList.remove('btn-danger', 'btn-warning', 'btn-info', 'btn-secondary');
+            btn.classList.add('btn-outline-danger', 'btn-outline-warning', 'btn-outline-info', 'btn-outline-secondary');
+        });
+
+        // Add active class to selected button
+        const activeButton = document.querySelector(`[data-category="${currentPsCategoryFilter}"]`);
+        if (activeButton) {
+            activeButton.classList.add('active');
+            activeButton.classList.remove('btn-outline-danger', 'btn-outline-warning', 'btn-outline-info', 'btn-outline-secondary');
+            
+            // Add solid color based on category
+            if (currentPsCategoryFilter === 'Hot') {
+                activeButton.classList.add('btn-danger');
+            } else if (currentPsCategoryFilter === 'Warm') {
+                activeButton.classList.add('btn-warning');
+            } else if (currentPsCategoryFilter === 'Cold') {
+                activeButton.classList.add('btn-info');
+            } else {
+                // "All Categories" - use secondary color
+                activeButton.classList.add('btn-secondary');
+            }
+        }
+    }
+
+    // Category filter event listeners
+    psCategoryFilters.forEach(filter => {
+        filter.addEventListener('click', function(e) {
+            e.preventDefault();
+            const category = this.getAttribute('data-category');
+            currentPsCategoryFilter = category;
+            updatePsCategoryFilterButtons();
+            filterPsAssignedByBranchAndPS();
+        });
+    });
+
+    // PS Assigned tab click handler to ensure "All Time" filter is applied on first visit
+    const psAssignedTab = document.querySelector('[data-bs-target="#ps-assigned"]');
+    if (psAssignedTab) {
+        psAssignedTab.addEventListener('click', function() {
+            // Force hide PS date range inputs on tab visit
+            forceHidePsDateRangeInputs();
+            
+            // Check if PS filter has been initialized
+            if (!filterState.ps || filterState.ps === 'all') {
+                // Apply "All Time" filter if not already applied
+                const psRows = document.querySelectorAll('.ps-lead-row');
+                if (psRows.length > 0) {
+                    console.log('PS Assigned tab clicked - applying All Time filter');
+                    filterPsAssignedLeads('all');
+                    saveFilterState('ps', 'all');
+                }
+            }
+        });
+    }
+
+    // Ensure date range inputs are hidden by default
+    hideAllDateRangeInputs();
+    
+    // Additional timeout to ensure PS date range inputs are hidden
+    setTimeout(() => {
+        forceHidePsDateRangeInputs();
+    }, 100);
+
+    // Call the function immediately
+    forceHidePsDateRangeInputs();
+    
+    // Initialize PS Assigned category filter buttons
+    updatePsCategoryFilterButtons();
+    
+    // Ensure date range inputs are hidden for non-range filters
+    if (filterState.ps !== 'range') {
+        forceHidePsDateRangeInputs();
+    }
+    
+    hideAllDateRangeInputs();
 });
 
 // Request browser notification permission on page load
@@ -1895,29 +2446,5 @@ function setupPendingSearch() {
 
 // Initialize the search functionality
 setupPendingSearch();
-
-// Handle tab and sub_tab redirection on page load
-document.addEventListener('DOMContentLoaded', function() {
-    const returnTab = '{{ return_tab }}';
-    const returnSubTab = '{{ return_sub_tab }}';
-    
-    if (returnTab && returnSubTab) {
-        // Activate the main tab first
-        const mainTab = document.querySelector(`[data-bs-target="#${returnTab}"]`);
-        if (mainTab) {
-            const tab = new bootstrap.Tab(mainTab);
-            tab.show();
-            
-            // Wait a bit for the tab to activate, then activate the sub-tab
-            setTimeout(() => {
-                const subTab = document.querySelector(`[data-bs-target="#${returnSubTab}"]`);
-                if (subTab) {
-                    const subTabInstance = new bootstrap.Tab(subTab);
-                    subTabInstance.show();
-                }
-            }, 100);
-        }
-    }
-});
 </script>
 {% endblock %}

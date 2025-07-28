@@ -3452,7 +3452,65 @@ def branch_head_dashboard():
         return redirect(url_for('index'))
     branch = session.get('branch_head_branch')
     ps_users = supabase.table('ps_users').select('*').eq('branch', branch).execute().data or []
-    return render_template('branch_head_dashboard.html', ps_users=ps_users)
+    
+    # Calculate initial KPI counts for the dashboard
+    try:
+        # Fresh leads count
+        fresh_leads = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).execute().data or []
+        fresh_leads_count = len([
+            row for row in fresh_leads
+            if (not row.get('first_call_date') or str(row.get('first_call_date')).strip() == '')
+                and row.get('final_status', '').strip().lower() == 'pending'
+        ])
+        
+        # Walk-in leads count
+        walkin_leads = supabase.table('walkin_data').select('*').eq('ps_branch', branch).execute().data or []
+        walkin_leads_count = len(walkin_leads)
+        
+        # CRE assigned leads count
+        cre_assigned_leads = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).execute().data or []
+        cre_assigned_leads_count = len(cre_assigned_leads)
+        
+        # Pending leads count (from multiple sources)
+        pending_followup = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Pending').execute().data or []
+        pending_event = supabase.table('activity_leads').select('*').eq('location', branch).eq('final_status', 'Pending').execute().data or []
+        pending_walkin = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('ps_final_status', 'Pending').execute().data or []
+        pending_leads_count = len(pending_followup) + len(pending_event) + len(pending_walkin)
+        
+        # Today's follow-ups count
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        followup_today = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).execute().data or []
+        event_today = supabase.table('activity_leads').select('*').eq('location', branch).eq('ps_followup_date_ts', today_str).execute().data or []
+        walkin_today = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).execute().data or []
+        followup_leads_count = len(followup_today) + len(event_today) + len(walkin_today)
+        
+        # Event leads count
+        event_leads = supabase.table('activity_leads').select('*').eq('location', branch).execute().data or []
+        event_leads_count = len(event_leads)
+        
+        # Won leads count
+        won_leads = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Won').execute().data or []
+        won_leads_count = len(won_leads)
+        
+        # Lost leads count
+        lost_leads = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Lost').execute().data or []
+        lost_leads_count = len(lost_leads)
+        
+    except Exception as e:
+        print(f"Error calculating KPI counts: {str(e)}")
+        fresh_leads_count = walkin_leads_count = cre_assigned_leads_count = pending_leads_count = 0
+        followup_leads_count = event_leads_count = won_leads_count = lost_leads_count = 0
+    
+    return render_template('branch_head_dashboard.html', 
+                         ps_users=ps_users,
+                         fresh_leads_count=fresh_leads_count,
+                         walkin_leads_count=walkin_leads_count,
+                         cre_assigned_leads_count=cre_assigned_leads_count,
+                         pending_leads_count=pending_leads_count,
+                         followup_leads_count=followup_leads_count,
+                         event_leads_count=event_leads_count,
+                         won_leads_count=won_leads_count,
+                         lost_leads_count=lost_leads_count)
 
 @app.route('/api/branch_head_dashboard_data')
 def api_branch_head_dashboard_data():
@@ -3481,6 +3539,48 @@ def api_branch_head_dashboard_data():
     # Get branch from session
     branch = session.get('branch_head_branch')
 
+    # Calculate KPI counts for all sections
+    try:
+        # Fresh leads count
+        fresh_leads = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).execute().data or []
+        fresh_leads_count = len([
+            row for row in fresh_leads
+            if (not row.get('first_call_date') or str(row.get('first_call_date')).strip() == '')
+                and row.get('final_status', '').strip().lower() == 'pending'
+        ])
+        
+        # Walk-in leads count
+        walkin_leads = supabase.table('walkin_data').select('*').eq('ps_branch', branch).execute().data or []
+        walkin_leads_count = len(walkin_leads)
+        
+        # CRE assigned leads count
+        cre_assigned_leads = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).execute().data or []
+        cre_assigned_leads_count = len(cre_assigned_leads)
+        
+        # Event leads count
+        event_leads = supabase.table('activity_leads').select('*').eq('location', branch).execute().data or []
+        event_leads_count = len(event_leads)
+        
+        # Won leads count
+        won_leads = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Won').execute().data or []
+        won_leads_count = len(won_leads)
+        
+        # Lost leads count
+        lost_leads = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Lost').execute().data or []
+        lost_leads_count = len(lost_leads)
+        
+        # Today's follow-ups count
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        followup_today = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).execute().data or []
+        event_today = supabase.table('activity_leads').select('*').eq('location', branch).eq('ps_followup_date_ts', today_str).execute().data or []
+        walkin_today = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).execute().data or []
+        followup_leads_count = len(followup_today) + len(event_today) + len(walkin_today)
+        
+    except Exception as e:
+        print(f"Error calculating KPI counts: {str(e)}")
+        fresh_leads_count = walkin_leads_count = cre_assigned_leads_count = event_leads_count = 0
+        won_leads_count = lost_leads_count = followup_leads_count = 0
+
     # Initialize query
     query = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch)
 
@@ -3498,7 +3598,15 @@ def api_branch_head_dashboard_data():
     if section == 'fresh_leads':
         all_rows = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).execute().data or []
         filtered_rows = [
-            {**row, 'uid': row.get('lead_uid', ''), 'branch': row.get('ps_branch', '')}
+                {
+                    'uid': row.get('lead_uid', ''),
+                    'customer_name': row.get('customer_name', ''),
+                    'customer_mobile_number': row.get('customer_mobile_number', ''),
+                    'final_status': row.get('final_status', ''),
+                    'source': row.get('source', ''),
+                    'lead_status': row.get('lead_status', ''),
+                    'ps_name': row.get('ps_name', '')
+                }
             for row in all_rows
             if (not row.get('first_call_date') or str(row.get('first_call_date')).strip() == '')
                 and row.get('final_status', '').strip().lower() == 'pending'
@@ -3513,7 +3621,13 @@ def api_branch_head_dashboard_data():
             'total_pages': math.ceil(total_count / per_page),
             'current_page': page,
             'per_page': per_page,
-            'fresh_leads_count': total_count
+                'fresh_leads_count': total_count,
+                'walkin_leads_count': walkin_leads_count,
+                'cre_assigned_leads_count': cre_assigned_leads_count,
+                'followup_leads_count': followup_leads_count,
+                'event_leads_count': event_leads_count,
+                'won_leads_count': won_leads_count,
+                'lost_leads_count': lost_leads_count
         }
         auth_manager.log_audit_event(
             user_id=session.get('user_id'),
@@ -3533,15 +3647,69 @@ def api_branch_head_dashboard_data():
         )
         return jsonify(response)
 
+<<<<<<< HEAD
+    elif section == 'walkin_leads':
+        walkin_query = supabase.table('walkin_data').select('*').eq('ps_branch', branch)
+        if uid:
+            walkin_query = walkin_query.eq('uid', uid)
+        all_rows = walkin_query.execute().data or []
+        rows = [
+            {
+                'uid': row.get('uid', ''),
+                'customer_name': row.get('customer_name', ''),
+                'customer_mobile_number': row.get('customer_mobile_number', ''),
+                'customer_email': row.get('customer_email', ''),
+                'model_interested': row.get('model_interested', ''),
+                'lead_source': row.get('lead_source', ''),
+                'status': row.get('ps_final_status', ''),
+                'ps_name': row.get('ps_name', ''),
+                'created_at': row.get('created_at', ''),
+                'lead_category': row.get('lead_category', '')
+            }
+            for row in all_rows
+        ]
+        total_count = int(len(rows))
+        offset = (page - 1) * per_page
+        paged_rows = rows[offset:offset + per_page]
+        total_pages = 1 if total_count == 0 else math.ceil(total_count / per_page)
+        response = {
+            'success': True,
+            'rows': paged_rows,
+            'total_count': total_count,
+            'total_pages': total_pages,
+            'current_page': page,
+            'per_page': per_page,
+            'walkin_leads_count': total_count,
+            'fresh_leads_count': fresh_leads_count,
+            'cre_assigned_leads_count': cre_assigned_leads_count,
+            'followup_leads_count': followup_leads_count,
+            'event_leads_count': event_leads_count,
+            'won_leads_count': won_leads_count,
+            'lost_leads_count': lost_leads_count
+        }
+        return jsonify(response)
+=======
 
+>>>>>>> fb9d1756b2688538844b1a9434851c1dc64395db
 
     elif section == 'cre_assigned_leads':
         # Fetch all rows from ps_followup_master for the current branch (and filters), with all columns
         all_rows = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).execute().data or []
-        # Add journey button field
+        
+        # Structure the data properly for frontend
         rows = [
-            {**row, 'journey': 'Journey', 'uid': row.get('lead_uid', '')} for row in all_rows
+            {
+                'customer_name': row.get('customer_name', ''),
+                'customer_mobile_number': row.get('customer_mobile_number', ''),
+                'final_status': row.get('final_status', ''),
+                'uid': row.get('lead_uid', ''),
+                'source': row.get('source', ''),
+                'lead_status': row.get('lead_status', ''),
+                'ps_name': row.get('ps_name', '')
+            }
+            for row in all_rows
         ]
+        
         total_count = len(rows)
         offset = (page - 1) * per_page
         paged_rows = rows[offset:offset + per_page]
@@ -3553,18 +3721,64 @@ def api_branch_head_dashboard_data():
             'total_pages': total_pages,
             'current_page': page,
             'per_page': per_page,
-            'cre_assigned_leads_count': total_count
+            'cre_assigned_leads_count': total_count,
+            'fresh_leads_count': fresh_leads_count,
+            'walkin_leads_count': walkin_leads_count,
+            'followup_leads_count': followup_leads_count,
+            'event_leads_count': event_leads_count,
+            'won_leads_count': won_leads_count,
+            'lost_leads_count': lost_leads_count
         }
         return jsonify(response)
     elif section == 'pending_leads':
         # ps_followup_master
-        followup_rows = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Pending').execute().data or []
-        followup_rows = [{**row, 'journey': 'Journey', 'source_type': row.get('source', '')} for row in followup_rows]
+        followup_rows_raw = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Pending').execute().data or []
+        followup_rows = [
+            {
+                'uid': row.get('lead_uid', ''),
+                'customer_name': row.get('customer_name', ''),
+                'customer_mobile_number': row.get('customer_mobile_number', ''),
+                'final_status': row.get('final_status', ''),
+                'source': row.get('source', ''),
+                'lead_status': row.get('lead_status', ''),
+                'ps_name': row.get('ps_name', '')
+            }
+            for row in followup_rows_raw
+        ]
 
         # activity_leads
-        event_rows = supabase.table('activity_leads').select('*').eq('location', branch).eq('final_status', 'Pending').execute().data or []
-        event_rows = [{**row, 'journey': 'Journey', 'source_type': 'Event', 'customer_mobile_number': row.get('customer_phone_number', row.get('customer_mobile_number', ''))} for row in event_rows]
+        event_rows_raw = supabase.table('activity_leads').select('*').eq('location', branch).eq('final_status', 'Pending').execute().data or []
+        event_rows = [
+            {
+                'uid': row.get('activity_uid', ''),
+                'customer_name': row.get('customer_name', ''),
+                'customer_mobile_number': row.get('customer_phone_number', row.get('customer_mobile_number', '')),
+                'final_status': row.get('final_status', ''),
+                'source': 'Event',
+                'lead_status': row.get('lead_status', ''),
+                'ps_name': row.get('ps_name', '')
+            }
+            for row in event_rows_raw
+        ]
 
+<<<<<<< HEAD
+        # walkin_data
+        walkin_rows_raw = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('ps_final_status', 'Pending').execute().data or []
+        walkin_rows = [
+            {
+                'uid': row.get('uid', ''),
+                'customer_name': row.get('customer_name', ''),
+                'customer_mobile_number': row.get('customer_mobile_number', ''),
+                'final_status': row.get('ps_final_status', ''),
+                'source': 'Walk-in',
+                'lead_status': row.get('lead_status', ''),
+                'ps_name': row.get('ps_name', '')
+            }
+            for row in walkin_rows_raw
+        ]
+
+=======
+>>>>>>> fb9d1756b2688538844b1a9434851c1dc64395db
         # Merge all
         all_rows = followup_rows + event_rows
 
@@ -3589,53 +3803,269 @@ def api_branch_head_dashboard_data():
             'pending_leads_count': total_count,
             'pending_leads_cre_assigned_count': cre_assigned_count,
             'pending_leads_event_count': event_count,
+<<<<<<< HEAD
+            'pending_leads_walkin_count': walkin_count,
+            'fresh_leads_count': fresh_leads_count,
+            'walkin_leads_count': walkin_leads_count,
+            'cre_assigned_leads_count': cre_assigned_leads_count,
+            'followup_leads_count': followup_leads_count,
+            'event_leads_count': event_leads_count,
+            'won_leads_count': won_leads_count,
+            'lost_leads_count': lost_leads_count
+=======
 
+>>>>>>> fb9d1756b2688538844b1a9434851c1dc64395db
         }
         return jsonify(response)
 
     elif section == 'followup_leads':
         today_str = datetime.now().strftime('%Y-%m-%d')
+<<<<<<< HEAD
+        tomorrow_str = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+        # Only today's follow-ups with correct status
+        ps_today = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).eq('final_status', 'Pending').execute().data or []
+        act_today_raw = supabase.table('activity_leads').select('*') \
+            .eq('location', branch) \
+            .gte('ps_followup_date_ts', f'{today_str} 00:00:00') \
+            .lt('ps_followup_date_ts', f'{tomorrow_str} 00:00:00') \
+            .eq('final_status', 'Pending').execute().data or []
+        walkin_today_raw = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).eq('ps_final_status', 'Pending').execute().data or []
+        
+        # Mark all as not missed and set source_type and phone
+        ps_today = [{**row, 'missed': False, 'lead_status': row.get('lead_status', '')} for row in ps_today]
+        act_today = [
+            {**row, 'missed': False, 'source_type': 'Event', 'customer_mobile_number': row.get('customer_phone_number', ''), 'lead_status': row.get('lead_status', '')}
+            for row in act_today_raw
+        ]
+        walkin_today = [
+            {**row, 'missed': False, 'source_type': 'Walk-in', 'final_status': row.get('ps_final_status', ''), 'lead_status': row.get('lead_status', '')}
+            for row in walkin_today_raw
+        ]
+        
+=======
         # Only today's follow-ups
         ps_today = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).execute().data or []
         act_today = supabase.table('activity_leads').select('*').eq('location', branch).eq('ps_followup_date_ts', today_str).execute().data or []
         # Mark all as not missed
         ps_today = [{**row, 'missed': False} for row in ps_today]
         act_today = [{**row, 'missed': False} for row in act_today]
+>>>>>>> fb9d1756b2688538844b1a9434851c1dc64395db
         # Merge only today's followups
         all_rows = ps_today + act_today
         total_count = len(all_rows)
         offset = (page - 1) * per_page
         paged_rows = all_rows[offset:offset + per_page]
         total_pages = 1 if total_count == 0 else math.ceil(total_count / per_page)
+        
         response = {
             'success': True,
             'rows': paged_rows,
             'total_count': total_count,
             'total_pages': total_pages,
             'current_page': page,
-            'per_page': per_page
+            'per_page': per_page,
+            'followup_leads_count': total_count,
+            'fresh_leads_count': fresh_leads_count,
+            'walkin_leads_count': walkin_leads_count,
+            'cre_assigned_leads_count': cre_assigned_leads_count,
+            'event_leads_count': event_leads_count,
+            'won_leads_count': won_leads_count,
+            'lost_leads_count': lost_leads_count
         }
         return jsonify(response)
 
     elif section == 'event_leads':
-        query = supabase.table('activity_leads').select('*').eq('location', branch)
-    elif section == 'won_leads':
-        query = query.eq('final_status', 'Won')
-    elif section == 'lost_leads':
-        query = query.eq('final_status', 'Lost')
+        event_rows_raw = supabase.table('activity_leads').select('*').eq('location', branch).execute().data or []
+        event_rows = [
+            {
+                'customer_name': (row.get('customer_name') or '') if row.get('customer_name') is not None else '',
+                'customer_mobile_number': (row.get('customer_phone_number') or '') if row.get('customer_phone_number') is not None else '',
+                'final_status': (row.get('final_status') or '') if row.get('final_status') is not None else '',
+                'uid': row.get('activity_uid', '') or '',
+                'source': 'Event',
+                'lead_status': (row.get('lead_status') or '') if row.get('lead_status') is not None else '',
+                'ps_name': (row.get('ps_name') or '') if row.get('ps_name') is not None else ''
+            }
+            for row in event_rows_raw
+        ]
+        
+        total_count = len(event_rows)
+        offset = (page - 1) * per_page
+        paged_rows = event_rows[offset:offset + per_page]
+        total_pages = 1 if total_count == 0 else math.ceil(total_count / per_page)
+        
+        response = {
+            'success': True,
+            'rows': paged_rows,
+            'total_count': total_count,
+            'total_pages': total_pages,
+            'current_page': page,
+            'per_page': per_page,
+            'event_leads_count': total_count,
+            'fresh_leads_count': fresh_leads_count,
+            'walkin_leads_count': walkin_leads_count,
+            'cre_assigned_leads_count': cre_assigned_leads_count,
+            'followup_leads_count': followup_leads_count,
+            'won_leads_count': won_leads_count,
+            'lost_leads_count': lost_leads_count
+        }
+        return jsonify(response)
 
-    # For all other sections, apply pagination and return
+    elif section == 'won_leads':
+        # Fetch from ps_followup_master
+        ps_rows_raw = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Won').execute().data or []
+        ps_rows = [
+            {
+                'customer_name': row.get('customer_name', ''),
+                'customer_mobile_number': row.get('customer_mobile_number', ''),
+                'final_status': row.get('final_status', ''),
+                'uid': row.get('lead_uid', ''),
+                'source': row.get('source', ''),
+                'lead_status': row.get('lead_status', ''),
+                'ps_name': row.get('ps_name', '')
+            }
+            for row in ps_rows_raw
+        ]
+        
+        # Fetch from activity_leads
+        event_rows_raw = supabase.table('activity_leads').select('*').eq('location', branch).eq('final_status', 'Won').execute().data or []
+        event_rows = [
+            {
+                'customer_name': row.get('customer_name', ''),
+                'customer_mobile_number': row.get('customer_phone_number', ''),
+                'final_status': row.get('final_status', ''),
+                'uid': row.get('activity_uid', ''),
+                'source': 'Event',
+                'lead_status': row.get('lead_status', ''),
+                'ps_name': row.get('ps_name', '')
+            }
+            for row in event_rows_raw
+        ]
+        
+        # Fetch from walkin_data
+        walkin_rows_raw = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('ps_final_status', 'Won').execute().data or []
+        walkin_rows = [
+            {
+                'customer_name': row.get('customer_name', ''),
+                'customer_mobile_number': row.get('customer_mobile_number', ''),
+                'final_status': row.get('ps_final_status', ''),
+                'uid': row.get('uid', ''),
+                'source': 'Walk-in',
+                'lead_status': row.get('lead_status', ''),
+                'ps_name': row.get('ps_name', '')
+            }
+            for row in walkin_rows_raw
+        ]
+        
+        # Merge all rows
+        all_rows = ps_rows + event_rows + walkin_rows
+        total_count = len(all_rows)
+        offset = (page - 1) * per_page
+        paged_rows = all_rows[offset:offset + per_page]
+        total_pages = 1 if total_count == 0 else math.ceil(total_count / per_page)
+        
+        response = {
+            'success': True,
+            'rows': paged_rows,
+            'total_count': total_count,
+            'total_pages': total_pages,
+            'current_page': page,
+            'per_page': per_page,
+            'won_leads_count': total_count,
+            'fresh_leads_count': fresh_leads_count,
+            'walkin_leads_count': walkin_leads_count,
+            'cre_assigned_leads_count': cre_assigned_leads_count,
+            'followup_leads_count': followup_leads_count,
+            'event_leads_count': event_leads_count,
+            'lost_leads_count': lost_leads_count
+        }
+        return jsonify(response)
+
+    elif section == 'lost_leads':
+        # Fetch from ps_followup_master
+        ps_rows_raw = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Lost').execute().data or []
+        ps_rows = [
+            {
+                'customer_name': row.get('customer_name', ''),
+                'customer_mobile_number': row.get('customer_mobile_number', ''),
+                'final_status': row.get('final_status', ''),
+                'uid': row.get('lead_uid', ''),
+                'source': row.get('source', ''),
+                'lead_status': row.get('lead_status', ''),
+                'ps_name': row.get('ps_name', '')
+            }
+            for row in ps_rows_raw
+        ]
+        
+        # Fetch from activity_leads
+        event_rows_raw = supabase.table('activity_leads').select('*').eq('location', branch).eq('final_status', 'Lost').execute().data or []
+        event_rows = [
+            {
+                'customer_name': row.get('customer_name', ''),
+                'customer_mobile_number': row.get('customer_phone_number', ''),
+                'final_status': row.get('final_status', ''),
+                'uid': row.get('activity_uid', ''),
+                'source': 'Event',
+                'lead_status': row.get('lead_status', ''),
+                'ps_name': row.get('ps_name', '')
+            }
+            for row in event_rows_raw
+        ]
+        
+        # Fetch from walkin_data
+        walkin_rows_raw = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('ps_final_status', 'Lost').execute().data or []
+        walkin_rows = [
+            {
+                'customer_name': row.get('customer_name', ''),
+                'customer_mobile_number': row.get('customer_mobile_number', ''),
+                'final_status': row.get('ps_final_status', ''),
+                'uid': row.get('uid', ''),
+                'source': 'Walk-in',
+                'lead_status': row.get('lead_status', ''),
+                'ps_name': row.get('ps_name', '')
+            }
+            for row in walkin_rows_raw
+        ]
+        
+        # Merge all rows
+        all_rows = ps_rows + event_rows + walkin_rows
+        total_count = len(all_rows)
     offset = (page - 1) * per_page
-    query = query.range(offset, offset + per_page - 1)
-    result = query.execute()
-    total_count = result.count if hasattr(result, 'count') and result.count is not None else len(result.data)
+        paged_rows = all_rows[offset:offset + per_page]
+        total_pages = 1 if total_count == 0 else math.ceil(total_count / per_page)
+        
     response = {
         'success': True,
-        'rows': result.data,
+            'rows': paged_rows,
         'total_count': total_count,
-        'total_pages': math.ceil(total_count / per_page) if total_count else 1,
+            'total_pages': total_pages,
         'current_page': page,
-        'per_page': per_page
+            'per_page': per_page,
+            'lost_leads_count': total_count,
+            'fresh_leads_count': fresh_leads_count,
+            'walkin_leads_count': walkin_leads_count,
+            'cre_assigned_leads_count': cre_assigned_leads_count,
+            'followup_leads_count': followup_leads_count,
+            'event_leads_count': event_leads_count,
+            'won_leads_count': won_leads_count
+        }
+        return jsonify(response)
+
+    # Default response for any other sections
+    response = {
+        'success': True,
+        'rows': [],
+        'total_count': 0,
+        'total_pages': 1,
+        'current_page': page,
+        'per_page': per_page,
+        'fresh_leads_count': fresh_leads_count,
+        'walkin_leads_count': walkin_leads_count,
+        'cre_assigned_leads_count': cre_assigned_leads_count,
+        'followup_leads_count': followup_leads_count,
+        'event_leads_count': event_leads_count,
+        'won_leads_count': won_leads_count,
+        'lost_leads_count': lost_leads_count
     }
     return jsonify(response)
 
@@ -5864,6 +6294,13 @@ def ps_analytics():
 def manage_branch_head():
     # Fetch all branch heads
     branch_heads = supabase.table('Branch Head').select('*').execute().data
+    
+    # Debug: Print the structure of existing data
+    if branch_heads:
+        print("Sample branch head data structure:")
+        print(f"Keys in first record: {list(branch_heads[0].keys())}")
+        print(f"Sample record: {branch_heads[0]}")
+    
     branches = get_all_branches()  # This should return a list of branch names
     return render_template('manage_branch_head.html', branch_heads=branch_heads, branches=branches)
 
@@ -5873,21 +6310,79 @@ def get_all_branches():
 
 @app.route('/add_branch_head', methods=['POST'])
 def add_branch_head():
-    name = request.form.get('name')
-    username = request.form.get('username')
-    password = request.form.get('password')
-    branch = request.form.get('branch')
+    try:
+        # Get form data
+        name = request.form.get('name', '').strip()
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        email = request.form.get('email', '').strip()
+        phone = request.form.get('phone', '').strip()
+        branch = request.form.get('branch', '').strip()
     is_active = request.form.get('is_active') == 'on'
+        
+        # Debug: Print form data
+        print(f"Form data received:")
+        print(f"Name: '{name}'")
+        print(f"Username: '{username}'")
+        print(f"Email: '{email}'")
+        print(f"Phone: '{phone}'")
+        print(f"Branch: '{branch}'")
+        
+        # Validate required fields
+        if not all([name, username, password, branch]):
+            flash('Name, Username, Password, and Branch are required fields', 'error')
+            return redirect(url_for('manage_branch_head'))
+        
+        # Validate email format if provided
+        if email and '@' not in email:
+            flash('Please enter a valid email address', 'error')
+            return redirect(url_for('manage_branch_head'))
+        
+        # Validate phone number format (10 digits)
+        if phone and not phone.replace(' ', '').isdigit() or (phone and len(phone.replace(' ', '')) != 10):
+            flash('Please enter a valid 10-digit phone number', 'error')
+            return redirect(url_for('manage_branch_head'))
+        
     # Store plain text password for Branch Head (testing only)
     hashed_pw = password
-    supabase.table('Branch Head').insert({
+        
+        # Prepare data for insertion
+        branch_head_data = {
         'Name': name,
         'Username': username,
         'Password': hashed_pw,
         'Branch': branch,
         'Is Active': is_active
-    }).execute()
+        }
+        
+        # Add email and phone (always include them, even if empty)
+        branch_head_data['email'] = email if email else None
+        branch_head_data['Phone No.'] = phone if phone else None
+        
+        # Debug: Print final data to be inserted
+        print(f"Data to be inserted: {branch_head_data}")
+        
+        # Insert into database
+        result = supabase.table('Branch Head').insert(branch_head_data).execute()
+        
+        if result.data:
     flash('Branch Head added successfully!', 'success')
+            print(f"Successfully inserted branch head with ID: {result.data[0]['id'] if result.data else 'Unknown'}")
+            
+            # Debug: Fetch the inserted record to verify what was saved
+            if result.data:
+                inserted_id = result.data[0]['id']
+                verify_record = supabase.table('Branch Head').select('*').eq('id', inserted_id).execute().data
+                if verify_record:
+                    print(f"Verified saved data: {verify_record[0]}")
+        else:
+            flash('Error creating branch head. Please try again.', 'error')
+            print("Failed to insert branch head")
+            
+    except Exception as e:
+        flash(f'Error adding branch head: {str(e)}', 'error')
+        print(f"Exception occurred: {str(e)}")
+    
     return redirect(url_for('manage_branch_head'))
 
 @app.route('/toggle_branch_head_active/<int:id>', methods=['POST'])
@@ -5897,13 +6392,53 @@ def toggle_branch_head_active(id):
     flash('Branch Head status updated!', 'info')
     return redirect(url_for('manage_branch_head'))
 
-# @app.route('/branch_head_dashboard')
-# def branch_head_dashboard():
-#     if 'branch_head_id' not in session:
-#         return redirect(url_for('index'))
-#     branch = session.get('branch_head_branch')
-#     ps_users = supabase.table('ps_users').select('*').eq('branch', branch).execute().data or []
-#     return render_template('branch_head_dashboard.html', ps_users=ps_users)
+@app.route('/edit_branch_head_contact/<int:id>', methods=['POST'])
+def edit_branch_head_contact(id):
+    """Edit branch head email and phone only"""
+    try:
+        email = request.form.get('email', '').strip()
+        phone = request.form.get('phone', '').strip()
+        
+        # Validate email format if provided
+        if email and '@' not in email:
+            return jsonify({'success': False, 'message': 'Please enter a valid email address'})
+        
+        # Validate phone number format (10 digits)
+        if phone and not phone.replace(' ', '').isdigit() or (phone and len(phone.replace(' ', '')) != 10):
+            return jsonify({'success': False, 'message': 'Please enter a valid 10-digit phone number'})
+        
+        # Prepare update data
+        update_data = {}
+        if email:
+            update_data['email'] = email
+        if phone:
+            update_data['Phone No.'] = phone
+        
+        # Update in database
+        result = supabase.table('Branch Head').update(update_data).eq('id', id).execute()
+        
+        if result.data:
+            return jsonify({'success': True, 'message': 'Contact information updated successfully!'})
+        else:
+            return jsonify({'success': False, 'message': 'Error updating contact information'})
+            
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'})
+
+@app.route('/delete_branch_head/<int:id>', methods=['POST'])
+def delete_branch_head(id):
+    """Delete entire branch head"""
+    try:
+        # Delete from database
+        result = supabase.table('Branch Head').delete().eq('id', id).execute()
+        
+        if result.data:
+            return jsonify({'success': True, 'message': 'Branch Head deleted successfully!'})
+        else:
+            return jsonify({'success': False, 'message': 'Error deleting branch head'})
+            
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'})
 
 @app.route('/manage_dashboards')
 @require_admin
@@ -6192,9 +6727,9 @@ def ps_dashboard_leads():
         # Process event leads
         for lead in event_leads:
             lead_dict = dict(lead)
-            lead_dict['lead_uid'] = lead.get('activity_uid') or lead.get('uid')
-            lead_dict['customer_mobile_number'] = lead.get('customer_phone_number')
-            final_status = lead.get('final_status')
+            lead_dict['lead_uid'] = lead.get('activity_uid', '') or lead.get('uid', '')
+            lead_dict['customer_mobile_number'] = lead.get('customer_phone_number', '')
+            final_status = lead.get('final_status', '')
             
             if final_status == 'Won':
                 won_leads.append(lead_dict)
