@@ -7081,14 +7081,6 @@ def delete_branch_head(id):
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error: {str(e)}'})
 
-# @app.route('/branch_head_dashboard')
-# def branch_head_dashboard():
-#     if 'branch_head_id' not in session:
-#         return redirect(url_for('index'))
-#     branch = session.get('branch_head_branch')
-#     ps_users = supabase.table('ps_users').select('*').eq('branch', branch).execute().data or []
-#     return render_template('branch_head_dashboard.html', ps_users=ps_users)
-
 @app.route('/manage_dashboards')
 @require_admin
 def manage_dashboards():
@@ -7387,9 +7379,9 @@ def ps_dashboard_leads():
         # Process event leads
         for lead in event_leads:
             lead_dict = dict(lead)
-            lead_dict['lead_uid'] = lead.get('activity_uid') or lead.get('uid')
-            lead_dict['customer_mobile_number'] = lead.get('customer_phone_number')
-            final_status = lead.get('final_status')
+            lead_dict['lead_uid'] = lead.get('activity_uid', '') or lead.get('uid', '')
+            lead_dict['customer_mobile_number'] = lead.get('customer_phone_number', '')
+            final_status = lead.get('final_status', '')
             
             if final_status == 'Won':
                 won_leads.append(lead_dict)
