@@ -84,20 +84,20 @@
     <div class="row mb-3">
         <div class="col">
             <div class="card text-center bg-primary text-white mb-2">
-                <div class="card-body p-2">Fresh<br><span class="h5" id="freshLeadsKPI">0</span></div>
+                <div class="card-body p-2">Fresh<br><span class="h5" id="freshLeadsKPI">{{ fresh_leads_count }}</span></div>
             </div>
         </div>
         <div class="col">
-            <div class="card text-center bg-success text-white mb-2"><div class="card-body p-2">Walk-in<br><span class="h5" id="walkinLeadsKPI">{{ walkin_leads|length if walkin_leads is defined else 0 }}</span></div></div>
+            <div class="card text-center bg-success text-white mb-2"><div class="card-body p-2">Walk-in<br><span class="h5" id="walkinLeadsKPI">{{ walkin_leads_count }}</span></div></div>
         </div>
         <div class="col">
-            <div class="card text-center bg-info text-white mb-2"><div class="card-body p-2">CRE Assigned<br><span class="h5" id="creAssignedLeadsKPI">{{ cre_assigned_leads|length if cre_assigned_leads is defined else 0 }}</span></div></div>
+            <div class="card text-center bg-info text-white mb-2"><div class="card-body p-2">CRE Assigned<br><span class="h5" id="creAssignedLeadsKPI">{{ cre_assigned_leads_count }}</span></div></div>
         </div>
         <div class="col">
             <div class="card text-center bg-warning text-dark mb-2">
                 <div class="card-body p-2">
                     Pending<br>
-                    <span class="h5" id="pendingLeadsKPI">0</span>
+                    <span class="h5" id="pendingLeadsKPI">{{ pending_leads_count }}</span>
                     <div class="d-flex justify-content-center mt-2" style="gap: 8px;">
                         <span class="badge bg-secondary text-white" id="pendingLeadsKPI_CRE" title="CRE Assigned Pending Leads">CRE: 0</span>
                         <span class="badge bg-info text-dark" id="pendingLeadsKPI_Event" title="Event Pending Leads">Event: 0</span>
@@ -107,16 +107,16 @@
             </div>
         </div>
         <div class="col">
-            <div class="card text-center bg-secondary text-white mb-2"><div class="card-body p-2">Today's Follow-ups<br><span class="h5" id="followupLeadsKPI">{{ followup_leads|length if followup_leads is defined else 0 }}</span></div></div>
+            <div class="card text-center bg-secondary text-white mb-2"><div class="card-body p-2">Today's Follow-ups<br><span class="h5" id="followupLeadsKPI">{{ followup_leads_count }}</span></div></div>
         </div>
         <div class="col">
-            <div class="card text-center bg-dark text-white mb-2"><div class="card-body p-2">Event<br><span class="h5" id="eventLeadsKPI">{{ event_leads|length if event_leads is defined else 0 }}</span></div></div>
+            <div class="card text-center bg-dark text-white mb-2"><div class="card-body p-2">Event<br><span class="h5" id="eventLeadsKPI">{{ event_leads_count }}</span></div></div>
         </div>
         <div class="col">
-            <div class="card text-center bg-success text-white mb-2"><div class="card-body p-2">Won<br><span class="h5" id="wonLeadsKPI">{{ won_leads|length if won_leads is defined else 0 }}</span></div></div>
+            <div class="card text-center bg-success text-white mb-2"><div class="card-body p-2">Won<br><span class="h5" id="wonLeadsKPI">{{ won_leads_count }}</span></div></div>
         </div>
         <div class="col">
-            <div class="card text-center bg-danger text-white mb-2"><div class="card-body p-2">Lost<br><span class="h5" id="lostLeadsKPI">{{ lost_leads|length if lost_leads is defined else 0 }}</span></div></div>
+            <div class="card text-center bg-danger text-white mb-2"><div class="card-body p-2">Lost<br><span class="h5" id="lostLeadsKPI">{{ lost_leads_count }}</span></div></div>
         </div>
     </div>
     <!-- Tab Navigation -->
@@ -198,7 +198,6 @@
                         <table class="table table-striped table-hover mb-0">
                             <thead class="thead-dark">
                                 <tr>
-                                    <th>Journey</th>
                                     <th>UID</th>
                                     <th>Customer Name</th>
                                     <th>Mobile</th>
@@ -211,7 +210,7 @@
                                 </tr>
                             </thead>
                             <tbody id="walkinLeadsTableBody">
-                                <tr><td colspan="10">Loading...</td></tr>
+                                <tr><td colspan="9">Loading...</td></tr>
                             </tbody>
                         </table>
                         <div id="walkinLeadsPagination"></div>
@@ -219,58 +218,7 @@
                 </div>
             </div>
         </div>
-        <!-- After the walk-in leads table, add modals for each lead -->
-        {% for lead in walkin_leads %}
-        <div class="modal fade" id="journeyModal-{{ lead.uid }}" tabindex="-1" aria-labelledby="journeyModalLabel-{{ lead.uid }}" aria-hidden="true">
-          <div class="modal-dialog modal-xl">
-            <div class="modal-content">
-              <div class="modal-header">
-                <h5 class="modal-title" id="journeyModalLabel-{{ lead.uid }}">PS Call Attempt History - {{ lead.customer_name }}</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-              </div>
-              <div class="modal-body">
-                {% set call_history = ps_call_history_by_uid[lead.uid] if ps_call_history_by_uid and lead.uid in ps_call_history_by_uid else [] %}
-                {% if call_history %}
-                <div class="table-responsive">
-                  <table class="table table-striped table-hover">
-                    <thead class="thead-dark">
-                      <tr>
-                        <th>Call #</th>
-                        <th>Attempt</th>
-                        <th>PS Name</th>
-                        <th>Status</th>
-                        <th>Call Recorded</th>
-                        <th>Follow-up Date</th>
-                        <th>Remarks</th>
-                        <th>Date/Time</th>
-                        <th>Final Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {% for attempt in call_history %}
-                      <tr>
-                        <td>{{ attempt.call_no|title }}</td>
-                        <td>{{ attempt.attempt }}</td>
-                        <td>{{ attempt.ps_name }}</td>
-                        <td>{{ attempt.status }}</td>
-                        <td>{% if attempt.call_was_recorded %}Yes{% else %}No{% endif %}</td>
-                        <td>{{ attempt.follow_up_date or '-' }}</td>
-                        <td>{{ attempt.remarks or '-' }}</td>
-                        <td>{{ attempt.created_at or '-' }}</td>
-                        <td>{{ lead.final_status or 'Pending' }}</td>
-                      </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                </div>
-                {% else %}
-                <div class="alert alert-info"><i class="fas fa-info-circle"></i> No PS call attempts recorded for this lead yet.</div>
-                {% endif %}
-              </div>
-            </div>
-          </div>
-        </div>
-        {% endfor %}
+
         <!-- Pagination controls -->
         <!-- Remove old Jinja pagination navs that use total_pages, walkin_page, etc. -->
         <!-- (Pagination is now handled by JS) -->
@@ -299,7 +247,6 @@
                         <table class="table table-striped table-hover mb-0">
                             <thead class="thead-dark">
                                 <tr>
-                                    <th>Journey</th>
                                     <th>Customer Name</th>
                                     <th>Phone No.</th>
                                     <th>Final Status</th>
@@ -310,7 +257,7 @@
                                 </tr>
                             </thead>
                             <tbody id="creAssignedLeadsTableBody">
-                                <tr><td colspan="8">Loading...</td></tr>
+                                <tr><td colspan="7">Loading...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -342,7 +289,6 @@
                         <table class="table table-striped table-hover mb-0">
                             <thead class="thead-dark">
                                 <tr>
-                                    <th>Journey</th>
                                     <th>UID</th>
                                     <th>Customer Name</th>
                                     <th>Phone No.</th>
@@ -353,7 +299,7 @@
                                 </tr>
                             </thead>
                             <tbody id="pendingLeadsTableBody">
-                                <tr><td colspan="8">Loading...</td></tr>
+                                <tr><td colspan="7">Loading...</td></tr>
                             </tbody>
                         </table>
                         <div id="pendingLeadsPagination"></div>
@@ -366,26 +312,26 @@
             <div class="card mb-3">
                 <div class="card-body">
                     <!-- Filters -->
-                    <form class="row g-2 mb-2">
+                    <form class="row g-2 mb-2" onsubmit="return false;">
                         <div class="col-auto">
-                            <input type="text" class="form-control" name="followup_uid_search" value="{{ request.args.get('followup_uid_search', '') }}" placeholder="Search by UID">
+                            <input type="text" class="form-control" id="followupLeadsUidSearch" placeholder="Search by UID">
                         </div>
                         <div class="col-auto">
-                            <select class="form-select" name="followup_rows" onchange="this.form.submit()">
-                                {% for n in [10, 25, 50, 100] %}
-                                <option value="{{ n }}" {% if request.args.get('followup_rows', '25') == n|string %}selected{% endif %}>Show {{ n }}</option>
-                                {% endfor %}
+                            <select class="form-select" id="followupLeadsRowsPerPage">
+                                <option value="10">Show 10</option>
+                                <option value="25" selected>Show 25</option>
+                                <option value="50">Show 50</option>
+                                <option value="100">Show 100</option>
                             </select>
                         </div>
                         <div class="col-auto">
-                            <button type="submit" class="btn btn-outline-primary">Apply</button>
+                            <button type="button" id="followupLeadsApplyBtn" class="btn btn-outline-primary">Apply</button>
                         </div>
                     </form>
                     <div class="table-responsive">
                         <table class="table table-striped table-hover mb-0">
                             <thead class="thead-dark">
                                 <tr>
-                                    <th>Journey</th>
                                     <th>Customer Name</th>
                                     <th>Phone No.</th>
                                     <th>Final Status</th>
@@ -396,7 +342,7 @@
                                 </tr>
                             </thead>
                             <tbody id="followupLeadsTableBody">
-                                <tr><td colspan="8">Loading...</td></tr>
+                                <tr><td colspan="7">Loading...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -408,26 +354,26 @@
             <div class="card mb-3">
                 <div class="card-body">
                     <!-- Filters -->
-                    <form class="row g-2 mb-2">
+                    <form class="row g-2 mb-2" onsubmit="return false;">
                         <div class="col-auto">
-                            <input type="text" class="form-control" name="event_uid_search" value="{{ request.args.get('event_uid_search', '') }}" placeholder="Search by UID">
+                            <input type="text" class="form-control" id="eventLeadsUidSearch" placeholder="Search by UID">
                         </div>
                         <div class="col-auto">
-                            <select class="form-select" name="event_rows" onchange="this.form.submit()">
-                                {% for n in [10, 25, 50, 100] %}
-                                <option value="{{ n }}" {% if request.args.get('event_rows', '25') == n|string %}selected{% endif %}>Show {{ n }}</option>
-                                {% endfor %}
+                            <select class="form-select" id="eventLeadsRowsPerPage">
+                                <option value="10">Show 10</option>
+                                <option value="25" selected>Show 25</option>
+                                <option value="50">Show 50</option>
+                                <option value="100">Show 100</option>
                             </select>
                         </div>
                         <div class="col-auto">
-                            <button type="submit" class="btn btn-outline-primary">Apply</button>
+                            <button type="button" id="eventLeadsApplyBtn" class="btn btn-outline-primary">Apply</button>
                         </div>
                     </form>
                     <div class="table-responsive">
                         <table class="table table-striped table-hover mb-0">
                             <thead class="thead-dark">
                                 <tr>
-                                    <th>Journey</th>
                                     <th>Customer Name</th>
                                     <th>Phone No.</th>
                                     <th>Final Status</th>
@@ -438,7 +384,7 @@
                                 </tr>
                             </thead>
                             <tbody id="eventLeadsTableBody">
-                                <tr><td colspan="8">Loading...</td></tr>
+                                <tr><td colspan="7">Loading...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -450,26 +396,26 @@
             <div class="card mb-3">
                 <div class="card-body">
                     <!-- Filters -->
-                    <form class="row g-2 mb-2">
+                    <form class="row g-2 mb-2" onsubmit="return false;">
                         <div class="col-auto">
-                            <input type="text" class="form-control" name="won_uid_search" value="{{ request.args.get('won_uid_search', '') }}" placeholder="Search by UID">
+                            <input type="text" class="form-control" id="wonLeadsUidSearch" placeholder="Search by UID">
                         </div>
                         <div class="col-auto">
-                            <select class="form-select" name="won_rows" onchange="this.form.submit()">
-                                {% for n in [10, 25, 50, 100] %}
-                                <option value="{{ n }}" {% if request.args.get('won_rows', '25') == n|string %}selected{% endif %}>Show {{ n }}</option>
-                                {% endfor %}
+                            <select class="form-select" id="wonLeadsRowsPerPage">
+                                <option value="10">Show 10</option>
+                                <option value="25" selected>Show 25</option>
+                                <option value="50">Show 50</option>
+                                <option value="100">Show 100</option>
                             </select>
                         </div>
                         <div class="col-auto">
-                            <button type="submit" class="btn btn-outline-primary">Apply</button>
+                            <button type="button" id="wonLeadsApplyBtn" class="btn btn-outline-primary">Apply</button>
                         </div>
                     </form>
                     <div class="table-responsive">
                         <table class="table table-striped table-hover mb-0">
                             <thead class="thead-dark">
                                 <tr>
-                                    <th>Journey</th>
                                     <th>Customer Name</th>
                                     <th>Phone No.</th>
                                     <th>Final Status</th>
@@ -480,7 +426,7 @@
                                 </tr>
                             </thead>
                             <tbody id="wonLeadsTableBody">
-                                <tr><td colspan="8">Loading...</td></tr>
+                                <tr><td colspan="7">Loading...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -492,26 +438,26 @@
             <div class="card mb-3">
                 <div class="card-body">
                     <!-- Filters -->
-                    <form class="row g-2 mb-2">
+                    <form class="row g-2 mb-2" onsubmit="return false;">
                         <div class="col-auto">
-                            <input type="text" class="form-control" name="lost_uid_search" value="{{ request.args.get('lost_uid_search', '') }}" placeholder="Search by UID">
+                            <input type="text" class="form-control" id="lostLeadsUidSearch" placeholder="Search by UID">
                         </div>
                         <div class="col-auto">
-                            <select class="form-select" name="lost_rows" onchange="this.form.submit()">
-                                {% for n in [10, 25, 50, 100] %}
-                                <option value="{{ n }}" {% if request.args.get('lost_rows', '25') == n|string %}selected{% endif %}>Show {{ n }}</option>
-                                {% endfor %}
+                            <select class="form-select" id="lostLeadsRowsPerPage">
+                                <option value="10">Show 10</option>
+                                <option value="25" selected>Show 25</option>
+                                <option value="50">Show 50</option>
+                                <option value="100">Show 100</option>
                             </select>
                         </div>
                         <div class="col-auto">
-                            <button type="submit" class="btn btn-outline-primary">Apply</button>
+                            <button type="button" id="lostLeadsApplyBtn" class="btn btn-outline-primary">Apply</button>
                         </div>
                     </form>
                     <div class="table-responsive">
                         <table class="table table-striped table-hover mb-0">
                             <thead class="thead-dark">
                                 <tr>
-                                    <th>Journey</th>
                                     <th>Customer Name</th>
                                     <th>Phone No.</th>
                                     <th>Final Status</th>
@@ -522,7 +468,7 @@
                                 </tr>
                             </thead>
                             <tbody id="lostLeadsTableBody">
-                                <tr><td colspan="8">Loading...</td></tr>
+                                <tr><td colspan="7">Loading...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -533,6 +479,46 @@
 </div>
 
 <script>
+// Function to update all KPI counts
+function updateAllKPIs(data) {
+  // Update all KPI counts from the response
+  if (data.fresh_leads_count !== undefined) {
+    document.getElementById('freshLeadsKPI').textContent = data.fresh_leads_count;
+  }
+  if (data.walkin_leads_count !== undefined) {
+    document.getElementById('walkinLeadsKPI').textContent = data.walkin_leads_count;
+  }
+  if (data.cre_assigned_leads_count !== undefined) {
+    document.getElementById('creAssignedLeadsKPI').textContent = data.cre_assigned_leads_count;
+  }
+  if (data.pending_leads_count !== undefined) {
+    document.getElementById('pendingLeadsKPI').textContent = data.pending_leads_count;
+  }
+  if (data.followup_leads_count !== undefined) {
+    document.getElementById('followupLeadsKPI').textContent = data.followup_leads_count;
+  }
+  if (data.event_leads_count !== undefined) {
+    document.getElementById('eventLeadsKPI').textContent = data.event_leads_count;
+  }
+  if (data.won_leads_count !== undefined) {
+    document.getElementById('wonLeadsKPI').textContent = data.won_leads_count;
+  }
+  if (data.lost_leads_count !== undefined) {
+    document.getElementById('lostLeadsKPI').textContent = data.lost_leads_count;
+  }
+  
+  // Update pending leads sub-counts if available
+  if (data.pending_leads_cre_assigned_count !== undefined) {
+    document.getElementById('pendingLeadsKPI_CRE').textContent = `CRE: ${data.pending_leads_cre_assigned_count}`;
+  }
+  if (data.pending_leads_event_count !== undefined) {
+    document.getElementById('pendingLeadsKPI_Event').textContent = `Event: ${data.pending_leads_event_count}`;
+  }
+  if (data.pending_leads_walkin_count !== undefined) {
+    document.getElementById('pendingLeadsKPI_Walkin').textContent = `Walk-in: ${data.pending_leads_walkin_count}`;
+  }
+}
+
 // Utility to get universal filters
 function getUniversalFilters() {
   return {
@@ -554,37 +540,43 @@ const sectionConfig = {
     tab: 'walkin-tab',
     tbody: 'walkinLeadsTableBody',
     pagination: 'walkinLeadsPagination',
-    columns: ['journey', 'uid', 'customer_name', 'customer_mobile_number', 'customer_email', 'model_interested', 'lead_source', 'status', 'ps_name', 'created_at']
+    columns: ['uid', 'customer_name', 'customer_mobile_number', 'customer_email', 'model_interested', 'lead_source', 'status', 'ps_name', 'created_at']
   },
   cre_assigned_leads: {
     tab: 'creassigned-tab',
     tbody: 'creAssignedLeadsTableBody',
     pagination: 'creAssignedLeadsPagination',
-    columns: ['journey', 'customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source', 'ps_assigned_at', 'ps_name']
+    columns: ['customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source', 'ps_assigned_at', 'ps_name']
   },
   pending_leads: {
     tab: 'pending-tab',
     tbody: 'pendingLeadsTableBody',
     pagination: 'pendingLeadsPagination',
-    columns: ['journey', 'uid', 'customer_name', 'customer_mobile_number', 'final_status', 'source', 'assigned_time', 'ps_name']
+    columns: ['uid', 'customer_name', 'customer_mobile_number', 'final_status', 'source', 'assigned_time', 'ps_name']
   },
   followup_leads: {
     tab: 'followup-tab',
     tbody: 'followupLeadsTableBody',
     pagination: 'followupLeadsPagination',
-    columns: ['uid', 'customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source', 'lead_status', 'ps_name']
+    columns: ['customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source', 'lead_status', 'ps_name']
+  },
+  event_leads: {
+    tab: 'event-tab',
+    tbody: 'eventLeadsTableBody',
+    pagination: 'eventLeadsPagination',
+    columns: ['customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source', 'lead_status', 'ps_name']
   },
   won_leads: {
     tab: 'won-tab',
     tbody: 'wonLeadsTableBody',
     pagination: 'wonLeadsPagination',
-    columns: ['uid', 'customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source', 'lead_status', 'ps_name']
+    columns: ['customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source', 'lead_status', 'ps_name']
   },
   lost_leads: {
     tab: 'lost-tab',
     tbody: 'lostLeadsTableBody',
     pagination: 'lostLeadsPagination',
-    columns: ['uid', 'customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source', 'lead_status', 'ps_name']
+    columns: ['customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source', 'lead_status', 'ps_name']
   }
 };
 
@@ -600,272 +592,9 @@ function loadSection(section, page = 1, per_page = 25) {
       return res.json();
     })
     .then(data => {
-      if (section === 'fresh_leads') {
-        // Show all rows, including those with final_status 'Pending'
-        const filteredRows = data.rows || [];
-        document.getElementById('freshLeadsKPI').textContent = data.fresh_leads_count || 0;
-        if (tbody) {
-          if (filteredRows.length > 0) {
-            tbody.innerHTML = '';
-            filteredRows.forEach(row => {
-              const tr = document.createElement('tr');
-              tr.innerHTML = sectionConfig.fresh_leads.columns.map(col => `<td>${row[col] || ''}</td>`).join('');
-              tbody.appendChild(tr);
-            });
-          } else {
-            tbody.innerHTML = `<tr><td colspan="${sectionConfig.fresh_leads.columns.length}">No data found.</td></tr>`;
-          }
-        }
-        // Pagination controls (unchanged)
-        let pagDiv = document.getElementById(sectionConfig.fresh_leads.pagination);
-        if (!pagDiv) {
-          pagDiv = document.createElement('div');
-          pagDiv.id = sectionConfig.fresh_leads.pagination;
-          tbody.parentElement.appendChild(pagDiv);
-        }
-        let html = '';
-        for (let p = 1; p <= data.total_pages; p++) {
-          html += `<button onclick="loadSection('fresh_leads', ${p}, ${data.per_page})" ${p === data.page ? 'disabled' : ''}>${p}</button> `;
-        }
-        pagDiv.innerHTML = html;
-        return; // Don't run the generic code below for fresh_leads
-      }
-      if (section === 'walkin_leads') {
-        document.getElementById('walkinLeadsKPI').textContent = data.walkin_leads_count || 0;
-        if (tbody) {
-          if (data.rows && data.rows.length > 0) {
-            tbody.innerHTML = '';
-            data.rows.forEach(row => {
-              const tr = document.createElement('tr');
-              tr.innerHTML = sectionConfig.walkin_leads.columns.map(col => {
-                if (col === 'journey') {
-                  return `<td><button class='btn btn-sm btn-primary'>Journey</button></td>`;
-                } else {
-                  return `<td>${row[col] || ''}</td>`;
-                }
-              }).join('');
-              tbody.appendChild(tr);
-            });
-          } else {
-            tbody.innerHTML = `<tr><td colspan="${sectionConfig.walkin_leads.columns.length}">No data found.</td></tr>`;
-          }
-        }
-        // Pagination controls (unchanged)
-        let pagDiv = document.getElementById(sectionConfig.walkin_leads.pagination);
-        if (!pagDiv) {
-          pagDiv = document.createElement('div');
-          pagDiv.id = sectionConfig.walkin_leads.pagination;
-          tbody.parentElement.appendChild(pagDiv);
-        }
-        let html = '';
-        for (let p = 1; p <= data.total_pages; p++) {
-          html += `<button onclick="loadSection('walkin_leads', ${p}, ${data.per_page})" ${p === data.page ? 'disabled' : ''}>${p}</button> `;
-        }
-        pagDiv.innerHTML = html;
-        return;
-      }
-      if (section === 'cre_assigned_leads') {
-        document.getElementById('creAssignedLeadsKPI').textContent = data.cre_assigned_leads_count || 0;
-        if (tbody) {
-          if (data.rows && data.rows.length > 0) {
-            tbody.innerHTML = '';
-            data.rows.forEach(row => {
-              const tr = document.createElement('tr');
-              tr.innerHTML = sectionConfig.cre_assigned_leads.columns.map(col => {
-                if (col === 'journey') {
-                  return `<td><button class='btn btn-sm btn-primary'>Journey</button></td>`;
-                } else {
-                  return `<td>${row[col] || ''}</td>`;
-                }
-              }).join('');
-              tbody.appendChild(tr);
-            });
-          } else {
-            tbody.innerHTML = `<tr><td colspan="${sectionConfig.cre_assigned_leads.columns.length}">No data found.</td></tr>`;
-          }
-        }
-        // Pagination controls (unchanged)
-        let pagDiv = document.getElementById(sectionConfig.cre_assigned_leads.pagination);
-        if (!pagDiv) {
-          pagDiv = document.createElement('div');
-          pagDiv.id = sectionConfig.cre_assigned_leads.pagination;
-          tbody.parentElement.appendChild(pagDiv);
-        }
-        let html = '';
-        for (let p = 1; p <= data.total_pages; p++) {
-          html += `<button onclick=\"loadSection('cre_assigned_leads', ${p}, ${data.per_page})\" ${p === data.page ? 'disabled' : ''}>${p}</button> `;
-        }
-        pagDiv.innerHTML = html;
-        return;
-      }
-      if (section === 'pending_leads') {
-        document.getElementById('pendingLeadsKPI').textContent = data.pending_leads_count || 0;
-        document.getElementById('pendingLeadsKPI_CRE').textContent = data.pending_leads_cre_assigned_count || 0;
-        document.getElementById('pendingLeadsKPI_Event').textContent = data.pending_leads_event_count || 0;
-        document.getElementById('pendingLeadsKPI_Walkin').textContent = data.pending_leads_walkin_count || 0;
-        if (tbody) {
-          if (data.rows && data.rows.length > 0) {
-            tbody.innerHTML = '';
-            data.rows.forEach(row => {
-              const tr = document.createElement('tr');
-              let uid = row.uid || row.lead_uid || row.activity_uid || '';
-              let assignedTime = row.ps_assigned_at || row.created_at || '';
-              tr.innerHTML = `
-                <td><button class='btn btn-sm btn-primary'>Journey</button></td>
-                <td>${uid}</td>
-                <td>${row.customer_name || ''}</td>
-                <td>${row.customer_mobile_number || ''}</td>
-                <td>${row.final_status || ''}</td>
-                <td>${row.source_type || ''}</td>
-                <td>${assignedTime}</td>
-                <td>${row.ps_name || ''}</td>
-              `;
-              tbody.appendChild(tr);
-            });
-          } else {
-            tbody.innerHTML = `<tr><td colspan="8">No data found.</td></tr>`;
-          }
-        }
-        // Pagination controls (unchanged)
-        let pagDiv = document.getElementById(config.pagination);
-        if (!pagDiv) {
-          pagDiv = document.createElement('div');
-          pagDiv.id = config.pagination;
-          tbody.parentElement.appendChild(pagDiv);
-        }
-        let html = '';
-        for (let p = 1; p <= data.total_pages; p++) {
-          html += `<button onclick=\"loadSection('pending_leads', ${p}, ${data.per_page})\" ${p === data.page ? 'disabled' : ''}>${p}</button> `;
-        }
-        pagDiv.innerHTML = html;
-        return;
-      }
-      if (section === 'followup_leads') {
-        document.getElementById('followupLeadsKPI').textContent = data.total_count || 0;
-        if (tbody) {
-          if (data.rows && data.rows.length > 0) {
-            tbody.innerHTML = '';
-            const today = new Date().toISOString().slice(0, 10);
-            data.rows.forEach(row => {
-              // Only show rows where follow_up_date is today (if present)
-              let followUpDate = row.follow_up_date ? String(row.follow_up_date).slice(0, 10) : '';
-              if (followUpDate && followUpDate !== today) return;
-              const tr = document.createElement('tr');
-              let uid = row.uid || row.lead_uid || row.activity_uid || '';
-              tr.innerHTML = `
-                <td><button class='btn btn-sm btn-primary'>Journey</button></td>
-                <td>${row.customer_name || ''}</td>
-                <td>${row.customer_mobile_number || ''}</td>
-                <td>${row.final_status || ''}</td>
-                <td>${uid}</td>
-                <td>${row.source_type || row.source || ''}</td>
-                <td>${followUpDate}</td>
-                <td>${row.ps_name || ''}</td>
-              `;
-              tbody.appendChild(tr);
-            });
-          } else {
-            tbody.innerHTML = `<tr><td colspan="8">No data found.</td></tr>`;
-          }
-        }
-        // Pagination controls (unchanged)
-        let pagDiv = document.getElementById(config.pagination);
-        if (!pagDiv) {
-          pagDiv = document.createElement('div');
-          pagDiv.id = config.pagination;
-          tbody.parentElement.appendChild(pagDiv);
-        }
-        let html = '';
-        for (let p = 1; p <= data.total_pages; p++) {
-          html += `<button onclick=\"loadSection('followup_leads', ${p}, ${data.per_page})\" ${p === data.page ? 'disabled' : ''}>${p}</button> `;
-        }
-        pagDiv.innerHTML = html;
-        return;
-      }
-      if (section === 'event_leads') {
-        document.getElementById('eventLeadsKPI').textContent = data.event_leads_count || 0;
-        if (tbody) {
-          if (data.rows && data.rows.length > 0) {
-            tbody.innerHTML = '';
-            data.rows.forEach(row => {
-              const tr = document.createElement('tr');
-              tr.innerHTML = sectionConfig.event_leads.columns.map(col => `<td>${row[col] || ''}</td>`).join('');
-              tbody.appendChild(tr);
-            });
-          } else {
-            tbody.innerHTML = `<tr><td colspan="${sectionConfig.event_leads.columns.length}">No data found.</td></tr>`;
-          }
-        }
-        // Pagination controls (unchanged)
-        let pagDiv = document.getElementById(sectionConfig.event_leads.pagination);
-        if (!pagDiv) {
-          pagDiv = document.createElement('div');
-          pagDiv.id = sectionConfig.event_leads.pagination;
-          tbody.parentElement.appendChild(pagDiv);
-        }
-        let html = '';
-        for (let p = 1; p <= data.total_pages; p++) {
-          html += `<button onclick="loadSection('event_leads', ${p}, ${data.per_page})" ${p === data.page ? 'disabled' : ''}>${p}</button> `;
-        }
-        pagDiv.innerHTML = html;
-        return;
-      }
-      if (section === 'won_leads') {
-        document.getElementById('wonLeadsKPI').textContent = data.won_leads_count || 0;
-        if (tbody) {
-          if (data.rows && data.rows.length > 0) {
-            tbody.innerHTML = '';
-            data.rows.forEach(row => {
-              const tr = document.createElement('tr');
-              tr.innerHTML = sectionConfig.won_leads.columns.map(col => `<td>${row[col] || ''}</td>`).join('');
-              tbody.appendChild(tr);
-            });
-          } else {
-            tbody.innerHTML = `<tr><td colspan="${sectionConfig.won_leads.columns.length}">No data found.</td></tr>`;
-          }
-        }
-        // Pagination controls (unchanged)
-        let pagDiv = document.getElementById(sectionConfig.won_leads.pagination);
-        if (!pagDiv) {
-          pagDiv = document.createElement('div');
-          pagDiv.id = sectionConfig.won_leads.pagination;
-          tbody.parentElement.appendChild(pagDiv);
-        }
-        let html = '';
-        for (let p = 1; p <= data.total_pages; p++) {
-          html += `<button onclick="loadSection('won_leads', ${p}, ${data.per_page})" ${p === data.page ? 'disabled' : ''}>${p}</button> `;
-        }
-        pagDiv.innerHTML = html;
-        return;
-      }
-      if (section === 'lost_leads') {
-        document.getElementById('lostLeadsKPI').textContent = data.lost_leads_count || 0;
-        if (tbody) {
-          if (data.rows && data.rows.length > 0) {
-            tbody.innerHTML = '';
-            data.rows.forEach(row => {
-              const tr = document.createElement('tr');
-              tr.innerHTML = sectionConfig.lost_leads.columns.map(col => `<td>${row[col] || ''}</td>`).join('');
-              tbody.appendChild(tr);
-            });
-          } else {
-            tbody.innerHTML = `<tr><td colspan="${sectionConfig.lost_leads.columns.length}">No data found.</td></tr>`;
-          }
-        }
-        // Pagination controls (unchanged)
-        let pagDiv = document.getElementById(sectionConfig.lost_leads.pagination);
-        if (!pagDiv) {
-          pagDiv = document.createElement('div');
-          pagDiv.id = sectionConfig.lost_leads.pagination;
-          tbody.parentElement.appendChild(pagDiv);
-        }
-        let html = '';
-        for (let p = 1; p <= data.total_pages; p++) {
-          html += `<button onclick="loadSection('lost_leads', ${p}, ${data.per_page})" ${p === data.page ? 'disabled' : ''}>${p}</button> `;
-        }
-        pagDiv.innerHTML = html;
-        return;
-      }
+      // Update all KPI counts
+      updateAllKPIs(data);
+      
       if (tbody) {
         if (data.rows && data.rows.length > 0) {
         tbody.innerHTML = '';
@@ -878,6 +607,7 @@ function loadSection(section, page = 1, per_page = 25) {
           tbody.innerHTML = `<tr><td colspan="${config.columns.length}">No data found.</td></tr>`;
         }
       }
+      
       // Pagination controls
       let pagDiv = document.getElementById(config.pagination);
       if (!pagDiv) {
@@ -893,38 +623,27 @@ function loadSection(section, page = 1, per_page = 25) {
     })
     .catch(err => {
       if (tbody) {
-        tbody.innerHTML = `<tr><td colspan="${config.columns.length}">No data found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="${config.columns.length}">Error loading data.</td></tr>`;
       }
       let pagDiv = document.getElementById(config.pagination);
       if (pagDiv) pagDiv.innerHTML = '';
     });
 }
 
-// Tab click handlers
-Object.keys(sectionConfig).forEach(section => {
-  const tab = document.getElementById(sectionConfig[section].tab);
-  if (tab) {
-    tab.addEventListener('click', function() {
-      loadSection(section, 1);
-    });
-  }
-});
+
 
 // Initial load
 window.addEventListener('DOMContentLoaded', function() {
-  // List all your section keys here
-  const sections = [
-    'fresh_leads',
-    'walkin_leads',
-    'cre_assigned_leads',
-    'pending_leads',
-    'followup_leads',
-    'event_leads',
-    'won_leads',
-    'lost_leads'
-  ];
-  sections.forEach(section => {
-    loadSection(section, 1);
+  // Load fresh leads by default
+  loadSection('fresh_leads', 1);
+  
+  // Add click handlers for tab navigation
+  document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
+    tab.addEventListener('click', function(e) {
+      const target = this.getAttribute('href').substring(1);
+      const section = target.replace('-', '_');
+      loadSection(section, 1);
+    });
   });
   // Fresh Leads rows per page Apply button
   const freshApplyBtn = document.getElementById('freshLeadsApplyBtn');
@@ -958,6 +677,42 @@ window.addEventListener('DOMContentLoaded', function() {
     pendingApplyBtn.addEventListener('click', function() {
       const perPage = parseInt(document.getElementById('pendingLeadsRowsPerPage').value, 10) || 25;
       loadSection('pending_leads', 1, perPage);
+    });
+  }
+  
+  // Follow-up Leads rows per page Apply button
+  const followupApplyBtn = document.getElementById('followupLeadsApplyBtn');
+  if (followupApplyBtn) {
+    followupApplyBtn.addEventListener('click', function() {
+      const perPage = parseInt(document.getElementById('followupLeadsRowsPerPage').value, 10) || 25;
+      loadSection('followup_leads', 1, perPage);
+    });
+  }
+  
+  // Event Leads rows per page Apply button
+  const eventApplyBtn = document.getElementById('eventLeadsApplyBtn');
+  if (eventApplyBtn) {
+    eventApplyBtn.addEventListener('click', function() {
+      const perPage = parseInt(document.getElementById('eventLeadsRowsPerPage').value, 10) || 25;
+      loadSection('event_leads', 1, perPage);
+    });
+  }
+  
+  // Won Leads rows per page Apply button
+  const wonApplyBtn = document.getElementById('wonLeadsApplyBtn');
+  if (wonApplyBtn) {
+    wonApplyBtn.addEventListener('click', function() {
+      const perPage = parseInt(document.getElementById('wonLeadsRowsPerPage').value, 10) || 25;
+      loadSection('won_leads', 1, perPage);
+    });
+  }
+  
+  // Lost Leads rows per page Apply button
+  const lostApplyBtn = document.getElementById('lostLeadsApplyBtn');
+  if (lostApplyBtn) {
+    lostApplyBtn.addEventListener('click', function() {
+      const perPage = parseInt(document.getElementById('lostLeadsRowsPerPage').value, 10) || 25;
+      loadSection('lost_leads', 1, perPage);
     });
   }
 });
@@ -1067,6 +822,18 @@ function loadBranchHeadDashboards() {
 // Load dashboards on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadBranchHeadDashboards();
+    
+    // Load fresh leads by default
+    loadSection('fresh_leads');
+    
+    // Add click handlers for tab navigation
+    document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
+        tab.addEventListener('click', function(e) {
+            const target = this.getAttribute('href').substring(1);
+            const section = target.replace('-', '_');
+            loadSection(section);
+        });
+    });
 });
 </script>
 {% endblock %} 
