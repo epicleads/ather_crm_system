@@ -9,19 +9,27 @@
             <h5 class="card-title mb-3">Add New Branch Head</h5>
             <form method="post" action="{{ url_for('add_branch_head') }}">
                 <div class="row g-3 align-items-end">
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <label for="name" class="form-label">Name</label>
                         <input type="text" class="form-control" id="name" name="name" required>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <label for="username" class="form-label">Username</label>
                         <input type="text" class="form-control" id="username" name="username" required>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <label for="password" class="form-label">Password</label>
                         <input type="password" class="form-control" id="password" name="password" required>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email" placeholder="Enter email">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="phone" class="form-label">Phone</label>
+                        <input type="tel" class="form-control" id="phone" name="phone" placeholder="9876543210" maxlength="10">
+                    </div>
+                    <div class="col-md-2">
                         <label for="branch" class="form-label">Branch</label>
                         <select class="form-select" id="branch" name="branch" required>
                             {% for branch in branches %}
@@ -52,10 +60,12 @@
                         <tr>
                             <th>Name</th>
                             <th>Username</th>
+                            <th>Email</th>
+                            <th>Phone</th>
                             <th>Branch</th>
                             <th>Is Active</th>
+                            <th>Actions</th>
                             <th>Created</th>
-                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -63,6 +73,8 @@
                         <tr>
                             <td>{{ bh['Name'] }}</td>
                             <td>{{ bh['Username'] }}</td>
+                            <td>{{ bh.get('email', '') }}</td>
+                            <td>{{ bh.get('Phone No.', '') }}</td>
                             <td>{{ bh['Branch'] }}</td>
                             <td>
                                 <form method="post" action="{{ url_for('toggle_branch_head_active', id=bh['id']) }}">
@@ -72,8 +84,19 @@
                                     </button>
                                 </form>
                             </td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn btn-sm btn-outline-primary" 
+                                            onclick="openEditModal({{ bh['id'] }}, 'both', '{{ bh.get('email', '') }}', '{{ bh.get('Phone No.', '') }}', '{{ bh['Name'] }}')">
+                                        <i class="fas fa-edit"></i> Edit
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" 
+                                            onclick="deleteBranchHead({{ bh['id'] }}, '{{ bh['Name'] }}')">
+                                        <i class="fas fa-trash"></i> Delete
+                                    </button>
+                                </div>
+                            </td>
                             <td>{{ bh['created_at'] }}</td>
-                            <td><!-- Future: Edit/Delete --></td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -82,4 +105,188 @@
         </div>
     </div>
 </div>
+
+<!-- Edit Contact Modal -->
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Contact Information</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editForm">
+                    <input type="hidden" id="editId" name="id">
+                    <input type="hidden" id="editType" name="type">
+                    <div class="mb-3">
+                        <label for="editName" class="form-label">Branch Head Name</label>
+                        <input type="text" class="form-control" id="editName" readonly>
+                    </div>
+                    <div class="mb-3" id="emailField">
+                        <label for="editEmail" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="editEmail" name="email" placeholder="Enter email address">
+                    </div>
+                    <div class="mb-3" id="phoneField">
+                        <label for="editPhone" class="form-label">Phone</label>
+                        <input type="tel" class="form-control" id="editPhone" name="phone" placeholder="9876543210" maxlength="10">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveContactInfo()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete branch head: <strong id="deleteName"></strong>?</p>
+                <p class="text-danger">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" onclick="proceedDelete()">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let editId = null;
+let editType = null;
+let deleteId = null;
+
+function openEditModal(id, type, email, phone, name) {
+    editId = id;
+    editType = type;
+    document.getElementById('editId').value = id;
+    document.getElementById('editType').value = type;
+    document.getElementById('editName').value = name;
+    
+    // Show/hide fields based on type
+    const emailField = document.getElementById('emailField');
+    const phoneField = document.getElementById('phoneField');
+    
+    if (type === 'email') {
+        emailField.style.display = 'block';
+        phoneField.style.display = 'none';
+        document.getElementById('editEmail').value = email;
+        document.getElementById('editPhone').value = '';
+    } else if (type === 'phone') {
+        emailField.style.display = 'none';
+        phoneField.style.display = 'block';
+        document.getElementById('editEmail').value = '';
+        document.getElementById('editPhone').value = phone;
+    } else if (type === 'both') {
+        emailField.style.display = 'block';
+        phoneField.style.display = 'block';
+        document.getElementById('editEmail').value = email;
+        document.getElementById('editPhone').value = phone;
+    }
+    
+    new bootstrap.Modal(document.getElementById('editModal')).show();
+}
+
+function saveContactInfo() {
+    const email = document.getElementById('editEmail').value.trim();
+    const phone = document.getElementById('editPhone').value.trim();
+    
+    // Validate email if editing email
+    if (editType === 'email' || editType === 'both') {
+        if (email && !email.includes('@')) {
+            alert('Please enter a valid email address');
+            return;
+        }
+    }
+    
+    // Validate phone if editing phone
+    if (editType === 'phone' || editType === 'both') {
+        if (phone && (!phone.replace(' ', '').match(/^\d+$/) || phone.replace(' ', '').length !== 10)) {
+            alert('Please enter a valid 10-digit phone number');
+            return;
+        }
+    }
+    
+    // Send AJAX request
+    fetch(`/edit_branch_head_contact/${editId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `email=${encodeURIComponent(email)}&phone=${encodeURIComponent(phone)}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload(); // Refresh page to show updated data
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while updating contact information');
+    });
+}
+
+function deleteBranchHead(id, name) {
+    deleteId = id;
+    document.getElementById('deleteName').textContent = name;
+    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+
+function proceedDelete() {
+    if (deleteId) {
+        fetch(`/delete_branch_head/${deleteId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                location.reload(); // Refresh page to show updated data
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while deleting branch head');
+        });
+    }
+}
+
+// Phone number formatting for add form (10 digits only)
+document.getElementById('phone').addEventListener('input', function(e) {
+    let value = e.target.value.replace(/\D/g, '');
+    // Limit to 10 digits
+    if (value.length > 10) {
+        value = value.substring(0, 10);
+    }
+    e.target.value = value;
+});
+
+// Phone number formatting for edit modal (10 digits only)
+document.getElementById('editPhone').addEventListener('input', function(e) {
+    let value = e.target.value.replace(/\D/g, '');
+    // Limit to 10 digits
+    if (value.length > 10) {
+        value = value.substring(0, 10);
+    }
+    e.target.value = value;
+});
+</script>
 {% endblock %} 
