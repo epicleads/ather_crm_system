@@ -1934,13 +1934,7 @@ def cre_dashboard():
         if follow_up_date and str(follow_up_date) < today_str and final_status not in ['Won', 'Lost']:
             supabase.table('lead_master').update({'follow_up_date': today_str}).eq('uid', lead.get('uid')).execute()
 
-    # 2. Walk-in leads (walkin_data)
-    walkin_leads = safe_get_data('walkin_data', {'cre_name': cre_name})
-    for lead in walkin_leads:
-        cre_follow_up_date = lead.get('cre_follow_up_date')
-        final_status = lead.get('final_status')
-        if cre_follow_up_date and str(cre_follow_up_date) < today_str and final_status not in ['Won', 'Lost']:
-            supabase.table('walkin_data').update({'cre_follow_up_date': today_str}).eq('uid', lead.get('uid')).execute()
+
 
     # 3. Event leads (activity_leads)
     event_event_leads = safe_get_data('activity_leads', {'cre_assigned': cre_name})
@@ -2325,14 +2319,7 @@ def ps_dashboard():
         if follow_up_date and str(follow_up_date) < today_str and final_status not in ['Won', 'Lost']:
             supabase.table('ps_followup_master').update({'follow_up_date': today_str}).eq('lead_uid', lead.get('lead_uid')).execute()
 
-    # 2. walkin_data
-    walkin_leads = safe_get_data('walkin_data', {'ps_name': ps_name})
-    for lead in walkin_leads:
-        follow_up_date = lead.get('walkin_followup_date')
-        status = lead.get('status')
-        ps_final_status = lead.get('ps_final_status')
-        if follow_up_date and str(follow_up_date) < today_str and ps_final_status not in ['Won', 'Lost'] and status not in ['Converted', 'Lost']:
-            supabase.table('walkin_data').update({'walkin_followup_date': today_str}).eq('uid', lead.get('uid')).execute()
+
 
     # 3. activity_leads
     event_leads = safe_get_data('activity_leads', {'ps_name': ps_name})
@@ -2360,7 +2347,7 @@ def ps_dashboard():
 
         # Initialize lists for different lead categories
         todays_followups_regular = []
-        todays_followups_walkin = []
+
         todays_followups_event = []  # Separate list for event followups
         fresh_leads = []
         pending_leads = []
@@ -2371,8 +2358,7 @@ def ps_dashboard():
         # Define statuses that should be excluded from Today's Follow-up and Pending Leads
         excluded_statuses = ['Lost to Codealer', 'Lost to Competition', 'Dropped', 'Booked', 'Retailed']
 
-        # Define walk-in statuses that should be excluded from Today's Follow-up
-        excluded_walkin_statuses = ['Converted', 'Lost']
+
 
         print(f"[PERF] ps_dashboard: data fetching took {time.time() - t0:.3f} seconds")
         print(f"[DEBUG] Total assigned leads fetched: {len(assigned_leads)}")
@@ -2448,57 +2434,9 @@ def ps_dashboard():
             category = lead.get('lead_category')
             print(f"  - {lead.get('lead_uid')}: {category} (Type: {type(category)})")
 
-        t2 = time.time()
-        # Fetch walk-in leads for this PS
-        walkin_leads = safe_get_data('walkin_data', {'ps_name': ps_name})
 
-        # --- Process Walk-in Leads ---
-        for lead in walkin_leads:
-            lead_dict = dict(lead)  # Make a copy to avoid mutating the original
-            lead_dict['lead_uid'] = lead.get('uid')  # Add lead_uid for template compatibility
 
-            ps_final_status = lead.get('ps_final_status')
-            status = lead.get('status')
-            lead_status = lead.get('lead_status')
 
-            # Categorize walk-in leads
-            if ps_final_status == 'Won' or status == 'Converted':
-                won_leads.append(lead_dict)
-            elif ps_final_status == 'Lost' or status == 'Lost':
-                lost_leads.append(lead_dict)
-            elif ps_final_status == 'Pending' or status == 'Pending':
-                if lead.get('first_call_date'):
-                    # Walk-in leads should already have lead_category from the database
-                    # Set default if it's missing, None, or empty
-                    if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
-                        lead_dict['lead_category'] = 'Not Set'
-                    attended_leads.append(lead_dict)
-                # Do NOT add walk-in leads to fresh_leads
-                # else:
-                #     if lead_status not in excluded_statuses:
-                #         fresh_leads.append(lead_dict)
-
-            # Add to today's followups if applicable
-            follow_up = lead.get('walkin_followup_date') or lead.get('follow_up_date')
-            if (follow_up and
-                str(follow_up).startswith(today_str) and
-                lead_status not in excluded_statuses and
-                status not in excluded_walkin_statuses):
-                todays_followups_walkin.append(lead_dict)
-
-        # Add walk-in leads to pending leads (leads without first_call_date and with status 'Pending')
-        for lead in walkin_leads:
-            if (not lead.get('first_call_date') and
-                (lead.get('status') == 'Pending' or lead.get('ps_final_status') == 'Pending') and
-                lead.get('lead_status') not in excluded_statuses):
-                lead_dict = dict(lead)
-                lead_dict['lead_uid'] = lead.get('uid')
-                # Set default lead_category if missing
-                if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
-                    lead_dict['lead_category'] = 'Not Set'
-                pending_leads.append(lead_dict)
-
-        print(f"[PERF] ps_dashboard: walkin leads processing took {time.time() - t2:.3f} seconds")
 
         t3 = time.time()
         # Fetch event leads for this PS
@@ -2584,7 +2522,7 @@ def ps_dashboard():
 
         t5 = time.time()
         # Merge today's followup lists
-        todays_followups = todays_followups_regular + todays_followups_walkin + todays_followups_event
+        todays_followups = todays_followups_regular + todays_followups_event
 
         print(f"[PERF] ps_dashboard: final processing took {time.time() - t5:.3f} seconds")
 
@@ -2598,7 +2536,6 @@ def ps_dashboard():
                                attended_leads=attended_leads,
                                won_leads=won_leads,
                                lost_leads=lost_leads,
-                               walkin_leads=walkin_leads,
                                event_leads=event_leads,
                                filter_type=filter_type,
                                start_date=start_date,
@@ -2626,7 +2563,6 @@ def ps_dashboard():
                              attended_leads=[],
                              won_leads=[],
                              lost_leads=[],
-                             walkin_leads=[],
                              event_leads=[],
                              filter_type=filter_type,
                              start_date=start_date,
@@ -2755,108 +2691,11 @@ def update_ps_lead(uid):
                                    completed_calls=completed_calls,
                                    today=date.today(),
                                    cre_call_summary=cre_call_summary)
-        # If not found in ps_followup_master, try walkin_data
-        walkin_result = supabase.table('walkin_data').select('*').eq('uid', uid).execute()
-        if not walkin_result.data:
-            flash('Lead not found', 'error')
-            redirect_url = url_for('ps_dashboard', tab=return_tab)
-            if status_filter:
-                redirect_url += f'&status_filter={status_filter}'
-            return redirect(redirect_url)
-        walkin_data = walkin_result.data[0]
-        # Only allow the PS assigned to this walk-in lead
-        if walkin_data.get('ps_name') != session.get('ps_name'):
-            flash('Access denied - This walk-in lead is not assigned to you', 'error')
-            redirect_url = url_for('ps_dashboard', tab=return_tab)
-            if status_filter:
-                redirect_url += f'&status_filter={status_filter}'
-            return redirect(redirect_url)
-        # Ensure lead_uid is set for template compatibility
-        walkin_data['lead_uid'] = walkin_data.get('uid')
-        # Determine next call info for walk-in (up to 7 calls)
-        call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
-        completed_calls = []
-        next_call = 'first'
-        for call_num in call_order:
-            call_date_key = f'{call_num}_call_date'
-            if walkin_data.get(call_date_key):
-                completed_calls.append(call_num)
-            else:
-                next_call = call_num
-                break
-        if request.method == 'POST':
-            update_data = {}
-            status = request.form.get('lead_status', '')
-            follow_up_date = request.form.get('follow_up_date', '')
-            call_remark = request.form.get('call_remark', '')
-            final_status = request.form.get('final_status', '')
-            call_date = request.form.get('call_date', '')
-            lead_category = request.form.get('lead_category', '')
-            # Use the actual source from walkin_data instead of hardcoding 'Walk-in'
-            update_data['lead_source'] = walkin_data.get('lead_source', 'Walk-in')
-            if lead_category:
-                update_data['lead_category'] = lead_category
-            if status:
-                update_data['lead_status'] = status
-            # Fix: Update walkin_followup_date (timestamp) if provided
-            if follow_up_date:
-                update_data['walkin_followup_date'] = follow_up_date
-            if follow_up_date:
-                update_data['follow_up_date'] = follow_up_date
-            if final_status in ['Won', 'Lost']:
-                update_data['ps_final_status'] = final_status
-                # Map final_status to status field in walkin_data
-                if final_status == 'Won':
-                    update_data['status'] = 'Converted'
-                elif final_status == 'Lost':
-                    update_data['status'] = 'Lost'
-            elif final_status == 'Pending':
-                update_data['ps_final_status'] = 'Pending'
-                update_data['status'] = 'Pending'
-            else:
-                update_data['ps_final_status'] = 'Pending'
-            skip_first_call_statuses = [
-                'Call not Connected',
-                'Busy on another call',
-                'RNR',
-                'Call me Back'
-            ]
-            if call_date and status and status not in skip_first_call_statuses:
-                update_data[f'{next_call}_call_date'] = call_date
-            if call_remark:
-                update_data[f'{next_call}_call_remark'] = f"{status}, {call_remark}"
-            try:
-                if update_data:
-                    supabase.table('walkin_data').update(update_data).eq('uid', uid).execute()
-                    flash('Walk-in lead updated successfully', 'success')
-                    redirect_url = url_for('ps_dashboard', tab=return_tab)
-                    if status_filter:
-                        redirect_url += f'&status_filter={status_filter}'
-                    return redirect(redirect_url)  # Always redirect to PS dashboard after update
-                else:
-                    flash('No changes to update', 'info')
-                walkin_result = supabase.table('walkin_data').select('*').eq('uid', uid).execute()
-                walkin_data = walkin_result.data[0] if walkin_result.data else walkin_data
-                call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
-                completed_calls = []
-                next_call = 'first'
-                for call_num in call_order:
-                    call_date_key = f'{call_num}_call_date'
-                    if walkin_data.get(call_date_key):
-                        completed_calls.append(call_num)
-                    else:
-                        next_call = call_num
-                        break
-                return redirect(url_for('update_ps_lead', uid=uid))
-            except Exception as e:
-                flash(f'Error updating walk-in lead: {str(e)}', 'error')
-        # For walk-in, mimic the same update form but only for available fields
-        return render_template('update_ps_lead.html',
-                               lead=walkin_data,
-                               next_call=next_call,
-                               completed_calls=completed_calls,
-                               today=date.today(),
-                               cre_call_summary={})
+        flash('Lead not found', 'error')
+        redirect_url = url_for('ps_dashboard', tab=return_tab)
+        if status_filter:
+            redirect_url += f'&status_filter={status_filter}'
+        return redirect(redirect_url)
     except Exception as e:
         flash(f'Error loading lead: {str(e)}', 'error')
         return redirect(url_for('ps_dashboard'))
@@ -2882,420 +2721,12 @@ def logout():
     return redirect(url_for('index'))
 
 
-def generate_walkin_uid(source, mobile_number, sequence):
-    """Generate UID for walk-in customers"""
-    source_map = {
-        'Walk-in': 'W',
-        'Referral': 'R',
-        'Social Media': 'S',
-        'Website': 'WB',
-        'Advertisement': 'A',
-        'Other': 'O'
-    }
-
-    source_char = source_map.get(source, 'X')
-
-    # Get sequence character (A-Z)
-    sequence_char = chr(65 + (sequence % 26))  # A=65 in ASCII
-
-    # Get last 4 digits of mobile number
-    mobile_str = str(mobile_number).replace(' ', '').replace('-', '')
-    mobile_last4 = mobile_str[-4:] if len(mobile_str) >= 4 else mobile_str.zfill(4)
-
-    # Generate sequence number (0001, 0002, etc.)
-    seq_num = f"{(sequence % 9999) + 1:04d}"
-
-    return f"{source_char}{sequence_char}-{mobile_last4}-{seq_num}"
 
 
-def send_quotation_email(customer_email, customer_name, quotation_data, pdf_path=None):
-    """Send quotation email to walk-in customer with PDF attachment"""
-    server = None
-    try:
-        if not EMAIL_USER or not EMAIL_PASSWORD:
-            print("Email credentials not configured. Skipping quotation email.")
-            return False
 
-        # Create message
-        msg = MIMEMultipart()
-        msg['From'] = EMAIL_USER
-        msg['To'] = customer_email
-        msg['Subject'] = f"Ather Quotation - {quotation_data['model_interested']}"
 
-        # Email body with quotation details
-        body = f"""
-        Dear {customer_name},
 
-        Thank you for visiting our Ather showroom. We are pleased to provide you with the quotation for your selected model.
 
-        Quotation Details:
-        - Model: {quotation_data['model_interested']}
-        - Price: ₹{int(float(quotation_data['quotation_amount'])):,}
-        - Branch: {quotation_data['ps_branch']}
-        - Quotation ID: {quotation_data['uid']}
-
-        Additional Details:
-        {quotation_data.get('quotation_details', 'Standard configuration')}
-
-        Key Features:
-        • Zero emissions, 100% electric
-        • Advanced connectivity features
-        • Fast charging capability
-        • Comprehensive warranty
-        • Pan-India service network
-
-        Next Steps:
-        1. Visit our showroom for a test ride
-        2. Explore financing options
-        3. Book your Ather scooter
-
-        Please find the detailed quotation attached as a PDF.
-
-        For any queries or to schedule a test ride, please contact us:
-        Phone: +91-XXXXXXXXXX
-        Email: {EMAIL_USER}
-
-        We look forward to welcoming you to the Ather family!
-
-        Best regards,
-        {quotation_data['ps_name']}
-        Ather Energy - {quotation_data['ps_branch']} Branch
-        """
-
-        msg.attach(MIMEText(body, 'plain'))
-
-        # Attach PDF if provided
-        if pdf_path and os.path.exists(pdf_path):
-            try:
-                from email.mime.application import MIMEApplication
-                with open(pdf_path, 'rb') as pdf_file:
-                    pdf_attachment = MIMEApplication(pdf_file.read(), _subtype='pdf')
-                    pdf_attachment.add_header('Content-Disposition', 'attachment',
-                                              filename=f"Ather_Quotation_{quotation_data['uid']}.pdf")
-                    msg.attach(pdf_attachment)
-                print("PDF attached to email successfully")
-            except Exception as e:
-                print(f"Error attaching PDF: {e}")
-
-        # Send email
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-        server.starttls()
-        server.login(EMAIL_USER, EMAIL_PASSWORD)
-        text = msg.as_string()
-        server.sendmail(EMAIL_USER, customer_email, text)
-        print(f"Quotation email sent successfully to {customer_email}")
-        return True
-
-    except Exception as e:
-        print(f"Error sending quotation email: {e}")
-        return False
-
-    finally:
-        if server:
-            try:
-                server.quit()
-            except Exception as e:
-                print(f"Error quitting server: {e}")
-
-# Replace the `generate_quotation_pdf` function with this new implementation:
-def generate_quotation_pdf(quotation_data):
-    """Generate PDF quotation for walk-in customer using ReportLab with exact RAAM ATHER format"""
-    try:
-        # Create a temporary file for the PDF
-        temp_dir = tempfile.gettempdir()
-        pdf_filename = f"quotation_{quotation_data['uid']}.pdf"
-        pdf_path = os.path.join(temp_dir, pdf_filename)
-
-        # Create the PDF document
-        doc = SimpleDocTemplate(pdf_path, pagesize=A4, topMargin=0.5 * inch, bottomMargin=0.5 * inch)
-
-        # Get styles
-        styles = getSampleStyleSheet()
-
-        # Custom styles to match exact format
-        company_style = ParagraphStyle(
-            'CompanyStyle',
-            parent=styles['Normal'],
-            fontSize=24,
-            spaceAfter=5,
-            alignment=TA_LEFT,
-            textColor=colors.HexColor('#147a49'),  # Green color for RAAM
-            fontName='Helvetica-Bold'
-        )
-
-        title_style = ParagraphStyle(
-            'TitleStyle',
-            parent=styles['Heading1'],
-            fontSize=20,
-            spaceAfter=20,
-            alignment=TA_RIGHT,
-            textColor=colors.HexColor('#2c3e50'),
-            fontName='Helvetica-Bold'
-        )
-
-        info_style = ParagraphStyle(
-            'InfoStyle',
-            parent=styles['Normal'],
-            fontSize=11,
-            spaceAfter=4,
-            fontName='Helvetica'
-        )
-
-        header_style = ParagraphStyle(
-            'HeaderStyle',
-            parent=styles['Heading2'],
-            fontSize=14,
-            spaceAfter=12,
-            spaceBefore=20,
-            textColor=colors.HexColor('#147a49'),
-            fontName='Helvetica-Bold'
-        )
-
-        # Build the PDF content
-        story = []
-
-        # Header with logo and title - Fixed logo handling
-        logo_element = None
-        try:
-            # Try multiple possible logo paths
-            possible_paths = [
-                'static/images/raam-ather-logo.png',
-                'public/images/raam-ather-logo.png',
-                os.path.join(os.path.dirname(__file__), 'static', 'images', 'raam-ather-logo.png'),
-                os.path.join(os.path.dirname(__file__), 'public', 'images', 'raam-ather-logo.png')
-            ]
-
-            logo_loaded = False
-            for logo_path in possible_paths:
-                if os.path.exists(logo_path):
-                    try:
-                        logo_element = Image(logo_path, width=2 * inch, height=0.6 * inch)
-                        logo_loaded = True
-                        print(f"Logo loaded successfully from: {logo_path}")
-                        break
-                    except Exception as e:
-                        print(f"Failed to load logo from {logo_path}: {e}")
-                        continue
-
-            if not logo_loaded:
-                print("Logo file not found, using text fallback")
-                # Fallback to styled text
-                logo_element = Paragraph(
-                    '<font color="#147a49" size="20"><b>RAAM</b></font><br/>'
-                    '<font color="#2c3e50" size="16"><b>ATHER</b></font>',
-                    company_style
-                )
-        except Exception as e:
-            print(f"Error loading logo: {e}")
-            # Text fallback
-            logo_element = Paragraph(
-                '<font color="#147a49" size="20"><b>RAAM</b></font><br/>'
-                '<font color="#2c3e50" size="16"><b>ATHER</b></font>',
-                company_style
-            )
-
-        # Header table with logo and title
-        header_data = [[logo_element, Paragraph("Customer Quotation", title_style)]]
-        header_table = Table(header_data, colWidths=[3 * inch, 4 * inch])
-        header_table.setStyle(TableStyle([
-            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
-            ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 15),
-        ]))
-
-        story.append(header_table)
-
-        # Add line separator
-        line = Table([['']], colWidths=[7 * inch])
-        line.setStyle(TableStyle([
-            ('LINEBELOW', (0, 0), (-1, -1), 2, colors.HexColor('#147a49')),
-            ('TOPPADDING', (0, 0), (-1, -1), 0),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 15),
-        ]))
-        story.append(line)
-
-        # Quotation info box
-        info_data = [
-            [f"Quotation ID: {quotation_data['uid']}"],
-            [f"Executive: {quotation_data['psName']}"],
-            [f"Mobile: {quotation_data.get('executiveMobile', 'N/A')}"],
-            [f"Date: {quotation_data['date']}"],
-            [f"Branch: {quotation_data['branch']}"]
-        ]
-
-        info_table = Table(info_data, colWidths=[7 * inch])
-        info_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8f9fa')),
-            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 0), (-1, -1), 11),
-            ('LEFTPADDING', (0, 0), (-1, -1), 15),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 15),
-            ('TOPPADDING', (0, 0), (-1, -1), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-            ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#dee2e6')),
-        ]))
-
-        story.append(info_table)
-        story.append(Spacer(1, 20))
-
-        # Customer Details Header
-        story.append(Paragraph("Customer Details", header_style))
-
-        # Customer details table - exact format
-        customer_data = [
-            ['Full Name', quotation_data['customerName'], 'Mobile', quotation_data['customerMobile']],
-            ['Email', quotation_data['email'], 'Address', quotation_data['address']],
-            ['Occupation', quotation_data['occupation'], 'Lead Source', quotation_data['leadSource']],
-            ['Lead Category', quotation_data['leadCategory'], 'Purchase Type', quotation_data['purchaseType']],
-            ['Model', quotation_data['model'], 'Color', quotation_data['color']],
-            ['Expected Delivery', quotation_data['expectedDate'], '', '']
-        ]
-
-        customer_table = Table(customer_data, colWidths=[1.2 * inch, 2.3 * inch, 1.2 * inch, 2.3 * inch])
-        customer_table.setStyle(TableStyle([
-            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),  # First column bold
-            ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),  # Third column bold
-            ('LEFTPADDING', (0, 0), (-1, -1), 8),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-            ('TOPPADDING', (0, 0), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#dee2e6')),
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ]))
-
-        story.append(customer_table)
-        story.append(Spacer(1, 25))
-
-        # Pricing Summary
-        story.append(Paragraph("Pricing Summary", header_style))
-
-        # Calculate pricing based on model - exact calculations
-        model_data = {
-            "Rizta S Mono (2.9 kWh)": [114841, 17000],
-            "Rizta S Super Matte (2.9 kWh)": [116841, 18000],
-            "Rizta Z Mono (2.9 kWh)": [129841, 20000],
-            "Rizta Z Duo (2.9 kWh)": [130841, 17000],
-            "Rizta Z Super Matte (2.9 kWh)": [131841, 18000],
-            "Rizta Z Mono (3.7 kWh)": [149842, 20000],
-            "Rizta Z Duo (3.7 kWh)": [150842, 17000],
-            "Rizta Z Super Matte (3.7 kWh)": [151842, 18000],
-            "450 X (2.9 kWh)": [149047, 20000],
-            "450 X (3.7 kWh)": [159046, 17000],
-            "450 X (2.9 kWh) Pro Pack": [166047, 18000],
-            "450 X (3.7 kWh) Pro Pack": [179046, 20000],
-            "450 Apex STD": [189841, 0]
-        }
-
-        model_price = model_data.get(quotation_data['model'], [0, 0])[0]
-        pro_pack_price = model_data.get(quotation_data['model'], [0, 0])[1]
-        accessories_cost = int(quotation_data.get('accessories', 0))
-        subsidy = 5000
-        rto = 1000
-        insurance = 5500
-        ebw = 6000
-        amc = 2500
-
-        grand_total = model_price + pro_pack_price + accessories_cost + rto + insurance + ebw + amc - subsidy
-
-        # Pricing table - exact format
-        pricing_data = [
-            ['Description', 'Amount (₹)'],
-            ['Ex Showroom Price (incl. GST + Charger)', f'{model_price:,}'],
-            ['PM-E Drive Subsidy', f'-{subsidy:,}'],
-            ['Pro Pack', f'{pro_pack_price:,}'],
-            ['RTO Registration', f'{rto:,}'],
-            ['Insurance (Add-on)', f'{insurance:,}'],
-            ['Accessories', f'{accessories_cost:,}'],
-            ['EBW (Extended Battery Warranty)', f'{ebw:,}'],
-            ['AMC (Annual Maintenance Contract)', f'{amc:,}'],
-            ['Grand Total', f'₹{grand_total:,}']
-        ]
-
-        pricing_table = Table(pricing_data, colWidths=[5 * inch, 2 * inch])
-        pricing_table.setStyle(TableStyle([
-            # Header row
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f0f0f0')),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 11),
-            # Data rows
-            ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -2), 10),
-            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-            ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-            # Subsidy row highlight
-            ('BACKGROUND', (0, 2), (-1, 2), colors.HexColor('#e8f5e8')),
-            # Grand total row
-            ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#147a49')),
-            ('TEXTCOLOR', (0, -1), (-1, -1), colors.white),
-            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, -1), (-1, -1), 12),
-            # Grid and padding
-            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#ddd')),
-            ('LEFTPADDING', (0, 0), (-1, -1), 10),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 10),
-            ('TOPPADDING', (0, 0), (-1, -1), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-        ]))
-
-        story.append(pricing_table)
-        story.append(Spacer(1, 30))
-
-        # Important Notes
-        notes_text = """<b>Important Notes:</b><br/>
-        • Vehicle delivery is subject to successful completion of PM-E Drive face verification.<br/>
-        • This quotation is valid for 30 days from the date of issue.<br/>
-        • Prices are subject to change without prior notice.<br/>
-        • All government subsidies are subject to availability and eligibility criteria.<br/>
-        • For financing options, please contact our sales team."""
-
-        notes_para = Paragraph(notes_text, ParagraphStyle(
-            'NotesStyle',
-            parent=styles['Normal'],
-            fontSize=10,
-            leftIndent=15,
-            rightIndent=15,
-            spaceAfter=20,
-            borderColor=colors.HexColor('#ffc107'),
-            borderWidth=1,
-            borderPadding=15,
-            backColor=colors.HexColor('#fff8e1')
-        ))
-
-        story.append(notes_para)
-
-        # Footer
-        footer_text = f"""<b>Thank you for choosing Ather Energy!</b><br/>
-        For any queries, please contact us at {quotation_data['branch']} branch<br/>
-        Visit us: www.atherenergy.com | Call: 1800-123-ATHER"""
-
-        footer_para = Paragraph(footer_text, ParagraphStyle(
-            'FooterStyle',
-            parent=styles['Normal'],
-            fontSize=10,
-            alignment=TA_CENTER,
-            textColor=colors.HexColor('#666'),
-            borderColor=colors.HexColor('#eee'),
-            borderWidth=1,
-            borderPadding=15,
-            spaceBefore=15
-        ))
-
-        story.append(footer_para)
-
-        # Build the PDF
-        doc.build(story)
-
-        print(f"PDF generated successfully: {pdf_path}")
-        return pdf_path
-
-    except Exception as e:
-        print(f"Error generating PDF: {e}")
-        import traceback
-        traceback.print_exc()
-        return None
 
 
 def ensure_static_directories():
@@ -3314,278 +2745,9 @@ def ensure_static_directories():
         return None
 
 
-@app.route('/walkin', methods=['GET', 'POST'])
-@require_ps
-def walkin():
-    """Standalone walk-in customer form"""
-    if request.method == 'POST':
-        # This would handle the walkin.html form submission
-        # For now, redirect to the main walkin_customers route
-        return redirect(url_for('walkin_customers'))
-
-    return render_template('walkin.html')
 
 
-@app.route('/walkin_customers', methods=['GET', 'POST'])
-@require_ps
-def walkin_customers():
-    if request.method == 'POST':
-        # Ensure static directories exist
-        ensure_static_directories()
-        # Get form data
-        customer_name = request.form.get('customer_name', '').strip()
-        customer_mobile = request.form.get('customer_mobile', '').strip()
-        customer_email = request.form.get('customer_email', '').strip()
-        customer_address = request.form.get('customer_address', '').strip()
-        customer_age = request.form.get('customer_age', '').strip()
-        occupation = request.form.get('occupation', '').strip()
-        vehicle_usage = request.form.get('vehicle_usage', '').strip()
-        daily_travel = request.form.get('daily_travel', '').strip()
-        lead_source = request.form.get('lead_source', '').strip()
-        lead_category = request.form.get('lead_category', '').strip()
-        purchase_type = request.form.get('purchase_type', '').strip()
-        model_interested = request.form.get('model_interested', '').strip()
-        color = request.form.get('color', '').strip()
-        pro_pack = request.form.get('pro_pack', '').strip()
-        expected_delivery = request.form.get('expected_delivery', '').strip()
-        accessories = request.form.get('accessories', '0').strip()
-        quotation_details = request.form.get('quotation_details', '').strip()
-        follow_up_date = request.form.get('follow_up_date', '').strip()
-        status = request.form.get('status', 'Pending').strip()
-        remarks = request.form.get('remarks', '').strip()
 
-        # Validate required fields
-        if not all([customer_name, customer_mobile, lead_source, model_interested]):
-            flash('Please fill all required fields', 'error')
-            return render_template('walkin_customers.html', today=datetime.now().strftime('%Y-%m-%d'))
-
-        try:
-            # Get current sequence number for UID generation
-            result = supabase.table('walkin_data').select('uid').execute()
-            current_count = len(result.data) if result.data else 0
-
-            # Generate UID
-            uid = generate_walkin_uid(lead_source, customer_mobile, current_count + 1)
-
-            # Prepare quotation data for PDF
-            quotation_data = {
-                'uid': uid,
-                'psName': session.get('ps_name'),
-                'executiveMobile': session.get('phone', 'N/A'),
-                'date': datetime.now().strftime('%Y-%m-%d'),
-                'branch': session.get('branch'),
-                'customerName': customer_name,
-                'customerMobile': customer_mobile,
-                'email': customer_email if customer_email else 'N/A',
-                'address': customer_address if customer_address else 'N/A',
-                'occupation': occupation if occupation else 'N/A',
-                'leadSource': lead_source,
-                'leadCategory': lead_category if lead_category else 'N/A',
-                'purchaseType': purchase_type if purchase_type else 'N/A',
-                'model': model_interested,
-                'color': color if color else 'N/A',
-                'expectedDate': expected_delivery if expected_delivery else 'N/A',
-                'accessories': accessories if accessories else '0'
-            }
-
-            # Calculate quotation amount based on model
-            model_data = {
-                "Rizta S Mono (2.9 kWh)": [114841, 17000],
-                "Rizta S Super Matte (2.9 kWh)": [116841, 18000],
-                "Rizta Z Mono (2.9 kWh)": [129841, 20000],
-                "Rizta Z Duo (2.9 kWh)": [130841, 17000],
-                "Rizta Z Super Matte (2.9 kWh)": [131841, 18000],
-                "Rizta Z Mono (3.7 kWh)": [149842, 20000],
-                "Rizta Z Duo (3.7 kWh)": [150842, 17000],
-                "Rizta Z Super Matte (3.7 kWh)": [151842, 18000],
-                "450 X (2.9 kWh)": [149047, 20000],
-                "450 X (3.7 kWh)": [159046, 17000],
-                "450 X (2.9 kWh) Pro Pack": [166047, 18000],
-                "450 X (3.7 kWh) Pro Pack": [179046, 20000],
-                "450 Apex STD": [189841, 0]
-            }
-
-            model_price = model_data.get(model_interested, [0, 0])[0]
-            pro_pack_price = model_data.get(model_interested, [0, 0])[1] if pro_pack == 'Yes' else 0
-            accessories_cost = int(accessories) if accessories else 0
-
-            # Calculate total (Ex-showroom + Pro Pack + Accessories + RTO + Insurance + EBW + AMC - Subsidy)
-            total_amount = model_price + pro_pack_price + accessories_cost + 1000 + 5500 + 6000 + 2500 - 5000
-
-            # Prepare walk-in data for database
-            walkin_data = {
-                'uid': uid,
-                'ps_name': session.get('ps_name'),
-                'ps_branch': session.get('branch'),
-                'customer_name': customer_name,
-                'customer_mobile_number': customer_mobile,
-                'customer_email': customer_email if customer_email else None,
-                'customer_address': customer_address if customer_address else None,
-                'customer_age': int(customer_age) if customer_age else None,
-                'occupation': occupation if occupation else None,
-                'vehicle_usage': vehicle_usage if vehicle_usage else None,
-                'daily_travel_distance': int(daily_travel) if daily_travel else None,
-                'lead_source': lead_source,
-                'lead_category': lead_category if lead_category else None,
-                'purchase_type': purchase_type if purchase_type else None,
-                'model_interested': model_interested,
-                'color': color if color else None,
-                'pro_pack': pro_pack if pro_pack else 'No',
-                'expected_delivery_date': expected_delivery if expected_delivery else None,
-                'accessories': accessories_cost,
-                'quotation_amount': total_amount,
-                'quotation_details': quotation_details if quotation_details else None,
-                'remarks': remarks if remarks else None,
-                'follow_up_date': follow_up_date if follow_up_date else None,
-                'ps_final_status': 'Pending',
-                'status': status,
-                'pdf_path': None,  # Will be updated in background
-                'created_at': datetime.now().isoformat()
-            }
-
-            # --- Walk-in Follow-up Assignment Logic ---
- 
-
-            # Insert walk-in data into the database
-            result = supabase.table('walkin_data').insert(walkin_data).execute()
-
-            if result.data:
-                # Log walk-in customer creation
-                auth_manager.log_audit_event(
-                    user_id=session.get('user_id'),
-                    user_type=session.get('user_type'),
-                    action='WALKIN_CUSTOMER_CREATED',
-                    resource='walkin_data',
-                    resource_id=uid,
-                    details={
-                        'customer_name': customer_name,
-                        'model_interested': model_interested,
-                        'quotation_amount': total_amount
-                    }
-                )
-                # Start background task for PDF generation and email sending
-                def background_pdf_and_email(customer_email, customer_name, quotation_data, uid):
-                    pdf_path = generate_quotation_pdf(quotation_data)
-                    # Update DB with PDF path
-                    if pdf_path:
-                        supabase.table('walkin_data').update({'pdf_path': pdf_path}).eq('uid', uid).execute()
-                    # Send email if email is provided
-                    if customer_email and pdf_path:
-                        send_quotation_email(customer_email, customer_name, quotation_data, pdf_path)
-                if customer_email:
-                    socketio.start_background_task(background_pdf_and_email, customer_email, customer_name, quotation_data, uid)
-                flash('Walk-in customer added successfully! Quotation will be sent to the customer shortly.', 'success')
-                return redirect(url_for('ps_dashboard'))
-            else:
-                flash('Error saving walk-in customer data', 'error')
-
-        except Exception as e:
-            print(f"Error creating walk-in customer: {e}")
-            flash(f'Error creating walk-in customer: {str(e)}', 'error')
-
-    return render_template('walkin_customers.html', today=datetime.now().strftime('%Y-%m-%d'))
-
-
-@app.route('/download_quotation_pdf/<uid>')
-@require_ps
-def download_quotation_pdf(uid):
-    """Download PDF quotation for walk-in customer"""
-    try:
-        # Get walk-in customer data
-        result = supabase.table('walkin_data').select('*').eq('uid', uid).execute()
-
-        if not result.data:
-            flash('Walk-in customer not found', 'error')
-            return redirect(url_for('view_walkin_customers'))
-
-        walkin_data = result.data[0]
-
-        # Verify this walk-in customer belongs to the current PS
-        if walkin_data.get('ps_name') != session.get('ps_name'):
-            flash('Access denied - This quotation does not belong to you', 'error')
-            return redirect(url_for('view_walkin_customers'))
-
-        # Check if PDF already exists
-        existing_pdf_path = walkin_data.get('pdf_path')
-        if existing_pdf_path and os.path.exists(existing_pdf_path):
-            pdf_path = existing_pdf_path
-        else:
-            # Generate new PDF
-            quotation_data = {
-                'uid': walkin_data['uid'],
-                'psName': walkin_data['ps_name'],
-                'executiveMobile': session.get('phone', 'N/A'),
-                'date': walkin_data.get('created_at', datetime.now().strftime('%Y-%m-%d')),
-                'branch': walkin_data['ps_branch'],
-                'customerName': walkin_data['customer_name'],
-                'customerMobile': walkin_data['customer_mobile_number'],
-                'email': walkin_data.get('customer_email', 'N/A'),
-                'address': walkin_data.get('customer_address', 'N/A'),
-                'occupation': walkin_data.get('occupation', 'N/A'),
-                'leadSource': walkin_data['lead_source'],
-                'leadCategory': walkin_data.get('lead_category', 'N/A'),
-                'purchaseType': walkin_data.get('purchase_type', 'N/A'),
-                'model': walkin_data['model_interested'],
-                'color': walkin_data.get('color', 'N/A'),
-                'expectedDate': walkin_data.get('expected_delivery_date', 'N/A'),
-                'accessories': str(walkin_data.get('accessories', 0))
-            }
-
-            pdf_path = generate_quotation_pdf(quotation_data)
-
-            if not pdf_path:
-                flash('Error generating PDF quotation', 'error')
-                return redirect(url_for('view_walkin_customers'))
-
-            # Update database with new PDF path
-            supabase.table('walkin_data').update({'pdf_path': pdf_path}).eq('uid', uid).execute()
-
-        # Log PDF download
-        auth_manager.log_audit_event(
-            user_id=session.get('user_id'),
-            user_type=session.get('user_type'),
-            action='QUOTATION_PDF_DOWNLOADED',
-            resource='walkin_data',
-            resource_id=uid,
-            details={'customer_name': walkin_data['customer_name']}
-        )
-
-        # Send file
-        return send_file(
-            pdf_path,
-            as_attachment=True,
-            download_name=f"Ather_Quotation_{uid}.pdf",
-            mimetype='application/pdf'
-        )
-
-    except Exception as e:
-        print(f"Error downloading PDF: {e}")
-        flash(f'Error downloading PDF: {str(e)}', 'error')
-        return redirect(url_for('view_walkin_customers'))
-
-
-@app.route('/view_walkin_customers')
-@require_ps
-def view_walkin_customers():
-    """View walk-in customers for current PS"""
-    try:
-        ps_name = session.get('ps_name')
-        walkin_customers = safe_get_data('walkin_data', {'ps_name': ps_name})
-
-        # Log access
-        auth_manager.log_audit_event(
-            user_id=session.get('user_id'),
-            user_type=session.get('user_type'),
-            action='WALKIN_CUSTOMERS_VIEWED',
-            resource='walkin_data',
-            details={'ps_name': ps_name, 'count': len(walkin_customers)}
-        )
-
-        return render_template('view_walkin_customers.html', walkin_customers=walkin_customers)
-
-    except Exception as e:
-        flash(f'Error loading walk-in customers: {str(e)}', 'error')
-        return redirect(url_for('ps_dashboard'))
 
 
 @app.route('/analytics')
@@ -4077,41 +3239,7 @@ def api_branch_head_dashboard_data():
         )
         return jsonify(response)
 
-    elif section == 'walkin_leads':
-        walkin_query = supabase.table('walkin_data').select('*').eq('ps_branch', branch)
-        if uid:
-            walkin_query = walkin_query.eq('uid', uid)
-        all_rows = walkin_query.execute().data or []
-        rows = [
-            {
-                'journey': 'Journey',
-                'uid': row.get('uid', ''),
-                'customer_name': row.get('customer_name', ''),
-                'customer_mobile_number': row.get('customer_mobile_number', ''),
-                'customer_email': row.get('customer_email', ''),
-                'model_interested': row.get('model_interested', ''),
-                'lead_source': row.get('lead_source', ''),
-                'status': row.get('ps_final_status', ''),
-                'ps_name': row.get('ps_name', ''),
-                'created_at': row.get('created_at', ''),
-                'lead_category': row.get('lead_category', '')
-            }
-            for row in all_rows
-        ]
-        total_count = int(len(rows))
-        offset = (page - 1) * per_page
-        paged_rows = rows[offset:offset + per_page]
-        total_pages = 1 if total_count == 0 else math.ceil(total_count / per_page)
-        response = {
-            'success': True,
-            'rows': paged_rows,
-            'total_count': total_count,
-            'total_pages': total_pages,
-            'current_page': page,
-            'per_page': per_page,
-            'walkin_leads_count': total_count
-        }
-        return jsonify(response)
+
 
     elif section == 'cre_assigned_leads':
         # Fetch all rows from ps_followup_master for the current branch (and filters), with all columns
@@ -4143,17 +3271,13 @@ def api_branch_head_dashboard_data():
         event_rows = supabase.table('activity_leads').select('*').eq('location', branch).eq('final_status', 'Pending').execute().data or []
         event_rows = [{**row, 'journey': 'Journey', 'source_type': 'Event', 'customer_mobile_number': row.get('customer_phone_number', row.get('customer_mobile_number', ''))} for row in event_rows]
 
-        # walkin_data
-        walkin_rows = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('ps_final_status', 'Pending').execute().data or []
-        walkin_rows = [{**row, 'journey': 'Journey', 'source_type': 'Walk-in'} for row in walkin_rows]
-
         # Merge all
-        all_rows = followup_rows + event_rows + walkin_rows
+        all_rows = followup_rows + event_rows
 
         # Counts for KPI sub-boxes
         cre_assigned_count = len(followup_rows)
         event_count = len(event_rows)
-        walkin_count = len(walkin_rows)
+
         total_count = len(all_rows)
 
         # Pagination
@@ -4171,7 +3295,7 @@ def api_branch_head_dashboard_data():
             'pending_leads_count': total_count,
             'pending_leads_cre_assigned_count': cre_assigned_count,
             'pending_leads_event_count': event_count,
-            'pending_leads_walkin_count': walkin_count
+
         }
         return jsonify(response)
 
@@ -4180,13 +3304,11 @@ def api_branch_head_dashboard_data():
         # Only today's follow-ups
         ps_today = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).execute().data or []
         act_today = supabase.table('activity_leads').select('*').eq('location', branch).eq('ps_followup_date_ts', today_str).execute().data or []
-        walkin_today = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).execute().data or []
         # Mark all as not missed
         ps_today = [{**row, 'missed': False} for row in ps_today]
         act_today = [{**row, 'missed': False} for row in act_today]
-        walkin_today = [{**row, 'missed': False} for row in walkin_today]
         # Merge only today's followups
-        all_rows = ps_today + act_today + walkin_today
+        all_rows = ps_today + act_today
         total_count = len(all_rows)
         offset = (page - 1) * per_page
         paged_rows = all_rows[offset:offset + per_page]
@@ -4847,109 +3969,7 @@ def view_event_leads():
         return redirect(url_for('ps_dashboard'))
 
 
-@app.route('/resend_quotation_email/<uid>', methods=['POST'])
-@require_ps
-def resend_quotation_email(uid):
-    """Resend quotation email to walk-in customer"""
-    try:
-        # Get walk-in customer data
-        result = supabase.table('walkin_data').select('*').eq('uid', uid).execute()
 
-        if not result.data:
-            return jsonify({'success': False, 'message': 'Walk-in customer not found'})
-
-        walkin_data = result.data[0]
-
-        # Verify this walk-in customer belongs to the current PS
-        if walkin_data.get('ps_name') != session.get('ps_name'):
-            return jsonify({'success': False, 'message': 'Access denied - This customer does not belong to you'})
-
-        # Check if customer has email
-        if not walkin_data.get('customer_email'):
-            return jsonify({'success': False, 'message': 'Customer email not available'})
-
-        # Check if PDF exists, generate if not
-        existing_pdf_path = walkin_data.get('pdf_path')
-        if not existing_pdf_path or not os.path.exists(existing_pdf_path):
-            # Generate new PDF
-            quotation_data = {
-                'uid': walkin_data['uid'],
-                'psName': walkin_data['ps_name'],
-                'executiveMobile': session.get('phone', 'N/A'),
-                'date': walkin_data.get('created_at', datetime.now().strftime('%Y-%m-%d')),
-                'branch': walkin_data['ps_branch'],
-                'customerName': walkin_data['customer_name'],
-                'customerMobile': walkin_data['customer_mobile_number'],
-                'email': walkin_data.get('customer_email', 'N/A'),
-                'address': walkin_data.get('customer_address', 'N/A'),
-                'occupation': walkin_data.get('occupation', 'N/A'),
-                'leadSource': walkin_data['lead_source'],
-                'leadCategory': walkin_data.get('lead_category', 'N/A'),
-                'purchaseType': walkin_data.get('purchase_type', 'N/A'),
-                'model': walkin_data['model_interested'],
-                'color': walkin_data.get('color', 'N/A'),
-                'expectedDate': walkin_data.get('expected_delivery_date', 'N/A'),
-                'accessories': str(walkin_data.get('accessories', 0))
-            }
-
-            pdf_path = generate_quotation_pdf(quotation_data)
-
-            if not pdf_path:
-                return jsonify({'success': False, 'message': 'Error generating PDF quotation'})
-
-            # Update database with new PDF path
-            supabase.table('walkin_data').update({'pdf_path': pdf_path}).eq('uid', uid).execute()
-        else:
-            pdf_path = existing_pdf_path
-
-        # Prepare quotation email data
-        quotation_email_data = {
-            'uid': walkin_data['uid'],
-            'model_interested': walkin_data['model_interested'],
-            'quotation_amount': str(walkin_data.get('quotation_amount', 0)),
-            'quotation_details': walkin_data.get('quotation_details', ''),
-            'ps_name': walkin_data['ps_name'],
-            'ps_branch': walkin_data['ps_branch']
-        }
-
-        # Send email
-        email_sent = send_quotation_email(
-            walkin_data['customer_email'],
-            walkin_data['customer_name'],
-            quotation_email_data,
-            pdf_path
-        )
-
-        if email_sent:
-            # Log email resend
-            auth_manager.log_audit_event(
-                user_id=session.get('user_id'),
-                user_type=session.get('user_type'),
-                action='QUOTATION_EMAIL_RESENT',
-                resource='walkin_data',
-                resource_id=uid,
-                details={
-                    'customer_name': walkin_data['customer_name'],
-                    'customer_email': walkin_data['customer_email']
-                }
-            )
-
-            return jsonify({
-                'success': True,
-                'message': f'Quotation email sent successfully to {walkin_data["customer_email"]}'
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'message': 'Failed to send email. Please check email configuration.'
-            })
-
-    except Exception as e:
-        print(f"Error resending quotation email: {e}")
-        return jsonify({
-            'success': False,
-            'message': f'Error resending email: {str(e)}'
-        })
 
 @app.route('/view_call_attempt_history/<uid>')
 @require_admin
@@ -6468,7 +5488,6 @@ def ps_analytics():
         ps_name = session.get('ps_name')
         # Get all relevant data
         ps_followups = safe_get_data('ps_followup_master')
-        walkin_data = safe_get_data('walkin_data')
         activity_leads = safe_get_data('activity_leads')
 
         # Date filter (from/to) for won cases and assigned leads
@@ -6495,27 +5514,18 @@ def ps_analytics():
         # PS Won Cases (date filtered)
         if not from_date and not to_date:
             won_ps_followups = [lead for lead in ps_followups if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Won']
-            won_walkins = [lead for lead in walkin_data if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Won']
             won_activities = [lead for lead in activity_leads if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Won']
         else:
             won_ps_followups = [lead for lead in ps_followups if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Won' and in_date_range(lead.get('won_timestamp'))]
-            won_walkins = [lead for lead in walkin_data if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Won' and in_date_range(lead.get('won_timestamp'))]
             won_activities = [lead for lead in activity_leads if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Won' and in_date_range(lead.get('won_timestamp'))]
-        total_won_cases = len(won_ps_followups) + len(won_walkins) + len(won_activities)
+        total_won_cases = len(won_ps_followups) + len(won_activities)
 
         # Conversion Rate (live, not date filtered)
         total_won_all = len([lead for lead in ps_followups if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Won']) \
-            + len([lead for lead in walkin_data if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Won']) \
             + len([lead for lead in activity_leads if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Won'])
         total_assigned_live = len([lead for lead in ps_followups if lead.get('ps_name') == ps_name]) \
-            + len([lead for lead in walkin_data if lead.get('ps_name') == ps_name]) \
             + len([lead for lead in activity_leads if lead.get('ps_name') == ps_name])
         conversion_rate = round((total_won_all / total_assigned_live * 100), 2) if total_assigned_live > 0 else 0
-
-        # Walk-In Conversion Rate (live, not date filtered)
-        walkin_total = len([lead for lead in walkin_data if lead.get('ps_name') == ps_name])
-        walkin_won = len([lead for lead in walkin_data if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Won'])
-        walkin_conversion_rate = round((walkin_won / walkin_total * 100), 2) if walkin_total > 0 else 0
 
         # Total Leads Assigned (date filtered by created_at)
         def in_created_range(ts):
@@ -6536,25 +5546,20 @@ def ps_analytics():
             except Exception:
                 return False
         assigned_ps_followups = [lead for lead in ps_followups if lead.get('ps_name') == ps_name and in_created_range(lead.get('created_at'))]
-        assigned_walkins = [lead for lead in walkin_data if lead.get('ps_name') == ps_name and in_created_range(lead.get('created_at'))]
         assigned_activities = [lead for lead in activity_leads if lead.get('ps_name') == ps_name and in_created_range(lead.get('created_at'))]
-        total_assigned = len(assigned_ps_followups) + len(assigned_walkins) + len(assigned_activities)
+        total_assigned = len(assigned_ps_followups) + len(assigned_activities)
 
         # Total Pending Cases (not date filtered)
         pending_ps_followups = [lead for lead in ps_followups if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Pending']
-        pending_walkins = [lead for lead in walkin_data if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Pending']
         pending_activities = [lead for lead in activity_leads if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Pending']
-        total_pending = len(pending_ps_followups) + len(pending_walkins) + len(pending_activities)
-
-        # Walk-In Pending Cases (Live Count)
-        walkin_pending_cases = len([lead for lead in walkin_data if lead.get('ps_name') == ps_name and lead.get('ps_final_status') == 'Pending'])
+        total_pending = len(pending_ps_followups) + len(pending_activities)
         ps_analytics = {
             'won_cases': total_won_cases,
             'conversion_rate': conversion_rate,
-            'walkin_conversion_rate': walkin_conversion_rate,
+
             'total_assigned': total_assigned,
             'total_pending': total_pending,
-            'walkin_pending_cases': walkin_pending_cases
+
         }
         return render_template('ps_analytics.html', ps_analytics=ps_analytics)
     except Exception as e:
@@ -6871,7 +5876,6 @@ def ps_dashboard_leads():
     try:
         # Get all assigned leads for this PS (reuse logic from ps_dashboard)
         assigned_leads = safe_get_data('ps_followup_master', {'ps_name': ps_name})
-        walkin_leads = safe_get_data('walkin_data', {'ps_name': ps_name})
         event_leads = safe_get_data('activity_leads', {'ps_name': ps_name})
         
         # Initialize lists
@@ -6889,17 +5893,7 @@ def ps_dashboard_leads():
             elif final_status == 'Lost':
                 lost_leads.append(lead_dict)
         
-        # Process walk-in leads
-        for lead in walkin_leads:
-            lead_dict = dict(lead)
-            lead_dict['lead_uid'] = lead.get('uid')
-            ps_final_status = lead.get('ps_final_status')
-            status_walkin = lead.get('status')
-            
-            if ps_final_status == 'Won' or status_walkin == 'Converted':
-                won_leads.append(lead_dict)
-            elif ps_final_status == 'Lost' or status_walkin == 'Lost':
-                lost_leads.append(lead_dict)
+
         
         # Process event leads
         for lead in event_leads:
