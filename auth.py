@@ -147,6 +147,10 @@ class AuthManager:
                 session['ps_name'] = user_data.get('name')
                 session['ps_id'] = user_id
                 session['branch'] = user_data.get('branch')
+            elif user_type == 'receptionist':
+                session['receptionist_name'] = user_data.get('name')
+                session['receptionist_id'] = user_id
+                session['branch'] = user_data.get('branch')
 
             print(f"[DEBUG] Flask session data set: {dict(session)}")
             return session_id
@@ -717,6 +721,19 @@ def require_ps(f):
     def decorated_function(*args, **kwargs):
         if session.get('user_type') != 'ps':
             flash('PS access required', 'error')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
+def require_receptionist(f):
+    """Decorator to require Receptionist access"""
+
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if session.get('user_type') != 'receptionist':
+            flash('Receptionist access required', 'error')
             return redirect(url_for('index'))
         return f(*args, **kwargs)
 

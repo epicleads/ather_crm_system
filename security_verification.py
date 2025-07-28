@@ -86,7 +86,7 @@ class SecurityVerifier:
             checks['security_tables_exist'] = tables_verified == len(required_tables)
 
             # Check if user tables have security columns
-            user_tables = ['admin_users', 'cre_users', 'ps_users']
+            user_tables = ['admin_users', 'cre_users', 'ps_users', 'receptionist_users']
             security_columns = [
                 'password_hash', 'salt', 'failed_login_attempts',
                 'account_locked_until', 'is_active'
@@ -232,7 +232,7 @@ class SecurityVerifier:
 
         try:
             # Check if users have hashed passwords
-            user_tables = ['admin_users', 'cre_users', 'ps_users']
+            user_tables = ['admin_users', 'cre_users', 'ps_users', 'receptionist_users']
             total_users = 0
             hashed_users = 0
 
@@ -351,7 +351,7 @@ class SecurityVerifier:
 
         try:
             # Check for account lockout implementation
-            user_tables = ['admin_users', 'cre_users', 'ps_users']
+            user_tables = ['admin_users', 'cre_users', 'ps_users', 'receptionist_users']
             for table in user_tables:
                 try:
                     result = self.supabase.table(table).select('failed_login_attempts, account_locked_until').limit(
@@ -522,7 +522,7 @@ class SecurityVerifier:
 
         try:
             # Check role separation
-            user_tables = ['admin_users', 'cre_users', 'ps_users']
+            user_tables = ['admin_users', 'cre_users', 'ps_users', 'receptionist_users']
             roles_found = set()
 
             for table in user_tables:
@@ -535,7 +535,7 @@ class SecurityVerifier:
                 except Exception:
                     pass
 
-            expected_roles = {'admin', 'cre', 'ps'}
+            expected_roles = {'admin', 'cre', 'ps', 'receptionist'}
             if roles_found >= expected_roles:
                 checks['role_separation'] = True
             else:

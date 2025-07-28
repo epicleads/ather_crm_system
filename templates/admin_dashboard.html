@@ -538,6 +538,12 @@
                     </a>
                 </li>
                 <li class="sidebar-nav-item">
+                    <a href="{{ url_for('manage_receptionist') }}" class="sidebar-nav-link">
+                        <i class="fas fa-user-tie sidebar-nav-icon"></i>
+                        <span>Manage Receptionist</span>
+                    </a>
+                </li>
+                <li class="sidebar-nav-item">
                     <a href="{{ url_for('manage_branch_head') }}" class="sidebar-nav-link">
                         <i class="fas fa-user-tie sidebar-nav-icon"></i>
                         <span>Manage Branch Heads</span>
@@ -627,12 +633,18 @@
                     </div>
                 </div>
                 <div class="stat-card info">
+                    <div class="stat-number">{{ receptionist_count }}</div>
+                    <div class="stat-label">
+                        <i class="fas fa-user-tie"></i> Receptionist Users
+                    </div>
+                </div>
+                <div class="stat-card warning">
                     <div class="stat-number">{{ leads_count }}</div>
                     <div class="stat-label">
                         <i class="fas fa-chart-line"></i> Total Leads
                     </div>
                 </div>
-                <div class="stat-card warning">
+                <div class="stat-card primary">
                     <div class="stat-number">{{ unassigned_leads }}</div>
                     <div class="stat-label">
                         <i class="fas fa-exclamation-triangle"></i> Unassigned

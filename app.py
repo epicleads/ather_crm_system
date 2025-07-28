@@ -17,7 +17,7 @@ import io
 from dotenv import load_dotenv
 from collections import defaultdict, Counter
 import json
-from auth import AuthManager, require_auth, require_admin, require_cre, require_ps
+from auth import AuthManager, require_auth, require_admin, require_cre, require_ps, require_receptionist
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from security_verification import run_security_verification
@@ -593,9 +593,9 @@ def unified_login() -> Response:
     password = request.form.get('password', '').strip()
     user_type = request.form.get('user_type', '').strip().lower()
 
-    valid_user_types = ['admin', 'cre', 'ps', 'branch_head']
+    valid_user_types = ['admin', 'cre', 'ps', 'branch_head', 'receptionist']
     if user_type not in valid_user_types:
-        flash('Please select a valid role (Admin, CRE, PS, or Branch Head)', 'error')
+        flash('Please select a valid role (Admin, CRE, PS, Branch Head, or Receptionist)', 'error')
         return redirect(url_for('index'))
 
     if user_type == 'branch_head':
@@ -644,6 +644,10 @@ def unified_login() -> Response:
                 print(f"[PERF] unified_login: redirect to ps_dashboard after {time.time() - t3:.3f} seconds")
                 print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
                 return redirect(url_for('ps_dashboard'))
+            elif user_type == 'receptionist':
+                print(f"[PERF] unified_login: redirect to receptionist_dashboard after {time.time() - t3:.3f} seconds")
+                print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
+                return redirect(url_for('receptionist_dashboard'))
         else:
             flash('Error creating session', 'error')
             print(f"[PERF] unified_login: session creation failed after {time.time() - t2:.3f} seconds")
@@ -673,6 +677,30 @@ def ps_login():
     if request.method == 'POST':
         return unified_login()
     return redirect(url_for('index'))
+
+
+@app.route('/receptionist_login', methods=['GET', 'POST'])
+def receptionist_login():
+    if request.method == 'POST':
+        return unified_login()
+    return redirect(url_for('index'))
+
+
+@app.route('/debug_receptionist')
+def debug_receptionist():
+    """Temporary debug route to check receptionist data"""
+    try:
+        result = supabase.table('receptionist_users').select('*').execute()
+        return jsonify({
+            'success': True,
+            'count': len(result.data),
+            'data': result.data
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
 
 
 @app.route('/password_reset_request', methods=['GET', 'POST'])
@@ -994,11 +1022,12 @@ def admin_dashboard():
         # Get actual counts from database with proper queries
         cre_count = get_accurate_count('cre_users')
         ps_count = get_accurate_count('ps_users')
+        receptionist_count = get_accurate_count('receptionist_users')
         leads_count = get_accurate_count('lead_master')
         unassigned_leads = get_accurate_count('lead_master', {'assigned': 'No'})
 
         print(
-            f"Dashboard counts - CRE: {cre_count}, PS: {ps_count}, Total Leads: {leads_count}, Unassigned: {unassigned_leads}")
+            f"Dashboard counts - CRE: {cre_count}, PS: {ps_count}, Receptionist: {receptionist_count}, Total Leads: {leads_count}, Unassigned: {unassigned_leads}")
 
     except Exception as e:
         print(f"Error getting dashboard counts: {e}")
@@ -1018,6 +1047,7 @@ def admin_dashboard():
     return render_template('admin_dashboard.html',
                            cre_count=cre_count,
                            ps_count=ps_count,
+                           receptionist_count=receptionist_count,
                            leads_count=leads_count,
                            unassigned_leads=unassigned_leads)
 
@@ -1730,6 +1760,150 @@ def delete_ps(ps_id):
         flash(f'Error deleting Product Specialist: {str(e)}', 'error')
 
     return redirect(url_for('manage_ps'))
+
+
+# Receptionist Management Routes
+@app.route('/add_receptionist', methods=['GET', 'POST'])
+@require_admin
+def add_receptionist():
+    branches = ['SOMAJIGUDA', 'ATTAPUR', 'BEGUMPET', 'KOMPALLY', 'MALAKPET', 'SRINAGAR COLONY', 'TOLICHOWKI',
+                'VANASTHALIPURAM']
+
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        phone = request.form.get('phone', '').strip()
+        email = request.form.get('email', '').strip()
+        branch = request.form.get('branch', '').strip()
+
+        if not all([name, username, password, phone, email, branch]):
+            flash('All fields are required', 'error')
+            return render_template('add_receptionist.html', branches=branches)
+
+        if not auth_manager.validate_password_strength(password):
+            flash(
+                'Password must be at least 8 characters long and contain uppercase, lowercase, number, and special character',
+                'error')
+            return render_template('add_receptionist.html', branches=branches)
+
+        try:
+            # Check if username already exists
+            existing = supabase.table('receptionist_users').select('username').eq('username', username).execute()
+            if existing.data:
+                flash('Username already exists', 'error')
+                return render_template('add_receptionist.html', branches=branches)
+
+            # Hash password
+            password_hash, salt = auth_manager.hash_password(password)
+
+            # Create receptionist data
+            receptionist_data = {
+                'name': name,
+                'username': username,
+                'password': password,  # Keep for backward compatibility
+                'password_hash': password_hash,
+                'salt': salt,
+                'phone': phone,
+                'email': email,
+                'branch': branch,
+                'is_active': True,
+                'role': 'receptionist',
+                'failed_login_attempts': 0
+            }
+
+            result = supabase.table('receptionist_users').insert(receptionist_data).execute()
+
+            # Log Receptionist creation
+            auth_manager.log_audit_event(
+                user_id=session.get('user_id'),
+                user_type=session.get('user_type'),
+                action='RECEPTIONIST_CREATED',
+                resource='receptionist_users',
+                resource_id=str(result.data[0]['id']) if result.data else None,
+                details={'receptionist_name': name, 'username': username, 'branch': branch}
+            )
+
+            flash('Receptionist added successfully', 'success')
+            return redirect(url_for('manage_receptionist'))
+        except Exception as e:
+            flash(f'Error adding Receptionist: {str(e)}', 'error')
+
+    return render_template('add_receptionist.html', branches=branches)
+
+
+@app.route('/manage_receptionist')
+@require_admin
+def manage_receptionist():
+    try:
+        receptionist_users = safe_get_data('receptionist_users')
+        return render_template('manage_receptionist.html', receptionist_users=receptionist_users)
+    except Exception as e:
+        flash(f'Error loading Receptionist users: {str(e)}', 'error')
+        return render_template('manage_receptionist.html', receptionist_users=[])
+
+
+@app.route('/toggle_receptionist_status/<int:receptionist_id>', methods=['POST'])
+@require_admin
+def toggle_receptionist_status(receptionist_id):
+    try:
+        data = request.get_json()
+        active_status = data.get('active', True)
+
+        # Update Receptionist status
+        result = supabase.table('receptionist_users').update({
+            'is_active': active_status
+        }).eq('id', receptionist_id).execute()
+
+        if result.data:
+            # Log status change
+            auth_manager.log_audit_event(
+                user_id=session.get('user_id'),
+                user_type=session.get('user_type'),
+                action='RECEPTIONIST_STATUS_CHANGED',
+                resource='receptionist_users',
+                resource_id=str(receptionist_id),
+                details={'new_status': 'active' if active_status else 'inactive'}
+            )
+
+            return jsonify({'success': True, 'message': 'Receptionist status updated successfully'})
+        else:
+            return jsonify({'success': False, 'message': 'Receptionist not found'})
+
+    except Exception as e:
+        print(f"Error toggling Receptionist status: {e}")
+        return jsonify({'success': False, 'message': str(e)})
+
+
+@app.route('/delete_receptionist/<int:receptionist_id>')
+@require_admin
+def delete_receptionist(receptionist_id):
+    try:
+        # Get Receptionist name before deletion
+        receptionist_result = supabase.table('receptionist_users').select('name').eq('id', receptionist_id).execute()
+        if receptionist_result.data:
+            receptionist_name = receptionist_result.data[0]['name']
+
+            # Delete the Receptionist user
+            supabase.table('receptionist_users').delete().eq('id', receptionist_id).execute()
+
+            # Log Receptionist deletion
+            auth_manager.log_audit_event(
+                user_id=session.get('user_id'),
+                user_type=session.get('user_type'),
+                action='RECEPTIONIST_DELETED',
+                resource='receptionist_users',
+                resource_id=str(receptionist_id),
+                details={'receptionist_name': receptionist_name}
+            )
+
+            flash('Receptionist deleted successfully', 'success')
+        else:
+            flash('Receptionist not found', 'error')
+    except Exception as e:
+        flash(f'Error deleting Receptionist: {str(e)}', 'error')
+
+    return redirect(url_for('manage_receptionist'))
 
 
 @app.route('/add_lead', methods=['GET', 'POST'])
@@ -3997,6 +4171,53 @@ def branch_head_dashboard():
     branch = session.get('branch_head_branch')
     ps_users = supabase.table('ps_users').select('*').eq('branch', branch).execute().data or []
     return render_template('branch_head_dashboard.html', ps_users=ps_users)
+
+
+@app.route('/receptionist_dashboard')
+@require_receptionist
+def receptionist_dashboard():
+    receptionist_name = session.get('receptionist_name')
+    branch = session.get('branch')
+    
+    # Get basic stats for receptionist
+    try:
+        # Get total leads for the branch
+        branch_leads = get_accurate_count('lead_master', {'branch': branch})
+        
+        # Get today's leads
+        today = datetime.now().date()
+        today_leads = get_accurate_count('lead_master', {
+            'branch': branch,
+            'created_at': today.isoformat()
+        })
+        
+        # Get unassigned leads for the branch
+        unassigned_leads = get_accurate_count('lead_master', {
+            'branch': branch,
+            'assigned': 'No'
+        })
+        
+    except Exception as e:
+        print(f"Error getting receptionist dashboard stats: {e}")
+        branch_leads = today_leads = unassigned_leads = 0
+
+    # Log dashboard access
+    user_id = session.get('user_id')
+    user_type = session.get('user_type')
+    if user_id and user_type:
+        auth_manager.log_audit_event(
+            user_id=user_id,
+            user_type=user_type,
+            action='DASHBOARD_ACCESS',
+            resource='receptionist_dashboard'
+        )
+
+    return render_template('receptionist_dashboard.html',
+                           receptionist_name=receptionist_name,
+                           branch=branch,
+                           branch_leads=branch_leads,
+                           today_leads=today_leads,
+                           unassigned_leads=unassigned_leads)
 
 @app.route('/api/branch_head_dashboard_data')
 def api_branch_head_dashboard_data():
@@ -6451,10 +6672,18 @@ def convert_duplicate_to_fresh(uid):
 def check_username():
     username = request.args.get('username', '').strip()
     user_type = request.args.get('type', '').strip().lower()
-    if not username or user_type not in ['cre', 'ps']:
+    if not username or user_type not in ['cre', 'ps', 'receptionist']:
         return jsonify({'error': 'Invalid parameters'}), 400
     try:
-        table = 'cre_users' if user_type == 'cre' else 'ps_users'
+        if user_type == 'cre':
+            table = 'cre_users'
+        elif user_type == 'ps':
+            table = 'ps_users'
+        elif user_type == 'receptionist':
+            table = 'receptionist_users'
+        else:
+            return jsonify({'error': 'Invalid user type'}), 400
+            
         result = supabase.table(table).select('username').eq('username', username).execute()
         exists = bool(result.data)
         return jsonify({'exists': exists})

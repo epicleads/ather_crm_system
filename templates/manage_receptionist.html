@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Receptionist - Ather CRM{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12 d-flex justify-content-between align-items-center">
+        <div>
+            <h2 class="mb-0" style="color: var(--airbnb-gray-700); font-weight: 700;">
+                <i class="fas fa-user-tie" style="color: var(--airbnb-blue);"></i> Manage Receptionist Users
+            </h2>
+            <p class="text-muted">View and manage Receptionists</p>
+        </div>
+        <a href="{{ url_for('add_receptionist') }}" class="btn btn-info">
+            <i class="fas fa-plus"></i> Add New Receptionist
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-list"></i> Receptionists ({{ receptionist_users|length }})</h5>
+    </div>
+    <div class="card-body p-0">
+        {% if receptionist_users %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Username</th>
+                        <th>Branch</th>
+                        <th>Phone</th>
+                        <th>Email</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for receptionist in receptionist_users %}
+                    <tr>
+                        <td><span class="badge bg-primary">#{{ receptionist.id }}</span></td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="avatar-sm bg-info rounded-circle d-flex align-items-center justify-content-center me-2">
+                                    <i class="fas fa-user-tie text-white"></i>
+                                </div>
+                                <strong>{{ receptionist.name }}</strong>
+                            </div>
+                        </td>
+                        <td><code>{{ receptionist.username }}</code></td>
+                        <td><span class="badge bg-success">{{ receptionist.branch }}</span></td>
+                        <td>
+                            <a href="tel:{{ receptionist.phone }}" class="text-decoration-none" style="color: var(--airbnb-blue);">
+                                <i class="fas fa-phone text-muted me-1"></i>{{ receptionist.phone }}
+                            </a>
+                        </td>
+                        <td>
+                            <a href="mailto:{{ receptionist.email }}" class="text-decoration-none" style="color: var(--airbnb-blue);">
+                                <i class="fas fa-envelope text-muted me-1"></i>{{ receptionist.email }}
+                            </a>
+                        </td>
+                        <td>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input status-toggle" type="checkbox" 
+                                       data-receptionist-id="{{ receptionist.id }}"
+                                       {% if receptionist.is_active %}checked{% endif %}
+                                       style="cursor: pointer;"
+                                       title="Toggle receptionist status">
+                                <label class="form-check-label">
+                                    <span class="badge {% if receptionist.is_active %}bg-success{% else %}bg-danger{% endif %}">
+                                        {% if receptionist.is_active %}Active{% else %}Inactive{% endif %}
+                                    </span>
+                                </label>
+                            </div>
+                        </td>
+                        <td>
+                            <small class="text-muted">
+                                {{ receptionist.created_at.split('T')[0] if receptionist.created_at else 'N/A' }}
+                            </small>
+                        </td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn btn-sm btn-outline-danger" 
+                                        onclick="deleteReceptionist({{ receptionist.id }}, '{{ receptionist.name }}')"
+                                        title="Delete Receptionist">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-user-tie fa-3x text-muted mb-3"></i>
+            <h5 class="text-muted">No Receptionists Found</h5>
+            <p class="text-muted">Add your first receptionist to get started.</p>
+            <a href="{{ url_for('add_receptionist') }}" class="btn btn-info">
+                <i class="fas fa-plus"></i> Add Receptionist
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Status toggle functionality
+    const statusToggles = document.querySelectorAll('.status-toggle');
+    
+    statusToggles.forEach(toggle => {
+        toggle.addEventListener('change', function() {
+            const receptionistId = this.dataset.receptionistId;
+            const isActive = this.checked;
+            
+            fetch(`/toggle_receptionist_status/${receptionistId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    active: isActive
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update the badge
+                    const badge = this.parentElement.querySelector('.badge');
+                    if (isActive) {
+                        badge.className = 'badge bg-success';
+                        badge.textContent = 'Active';
+                    } else {
+                        badge.className = 'badge bg-danger';
+                        badge.textContent = 'Inactive';
+                    }
+                    
+                    // Show success message
+                    showAlert('success', data.message);
+                } else {
+                    // Revert the toggle
+                    this.checked = !isActive;
+                    showAlert('error', data.message || 'Failed to update status');
+                }
+            })
+            .catch(error => {
+                // Revert the toggle
+                this.checked = !isActive;
+                showAlert('error', 'Network error occurred');
+            });
+        });
+    });
+});
+
+function deleteReceptionist(receptionistId, receptionistName) {
+    if (confirm(`Are you sure you want to delete receptionist "${receptionistName}"? This action cannot be undone.`)) {
+        window.location.href = `/delete_receptionist/${receptionistId}`;
+    }
+}
+
+function showAlert(type, message) {
+    // Create alert element
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show position-fixed`;
+    alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(alertDiv);
+    
+    // Auto remove after 3 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 3000);
+}
+</script>
+{% endblock %} 
