@@ -18,10 +18,14 @@
             {% for lead in leads_list %}
             <tr class="won-lost-lead-row"
                 data-date="{{ lead.won_timestamp[:10] if status == 'won' and lead.won_timestamp else (lead.lost_timestamp[:10] if lead.lost_timestamp else '') }}"
-                data-search="{{ ((lead.lead_uid or lead.uid) + ' ' + lead.customer_name + ' ' + lead.customer_mobile_number + ' ' + (lead.cre_name or '') + ' ' + (lead.model_interested or ''))|lower }}">
+                data-search="{{ ((lead.lead_uid or lead.uid or '') + ' ' + (lead.customer_name or '') + ' ' + (lead.customer_mobile_number or '') + ' ' + (lead.cre_name or '') + ' ' + (lead.model_interested or ''))|lower }}">
                 <td>
                     {% if lead.activity_uid %}
                         <a href="{{ url_for('update_event_lead', activity_uid=lead.activity_uid) }}" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-edit"></i> View
+                        </a>
+                    {% elif lead.is_walkin %}
+                        <a href="{{ url_for('update_walkin_lead', walkin_id=lead.walkin_id, return_tab='won-lost') }}" class="btn btn-sm btn-outline-primary">
                             <i class="fas fa-edit"></i> View
                         </a>
                     {% else %}
