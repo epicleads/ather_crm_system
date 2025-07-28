@@ -721,3 +721,16 @@ def require_ps(f):
         return f(*args, **kwargs)
 
     return decorated_function
+
+
+def require_rec(f):
+    """Decorator to require Receptionist access"""
+
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if session.get('user_type') != 'rec':
+            flash('Receptionist access required', 'error')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+
+    return decorated_function

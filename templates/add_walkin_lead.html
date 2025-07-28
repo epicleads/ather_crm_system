@@ -1,0 +1,339 @@
+{% extends 'base.html' %}
+{% block content %}
+<style>
+  .hero-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 2rem 0;
+    margin-bottom: 2rem;
+    border-radius: 0 0 20px 20px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  }
+  
+  .form-card {
+    background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
+    border: none;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    overflow: hidden;
+  }
+  
+  .form-card .card-header {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: white;
+    border: none;
+    padding: 1.5rem;
+    text-align: center;
+  }
+  
+  .form-card .card-body {
+    padding: 2rem;
+  }
+  
+  .form-label {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  
+  .form-control, .form-select {
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    transition: all 0.3s ease;
+    background: #f8f9fa;
+  }
+  
+  .form-control:focus, .form-select:focus {
+    border-color: #4facfe;
+    box-shadow: 0 0 0 0.2rem rgba(79, 172, 254, 0.25);
+    background: white;
+  }
+  
+  .btn-submit {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    border-radius: 25px;
+    padding: 0.75rem 2rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  }
+  
+  .btn-submit:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+  }
+  
+  .form-row {
+    margin-bottom: 1.5rem;
+  }
+  
+  .required-field::after {
+    content: " *";
+    color: #dc3545;
+    font-weight: bold;
+  }
+  
+  .info-badge {
+    background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+    color: #495057;
+    padding: 0.5rem 1rem;
+    border-radius: 15px;
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+    border-left: 4px solid #4facfe;
+  }
+  
+  .field-group {
+    position: relative;
+    margin-bottom: 1.5rem;
+  }
+  
+  .field-icon {
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #6c757d;
+    z-index: 10;
+  }
+  
+  .field-with-icon {
+    padding-left: 45px;
+  }
+</style>
+
+<div class="hero-header">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-md-8 text-center">
+        <h1 class="display-5 fw-bold mb-3">
+          <i class="fas fa-user-plus me-3"></i>Add Walk-in Lead
+        </h1>
+        <p class="lead mb-0">Enter customer information for walk-in leads</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="row justify-content-center">
+    <div class="col-lg-10">
+      <div class="card form-card">
+        <div class="card-header">
+          <h3 class="mb-0">
+            <i class="fas fa-clipboard-list me-2"></i>Customer Information
+          </h3>
+        </div>
+        <div class="card-body">
+          <div class="info-badge">
+            <i class="fas fa-info-circle me-2"></i>
+            Please fill in all required fields marked with <span class="text-danger">*</span>
+          </div>
+          
+          <form method="POST" action="{{ url_for('add_walkin_lead') }}">
+            <!-- Customer Details Row -->
+            <div class="row form-row">
+              <div class="col-md-6">
+                <div class="field-group">
+                  <label class="form-label required-field">
+                    <i class="fas fa-user me-2"></i>Customer Name
+                  </label>
+                  <div class="position-relative">
+                    <i class="fas fa-user field-icon"></i>
+                    <input type="text" class="form-control field-with-icon" name="customer_name" required 
+                           placeholder="Enter customer name">
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="field-group">
+                  <label class="form-label required-field">
+                    <i class="fas fa-phone me-2"></i>Mobile Number
+                  </label>
+                  <div class="position-relative">
+                    <i class="fas fa-phone field-icon"></i>
+                    <input type="text" class="form-control field-with-icon" name="mobile_number" required 
+                           placeholder="Enter mobile number">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Contact Details Row -->
+            <div class="row form-row">
+              <div class="col-md-6">
+                <div class="field-group">
+                  <label class="form-label">
+                    <i class="fas fa-envelope me-2"></i>Email Address
+                  </label>
+                  <div class="position-relative">
+                    <i class="fas fa-envelope field-icon"></i>
+                    <input type="email" class="form-control field-with-icon" name="email" 
+                           placeholder="Enter email address">
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="field-group">
+                  <label class="form-label">
+                    <i class="fas fa-briefcase me-2"></i>Occupation
+                  </label>
+                  <div class="position-relative">
+                    <i class="fas fa-briefcase field-icon"></i>
+                    <input type="text" class="form-control field-with-icon" name="occupation" 
+                           placeholder="Enter occupation">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Lead Details Row -->
+            <div class="row form-row">
+              <div class="col-md-6">
+                <div class="field-group">
+                  <label class="form-label">
+                    <i class="fas fa-tag me-2"></i>Lead Source
+                  </label>
+                  <div class="position-relative">
+                    <i class="fas fa-tag field-icon"></i>
+                    <input type="text" class="form-control field-with-icon" name="lead_source" 
+                           placeholder="Enter lead source" value="Walk-in">
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="field-group">
+                  <label class="form-label required-field">
+                    <i class="fas fa-car me-2"></i>Model Interested
+                  </label>
+                  <div class="position-relative">
+                    <i class="fas fa-car field-icon"></i>
+                    <select class="form-select field-with-icon" name="model_interested" required>
+                      <option value="">Select model</option>
+                      {% for model in models %}
+                      <option value="{{ model }}">{{ model }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Category and Branch Row -->
+            <div class="row form-row">
+              <div class="col-md-6">
+                <div class="field-group">
+                  <label class="form-label required-field">
+                    <i class="fas fa-fire me-2"></i>Lead Category
+                  </label>
+                  <div class="position-relative">
+                    <i class="fas fa-fire field-icon"></i>
+                    <select class="form-select field-with-icon" name="lead_category" required>
+                      <option value="">Select category</option>
+                      <option value="Hot" class="text-danger">🔥 Hot</option>
+                      <option value="Warm" class="text-warning">🌡️ Warm</option>
+                      <option value="Cold" class="text-info">❄️ Cold</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="field-group">
+                  <label class="form-label required-field">
+                    <i class="fas fa-building me-2"></i>Branch
+                  </label>
+                  <div class="position-relative">
+                    <i class="fas fa-building field-icon"></i>
+                    <select class="form-select field-with-icon" name="branch" id="branch-select" required>
+                      <option value="">Select branch</option>
+                      {% for branch in branches %}
+                      <option value="{{ branch }}">{{ branch }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- PS Assignment Row -->
+            <div class="row form-row">
+              <div class="col-md-6">
+                <div class="field-group">
+                  <label class="form-label required-field">
+                    <i class="fas fa-user-tie me-2"></i>PS Assigned
+                  </label>
+                  <div class="position-relative">
+                    <i class="fas fa-user-tie field-icon"></i>
+                    <select class="form-select field-with-icon" name="ps_assigned" id="ps-select" required>
+                      <option value="">Select branch first</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="text-center mt-4">
+              <button type="submit" class="btn btn-submit btn-lg">
+                <i class="fas fa-plus-circle me-2"></i>Add Walk-in Lead
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Dynamic PS dropdown based on branch selection
+  const branchSelect = document.getElementById('branch-select');
+  const psSelect = document.getElementById('ps-select');
+  const psOptions = {{ ps_options_json|safe }};
+
+  function updatePSDropdown() {
+    const branch = branchSelect.value;
+    const psList = psOptions[branch] || [];
+    
+    psSelect.innerHTML = '<option value="">Select PS</option>';
+    
+    psList.forEach(function(ps) {
+      const opt = document.createElement('option');
+      opt.value = ps;
+      opt.textContent = ps;
+      psSelect.appendChild(opt);
+    });
+    
+    // Add visual feedback
+    if (psList.length === 0 && branch) {
+      const noPsOption = document.createElement('option');
+      noPsOption.value = '';
+      noPsOption.textContent = 'No PS available for this branch';
+      noPsOption.disabled = true;
+      psSelect.appendChild(noPsOption);
+    }
+  }
+  
+  branchSelect.addEventListener('change', updatePSDropdown);
+  document.addEventListener('DOMContentLoaded', updatePSDropdown);
+  
+  // Add form validation feedback
+  document.querySelectorAll('.form-control, .form-select').forEach(function(input) {
+    input.addEventListener('blur', function() {
+      if (this.hasAttribute('required') && !this.value) {
+        this.classList.add('is-invalid');
+      } else {
+        this.classList.remove('is-invalid');
+        this.classList.add('is-valid');
+      }
+    });
+  });
+</script>
+{% endblock %} 

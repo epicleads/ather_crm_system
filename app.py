@@ -17,7 +17,7 @@ import io
 from dotenv import load_dotenv
 from collections import defaultdict, Counter
 import json
-from auth import AuthManager, require_auth, require_admin, require_cre, require_ps
+from auth import AuthManager, require_auth, require_admin, require_cre, require_ps, require_rec
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from security_verification import run_security_verification
@@ -43,7 +43,7 @@ import seaborn as sns
 from matplotlib.backends.backend_pdf import PdfPages
 import pytz
 import pandas as pd
-from werkzeug.security import generate_password_hash
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # Load environment variables from .env file
 load_dotenv()
@@ -303,7 +303,8 @@ def generate_uid(source, mobile_number, sequence):
         'Know': 'K',
         'Whatsapp': 'W',
         'Tele': 'T',
-        'Activity': 'AC'  # ADD THIS LINE if it's not there
+        'Activity': 'AC',
+        'Walk-in': 'W'  # Add Walk-in mapping
     }
 
     source_char = source_map.get(source, 'X')
@@ -593,9 +594,9 @@ def unified_login() -> Response:
     password = request.form.get('password', '').strip()
     user_type = request.form.get('user_type', '').strip().lower()
 
-    valid_user_types = ['admin', 'cre', 'ps', 'branch_head']
+    valid_user_types = ['admin', 'cre', 'ps', 'branch_head', 'rec']
     if user_type not in valid_user_types:
-        flash('Please select a valid role (Admin, CRE, PS, or Branch Head)', 'error')
+        flash('Please select a valid role (Admin, CRE, PS, Branch Head, or Receptionist)', 'error')
         return redirect(url_for('index'))
 
     if user_type == 'branch_head':
@@ -618,6 +619,29 @@ def unified_login() -> Response:
         session['username'] = username  # Add username for consistency
         flash('Welcome! Logged in as Branch Head', 'success')
         return redirect('/branch_head_dashboard')
+
+    elif user_type == 'rec':
+        # Receptionist authentication
+        rec_user = supabase.table('rec_users').select('*').eq('username', username).execute().data
+        if not rec_user:
+            flash('Invalid username or password', 'error')
+            return redirect(url_for('index'))
+        rec_user = rec_user[0]
+        if not rec_user.get('is_active', True):
+            flash('User is inactive', 'error')
+            return redirect(url_for('index'))
+        # Check password using werkzeug
+        if not check_password_hash(rec_user['password_hash'], password):
+            flash('Incorrect password', 'error')
+            return redirect(url_for('index'))
+        session.clear()
+        session['rec_user_id'] = rec_user['id']
+        session['rec_branch'] = rec_user['branch']
+        session['rec_name'] = rec_user.get('name', username)
+        session['user_type'] = 'rec'
+        session['username'] = username
+        flash('Welcome! Logged in as Receptionist', 'success')
+        return redirect(url_for('add_walkin_lead'))
 
     # Existing logic for admin, cre, ps
     t_user = time.time()
@@ -1732,6 +1756,54 @@ def delete_ps(ps_id):
     return redirect(url_for('manage_ps'))
 
 
+@app.route('/manage_rec', methods=['GET', 'POST'])
+@require_admin
+def manage_rec():
+    branches = [
+        "KOMPALLY", "SOMAJIGUDA", "ATTAPUR", "MALAKPET",
+        "TOLICHOWKI", "VANASTHALIPURAM"
+    ]
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        name = request.form.get('name', '').strip()
+        branch = request.form.get('branch', '').strip()
+        if not all([username, password, name, branch]):
+            flash('All fields are required', 'error')
+        else:
+            existing = supabase.table('rec_users').select('username').eq('username', username).execute()
+            if existing.data:
+                flash('Username already exists', 'error')
+            else:
+                password_hash = generate_password_hash(password)
+                rec_data = {
+                    'username': username,
+                    'password_hash': password_hash,
+                    'password': password,  # Store plain password as well
+                    'name': name,
+                    'branch': branch,
+                    'is_active': True
+                }
+                try:
+                    supabase.table('rec_users').insert(rec_data).execute()
+                    flash('Receptionist user added successfully', 'success')
+                except Exception as e:
+                    flash(f'Error adding receptionist: {str(e)}', 'error')
+    rec_users = safe_get_data('rec_users')
+    return render_template('manage_rec.html', rec_users=rec_users, branches=branches)
+
+
+@app.route('/delete_rec/<int:rec_id>')
+@require_admin
+def delete_rec(rec_id):
+    try:
+        supabase.table('rec_users').delete().eq('id', rec_id).execute()
+        flash('Receptionist user deleted successfully', 'success')
+    except Exception as e:
+        flash(f'Error deleting receptionist: {str(e)}', 'error')
+    return redirect(url_for('manage_rec'))
+
+
 @app.route('/add_lead', methods=['GET', 'POST'])
 @require_cre
 def add_lead():
@@ -2307,6 +2379,32 @@ def update_lead(uid):
 def ps_dashboard():
     start_time = time.time()
     ps_name = session.get('ps_name')
+    
+    # Debug session data
+    print(f"[DEBUG] PS Dashboard - Session data: {dict(session)}")
+    print(f"[DEBUG] PS Dashboard - ps_name from session: {ps_name}")
+    
+    # Fallback to username if ps_name is not available
+    if not ps_name:
+        ps_name = session.get('username')
+        print(f"[DEBUG] PS Dashboard - Using username as fallback: {ps_name}")
+    
+    # If still no name, try to get from database
+    if not ps_name:
+        user_id = session.get('user_id')
+        if user_id:
+            try:
+                ps_user = supabase.table('ps_users').select('name,username').eq('id', user_id).execute()
+                if ps_user.data:
+                    ps_name = ps_user.data[0].get('name') or ps_user.data[0].get('username')
+                    print(f"[DEBUG] PS Dashboard - Retrieved from DB: {ps_name}")
+            except Exception as e:
+                print(f"[DEBUG] PS Dashboard - Error fetching PS data: {e}")
+    
+    if not ps_name:
+        flash('Error: Could not determine PS name. Please log in again.', 'error')
+        return redirect(url_for('logout'))
+    
     today = datetime.now().date()
     today_str = today.isoformat()
 
@@ -2336,14 +2434,19 @@ def ps_dashboard():
     end_date = request.args.get('end_date')
     status_filter = request.args.get('status_filter', '')
     status = request.args.get('status', 'lost')  # <-- Add this line
+    tab = request.args.get('tab', 'fresh-leads')  # <-- Add tab parameter
+    category_filter = request.args.get('category_filter', '')  # <-- Add category filter parameter
 
     try:
         t0 = time.time()
         # Get all assigned leads for this PS
+        print(f"[DEBUG] PS Dashboard - Fetching leads for PS: {ps_name}")
         assigned_leads = safe_get_data('ps_followup_master', {'ps_name': ps_name})
+        print(f"[DEBUG] PS Dashboard - Assigned leads count: {len(assigned_leads) if assigned_leads else 0}")
 
         # Apply date filtering to assigned leads
         filtered_leads = filter_leads_by_date(assigned_leads, filter_type, 'created_at')
+        print(f"[DEBUG] PS Dashboard - Filtered leads count: {len(filtered_leads) if filtered_leads else 0}")
 
         # Initialize lists for different lead categories
         todays_followups_regular = []
@@ -2441,6 +2544,11 @@ def ps_dashboard():
         t3 = time.time()
         # Fetch event leads for this PS
         event_leads = safe_get_data('activity_leads', {'ps_name': ps_name})
+        
+        # Fetch walk-in leads for this PS
+        print(f"[DEBUG] PS Dashboard - Fetching walk-in leads for PS: {ps_name}")
+        walkin_leads = safe_get_data('walkin_table', {'ps_assigned': ps_name})
+        print(f"[DEBUG] PS Dashboard - Walk-in leads count: {len(walkin_leads) if walkin_leads else 0}")
 
         # --- Process Event Leads ---
         print(f"[DEBUG] Processing {len(event_leads)} event leads")
@@ -2463,6 +2571,7 @@ def ps_dashboard():
             elif final_status == 'Lost':
                 lost_leads.append(lead_dict)
                 print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to lost_leads")
+
             elif final_status == 'Pending' or not final_status:  # Include leads with no final_status
                 if ps_first_call_date:
                     # Event leads should already have lead_category from the database
@@ -2493,6 +2602,56 @@ def ps_dashboard():
 
         print(f"[PERF] ps_dashboard: event leads processing took {time.time() - t3:.3f} seconds")
 
+        t3_5 = time.time()
+        # --- Process Walk-in Leads ---
+        print(f"[DEBUG] Processing {len(walkin_leads)} walk-in leads")
+        todays_followups_walkin = []
+        
+        for lead in walkin_leads:
+            lead_dict = dict(lead)  # Make a copy to avoid mutating the original
+            lead_dict['lead_uid'] = lead.get('uid', f"W{lead.get('id')}")  # Use actual UID or generate one
+            lead_dict['customer_mobile_number'] = lead.get('mobile_number', '')  # For template compatibility
+            lead_dict['customer_name'] = lead.get('customer_name', '')  # Ensure customer_name is set
+            lead_dict['source'] = 'Walk-in'  # Set source for consistency
+            lead_dict['is_walkin'] = True  # Flag to identify walk-in leads
+            lead_dict['walkin_id'] = lead.get('id')  # Store the walk-in ID for URL generation
+            lead_dict['cre_name'] = ''  # Set empty cre_name for walk-in leads
+            
+            final_status = lead.get('status')
+            followup_no = lead.get('followup_no', 1)
+            next_followup_date = lead.get('next_followup_date')
+            
+            print(f"[DEBUG] Walk-in lead: {lead_dict['lead_uid']} | status: {final_status} | followup_no: {followup_no} | next_followup_date: {next_followup_date}")
+
+            # Categorize walk-in leads based on status
+            if final_status == 'Won':
+                # Add won timestamp for filtering
+                lead_dict['won_timestamp'] = lead.get('updated_at') or datetime.now().isoformat()
+                won_leads.append(lead_dict)
+                print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to won_leads")
+            elif final_status == 'Lost':
+                # Add lost timestamp for filtering
+                lead_dict['lost_timestamp'] = lead.get('updated_at') or datetime.now().isoformat()
+                lost_leads.append(lead_dict)
+                print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to lost_leads")
+            elif final_status == 'Pending' or not final_status:
+                # Add to today's followups if next_followup_date is today
+                if next_followup_date and str(next_followup_date)[:10] == today_str:
+                    lead_dict['follow_up_date'] = str(next_followup_date)
+                    todays_followups_walkin.append(lead_dict)
+                    print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to today's followups")
+                
+                # Add to pending leads if no follow-up has been made yet
+                if followup_no == 1 and not any(lead.get(f'{i}_call_date') for i in range(1, 8)):
+                    pending_leads.append(lead_dict)
+                    print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to pending_leads")
+                else:
+                    # Add to attended leads if follow-ups have been made
+                    attended_leads.append(lead_dict)
+                    print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to attended_leads")
+
+        print(f"[PERF] ps_dashboard: walk-in leads processing took {time.time() - t3_5:.3f} seconds")
+
         t4 = time.time()
         # Apply date filtering to lost leads using lost_timestamp
         def filter_lost_by_timestamp(leads_list):
@@ -2522,7 +2681,7 @@ def ps_dashboard():
 
         t5 = time.time()
         # Merge today's followup lists
-        todays_followups = todays_followups_regular + todays_followups_event
+        todays_followups = todays_followups_regular + todays_followups_event + todays_followups_walkin
 
         print(f"[PERF] ps_dashboard: final processing took {time.time() - t5:.3f} seconds")
 
@@ -2537,6 +2696,7 @@ def ps_dashboard():
                                won_leads=won_leads,
                                lost_leads=lost_leads,
                                event_leads=event_leads,
+                               walkin_leads=walkin_leads,
                                filter_type=filter_type,
                                start_date=start_date,
                                end_date=end_date,
@@ -2549,7 +2709,37 @@ def ps_dashboard():
         print(f"[DEBUG] Pending leads being sent to template: {[lead.get('lead_uid') for lead in pending_leads]}")
         print(f"[DEBUG] Won leads being sent to template: {[lead.get('lead_uid') for lead in won_leads]}")
         print(f"[DEBUG] Lost leads being sent to template: {[lead.get('lead_uid') for lead in lost_leads]}")
+        print(f"[DEBUG] Walk-in leads count: {len(walkin_leads) if walkin_leads else 0}")
+        print(f"[DEBUG] Today's followups count: {len(todays_followups)}")
         print(f"[PERF] ps_dashboard TOTAL took {time.time() - start_time:.3f} seconds")
+        
+        # Add session data to template context for debugging
+        template_data = {
+            'assigned_leads': assigned_leads,
+            'fresh_leads': fresh_leads,
+            'pending_leads': pending_leads,
+            'todays_followups': todays_followups,
+            'attended_leads': attended_leads,
+            'won_leads': won_leads,
+            'lost_leads': lost_leads,
+            'event_leads': event_leads,
+            'walkin_leads': walkin_leads,
+            'filter_type': filter_type,
+            'start_date': start_date,
+            'end_date': end_date,
+            'status_filter': status_filter,
+            'status': status,
+            'tab': tab,  # Add tab parameter
+            'category_filter': category_filter,  # Add category filter parameter
+            'ps_name': ps_name,  # Pass ps_name directly to template
+            'debug_info': {
+                'session_data': dict(session),
+                'ps_name': ps_name,
+                'total_leads': len(assigned_leads) if assigned_leads else 0
+            }
+        }
+        
+        result = render_template('ps_dashboard.html', **template_data)
         return result
 
     except Exception as e:
@@ -2564,12 +2754,113 @@ def ps_dashboard():
                              won_leads=[],
                              lost_leads=[],
                              event_leads=[],
+                             walkin_leads=[],
                              filter_type=filter_type,
                              start_date=start_date,
                              end_date=end_date,
                              status_filter=status_filter,
-                             status=status)
+                             status=status,
+                             ps_name=ps_name if 'ps_name' in locals() else 'Unknown',
+                             debug_info={
+                                 'session_data': dict(session),
+                                 'ps_name': ps_name if 'ps_name' in locals() else 'Unknown',
+                                 'error': str(e)
+                             })
 
+
+
+@app.route('/update_walkin_lead/<int:walkin_id>', methods=['GET', 'POST'])
+@require_ps
+def update_walkin_lead(walkin_id):
+    return_tab = request.args.get('return_tab', 'walkin-leads')
+    try:
+        # Get the walk-in lead data
+        walkin_result = supabase.table('walkin_table').select('*').eq('id', walkin_id).execute()
+        if not walkin_result.data:
+            flash('Walk-in lead not found', 'error')
+            return redirect(url_for('ps_dashboard'))
+        
+        walkin_lead = walkin_result.data[0]
+        ps_name = session.get('ps_name')
+        
+        # Check if this PS is assigned to this walk-in lead
+        if walkin_lead.get('ps_assigned') != ps_name:
+            flash('You are not authorized to update this walk-in lead', 'error')
+            return redirect(url_for('ps_dashboard'))
+        
+        if request.method == 'POST':
+            # Get form data
+            followup_no = int(request.form.get('followup_no', 1))
+            call_date = request.form.get('call_date')
+            call_remark = request.form.get('call_remark')
+            status = request.form.get('status', 'Pending')
+            lead_category = request.form.get('lead_category', 'Warm')
+            next_followup_date = request.form.get('next_followup_date')
+            
+            # Update the specific call field based on followup number
+            update_data = {
+                'status': status,
+                'lead_category': lead_category,
+                'followup_no': followup_no,
+                'updated_at': datetime.now().isoformat()
+            }
+            
+            # Set the specific call date and remark fields
+            if followup_no == 1:
+                update_data['first_call_date'] = call_date
+                update_data['first_call_remark'] = call_remark
+            elif followup_no == 2:
+                update_data['second_call_date'] = call_date
+                update_data['second_call_remark'] = call_remark
+            elif followup_no == 3:
+                update_data['third_call_date'] = call_date
+                update_data['third_call_remark'] = call_remark
+            elif followup_no == 4:
+                update_data['fourth_call_date'] = call_date
+                update_data['fourth_call_remark'] = call_remark
+            elif followup_no == 5:
+                update_data['fifth_call_date'] = call_date
+                update_data['fifth_call_remark'] = call_remark
+            elif followup_no == 6:
+                update_data['sixth_call_date'] = call_date
+                update_data['sixth_call_remark'] = call_remark
+            elif followup_no == 7:
+                update_data['seventh_call_date'] = call_date
+                update_data['seventh_call_remark'] = call_remark
+            
+            # Set next followup date if provided
+            if next_followup_date:
+                update_data['next_followup_date'] = next_followup_date
+            
+            # Update the walk-in lead
+            supabase.table('walkin_table').update(update_data).eq('id', walkin_id).execute()
+            
+            flash(f'Walk-in lead updated successfully! Follow-up {followup_no} recorded.', 'success')
+            redirect_url = url_for('ps_dashboard', tab=return_tab)
+            return redirect(redirect_url)
+        
+        # For GET request, render the update form
+        # Determine next call number and completed calls
+        next_call, completed_calls = get_next_ps_call_info(walkin_lead)
+        models = [
+            "450X", "450S", "Rizta S Mono (2.9 kWh)", "Rizta S Super Matte (2.9 kWh)",
+            "Rizta Z Mono (2.9 kWh)", "Rizta Z Duo (2.9 kWh)", "Rizta Z Super Matte (2.9 kWh)",
+            "Rizta Z Mono (3.7 kWh)", "Rizta Z Duo (3.7 kWh)", "Rizta Z Super Matte (3.7 kWh)",
+            "450 X (2.9 kWh)", "450 X (3.7 kWh)", "450 X (2.9 kWh) Pro Pack", "450 X (3.7 kWh) Pro Pack",
+            "450 Apex STD"
+        ]
+        return render_template(
+            'update_walkin_lead.html',
+            walkin_lead=walkin_lead,
+            next_call=next_call,
+            completed_calls=completed_calls,
+            models=models
+        )
+        
+    except Exception as e:
+        flash(f'Error updating walk-in lead: {str(e)}', 'error')
+        redirect_url = url_for('ps_dashboard', tab=return_tab)
+        return redirect(redirect_url)
 
 
 @app.route('/update_ps_lead/<uid>', methods=['GET', 'POST'])
@@ -2577,6 +2868,7 @@ def ps_dashboard():
 def update_ps_lead(uid):
     return_tab = request.args.get('return_tab', 'fresh-leads')
     status_filter = request.args.get('status_filter', '')
+    category_filter = request.args.get('category_filter', '')
     try:
         # Try to get PS followup data (regular leads)
         ps_result = supabase.table('ps_followup_master').select('*').eq('lead_uid', uid).execute()
@@ -2682,6 +2974,8 @@ def update_ps_lead(uid):
                     redirect_url = url_for('ps_dashboard', tab=return_tab)
                     if status_filter:
                         redirect_url += f'&status_filter={status_filter}'
+                    if category_filter:
+                        redirect_url += f'&category_filter={category_filter}'
                     return redirect(redirect_url)
                 except Exception as e:
                     flash(f'Error updating lead: {str(e)}', 'error')
@@ -2691,11 +2985,11 @@ def update_ps_lead(uid):
                                    completed_calls=completed_calls,
                                    today=date.today(),
                                    cre_call_summary=cre_call_summary)
-        flash('Lead not found', 'error')
-        redirect_url = url_for('ps_dashboard', tab=return_tab)
-        if status_filter:
-            redirect_url += f'&status_filter={status_filter}'
-        return redirect(redirect_url)
+            flash('Lead not found', 'error')
+            redirect_url = url_for('ps_dashboard', tab=return_tab)
+            if status_filter:
+                redirect_url += f'&status_filter={status_filter}'
+            return redirect(redirect_url)
     except Exception as e:
         flash(f'Error loading lead: {str(e)}', 'error')
         return redirect(url_for('ps_dashboard'))
@@ -6442,6 +6736,26 @@ def ps_dashboard_leads():
             elif final_status == 'Lost':
                 lost_leads.append(lead_dict)
         
+        # Process walk-in leads
+        walkin_leads = safe_get_data('walkin_table', {'ps_assigned': ps_name})
+        for lead in walkin_leads:
+            lead_dict = dict(lead)
+            lead_dict['lead_uid'] = lead.get('uid', f"W{lead.get('id')}")
+            lead_dict['customer_mobile_number'] = lead.get('mobile_number', '')
+            lead_dict['customer_name'] = lead.get('customer_name', '')
+            lead_dict['is_walkin'] = True
+            lead_dict['walkin_id'] = lead.get('id')
+            lead_dict['cre_name'] = ''
+            final_status = lead.get('status')
+            
+            # Add timestamp for filtering
+            if final_status == 'Won':
+                lead_dict['won_timestamp'] = lead.get('updated_at') or datetime.now().isoformat()
+                won_leads.append(lead_dict)
+            elif final_status == 'Lost':
+                lead_dict['lost_timestamp'] = lead.get('updated_at') or datetime.now().isoformat()
+                lost_leads.append(lead_dict)
+        
         # Select the appropriate list based on status
         leads_list = won_leads if status == 'won' else lost_leads
         
@@ -6452,6 +6766,103 @@ def ps_dashboard_leads():
     
     except Exception as e:
         return f'<div class="alert alert-danger">Error loading leads: {str(e)}</div>'
+
+# Receptionist session key
+RECEPTIONIST_SESSION_KEY = 'rec_user_id'
+
+@app.route('/rec_login', methods=['GET', 'POST'])
+def rec_login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        # Fetch receptionist from DB
+        rec_user = supabase.table('rec_users').select('*').eq('username', username).execute().data
+        if rec_user:
+            rec_user = rec_user[0]
+            if rec_user.get('is_active', True) and check_password_hash(rec_user['password_hash'], password):
+                session.clear()
+                session[RECEPTIONIST_SESSION_KEY] = rec_user['id']
+                session['rec_branch'] = rec_user['branch']
+                session['rec_name'] = rec_user.get('name', username)
+                flash('Login successful!', 'success')
+                return redirect(url_for('add_walkin_lead'))
+            else:
+                flash('Invalid credentials or inactive account.', 'danger')
+        else:
+            flash('Invalid username or password.', 'danger')
+    return render_template('rec_login.html')
+
+@app.route('/rec_logout')
+def rec_logout():
+    session.pop(RECEPTIONIST_SESSION_KEY, None)
+    session.pop('rec_branch', None)
+    session.pop('rec_name', None)
+    flash('Logged out successfully.', 'info')
+    return redirect(url_for('rec_login'))
+
+@app.route('/add_walkin_lead', methods=['GET', 'POST'])
+@require_rec
+def add_walkin_lead():
+
+    # Models and branches (customize as needed)
+    models = [
+        "450X", "450S", "Rizta S Mono (2.9 kWh)", "Rizta S Super Matte (2.9 kWh)",
+        "Rizta Z Mono (2.9 kWh)", "Rizta Z Duo (2.9 kWh)", "Rizta Z Super Matte (2.9 kWh)",
+        "Rizta Z Mono (3.7 kWh)", "Rizta Z Duo (3.7 kWh)", "Rizta Z Super Matte (3.7 kWh)",
+        "450 X (2.9 kWh)", "450 X (3.7 kWh)", "450 X (2.9 kWh) Pro Pack", "450 X (3.7 kWh) Pro Pack",
+        "450 Apex STD"
+    ]
+    branches = [
+        "KOMPALLY", "SOMAJIGUDA", "ATTAPUR", "MALAKPET",
+        "TOLICHOWKI", "VANASTHALIPURAM"
+    ]
+    # Fetch PS users for all branches
+    ps_users = supabase.table('ps_users').select('name,branch').execute().data or []
+    ps_options = {}
+    for branch in branches:
+        ps_options[branch] = [ps['name'] for ps in ps_users if ps.get('branch') == branch]
+    ps_options_json = json.dumps(ps_options)
+
+    if request.method == 'POST':
+        # Generate UID for walk-in lead
+        mobile_number = request.form['mobile_number']
+        
+        # Get count of existing walk-in leads for this mobile number
+        existing_count = get_accurate_count('walkin_table', {'mobile_number': mobile_number})
+        sequence = existing_count + 1
+        
+        # Generate UID using 'Walk-in' as source (which maps to 'W')
+        uid = generate_uid('Walk-in', mobile_number, sequence)
+        
+        data = {
+            'customer_name': request.form['customer_name'],
+            'mobile_number': request.form['mobile_number'],
+            'email': request.form.get('email'),
+            'lead_source': request.form.get('lead_source'),
+            'model_interested': request.form['model_interested'],
+            'occupation': request.form.get('occupation'),
+            'lead_category': request.form['lead_category'],
+            'branch': request.form['branch'],
+            'ps_assigned': request.form['ps_assigned'],
+            'status': 'Pending',
+            'followup_no': 1,
+            'uid': uid,  # Add UID
+            'created_at': datetime.now().isoformat(),
+            'updated_at': datetime.now().isoformat(),
+        }
+        try:
+            supabase.table('walkin_table').insert(data).execute()
+            flash('Walk-in lead added and assigned to PS successfully!', 'success')
+            return redirect(url_for('add_walkin_lead'))
+        except Exception as e:
+            flash(f'Error adding walk-in lead: {str(e)}', 'danger')
+
+    return render_template(
+        'add_walkin_lead.html',
+        models=models,
+        branches=branches,
+        ps_options_json=ps_options_json
+    )
 
 if __name__ == '__main__':
     # socketio.run(app, debug=True)

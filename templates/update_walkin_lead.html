@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+
+{% block title %}Update Walk-in Lead - Ather CRM{% endblock %}
+
+{% block content %}
+<style>
+  .update-card {
+    background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
+    border: none;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    overflow: hidden;
+  }
+  
+  .update-card .card-header {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: white;
+    border: none;
+    padding: 1.5rem;
+    text-align: center;
+  }
+  
+  .form-label {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  
+  .form-control, .form-select {
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    transition: all 0.3s ease;
+    background: #f8f9fa;
+  }
+  
+  .form-control:focus, .form-select:focus {
+    border-color: #4facfe;
+    box-shadow: 0 0 0 0.2rem rgba(79, 172, 254, 0.25);
+    background: white;
+  }
+  
+  .btn-submit {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    border-radius: 25px;
+    padding: 0.75rem 2rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  }
+  
+  .btn-submit:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+  }
+  
+  .lead-info {
+    background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+    border-radius: 15px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    border-left: 4px solid #4facfe;
+  }
+  
+  .call-history {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+</style>
+
+<div class="container mt-4">
+  <div class="row justify-content-center">
+    <div class="col-lg-10">
+      <div class="card update-card">
+        <div class="card-header">
+          <h3 class="mb-0">
+            <i class="fas fa-edit me-2"></i>Update Walk-in Lead
+          </h3>
+        </div>
+        <div class="card-body p-4">
+          
+          <!-- Lead Information -->
+          <div class="lead-info">
+            <h5><i class="fas fa-user me-2"></i>Customer Information</h5>
+            <div class="row">
+              <div class="col-md-6">
+                <p><strong>Name:</strong> {{ walkin_lead.customer_name }}</p>
+                <p><strong>Mobile:</strong> {{ walkin_lead.mobile_number }}</p>
+                <p><strong>Email:</strong> {{ walkin_lead.email or 'N/A' }}</p>
+              </div>
+              <div class="col-md-6">
+                <p><strong>Model Interested:</strong> {{ walkin_lead.model_interested }}</p>
+                <p><strong>Branch:</strong> {{ walkin_lead.branch }}</p>
+                <p><strong>Status:</strong> 
+                  <span class="badge {% if walkin_lead.status == 'Won' %}bg-success{% elif walkin_lead.status == 'Lost' %}bg-danger{% else %}bg-warning{% endif %}">
+                    {{ walkin_lead.status }}
+                  </span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Update Form -->
+          <form method="POST">
+            <div class="row">
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <label class="form-label">
+                    <i class="fas fa-phone me-2"></i>Follow-up Number
+                  </label>
+                  <select class="form-select" name="followup_no" required>
+                    {% for i in range(1, 8) %}
+                      {% set call_num = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh'][i-1] %}
+                      {% set call_date = walkin_lead.get(call_num + '_call_date') %}
+                      <option value="{{ i }}" {% if next_call == call_num %}selected{% endif %}>
+                        {{ i }}{% if i == 1 %}st{% elif i == 2 %}nd{% elif i == 3 %}rd{% else %}th{% endif %} Call
+                        {% if call_date %} (Already recorded){% endif %}
+                      </option>
+                    {% endfor %}
+                  </select>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <label class="form-label">
+                    <i class="fas fa-calendar me-2"></i>Call Date
+                  </label>
+                  <input type="datetime-local" class="form-control" name="call_date" required>
+                </div>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">
+                <i class="fas fa-comment me-2"></i>Call Remarks
+              </label>
+              <textarea class="form-control" name="call_remark" rows="3" placeholder="Enter call remarks..." required></textarea>
+            </div>
+
+            <div class="row">
+              <div class="col-md-4">
+                <div class="mb-3">
+                  <label class="form-label">
+                    <i class="fas fa-flag me-2"></i>Status
+                  </label>
+                  <select class="form-select" name="status" required>
+                    <option value="Pending" {% if walkin_lead.status == 'Pending' %}selected{% endif %}>Pending</option>
+                    <option value="Won" {% if walkin_lead.status == 'Won' %}selected{% endif %}>Won</option>
+                    <option value="Lost" {% if walkin_lead.status == 'Lost' %}selected{% endif %}>Lost</option>
+                  </select>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="mb-3">
+                  <label class="form-label">
+                    <i class="fas fa-fire me-2"></i>Lead Category
+                  </label>
+                  <select class="form-select" name="lead_category" required>
+                    <option value="Hot" {% if walkin_lead.lead_category == 'Hot' %}selected{% endif %}>🔥 Hot</option>
+                    <option value="Warm" {% if walkin_lead.lead_category == 'Warm' %}selected{% endif %}>🌡️ Warm</option>
+                    <option value="Cold" {% if walkin_lead.lead_category == 'Cold' %}selected{% endif %}>❄️ Cold</option>
+                  </select>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="mb-3">
+                  <label class="form-label">
+                    <i class="fas fa-car me-2"></i>Model Interested
+                  </label>
+                  <select class="form-select" name="model_interested" required>
+                    {% for model in models %}
+                      <option value="{{ model }}" {% if walkin_lead.model_interested == model %}selected{% endif %}>{{ model }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-4">
+                <div class="mb-3">
+                  <label class="form-label">
+                    <i class="fas fa-calendar-plus me-2"></i>Next Follow-up Date
+                  </label>
+                  <input type="datetime-local" class="form-control" name="next_followup_date" 
+                         placeholder="Leave empty if status is Won/Lost">
+                </div>
+              </div>
+              <!-- Removed call progress display -->
+            </div>
+
+            <div class="text-center mt-4">
+              <button type="submit" class="btn btn-submit btn-lg">
+                <i class="fas fa-save me-2"></i>Update Walk-in Lead
+              </button>
+              <a href="{{ url_for('ps_dashboard') }}" class="btn btn-outline-secondary btn-lg ms-2">
+                <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+              </a>
+            </div>
+          </form>
+
+          <!-- Call History (moved below form) -->
+          <div class="call-history mt-4" style="background: linear-gradient(135deg, #e0eafc 0%, #cfdef3 100%); border: 2px solid #4facfe; box-shadow: 0 2px 8px rgba(79,172,254,0.08);">
+            <h6><i class="fas fa-history me-2"></i>Call History</h6>
+            <div class="row">
+              {% for i in range(1, 8) %}
+                {% set call_num = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh'][i-1] %}
+                {% set call_date = walkin_lead.get(call_num + '_call_date') %}
+                {% set call_remark = walkin_lead.get(call_num + '_call_remark') %}
+                <div class="col-md-6 mb-2">
+                  <small class="text-muted">{{ i }}{% if i == 1 %}st{% elif i == 2 %}nd{% elif i == 3 %}rd{% else %}th{% endif %} Call:</small>
+                  {% if call_date %}
+                    <div class="text-success">{{ call_date }}</div>
+                    {% if call_remark %}
+                      <div class="text-muted small">{{ call_remark }}</div>
+                    {% endif %}
+                  {% else %}
+                    <div class="text-muted">Not recorded</div>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Auto-fill current date/time for call date
+  document.addEventListener('DOMContentLoaded', function() {
+    const now = new Date();
+    const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    document.querySelector('input[name="call_date"]').value = localDateTime;
+  });
+  
+  // Auto-hide next followup date if status is Won/Lost
+  document.querySelector('select[name="status"]').addEventListener('change', function() {
+    const nextFollowupField = document.querySelector('input[name="next_followup_date"]');
+    if (this.value === 'Won' || this.value === 'Lost') {
+      nextFollowupField.value = '';
+      nextFollowupField.disabled = true;
+    } else {
+      nextFollowupField.disabled = false;
+    }
+  });
+</script>
+{% endblock %} 
