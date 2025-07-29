@@ -3647,7 +3647,6 @@ def api_branch_head_dashboard_data():
         )
         return jsonify(response)
 
-<<<<<<< HEAD
     elif section == 'walkin_leads':
         walkin_query = supabase.table('walkin_data').select('*').eq('ps_branch', branch)
         if uid:
@@ -3688,9 +3687,6 @@ def api_branch_head_dashboard_data():
             'lost_leads_count': lost_leads_count
         }
         return jsonify(response)
-=======
-
->>>>>>> fb9d1756b2688538844b1a9434851c1dc64395db
 
     elif section == 'cre_assigned_leads':
         # Fetch all rows from ps_followup_master for the current branch (and filters), with all columns
@@ -3761,24 +3757,6 @@ def api_branch_head_dashboard_data():
             for row in event_rows_raw
         ]
 
-<<<<<<< HEAD
-        # walkin_data
-        walkin_rows_raw = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('ps_final_status', 'Pending').execute().data or []
-        walkin_rows = [
-            {
-                'uid': row.get('uid', ''),
-                'customer_name': row.get('customer_name', ''),
-                'customer_mobile_number': row.get('customer_mobile_number', ''),
-                'final_status': row.get('ps_final_status', ''),
-                'source': 'Walk-in',
-                'lead_status': row.get('lead_status', ''),
-                'ps_name': row.get('ps_name', '')
-            }
-            for row in walkin_rows_raw
-        ]
-
-=======
->>>>>>> fb9d1756b2688538844b1a9434851c1dc64395db
         # Merge all
         all_rows = followup_rows + event_rows
 
@@ -3803,8 +3781,6 @@ def api_branch_head_dashboard_data():
             'pending_leads_count': total_count,
             'pending_leads_cre_assigned_count': cre_assigned_count,
             'pending_leads_event_count': event_count,
-<<<<<<< HEAD
-            'pending_leads_walkin_count': walkin_count,
             'fresh_leads_count': fresh_leads_count,
             'walkin_leads_count': walkin_leads_count,
             'cre_assigned_leads_count': cre_assigned_leads_count,
@@ -3812,15 +3788,11 @@ def api_branch_head_dashboard_data():
             'event_leads_count': event_leads_count,
             'won_leads_count': won_leads_count,
             'lost_leads_count': lost_leads_count
-=======
-
->>>>>>> fb9d1756b2688538844b1a9434851c1dc64395db
         }
         return jsonify(response)
 
     elif section == 'followup_leads':
         today_str = datetime.now().strftime('%Y-%m-%d')
-<<<<<<< HEAD
         tomorrow_str = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
         # Only today's follow-ups with correct status
         ps_today = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).eq('final_status', 'Pending').execute().data or []
@@ -3842,14 +3814,6 @@ def api_branch_head_dashboard_data():
             for row in walkin_today_raw
         ]
         
-=======
-        # Only today's follow-ups
-        ps_today = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).execute().data or []
-        act_today = supabase.table('activity_leads').select('*').eq('location', branch).eq('ps_followup_date_ts', today_str).execute().data or []
-        # Mark all as not missed
-        ps_today = [{**row, 'missed': False} for row in ps_today]
-        act_today = [{**row, 'missed': False} for row in act_today]
->>>>>>> fb9d1756b2688538844b1a9434851c1dc64395db
         # Merge only today's followups
         all_rows = ps_today + act_today
         total_count = len(all_rows)
@@ -4030,16 +3994,16 @@ def api_branch_head_dashboard_data():
         # Merge all rows
         all_rows = ps_rows + event_rows + walkin_rows
         total_count = len(all_rows)
-    offset = (page - 1) * per_page
+        offset = (page - 1) * per_page
         paged_rows = all_rows[offset:offset + per_page]
         total_pages = 1 if total_count == 0 else math.ceil(total_count / per_page)
         
-    response = {
-        'success': True,
+        response = {
+            'success': True,
             'rows': paged_rows,
-        'total_count': total_count,
+            'total_count': total_count,
             'total_pages': total_pages,
-        'current_page': page,
+            'current_page': page,
             'per_page': per_page,
             'lost_leads_count': total_count,
             'fresh_leads_count': fresh_leads_count,
@@ -6318,7 +6282,7 @@ def add_branch_head():
         email = request.form.get('email', '').strip()
         phone = request.form.get('phone', '').strip()
         branch = request.form.get('branch', '').strip()
-    is_active = request.form.get('is_active') == 'on'
+        is_active = request.form.get('is_active') == 'on'
         
         # Debug: Print form data
         print(f"Form data received:")
@@ -6343,16 +6307,16 @@ def add_branch_head():
             flash('Please enter a valid 10-digit phone number', 'error')
             return redirect(url_for('manage_branch_head'))
         
-    # Store plain text password for Branch Head (testing only)
-    hashed_pw = password
+        # Store plain text password for Branch Head (testing only)
+        hashed_pw = password
         
         # Prepare data for insertion
         branch_head_data = {
-        'Name': name,
-        'Username': username,
-        'Password': hashed_pw,
-        'Branch': branch,
-        'Is Active': is_active
+            'Name': name,
+            'Username': username,
+            'Password': hashed_pw,
+            'Branch': branch,
+            'Is Active': is_active
         }
         
         # Add email and phone (always include them, even if empty)
@@ -6366,7 +6330,7 @@ def add_branch_head():
         result = supabase.table('Branch Head').insert(branch_head_data).execute()
         
         if result.data:
-    flash('Branch Head added successfully!', 'success')
+            flash('Branch Head added successfully!', 'success')
             print(f"Successfully inserted branch head with ID: {result.data[0]['id'] if result.data else 'Unknown'}")
             
             # Debug: Fetch the inserted record to verify what was saved
