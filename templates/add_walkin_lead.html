@@ -257,7 +257,7 @@
                     <select class="form-select field-with-icon" name="branch" id="branch-select" required>
                       <option value="">Select branch</option>
                       {% for branch in branches %}
-                      <option value="{{ branch }}">{{ branch }}</option>
+                      <option value="{{ branch }}" {% if branch == default_branch %}selected{% endif %}>{{ branch }}</option>
                       {% endfor %}
                     </select>
                   </div>

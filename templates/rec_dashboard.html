@@ -214,10 +214,10 @@
       </div>
     </div>
     <div class="col-md-3 mb-3">
-      <div class="card kpi-card assigned text-center">
+      <div class="card kpi-card response-rate text-center">
         <div class="card-body">
-          <div class="kpi-number text-primary">{{ assigned_leads_count }}</div>
-          <div class="kpi-label">Leads Assigned</div>
+          <div class="kpi-number text-info">{{ first_call_response_rate }}%</div>
+          <div class="kpi-label">First Call Response Rate</div>
         </div>
       </div>
     </div>
@@ -379,6 +379,7 @@
                   <th><i class="fas fa-user-tie me-1"></i>PS Assigned</th>
                   <th><i class="fas fa-flag me-1"></i>Status</th>
                   <th><i class="fas fa-calendar me-1"></i>Created At</th>
+                  <th><i class="fas fa-cogs me-1"></i>Actions</th>
                 </tr>
               </thead>
               <tbody id="leadsTableBody">
@@ -409,11 +410,16 @@
                       {% endif %}
                     </td>
                     <td>{{ lead.created_at[:10] if lead.created_at else '-' }}</td>
+                    <td>
+                      <button class="btn btn-sm btn-outline-primary" onclick="viewCallHistory('{{ lead.uid }}')" title="View Call History">
+                        <i class="fas fa-eye"></i>
+                      </button>
+                    </td>
                   </tr>
                   {% endfor %}
                 {% else %}
                   <tr>
-                    <td colspan="8" class="text-center text-muted py-4">
+                    <td colspan="9" class="text-center text-muted py-4">
                       <i class="fas fa-inbox fa-2x mb-2"></i>
                       <p class="mb-0">No leads found</p>
                     </td>
@@ -486,7 +492,7 @@ function updateLeadsTable(leads) {
   if (leads.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="8" class="text-center text-muted py-4">
+        <td colspan="9" class="text-center text-muted py-4">
           <i class="fas fa-inbox fa-2x mb-2"></i>
           <p class="mb-0">No leads found</p>
         </td>
@@ -511,7 +517,12 @@ function updateLeadsTable(leads) {
       <td>
         ${getStatusBadge(lead.status)}
       </td>
-                          <td>${lead.created_at ? lead.created_at.substring(0, 10) : '-'}</td>
+      <td>${lead.created_at ? lead.created_at.substring(0, 10) : '-'}</td>
+      <td>
+        <button class="btn btn-sm btn-outline-primary" onclick="viewCallHistory('${lead.uid}')" title="View Call History">
+          <i class="fas fa-eye"></i>
+        </button>
+      </td>
     </tr>
   `).join('');
 }
@@ -551,6 +562,11 @@ function clearFilters() {
   document.getElementById('dateTo').value = '';
   document.getElementById('dateRangeContainer').style.display = 'none';
   applyFilters();
+}
+
+function viewCallHistory(uid) {
+  // Redirect to call history page
+  window.open(`/view_walkin_call_history/${uid}`, '_blank');
 }
 
 function viewLeadDetails(uid) {
