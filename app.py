@@ -5311,6 +5311,114 @@ def export_filtered_leads():
         filename = f"leads_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         return send_file(io.BytesIO(output.getvalue().encode('utf-8')), as_attachment=True, download_name=filename, mimetype='text/csv')
 
+@app.route('/export_all_cre_leads')
+@require_admin
+def export_all_cre_leads():
+    """Export all leads assigned to all CREs as CSV or Excel."""
+    import io
+    import csv
+    import openpyxl
+    from flask import send_file
+    
+    print(f"Export All CREs route called with format: {request.args.get('format', 'csv')}")
+    format_ = request.args.get('format', 'csv')
+    
+    try:
+        # Get all CREs
+        cres = safe_get_data('cre_users')
+        active_cres = [cre for cre in cres if cre.get('is_active', True)]
+        
+        # Get all leads assigned to any CRE
+        all_leads = safe_get_data('lead_master')
+        assigned_leads = [lead for lead in all_leads if lead.get('cre_name')]
+        print(f"Total leads found: {len(all_leads)}, Assigned leads: {len(assigned_leads)}")
+        
+        # Columns to export
+        export_columns = [
+            ('uid', 'UID'),
+            ('customer_name', 'Customer Name'),
+            ('customer_mobile_number', 'Customer Mobile Number'),
+            ('source', 'Source'),
+            ('cre_name', 'CRE Name'),
+            ('ps_name', 'PS Name'),
+            ('final_status', 'Final Status'),
+            ('lead_status', 'Lead Status'),
+            ('cre_assigned_at', 'CRE Assigned Date'),
+            ('first_call_date', 'First Call Date'),
+            ('last_call_date', 'Last Call Date'),
+            ('total_calls', 'Total Calls'),
+            ('lead_category', 'Lead Category')
+        ]
+        
+        if format_ == 'excel':
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = 'All CRE Leads'
+            
+            # Add header
+            ws.append([col[1] for col in export_columns])
+            
+            # Add data
+            for lead in assigned_leads:
+                row_data = []
+                for col_key, col_name in export_columns:
+                    value = lead.get(col_key, '')
+                    # Format dates if they exist
+                    if col_key in ['cre_assigned_at', 'first_call_date', 'last_call_date'] and value:
+                        try:
+                            value = value[:10] if len(value) >= 10 else value  # Get just the date part
+                        except:
+                            pass
+                    row_data.append(value)
+                ws.append(row_data)
+            
+            # Auto-adjust column widths
+            for column in ws.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 50)  # Cap at 50 characters
+                ws.column_dimensions[column_letter].width = adjusted_width
+            
+            output = io.BytesIO()
+            wb.save(output)
+            output.seek(0)
+            filename = f"all_cre_leads_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            return send_file(output, as_attachment=True, download_name=filename, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        else:
+            output = io.StringIO()
+            writer = csv.writer(output)
+            
+            # Add header
+            writer.writerow([col[1] for col in export_columns])
+            
+            # Add data
+            for lead in assigned_leads:
+                row_data = []
+                for col_key, col_name in export_columns:
+                    value = lead.get(col_key, '')
+                    # Format dates if they exist
+                    if col_key in ['cre_assigned_at', 'first_call_date', 'last_call_date'] and value:
+                        try:
+                            value = value[:10] if len(value) >= 10 else value  # Get just the date part
+                        except:
+                            pass
+                    row_data.append(value)
+                writer.writerow(row_data)
+            
+            output.seek(0)
+            filename = f"all_cre_leads_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            return send_file(io.BytesIO(output.getvalue().encode('utf-8')), as_attachment=True, download_name=filename, mimetype='text/csv')
+    
+    except Exception as e:
+        flash(f'Error exporting all CRE leads: {str(e)}', 'error')
+        return redirect(url_for('manage_leads'))
+
 @app.route('/cre_analytics')
 @require_cre
 def cre_analytics():

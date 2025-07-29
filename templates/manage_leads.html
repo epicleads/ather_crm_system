@@ -33,6 +33,9 @@
             <!-- Export Buttons -->
             <button id="exportCsvBtn" class="btn btn-outline-success ms-2" type="button">Export CSV</button>
             <button id="exportExcelBtn" class="btn btn-outline-primary ms-2" type="button">Export Excel</button>
+            <button id="exportAllCresBtn" class="btn btn-outline-warning ms-2" type="button" style="cursor: pointer;">
+                <i class="fas fa-download me-1"></i>Export All CREs
+            </button>
         </div>
     </div>
     <p id="showingLeadsText">Showing {{ total_leads }} leads</p>
@@ -503,11 +506,24 @@ document.addEventListener('DOMContentLoaded', function() {
     // Export buttons logic
     const exportCsvBtn = document.getElementById('exportCsvBtn');
     const exportExcelBtn = document.getElementById('exportExcelBtn');
+    const exportAllCresBtn = document.getElementById('exportAllCresBtn');
+    
     function buildExportUrl(format) {
         const params = new URLSearchParams(window.location.search);
         params.set('format', format);
         return '/export_filtered_leads?' + params.toString();
     }
+    
+    function buildAllCresExportUrl(format) {
+        console.log('Building export URL for format:', format);
+        const params = new URLSearchParams();
+        params.set('format', format);
+        params.set('export_all_cre', 'true');
+        const url = '/export_all_cre_leads?' + params.toString();
+        console.log('Built URL:', url);
+        return url;
+    }
+    
     if (exportCsvBtn) {
         exportCsvBtn.addEventListener('click', function() {
             window.open(buildExportUrl('csv'), '_blank');
@@ -517,6 +533,20 @@ document.addEventListener('DOMContentLoaded', function() {
         exportExcelBtn.addEventListener('click', function() {
             window.open(buildExportUrl('excel'), '_blank');
         });
+    }
+    if (exportAllCresBtn) {
+        console.log('Export All CREs button found and event listener added');
+        exportAllCresBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log('Export All CREs button clicked');
+            alert('Export All CREs button is working!');
+            const format = confirm('Choose export format:\n\nClick OK for Excel (.xlsx)\nClick Cancel for CSV (.csv)') ? 'excel' : 'csv';
+            const url = buildAllCresExportUrl(format);
+            console.log('Opening URL:', url);
+            window.open(url, '_blank');
+        });
+    } else {
+        console.error('Export All CREs button not found');
     }
 });
 </script>
