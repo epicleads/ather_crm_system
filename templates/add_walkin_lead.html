@@ -2,12 +2,12 @@
 {% block content %}
 <style>
   .hero-header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
     color: white;
     padding: 2rem 0;
     margin-bottom: 2rem;
     border-radius: 0 0 20px 20px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 15px rgba(220, 53, 69, 0.3);
   }
   
   .form-card {
@@ -19,7 +19,7 @@
   }
   
   .form-card .card-header {
-    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
     color: white;
     border: none;
     padding: 1.5rem;
@@ -48,13 +48,13 @@
   }
   
   .form-control:focus, .form-select:focus {
-    border-color: #4facfe;
-    box-shadow: 0 0 0 0.2rem rgba(79, 172, 254, 0.25);
+    border-color: #dc3545;
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
     background: white;
   }
   
   .btn-submit {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
     border: none;
     border-radius: 25px;
     padding: 0.75rem 2rem;
@@ -62,12 +62,12 @@
     text-transform: uppercase;
     letter-spacing: 1px;
     transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 4px 15px rgba(220, 53, 69, 0.4);
   }
   
   .btn-submit:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+    box-shadow: 0 6px 20px rgba(220, 53, 69, 0.6);
   }
   
   .form-row {
@@ -81,13 +81,13 @@
   }
   
   .info-badge {
-    background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+    background: linear-gradient(135deg, #ffe6e6 0%, #ffcccc 100%);
     color: #495057;
     padding: 0.5rem 1rem;
     border-radius: 15px;
     font-size: 0.85rem;
     margin-bottom: 1rem;
-    border-left: 4px solid #4facfe;
+    border-left: 4px solid #dc3545;
   }
   
   .field-group {
@@ -113,10 +113,13 @@
   <div class="container">
     <div class="row justify-content-center">
       <div class="col-md-8 text-center">
-        <h1 class="display-5 fw-bold mb-3">
-          <i class="fas fa-user-plus me-3"></i>Add Walk-in Lead
-        </h1>
-        <p class="lead mb-0">Enter customer information for walk-in leads</p>
+        <h2 class="h4 fw-bold mb-2">
+          Add Walk-in Lead
+        </h2>
+        <p class="lead mb-3">Enter customer information for walk-in leads</p>
+        <a href="{{ url_for('rec_dashboard') }}" class="btn btn-outline-light btn-sm">
+          <i class="fas fa-chart-bar me-1"></i>View All
+        </a>
       </div>
     </div>
   </div>

@@ -6754,6 +6754,7 @@ def rec_login():
                 session[RECEPTIONIST_SESSION_KEY] = rec_user['id']
                 session['rec_branch'] = rec_user['branch']
                 session['rec_name'] = rec_user.get('name', username)
+                session['user_type'] = 'rec'  # Add user_type for the decorator
                 flash('Login successful!', 'success')
                 return redirect(url_for('add_walkin_lead'))
             else:
@@ -6767,8 +6768,146 @@ def rec_logout():
     session.pop(RECEPTIONIST_SESSION_KEY, None)
     session.pop('rec_branch', None)
     session.pop('rec_name', None)
+    session.pop('user_type', None)
     flash('Logged out successfully.', 'info')
     return redirect(url_for('rec_login'))
+
+@app.route('/rec_dashboard')
+@require_rec
+def rec_dashboard():
+    """Receptionist Dashboard with KPIs"""
+    if 'rec_branch' not in session:
+        return redirect(url_for('rec_login'))
+    
+    branch = session.get('rec_branch')
+    
+    try:
+        # Calculate KPI counts for the receptionist's branch
+        # Total walk-in leads
+        total_walkin = supabase.table('walkin_table').select('*').eq('branch', branch).execute().data or []
+        total_walkin_count = len(total_walkin)
+        
+        # Won leads
+        won_walkin = supabase.table('walkin_table').select('*').eq('branch', branch).eq('status', 'Won').execute().data or []
+        won_leads_count = len(won_walkin)
+        
+        # Lost leads
+        lost_walkin = supabase.table('walkin_table').select('*').eq('branch', branch).eq('status', 'Lost').execute().data or []
+        lost_leads_count = len(lost_walkin)
+        
+        # Pending leads
+        pending_walkin = supabase.table('walkin_table').select('*').eq('branch', branch).eq('status', 'Pending').execute().data or []
+        pending_leads_count = len(pending_walkin)
+        
+        # Leads assigned (leads that have been assigned to PS)
+        assigned_leads = supabase.table('walkin_table').select('*').eq('branch', branch).not_.is_('ps_assigned', 'null').execute().data or []
+        assigned_leads_count = len(assigned_leads)
+        
+        # Today's walk-in leads
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        today_walkin = supabase.table('walkin_table').select('*').eq('branch', branch).eq('created_at', today_str).execute().data or []
+        today_leads_count = len(today_walkin)
+        
+        # Conversion rate
+        conversion_rate = 0
+        if total_walkin_count > 0:
+            conversion_rate = round((won_leads_count / total_walkin_count) * 100, 2)
+        
+    except Exception as e:
+        print(f"Error calculating receptionist KPIs: {str(e)}")
+        total_walkin_count = won_leads_count = lost_leads_count = pending_leads_count = assigned_leads_count = today_leads_count = conversion_rate = 0
+    
+    # Get all leads for the branch with filtering
+    try:
+        # Get filter parameters
+        ps_filter = request.args.get('ps_filter', '')
+        status_filter = request.args.get('status_filter', '')
+        date_filter = request.args.get('date_filter', '')
+        
+        # Build query
+        query = supabase.table('walkin_table').select('*').eq('branch', branch)
+        
+        if ps_filter:
+            query = query.eq('ps_assigned', ps_filter)
+        if status_filter:
+            query = query.eq('status', status_filter)
+        if date_filter:
+            query = query.eq('created_at', date_filter)
+            
+        all_leads = query.order('created_at', desc=True).execute().data or []
+        
+        # Get unique PS names for filter dropdown
+        ps_names = supabase.table('walkin_table').select('ps_assigned').eq('branch', branch).not_.is_('ps_assigned', 'null').execute().data or []
+        ps_options = list(set([lead['ps_assigned'] for lead in ps_names if lead['ps_assigned']]))
+        
+        # Get unique statuses for filter dropdown
+        statuses = supabase.table('walkin_table').select('status').eq('branch', branch).execute().data or []
+        status_options = list(set([lead['status'] for lead in statuses if lead['status']]))
+        
+    except Exception as e:
+        print(f"Error fetching leads data: {str(e)}")
+        all_leads = []
+        ps_options = []
+        status_options = []
+    
+    return render_template('rec_dashboard.html',
+                         total_walkin_count=total_walkin_count,
+                         won_leads_count=won_leads_count,
+                         lost_leads_count=lost_leads_count,
+                         pending_leads_count=pending_leads_count,
+                         assigned_leads_count=assigned_leads_count,
+                         today_leads_count=today_leads_count,
+                         conversion_rate=conversion_rate,
+                         all_leads=all_leads,
+                         ps_options=ps_options,
+                         status_options=status_options,
+                         current_ps_filter=request.args.get('ps_filter', ''),
+                         current_status_filter=request.args.get('status_filter', ''),
+                         current_date_filter=request.args.get('date_filter', ''))
+
+@app.route('/api/filter_leads')
+@require_rec
+def filter_leads():
+    """AJAX endpoint for filtering leads"""
+    if 'rec_branch' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    branch = session.get('rec_branch')
+    
+    try:
+        # Get filter parameters
+        ps_filter = request.args.get('ps_filter', '')
+        status_filter = request.args.get('status_filter', '')
+        date_filter_type = request.args.get('date_filter_type', '')
+        date_from = request.args.get('date_from', '')
+        date_to = request.args.get('date_to', '')
+        
+        # Build query
+        query = supabase.table('walkin_table').select('*').eq('branch', branch)
+        
+        if ps_filter:
+            query = query.eq('ps_assigned', ps_filter)
+        if status_filter:
+            query = query.eq('status', status_filter)
+        
+        # Handle date filtering
+        if date_filter_type == 'today':
+            today_str = datetime.now().strftime('%Y-%m-%d')
+            query = query.eq('created_at', today_str)
+        elif date_filter_type == 'range' and date_from and date_to:
+            query = query.gte('created_at', date_from).lte('created_at', date_to)
+        elif date_filter_type == 'range' and date_from:
+            query = query.gte('created_at', date_from)
+        elif date_filter_type == 'range' and date_to:
+            query = query.lte('created_at', date_to)
+            
+        all_leads = query.order('created_at', desc=True).execute().data or []
+        
+        return jsonify({'leads': all_leads})
+        
+    except Exception as e:
+        print(f"Error filtering leads: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/add_walkin_lead', methods=['GET', 'POST'])
 @require_rec
