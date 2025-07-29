@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+
+{% block title %}Call History - {{ walkin_lead.customer_name }}{% endblock %}
+
+{% block content %}
+<style>
+  .history-card {
+    background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
+    border: none;
+    border-radius: 20px;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+    overflow: hidden;
+    margin-bottom: 2rem;
+  }
+  
+  .history-card .card-header {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    color: white;
+    border: none;
+    padding: 2rem;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .history-card .card-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(45deg, rgba(255,255,255,0.1) 0%, transparent 50%, rgba(255,255,255,0.1) 100%);
+    animation: shimmer 3s infinite;
+  }
+  
+  @keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+  
+  .history-card .card-header h3 {
+    position: relative;
+    z-index: 1;
+    font-weight: 700;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  }
+  
+  .lead-info {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    border-radius: 20px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    border: none;
+    box-shadow: 0 10px 30px rgba(220, 53, 69, 0.2);
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .lead-info::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(45deg, rgba(255,255,255,0.1) 0%, transparent 50%, rgba(255,255,255,0.1) 100%);
+    animation: shimmer 4s infinite;
+  }
+  
+  .lead-info h5 {
+    color: white;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    position: relative;
+    z-index: 1;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  }
+  
+  .lead-info .row {
+    position: relative;
+    z-index: 1;
+  }
+  
+  .lead-info p {
+    color: white;
+    font-weight: 500;
+    margin-bottom: 0.75rem;
+    font-size: 1rem;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  }
+  
+  .lead-info strong {
+    color: #f8f9fa;
+    font-weight: 700;
+    margin-right: 0.5rem;
+  }
+  
+  .call-item {
+    background: #ffffff;
+    border-radius: 15px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+    border: 1px solid #e9ecef;
+    transition: all 0.3s ease;
+  }
+  
+  .call-item:hover {
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+  }
+  
+  .call-item.completed {
+    border-left: 4px solid #28a745;
+  }
+  
+  .call-item.pending {
+    border-left: 4px solid #ffc107;
+    opacity: 0.7;
+  }
+  
+  .call-number {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    color: white;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    margin-right: 1rem;
+  }
+  
+  .call-status {
+    font-size: 0.8rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 15px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  
+  .status-completed {
+    background: #d4edda;
+    color: #155724;
+  }
+  
+  .status-pending {
+    background: #fff3cd;
+    color: #856404;
+  }
+  
+  .btn-back {
+    background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+    border: none;
+    border-radius: 30px;
+    padding: 0.75rem 2rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(108, 117, 125, 0.4);
+    color: white;
+  }
+  
+  .btn-back:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(108, 117, 125, 0.6);
+    color: white;
+  }
+</style>
+
+<div class="container mt-4">
+  <div class="row justify-content-center">
+    <div class="col-lg-10">
+      <div class="card history-card">
+        <div class="card-header">
+          <h3 class="mb-0">
+            <i class="fas fa-history me-2"></i>Call History
+          </h3>
+        </div>
+        <div class="card-body p-4">
+          
+          <!-- Lead Information -->
+          <div class="lead-info">
+            <h5><i class="fas fa-user-circle me-2"></i>Customer Information</h5>
+            <div class="row">
+              <div class="col-md-6">
+                <div class="info-item">
+                  <p><strong><i class="fas fa-user me-2"></i>Name:</strong> {{ walkin_lead.customer_name }}</p>
+                </div>
+                <div class="info-item">
+                  <p><strong><i class="fas fa-phone me-2"></i>Mobile:</strong> {{ walkin_lead.mobile_number }}</p>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="info-item">
+                  <p><strong><i class="fas fa-flag me-2"></i>Status:</strong> 
+                    <span class="badge {% if walkin_lead.status == 'Won' %}bg-success{% elif walkin_lead.status == 'Lost' %}bg-danger{% else %}bg-warning{% endif %}">
+                      {{ walkin_lead.status }}
+                    </span>
+                  </p>
+                </div>
+                <div class="info-item">
+                  <p><strong><i class="fas fa-info-circle me-2"></i>Lead Status:</strong> 
+                    <span class="badge bg-info">
+                      {{ walkin_lead.lead_status or 'Not Set' }}
+                    </span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Call History -->
+          <h5 class="mb-3"><i class="fas fa-phone me-2"></i>Call Attempts</h5>
+          
+          {% for call in call_history %}
+          <div class="call-item {{ 'completed' if call.status == 'Completed' else 'pending' }}">
+            <div class="row align-items-center">
+              <div class="col-md-1">
+                <div class="call-number">{{ call.call_number }}</div>
+              </div>
+              <div class="col-md-3">
+                <h6 class="mb-1">{{ call.call_type }} Call</h6>
+                <span class="call-status {{ 'status-completed' if call.status == 'Completed' else 'status-pending' }}">
+                  {{ call.status }}
+                </span>
+              </div>
+              <div class="col-md-3">
+                <strong>Date:</strong><br>
+                <span class="text-muted">{{ call.date }}</span>
+              </div>
+              <div class="col-md-5">
+                <strong>Remarks:</strong><br>
+                <span class="text-muted">{{ call.remark }}</span>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+          
+          <!-- Back Button -->
+          <div class="text-center mt-4">
+            <a href="{{ url_for('rec_dashboard') }}" class="btn btn-back">
+              <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} 

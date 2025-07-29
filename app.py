@@ -2795,12 +2795,16 @@ def update_walkin_lead(walkin_id):
             call_remark = request.form.get('call_remark')
             status = request.form.get('status', 'Pending')
             lead_category = request.form.get('lead_category', 'Warm')
+            lead_status = request.form.get('lead_status', '')
+            model_interested = request.form.get('model_interested', '')
             next_followup_date = request.form.get('next_followup_date')
             
             # Update the specific call field based on followup number
             update_data = {
                 'status': status,
                 'lead_category': lead_category,
+                'lead_status': lead_status,
+                'model_interested': model_interested,
                 'followup_no': followup_no,
                 'updated_at': datetime.now().isoformat()
             }
@@ -6799,14 +6803,20 @@ def rec_dashboard():
         pending_walkin = supabase.table('walkin_table').select('*').eq('branch', branch).eq('status', 'Pending').execute().data or []
         pending_leads_count = len(pending_walkin)
         
-        # Leads assigned (leads that have been assigned to PS)
-        assigned_leads = supabase.table('walkin_table').select('*').eq('branch', branch).not_.is_('ps_assigned', 'null').execute().data or []
-        assigned_leads_count = len(assigned_leads)
-        
         # Today's walk-in leads
         today_str = datetime.now().strftime('%Y-%m-%d')
         today_walkin = supabase.table('walkin_table').select('*').eq('branch', branch).eq('created_at', today_str).execute().data or []
         today_leads_count = len(today_walkin)
+        
+        # First call response rate calculation
+        # Get leads that have at least one call recorded
+        leads_with_calls = supabase.table('walkin_table').select('*').eq('branch', branch).not_.is_('first_call_date', 'null').execute().data or []
+        leads_with_calls_count = len(leads_with_calls)
+        
+        # Calculate first call response rate
+        first_call_response_rate = 0
+        if total_walkin_count > 0:
+            first_call_response_rate = round((leads_with_calls_count / total_walkin_count) * 100, 2)
         
         # Conversion rate
         conversion_rate = 0
@@ -6815,7 +6825,7 @@ def rec_dashboard():
         
     except Exception as e:
         print(f"Error calculating receptionist KPIs: {str(e)}")
-        total_walkin_count = won_leads_count = lost_leads_count = pending_leads_count = assigned_leads_count = today_leads_count = conversion_rate = 0
+        total_walkin_count = won_leads_count = lost_leads_count = pending_leads_count = first_call_response_rate = today_leads_count = conversion_rate = 0
     
     # Get all leads for the branch with filtering
     try:
@@ -6855,7 +6865,7 @@ def rec_dashboard():
                          won_leads_count=won_leads_count,
                          lost_leads_count=lost_leads_count,
                          pending_leads_count=pending_leads_count,
-                         assigned_leads_count=assigned_leads_count,
+                         first_call_response_rate=first_call_response_rate,
                          today_leads_count=today_leads_count,
                          conversion_rate=conversion_rate,
                          all_leads=all_leads,
@@ -6908,6 +6918,59 @@ def filter_leads():
     except Exception as e:
         print(f"Error filtering leads: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/view_walkin_call_history/<uid>')
+@require_rec
+def view_walkin_call_history(uid):
+    """View call history for a specific walk-in lead"""
+    if 'rec_branch' not in session:
+        return redirect(url_for('rec_login'))
+    
+    branch = session.get('rec_branch')
+    
+    try:
+        # Get the walk-in lead data
+        walkin_result = supabase.table('walkin_table').select('*').eq('uid', uid).eq('branch', branch).execute()
+        if not walkin_result.data:
+            flash('Walk-in lead not found', 'error')
+            return redirect(url_for('rec_dashboard'))
+        
+        walkin_lead = walkin_result.data[0]
+        
+        # Prepare call history data
+        call_history = []
+        
+        # Check for each call attempt
+        call_fields = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
+        
+        for i, call_type in enumerate(call_fields, 1):
+            call_date = walkin_lead.get(f'{call_type}_call_date')
+            call_remark = walkin_lead.get(f'{call_type}_call_remark')
+            
+            if call_date:
+                call_history.append({
+                    'call_number': i,
+                    'call_type': call_type.title(),
+                    'date': call_date,
+                    'remark': call_remark or 'No remarks',
+                    'status': 'Completed'
+                })
+            else:
+                call_history.append({
+                    'call_number': i,
+                    'call_type': call_type.title(),
+                    'date': 'Not recorded',
+                    'remark': 'No call made yet',
+                    'status': 'Pending'
+                })
+        
+        return render_template('view_walkin_call_history.html',
+                             walkin_lead=walkin_lead,
+                             call_history=call_history)
+        
+    except Exception as e:
+        flash(f'Error viewing call history: {str(e)}', 'error')
+        return redirect(url_for('rec_dashboard'))
 
 @app.route('/add_walkin_lead', methods=['GET', 'POST'])
 @require_rec
@@ -6966,11 +7029,15 @@ def add_walkin_lead():
         except Exception as e:
             flash(f'Error adding walk-in lead: {str(e)}', 'danger')
 
+    # Get receptionist's branch from session
+    rec_branch = session.get('rec_branch', '')
+    
     return render_template(
         'add_walkin_lead.html',
         models=models,
         branches=branches,
-        ps_options_json=ps_options_json
+        ps_options_json=ps_options_json,
+        default_branch=rec_branch
     )
 
 if __name__ == '__main__':
