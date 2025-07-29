@@ -3450,6 +3450,10 @@ def analytics():
 def branch_head_dashboard():
     if 'branch_head_id' not in session:
         return redirect(url_for('index'))
+    
+    # Set user type for dashboard API access
+    session['user_type'] = 'branch_head'
+    
     branch = session.get('branch_head_branch')
     ps_users = supabase.table('ps_users').select('*').eq('branch', branch).execute().data or []
     
@@ -3603,9 +3607,8 @@ def api_branch_head_dashboard_data():
                     'customer_name': row.get('customer_name', ''),
                     'customer_mobile_number': row.get('customer_mobile_number', ''),
                     'final_status': row.get('final_status', ''),
-                    'source': row.get('source', ''),
-                    'lead_status': row.get('lead_status', ''),
-                    'ps_name': row.get('ps_name', '')
+                    'ps_name': row.get('ps_name', ''),
+                    'created_at': row.get('created_at', '')
                 }
             for row in all_rows
             if (not row.get('first_call_date') or str(row.get('first_call_date')).strip() == '')
@@ -6466,6 +6469,8 @@ def get_dashboards():
         
         # Filter dashboards based on user role
         user_type = session.get('user_type', 'admin')
+        print(f"DEBUG: User type in session: {user_type}")
+        print(f"DEBUG: Available dashboard types: {list(grouped_dashboards.keys())}")
         
         if user_type == 'cre':
             # CRE users can only see CRE dashboards
@@ -6476,6 +6481,7 @@ def get_dashboards():
         elif user_type == 'branch_head':
             # Branch Head users can only see Branch Head dashboards
             filtered_dashboards = {'branch-head': grouped_dashboards.get('branch-head', [])}
+            print(f"DEBUG: Branch head dashboards found: {len(grouped_dashboards.get('branch-head', []))}")
         else:
             # Admin users can see all dashboards
             filtered_dashboards = grouped_dashboards
