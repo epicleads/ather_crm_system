@@ -1,0 +1,590 @@
+{% extends 'base.html' %}
+{% block title %}Receptionist Dashboard - Ather CRM{% endblock %}
+{% block content %}
+
+<style>
+  .hero-header {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 50%, #bd2130 100%);
+    color: white;
+    padding: 1.5rem 0;
+    margin-bottom: 2rem;
+    border-radius: 0 0 20px 20px;
+    box-shadow: 0 8px 25px rgba(220, 53, 69, 0.3);
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .hero-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%);
+    animation: shimmer 3s infinite;
+  }
+  
+  @keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+  
+  .kpi-card {
+    background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
+    border: none;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+    overflow: hidden;
+  }
+  
+  .kpi-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 40px rgba(0,0,0,0.15);
+  }
+  
+  .kpi-card.won {
+    border-left: 5px solid #28a745;
+  }
+  
+  .kpi-card.lost {
+    border-left: 5px solid #dc3545;
+  }
+  
+  .kpi-card.pending {
+    border-left: 5px solid #ffc107;
+  }
+  
+  .kpi-card.assigned {
+    border-left: 5px solid #007bff;
+  }
+  
+  .kpi-card.total {
+    border-left: 5px solid #17a2b8;
+  }
+  
+  .kpi-card.today {
+    border-left: 5px solid #6f42c1;
+  }
+  
+  .kpi-card.conversion {
+    border-left: 5px solid #fd7e14;
+  }
+  
+  .bg-gradient-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+  
+  .table th {
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    letter-spacing: 0.5px;
+  }
+  
+  .table td {
+    vertical-align: middle;
+  }
+  
+  .form-select.border-2, .form-control.border-2 {
+    border-width: 2px !important;
+    transition: all 0.3s ease;
+  }
+  
+  .form-select.border-2:focus, .form-control.border-2:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+  }
+  
+  .card.shadow-sm {
+    transition: all 0.3s ease;
+  }
+  
+  .card.shadow-sm:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15) !important;
+  }
+  
+  .badge {
+    font-size: 0.75rem;
+    padding: 0.5em 0.75em;
+  }
+  
+  .btn-outline-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  }
+  
+  .kpi-number {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+  }
+  
+  .kpi-label {
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    opacity: 0.8;
+  }
+  
+  .action-card {
+    background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
+    border: none;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+  }
+  
+  .action-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 15px 40px rgba(0,0,0,0.15);
+  }
+  
+  .btn-action {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    border: none;
+    border-radius: 25px;
+    padding: 1rem 2rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(220, 53, 69, 0.4);
+  }
+  
+  .btn-action:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(220, 53, 69, 0.6);
+    background: linear-gradient(135deg, #c82333 0%, #bd2130 100%);
+  }
+</style>
+
+<div class="hero-header">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-md-8 text-center">
+        <h2 class="h3 fw-bold mb-2">
+          Receptionist Dashboard
+        </h2>
+        <p class="lead mb-0">Welcome, {{ session.rec_name }} - {{ session.rec_branch }} Branch</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <!-- KPI Cards Row -->
+  <div class="row mb-4">
+    <div class="col-md-4 mb-3">
+      <div class="card kpi-card total text-center">
+        <div class="card-body">
+          <div class="kpi-number text-info">{{ total_walkin_count }}</div>
+          <div class="kpi-label">Total Walk-in Leads</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4 mb-3">
+      <div class="card kpi-card won text-center">
+        <div class="card-body">
+          <div class="kpi-number text-success">{{ won_leads_count }}</div>
+          <div class="kpi-label">Won Leads</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4 mb-3">
+      <div class="card kpi-card lost text-center">
+        <div class="card-body">
+          <div class="kpi-number text-danger">{{ lost_leads_count }}</div>
+          <div class="kpi-label">Lost Leads</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Second Row of KPI Cards -->
+  <div class="row mb-4">
+    <div class="col-md-3 mb-3">
+      <div class="card kpi-card pending text-center">
+        <div class="card-body">
+          <div class="kpi-number text-warning">{{ pending_leads_count }}</div>
+          <div class="kpi-label">Pending Leads</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3 mb-3">
+      <div class="card kpi-card assigned text-center">
+        <div class="card-body">
+          <div class="kpi-number text-primary">{{ assigned_leads_count }}</div>
+          <div class="kpi-label">Leads Assigned</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3 mb-3">
+      <div class="card kpi-card today text-center">
+        <div class="card-body">
+          <div class="kpi-number text-purple">{{ today_leads_count }}</div>
+          <div class="kpi-label">Today's Leads</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3 mb-3">
+      <div class="card kpi-card conversion text-center">
+        <div class="card-body">
+          <div class="kpi-number text-orange">{{ conversion_rate }}%</div>
+          <div class="kpi-label">Conversion Rate</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Action Card Row -->
+  <div class="row">
+    <div class="col-md-12 mb-4">
+      <div class="card action-card">
+        <div class="card-body text-center">
+          <h5 class="card-title mb-3">Add New Walk-in Lead</h5>
+          <p class="card-text mb-4">Register a new customer who walked into the showroom</p>
+          <a href="{{ url_for('add_walkin_lead') }}" class="btn btn-action text-white">
+            <i class="fas fa-plus me-2"></i>Add Walk-in Lead
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Quick Stats -->
+  <div class="row mt-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header bg-light">
+          <h5 class="mb-0">Quick Statistics</h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-3 text-center">
+              <div class="border-end">
+                <h6 class="text-muted">Total Leads</h6>
+                <h4 class="text-primary">{{ total_walkin_count }}</h4>
+              </div>
+            </div>
+            <div class="col-md-3 text-center">
+              <div class="border-end">
+                <h6 class="text-muted">Success Rate</h6>
+                <h4 class="text-success">{{ conversion_rate }}%</h4>
+              </div>
+            </div>
+            <div class="col-md-3 text-center">
+              <div class="border-end">
+                <h6 class="text-muted">Pending</h6>
+                <h4 class="text-warning">{{ pending_leads_count }}</h4>
+              </div>
+            </div>
+            <div class="col-md-3 text-center">
+              <div>
+                <h6 class="text-muted">Today</h6>
+                <h4 class="text-info">{{ today_leads_count }}</h4>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leads Section -->
+  <div id="leads-section" class="row mt-4">
+    <div class="col-12">
+      <div class="card shadow-sm">
+        <div class="card-header bg-gradient-primary text-white d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">
+            <i class="fas fa-list me-2"></i>All Walk-in Leads
+          </h5>
+          <span class="badge bg-light text-dark" id="leadsCount">{{ all_leads|length }} leads</span>
+        </div>
+        <div class="card-body">
+          <!-- Filters -->
+          <div class="row mb-4">
+            <div class="col-md-3 mb-2">
+              <label class="form-label fw-bold text-muted">
+                <i class="fas fa-user-tie me-1"></i>Filter by PS:
+              </label>
+              <select class="form-select border-2" id="psFilter">
+                <option value="">All PS</option>
+                {% for ps in ps_options %}
+                <option value="{{ ps }}" {% if ps == current_ps_filter %}selected{% endif %}>{{ ps }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3 mb-2">
+              <label class="form-label fw-bold text-muted">
+                <i class="fas fa-flag me-1"></i>Filter by Status:
+              </label>
+              <select class="form-select border-2" id="statusFilter">
+                <option value="">All Status</option>
+                {% for status in status_options %}
+                <option value="{{ status }}" {% if status == current_status_filter %}selected{% endif %}>{{ status }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3 mb-2">
+              <label class="form-label fw-bold text-muted">
+                <i class="fas fa-calendar me-1"></i>Filter by Date:
+              </label>
+              <select class="form-select border-2" id="dateFilterType" onchange="toggleDateRange()">
+                <option value="">All Time</option>
+                <option value="today">Today</option>
+                <option value="range">Date Range</option>
+              </select>
+            </div>
+            <div class="col-md-3 mb-2" id="dateRangeContainer" style="display: none;">
+              <label class="form-label fw-bold text-muted">
+                <i class="fas fa-calendar-alt me-1"></i>Date Range:
+              </label>
+              <div class="row g-2">
+                <div class="col-6">
+                  <input type="date" class="form-control border-2" id="dateFrom" placeholder="From">
+                </div>
+                <div class="col-6">
+                  <input type="date" class="form-control border-2" id="dateTo" placeholder="To">
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3 mb-2 d-flex align-items-end">
+              <button class="btn btn-outline-danger w-100" onclick="clearFilters()">
+                <i class="fas fa-times me-1"></i>Clear All Filters
+              </button>
+            </div>
+          </div>
+
+          <!-- Loading Spinner -->
+          <div id="loadingSpinner" class="text-center d-none">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2 text-muted">Filtering leads...</p>
+          </div>
+
+          <!-- Leads Table -->
+          <div class="table-responsive" id="leadsTableContainer">
+            <table class="table table-hover table-striped">
+              <thead class="table-dark">
+                <tr>
+                  <th><i class="fas fa-hashtag me-1"></i>UID</th>
+                  <th><i class="fas fa-user me-1"></i>Customer Name</th>
+                  <th><i class="fas fa-phone me-1"></i>Mobile</th>
+                  <th><i class="fas fa-envelope me-1"></i>Email</th>
+                  <th><i class="fas fa-motorcycle me-1"></i>Model Interested</th>
+                  <th><i class="fas fa-user-tie me-1"></i>PS Assigned</th>
+                  <th><i class="fas fa-flag me-1"></i>Status</th>
+                  <th><i class="fas fa-calendar me-1"></i>Created At</th>
+                </tr>
+              </thead>
+              <tbody id="leadsTableBody">
+                {% if all_leads %}
+                  {% for lead in all_leads %}
+                  <tr>
+                    <td><span class="badge bg-secondary">{{ lead.uid }}</span></td>
+                    <td><strong>{{ lead.customer_name }}</strong></td>
+                    <td>{{ lead.mobile_number }}</td>
+                    <td>{{ lead.email or '-' }}</td>
+                    <td>{{ lead.model_interested }}</td>
+                    <td>
+                      {% if lead.ps_assigned %}
+                        <span class="badge bg-info">{{ lead.ps_assigned }}</span>
+                      {% else %}
+                        <span class="badge bg-warning">Not Assigned</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if lead.status == 'Won' %}
+                        <span class="badge bg-success">{{ lead.status }}</span>
+                      {% elif lead.status == 'Lost' %}
+                        <span class="badge bg-danger">{{ lead.status }}</span>
+                      {% elif lead.status == 'Pending' %}
+                        <span class="badge bg-warning">{{ lead.status }}</span>
+                      {% else %}
+                        <span class="badge bg-secondary">{{ lead.status }}</span>
+                      {% endif %}
+                    </td>
+                    <td>{{ lead.created_at[:10] if lead.created_at else '-' }}</td>
+                  </tr>
+                  {% endfor %}
+                {% else %}
+                  <tr>
+                    <td colspan="8" class="text-center text-muted py-4">
+                      <i class="fas fa-inbox fa-2x mb-2"></i>
+                      <p class="mb-0">No leads found</p>
+                    </td>
+                  </tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let filterTimeout;
+
+function applyFilters() {
+  // Clear previous timeout to prevent multiple requests
+  clearTimeout(filterTimeout);
+  
+  // Set a new timeout to delay the request (debouncing)
+  filterTimeout = setTimeout(() => {
+    const psFilter = document.getElementById('psFilter').value;
+    const statusFilter = document.getElementById('statusFilter').value;
+    const dateFilterType = document.getElementById('dateFilterType').value;
+    const dateFrom = document.getElementById('dateFrom').value;
+    const dateTo = document.getElementById('dateTo').value;
+    
+    // Show loading spinner
+    document.getElementById('loadingSpinner').classList.remove('d-none');
+    document.getElementById('leadsTableContainer').classList.add('d-none');
+    
+    // Build URL with filter parameters
+    const params = new URLSearchParams();
+    if (psFilter) params.append('ps_filter', psFilter);
+    if (statusFilter) params.append('status_filter', statusFilter);
+    if (dateFilterType) params.append('date_filter_type', dateFilterType);
+    if (dateFrom) params.append('date_from', dateFrom);
+    if (dateTo) params.append('date_to', dateTo);
+    
+    const url = '/api/filter_leads?' + params.toString();
+    
+    // Fetch filtered data
+    fetch(url)
+      .then(response => response.json())
+      .then(data => {
+        if (data.error) {
+          console.error('Error:', data.error);
+          return;
+        }
+        
+        updateLeadsTable(data.leads);
+        document.getElementById('leadsCount').textContent = data.leads.length + ' leads';
+      })
+      .catch(error => {
+        console.error('Error fetching leads:', error);
+      })
+      .finally(() => {
+        // Hide loading spinner and show table
+        document.getElementById('loadingSpinner').classList.add('d-none');
+        document.getElementById('leadsTableContainer').classList.remove('d-none');
+      });
+  }, 300); // 300ms delay for better UX
+}
+
+function updateLeadsTable(leads) {
+  const tbody = document.getElementById('leadsTableBody');
+  
+  if (leads.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" class="text-center text-muted py-4">
+          <i class="fas fa-inbox fa-2x mb-2"></i>
+          <p class="mb-0">No leads found</p>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+  
+  tbody.innerHTML = leads.map(lead => `
+    <tr>
+      <td><span class="badge bg-secondary">${lead.uid || '-'}</span></td>
+      <td><strong>${lead.customer_name || '-'}</strong></td>
+      <td>${lead.mobile_number || '-'}</td>
+      <td>${lead.email || '-'}</td>
+      <td>${lead.model_interested || '-'}</td>
+      <td>
+        ${lead.ps_assigned ? 
+          `<span class="badge bg-info">${lead.ps_assigned}</span>` : 
+          `<span class="badge bg-warning">Not Assigned</span>`
+        }
+      </td>
+      <td>
+        ${getStatusBadge(lead.status)}
+      </td>
+                          <td>${lead.created_at ? lead.created_at.substring(0, 10) : '-'}</td>
+    </tr>
+  `).join('');
+}
+
+function getStatusBadge(status) {
+  if (status === 'Won') {
+    return '<span class="badge bg-success">Won</span>';
+  } else if (status === 'Lost') {
+    return '<span class="badge bg-danger">Lost</span>';
+  } else if (status === 'Pending') {
+    return '<span class="badge bg-warning">Pending</span>';
+  } else {
+    return `<span class="badge bg-secondary">${status || '-'}</span>`;
+  }
+}
+
+function toggleDateRange() {
+  const dateFilterType = document.getElementById('dateFilterType').value;
+  const dateRangeContainer = document.getElementById('dateRangeContainer');
+  
+  if (dateFilterType === 'range') {
+    dateRangeContainer.style.display = 'block';
+  } else {
+    dateRangeContainer.style.display = 'none';
+    document.getElementById('dateFrom').value = '';
+    document.getElementById('dateTo').value = '';
+  }
+  
+  applyFilters();
+}
+
+function clearFilters() {
+  document.getElementById('psFilter').value = '';
+  document.getElementById('statusFilter').value = '';
+  document.getElementById('dateFilterType').value = '';
+  document.getElementById('dateFrom').value = '';
+  document.getElementById('dateTo').value = '';
+  document.getElementById('dateRangeContainer').style.display = 'none';
+  applyFilters();
+}
+
+function viewLeadDetails(uid) {
+  // You can implement a modal or redirect to a detailed view
+  alert('Lead details for UID: ' + uid + '\n\nThis feature can be expanded to show detailed lead information in a modal or separate page.');
+}
+
+// Add event listeners for real-time filtering
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('psFilter').addEventListener('change', applyFilters);
+  document.getElementById('statusFilter').addEventListener('change', applyFilters);
+  document.getElementById('dateFrom').addEventListener('change', applyFilters);
+  document.getElementById('dateTo').addEventListener('change', applyFilters);
+});
+</script>
+
+<script>
+  // Add some interactive effects
+  document.addEventListener('DOMContentLoaded', function() {
+    // Animate KPI cards on load
+    const kpiCards = document.querySelectorAll('.kpi-card');
+    kpiCards.forEach((card, index) => {
+      setTimeout(() => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        card.style.transition = 'all 0.5s ease';
+        
+        setTimeout(() => {
+          card.style.opacity = '1';
+          card.style.transform = 'translateY(0)';
+        }, 100);
+      }, index * 100);
+    });
+  });
+</script>
+
+{% endblock %} 
