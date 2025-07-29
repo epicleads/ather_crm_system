@@ -88,11 +88,7 @@
             </div>
         </div>
         <div class="col">
-<<<<<<< HEAD
             <div class="card text-center bg-success text-white mb-2"><div class="card-body p-2">Walk-in<br><span class="h5" id="walkinLeadsKPI">{{ walkin_leads_count }}</span></div></div>
-=======
-    
->>>>>>> fb9d1756b2688538844b1a9434851c1dc64395db
         </div>
         <div class="col">
             <div class="card text-center bg-info text-white mb-2"><div class="card-body p-2">CRE Assigned<br><span class="h5" id="creAssignedLeadsKPI">{{ cre_assigned_leads_count }}</span></div></div>
@@ -177,7 +173,6 @@
                 </div>
             </div>
         </div>
-<<<<<<< HEAD
         <!-- Walk-in Leads Tab -->
         <div class="tab-pane fade" id="walkin" role="tabpanel">
             <div class="card mb-3">
@@ -223,10 +218,6 @@
                 </div>
             </div>
         </div>
-
-=======
-
-
 
         <div class="modal fade" id="journeyModal-{{ lead.uid }}" tabindex="-1" aria-labelledby="journeyModalLabel-{{ lead.uid }}" aria-hidden="true">
           <div class="modal-dialog modal-xl">
@@ -278,10 +269,8 @@
           </div>
         </div>
         {% endfor %}
->>>>>>> fb9d1756b2688538844b1a9434851c1dc64395db
+        
         <!-- Pagination controls -->
-
-        <!-- (Pagination is now handled by JS) -->
         <!-- CRE Assigned Leads Tab -->
         <div class="tab-pane fade" id="creassigned" role="tabpanel">
             <div class="card mb-3">
@@ -596,16 +585,12 @@ const sectionConfig = {
     pagination: 'freshLeadsPagination',
     columns: ['uid', 'customer_name', 'customer_mobile_number', 'final_status', 'ps_name', 'created_at', 'branch']
   },
-<<<<<<< HEAD
   walkin_leads: {
     tab: 'walkin-tab',
     tbody: 'walkinLeadsTableBody',
     pagination: 'walkinLeadsPagination',
     columns: ['uid', 'customer_name', 'customer_mobile_number', 'customer_email', 'model_interested', 'lead_source', 'status', 'ps_name', 'created_at']
   },
-=======
-
->>>>>>> fb9d1756b2688538844b1a9434851c1dc64395db
   cre_assigned_leads: {
     tab: 'creassigned-tab',
     tbody: 'creAssignedLeadsTableBody',
@@ -656,100 +641,8 @@ function loadSection(section, page = 1, per_page = 25) {
       return res.json();
     })
     .then(data => {
-<<<<<<< HEAD
       // Update all KPI counts
       updateAllKPIs(data);
-      
-=======
-      if (section === 'fresh_leads') {
-        // Show all rows, including those with final_status 'Pending'
-        const filteredRows = data.rows || [];
-        document.getElementById('freshLeadsKPI').textContent = data.fresh_leads_count || 0;
-        if (tbody) {
-          if (filteredRows.length > 0) {
-            tbody.innerHTML = '';
-            filteredRows.forEach(row => {
-              const tr = document.createElement('tr');
-              tr.innerHTML = sectionConfig.fresh_leads.columns.map(col => `<td>${row[col] || ''}</td>`).join('');
-              tbody.appendChild(tr);
-            });
-          } else {
-            tbody.innerHTML = `<tr><td colspan="${sectionConfig.fresh_leads.columns.length}">No data found.</td></tr>`;
-          }
-        }
-        // Pagination controls (unchanged)
-        let pagDiv = document.getElementById(sectionConfig.fresh_leads.pagination);
-        if (!pagDiv) {
-          pagDiv = document.createElement('div');
-          pagDiv.id = sectionConfig.fresh_leads.pagination;
-          tbody.parentElement.appendChild(pagDiv);
-        }
-        let html = '';
-        for (let p = 1; p <= data.total_pages; p++) {
-          html += `<button onclick="loadSection('fresh_leads', ${p}, ${data.per_page})" ${p === data.page ? 'disabled' : ''}>${p}</button> `;
-        }
-        pagDiv.innerHTML = html;
-        return; // Don't run the generic code below for fresh_leads
-      }
-
-      if (section === 'cre_assigned_leads') {
-        document.getElementById('creAssignedLeadsKPI').textContent = data.cre_assigned_leads_count || 0;
-        if (tbody) {
-          if (data.rows && data.rows.length > 0) {
-            tbody.innerHTML = '';
-            data.rows.forEach(row => {
-              const tr = document.createElement('tr');
-              tr.innerHTML = sectionConfig.cre_assigned_leads.columns.map(col => {
-                if (col === 'journey') {
-                  return `<td><button class='btn btn-sm btn-primary'>Journey</button></td>`;
-                } else {
-                  return `<td>${row[col] || ''}</td>`;
-                }
-              }).join('');
-              tbody.appendChild(tr);
-            });
-          } else {
-            tbody.innerHTML = `<tr><td colspan="${sectionConfig.cre_assigned_leads.columns.length}">No data found.</td></tr>`;
-          }
-        }
-        // Pagination controls (unchanged)
-        let pagDiv = document.getElementById(sectionConfig.cre_assigned_leads.pagination);
-        if (!pagDiv) {
-          pagDiv = document.createElement('div');
-          pagDiv.id = sectionConfig.cre_assigned_leads.pagination;
-          tbody.parentElement.appendChild(pagDiv);
-        }
-        let html = '';
-        for (let p = 1; p <= data.total_pages; p++) {
-          html += `<button onclick=\"loadSection('cre_assigned_leads', ${p}, ${data.per_page})\" ${p === data.page ? 'disabled' : ''}>${p}</button> `;
-        }
-        pagDiv.innerHTML = html;
-        return;
-      }
-      if (section === 'pending_leads') {
-        document.getElementById('pendingLeadsKPI').textContent = data.pending_leads_count || 0;
-        document.getElementById('pendingLeadsKPI_CRE').textContent = data.pending_leads_cre_assigned_count || 0;
-        document.getElementById('pendingLeadsKPI_Event').textContent = data.pending_leads_event_count || 0;
-
-        if (tbody) {
-          if (data.rows && data.rows.length > 0) {
-            tbody.innerHTML = '';
-            data.rows.forEach(row => {
-              const tr = document.createElement('tr');
-              let uid = row.uid || row.lead_uid || row.activity_uid || '';
-              let assignedTime = row.ps_assigned_at || row.created_at || '';
-              tr.innerHTML = `
-                <td><button class='btn btn-sm btn-primary'>Journey</button></td>
-                <td>${uid}</td>
-                <td>${row.customer_name || ''}</td>
-                <td>${row.customer_mobile_number || ''}</td>
-                <td>${row.final_status || ''}</td>
-                <td>${row.source_type || ''}</td>
-                <td>${assignedTime}</td>
-                <td>${row.ps_name || ''}</td>
-              `;
-              tbody.appendChild(tr);
-            });
           } else {
             tbody.innerHTML = `<tr><td colspan="8">No data found.</td></tr>`;
           }
@@ -894,7 +787,7 @@ function loadSection(section, page = 1, per_page = 25) {
         pagDiv.innerHTML = html;
         return;
       }
->>>>>>> fb9d1756b2688538844b1a9434851c1dc64395db
+      
       if (tbody) {
         if (data.rows && data.rows.length > 0) {
         tbody.innerHTML = '';
@@ -934,7 +827,6 @@ function loadSection(section, page = 1, per_page = 25) {
 
 // Initial load
 window.addEventListener('DOMContentLoaded', function() {
-<<<<<<< HEAD
   // Load fresh leads by default
   loadSection('fresh_leads', 1);
   
@@ -943,23 +835,10 @@ window.addEventListener('DOMContentLoaded', function() {
     tab.addEventListener('click', function(e) {
       const target = this.getAttribute('href').substring(1);
       const section = target.replace('-', '_');
-=======
-  // List all your section keys here
-  const sections = [
-    'fresh_leads',
-    
-    'cre_assigned_leads',
-    'pending_leads',
-    'followup_leads',
-    'event_leads',
-    'won_leads',
-    'lost_leads'
-  ];
-  sections.forEach(section => {
->>>>>>> fb9d1756b2688538844b1a9434851c1dc64395db
-    loadSection(section, 1);
+      loadSection(section, 1);
     });
   });
+  
   // Fresh Leads rows per page Apply button
   const freshApplyBtn = document.getElementById('freshLeadsApplyBtn');
   if (freshApplyBtn) {
