@@ -6834,6 +6834,99 @@ def add_walkin_lead():
         ps_options_json=ps_options_json
     )
 
+@app.route('/rec_assigned_leads')
+@require_rec
+def rec_assigned_leads():
+    """Display leads assigned by receptionist to PS users"""
+    try:
+        # Get receptionist's branch
+        rec_branch = session.get('rec_branch')
+        rec_name = session.get('rec_name')
+        
+        if not rec_branch:
+            flash('Branch information not found. Please contact administrator.', 'error')
+            return redirect(url_for('add_walkin_lead'))
+        
+        # Get all walk-in leads for this branch
+        walkin_leads = safe_get_data('walkin_table', {'branch': rec_branch})
+        
+        if not walkin_leads:
+            flash('No walk-in leads found for your branch.', 'info')
+            return render_template(
+                'rec_assigned_leads.html',
+                assigned_leads=[],
+                leads_by_ps={},
+                ps_names=[],
+                total_leads=0,
+                pending_leads=0,
+                won_leads=0,
+                lost_leads=0,
+                rec_name=rec_name,
+                rec_branch=rec_branch
+            )
+        
+        # Filter leads that have PS assigned (not empty)
+        assigned_leads = []
+        for lead in walkin_leads:
+            if lead.get('ps_assigned'):
+                lead_dict = dict(lead)
+                # Add additional computed fields
+                try:
+                    created_at = lead.get('created_at', datetime.now().isoformat())
+                    lead_dict['days_since_created'] = (datetime.now() - datetime.fromisoformat(created_at)).days
+                except:
+                    lead_dict['days_since_created'] = 0
+                lead_dict['status_color'] = get_status_color(lead.get('status', 'Pending'))
+                assigned_leads.append(lead_dict)
+        
+        # Sort by creation date (newest first)
+        assigned_leads.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        
+        # Get PS users for this branch
+        ps_users = safe_get_data('ps_users', {'branch': rec_branch})
+        ps_names = [ps['name'] for ps in ps_users] if ps_users else []
+        
+        # Group leads by PS
+        leads_by_ps = {}
+        for ps_name in ps_names:
+            leads_by_ps[ps_name] = [lead for lead in assigned_leads if lead.get('ps_assigned') == ps_name]
+        
+        # Get summary statistics
+        total_leads = len(assigned_leads)
+        pending_leads = len([lead for lead in assigned_leads if lead.get('status') == 'Pending'])
+        won_leads = len([lead for lead in assigned_leads if lead.get('status') == 'Won'])
+        lost_leads = len([lead for lead in assigned_leads if lead.get('status') == 'Lost'])
+        
+        return render_template(
+            'rec_assigned_leads.html',
+            assigned_leads=assigned_leads,
+            leads_by_ps=leads_by_ps,
+            ps_names=ps_names,
+            total_leads=total_leads,
+            pending_leads=pending_leads,
+            won_leads=won_leads,
+            lost_leads=lost_leads,
+            rec_name=rec_name,
+            rec_branch=rec_branch
+        )
+        
+    except Exception as e:
+        print(f"Error in rec_assigned_leads: {str(e)}")
+        flash(f'Error loading assigned leads: {str(e)}', 'error')
+        return redirect(url_for('add_walkin_lead'))
+
+
+def get_status_color(status):
+    """Get Bootstrap color class for status"""
+    status_colors = {
+        'Pending': 'warning',
+        'Won': 'success',
+        'Lost': 'danger',
+        'In Progress': 'info'
+    }
+    return status_colors.get(status, 'secondary')
+
+
 if __name__ == '__main__':
     # socketio.run(app, debug=True)
     print(" Starting Ather CRM System...")
