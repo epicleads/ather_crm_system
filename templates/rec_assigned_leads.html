@@ -1,0 +1,733 @@
+{% extends 'base.html' %}
+{% block content %}
+<style>
+  .hero-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 2rem 0;
+    margin-bottom: 2rem;
+    border-radius: 0 0 20px 20px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  }
+  
+  .stats-card {
+    background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease;
+  }
+  
+  .stats-card:hover {
+    transform: translateY(-2px);
+  }
+  
+  .table-card {
+    background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
+    border: none;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    overflow: hidden;
+  }
+  
+  .table-card .card-header {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: white;
+    border: none;
+    padding: 1.5rem;
+  }
+  
+  .table-responsive {
+    border-radius: 0 0 20px 20px;
+  }
+  
+  .table th {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: none;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 0.85rem;
+  }
+  
+  .table td {
+    border: none;
+    border-bottom: 1px solid #e9ecef;
+    vertical-align: middle;
+  }
+  
+  .status-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  
+  .filter-section {
+    background: linear-gradient(145deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 15px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  
+  .btn-filter {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    border-radius: 25px;
+    padding: 0.5rem 1.5rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+  }
+  
+  .btn-filter:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  }
+  
+  .ps-section {
+    margin-bottom: 2rem;
+  }
+  
+  .ps-header {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: white;
+    padding: 1rem 1.5rem;
+    border-radius: 15px 15px 0 0;
+    font-weight: 600;
+  }
+  
+  .ps-count {
+    background: rgba(255,255,255,0.2);
+    padding: 0.25rem 0.75rem;
+    border-radius: 15px;
+    font-size: 0.85rem;
+  }
+  
+  /* Horizontal PS Tabs Styles */
+  .ps-tabs-container {
+    background: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    overflow-x: auto;
+  }
+  
+  .ps-tabs-scroll {
+    min-width: 100%;
+    padding: 0 0.5rem;
+  }
+  
+  .ps-tabs {
+    display: flex;
+    gap: 0.25rem;
+    padding: 0.4rem 0;
+    min-width: max-content;
+  }
+  
+  .ps-tab {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 12px;
+    padding: 0.3rem 0.6rem;
+    font-weight: 500;
+    color: #6c757d;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: auto;
+    white-space: nowrap;
+    font-size: 0.8rem;
+  }
+  
+  .ps-tab:hover {
+    border-color: #4facfe;
+    color: #4facfe;
+    background-color: #f8f9ff;
+  }
+  
+  .ps-tab.active {
+    background: #4facfe;
+    border-color: #4facfe;
+    color: white;
+    box-shadow: 0 1px 3px rgba(79, 172, 254, 0.3);
+  }
+  
+  .ps-tab .ps-name {
+    font-size: 0.8rem;
+    font-weight: 500;
+  }
+  
+  .ps-tab .ps-count {
+    background: rgba(255,255,255,0.2);
+    padding: 0.1rem 0.3rem;
+    border-radius: 6px;
+    font-size: 0.65rem;
+    font-weight: 600;
+  }
+  
+  @media (max-width: 768px) {
+    .ps-tabs {
+      gap: 0.2rem;
+      padding: 0.3rem 0;
+    }
+    
+    .ps-tab {
+      padding: 0.25rem 0.5rem;
+    }
+    
+    .ps-tab .ps-name {
+      font-size: 0.75rem;
+    }
+    
+    .ps-tab .ps-count {
+      font-size: 0.6rem;
+      padding: 0.08rem 0.25rem;
+    }
+    
+    .filter-section .d-flex {
+      flex-direction: column;
+      gap: 0.5rem !important;
+    }
+    
+    .filter-section .d-flex input[type="date"] {
+      width: 100%;
+    }
+  }
+  
+  .ps-content-container {
+    position: relative;
+  }
+  
+  .ps-content {
+    display: none;
+    animation: fadeIn 0.3s ease-in-out;
+  }
+  
+  .ps-content.active {
+    display: block;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  /* Scroll indicator */
+  .ps-tabs-scroll::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 30px;
+    background: linear-gradient(to right, transparent, rgba(248, 249, 250, 0.9));
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  
+  .ps-tabs-scroll.has-overflow::after {
+    opacity: 1;
+  }
+</style>
+
+<div class="hero-header">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-md-8 text-center">
+        <h4 class="fw-bold mb-2">
+          <i class="fas fa-users me-2"></i>Assigned Leads
+        </h4>
+        <p class="mb-0">{{ rec_name }} - {{ rec_branch }}</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <!-- Statistics Cards -->
+  <div class="row mb-3">
+    <div class="col-md-3">
+      <div class="card stats-card text-center">
+        <div class="card-body py-2">
+          <h5 class="text-primary mb-1">{{ total_leads }}</h5>
+          <small class="text-muted">Total</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card stats-card text-center">
+        <div class="card-body py-2">
+          <h5 class="text-warning mb-1">{{ pending_leads }}</h5>
+          <small class="text-muted">Pending</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card stats-card text-center">
+        <div class="card-body py-2">
+          <h5 class="text-success mb-1">{{ won_leads }}</h5>
+          <small class="text-muted">Won</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card stats-card text-center">
+        <div class="card-body py-2">
+          <h5 class="text-danger mb-1">{{ lost_leads }}</h5>
+          <small class="text-muted">Lost</small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filter Section -->
+  <div class="filter-section">
+    <div class="row align-items-end">
+      <div class="col-md-2 col-sm-6 mb-2">
+        <label class="form-label fw-bold small">Filter by PS:</label>
+        <select class="form-select form-select-sm" id="ps-filter" aria-label="Filter by PS">
+          <option value="">All PS</option>
+          {% for ps_name in ps_names %}
+          <option value="{{ ps_name }}">{{ ps_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2 col-sm-6 mb-2">
+        <label class="form-label fw-bold small">Filter by Status:</label>
+        <select class="form-select form-select-sm" id="status-filter" aria-label="Filter by Status">
+          <option value="">All Status</option>
+          <option value="Pending">Pending</option>
+          <option value="Won">Won</option>
+          <option value="Lost">Lost</option>
+        </select>
+      </div>
+      <div class="col-md-2 col-sm-6 mb-2">
+        <label class="form-label fw-bold small">Quick Filters:</label>
+        <select class="form-select form-select-sm" id="quick-date-filter" aria-label="Quick Date Filter">
+          <option value="">Select Filter</option>
+          <option value="today">Today</option>
+          <option value="week">This Week</option>
+          <option value="month">This Month</option>
+          <option value="range">Date Range</option>
+          <option value="all">All Time</option>
+        </select>
+      </div>
+      <div class="col-md-4 col-sm-12 mb-2" id="date-range-container" style="display: none;">
+        <label class="form-label fw-bold small">Date Range:</label>
+        <div class="d-flex gap-1">
+          <input type="date" class="form-control form-control-sm" id="date-from" placeholder="From">
+          <input type="date" class="form-control form-control-sm" id="date-to" placeholder="To">
+        </div>
+      </div>
+      <div class="col-md-2 col-sm-6 mb-2">
+        <button class="btn btn-filter btn-sm w-100" onclick="resetFilters()">
+          <i class="fas fa-refresh me-1"></i>Reset
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Navigation -->
+  <div class="text-center mb-4">
+    <a href="{{ url_for('add_walkin_lead') }}" class="btn btn-primary">
+      <i class="fas fa-plus-circle me-2"></i>Add New Lead
+    </a>
+  </div>
+
+  <!-- All Leads Table View -->
+  <div class="card table-card" id="all-leads-view">
+    <div class="card-header">
+      <h4 class="mb-0">
+        <i class="fas fa-table me-2"></i>All Assigned Leads
+      </h4>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover mb-0" id="leads-table">
+        <thead>
+          <tr>
+            <th>Customer Name</th>
+            <th>Mobile</th>
+            <th>PS Assigned</th>
+            <th>Model</th>
+            <th>Category</th>
+            <th>Status</th>
+            <th>Follow-up</th>
+            <th>Created</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for lead in assigned_leads %}
+          <tr data-ps="{{ lead.ps_assigned }}" data-status="{{ lead.status }}" data-created="{{ lead.created_at[:10] if lead.created_at else '' }}">
+            <td>
+              <strong>{{ lead.customer_name }}</strong>
+              {% if lead.email %}
+              <br><small class="text-muted">{{ lead.email }}</small>
+              {% endif %}
+            </td>
+            <td>{{ lead.mobile_number }}</td>
+            <td>
+              <span class="badge bg-info">{{ lead.ps_assigned }}</span>
+            </td>
+            <td>{{ lead.model_interested }}</td>
+            <td>
+              <span class="badge bg-{{ 'danger' if lead.lead_category == 'Hot' else 'warning' if lead.lead_category == 'Warm' else 'info' }}">
+                {{ lead.lead_category }}
+              </span>
+            </td>
+            <td>
+              <span class="status-badge bg-{{ lead.status_color }}">
+                {{ lead.status }}
+              </span>
+            </td>
+            <td>
+              {% if lead.followup_no %}
+              <span class="badge bg-secondary">{{ lead.followup_no }}</span>
+              {% else %}
+              <span class="text-muted">-</span>
+              {% endif %}
+            </td>
+            <td>
+              <small class="text-muted">
+                {{ lead.created_at[:10] if lead.created_at else '-' }}
+                {% if lead.days_since_created %}
+                <br><span class="text-info">({{ lead.days_since_created }} days ago)</span>
+                {% endif %}
+              </small>
+            </td>
+            <td>
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-primary" onclick="viewLeadDetails('{{ lead.id }}')" title="View Details">
+                  <i class="fas fa-eye"></i>
+                </button>
+                <button class="btn btn-outline-success" onclick="copyLeadInfo('{{ lead.customer_name }}', '{{ lead.mobile_number }}')" title="Copy Info">
+                  <i class="fas fa-copy"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Horizontal PS Tabs View -->
+  <div class="card table-card" id="grouped-view" style="display: none;">
+    <div class="card-header">
+      <h4 class="mb-0">
+        <i class="fas fa-users me-2"></i>Leads by PS
+      </h4>
+    </div>
+    <div class="card-body p-0">
+      <!-- PS Tabs Navigation -->
+      <div class="ps-tabs-container">
+        <div class="ps-tabs-scroll">
+          <div class="ps-tabs" id="ps-tabs">
+            <button class="ps-tab active" data-ps="all" onclick="switchPSTab('all')">
+              <span class="ps-name">All PS</span>
+              <span class="ps-count">{{ total_leads }}</span>
+            </button>
+            {% for ps_name in ps_names %}
+              {% if leads_by_ps[ps_name] %}
+              <button class="ps-tab" data-ps="{{ ps_name }}" onclick="switchPSTab('{{ ps_name }}')">
+                <span class="ps-name">{{ ps_name }}</span>
+                <span class="ps-count">{{ leads_by_ps[ps_name]|length }}</span>
+              </button>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <!-- PS Content Sections -->
+      <div class="ps-content-container">
+        <!-- All PS Content -->
+        <div class="ps-content active" id="ps-content-all">
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>Customer Name</th>
+                  <th>Mobile</th>
+                  <th>PS Assigned</th>
+                  <th>Model</th>
+                  <th>Category</th>
+                  <th>Status</th>
+                  <th>Follow-up</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for lead in assigned_leads %}
+                <tr>
+                  <td>
+                    <strong>{{ lead.customer_name }}</strong>
+                    {% if lead.email %}
+                    <br><small class="text-muted">{{ lead.email }}</small>
+                    {% endif %}
+                  </td>
+                  <td>{{ lead.mobile_number }}</td>
+                  <td>
+                    <span class="badge bg-info">{{ lead.ps_assigned }}</span>
+                  </td>
+                  <td>{{ lead.model_interested }}</td>
+                  <td>
+                    <span class="badge bg-{{ 'danger' if lead.lead_category == 'Hot' else 'warning' if lead.lead_category == 'Warm' else 'info' }}">
+                      {{ lead.lead_category }}
+                    </span>
+                  </td>
+                  <td>
+                    <span class="status-badge bg-{{ lead.status_color }}">
+                      {{ lead.status }}
+                    </span>
+                  </td>
+                  <td>
+                    {% if lead.followup_no %}
+                    <span class="badge bg-secondary">{{ lead.followup_no }}</span>
+                    {% else %}
+                    <span class="text-muted">-</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <small class="text-muted">
+                      {{ lead.created_at[:10] if lead.created_at else '-' }}
+                    </small>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Individual PS Content -->
+        {% for ps_name in ps_names %}
+          {% if leads_by_ps[ps_name] %}
+          <div class="ps-content" id="ps-content-{{ ps_name }}">
+            <div class="table-responsive">
+              <table class="table table-hover mb-0">
+                <thead>
+                  <tr>
+                    <th>Customer Name</th>
+                    <th>Mobile</th>
+                    <th>Model</th>
+                    <th>Category</th>
+                    <th>Status</th>
+                    <th>Follow-up</th>
+                    <th>Created</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for lead in leads_by_ps[ps_name] %}
+                  <tr>
+                    <td>
+                      <strong>{{ lead.customer_name }}</strong>
+                      {% if lead.email %}
+                      <br><small class="text-muted">{{ lead.email }}</small>
+                      {% endif %}
+                    </td>
+                    <td>{{ lead.mobile_number }}</td>
+                    <td>{{ lead.model_interested }}</td>
+                    <td>
+                      <span class="badge bg-{{ 'danger' if lead.lead_category == 'Hot' else 'warning' if lead.lead_category == 'Warm' else 'info' }}">
+                        {{ lead.lead_category }}
+                      </span>
+                    </td>
+                    <td>
+                      <span class="status-badge bg-{{ lead.status_color }}">
+                        {{ lead.status }}
+                      </span>
+                    </td>
+                    <td>
+                      {% if lead.followup_no %}
+                      <span class="badge bg-secondary">{{ lead.followup_no }}</span>
+                      {% else %}
+                      <span class="text-muted">-</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      <small class="text-muted">
+                        {{ lead.created_at[:10] if lead.created_at else '-' }}
+                      </small>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Filter functionality
+  function filterTable() {
+    const psFilter = document.getElementById('ps-filter').value;
+    const statusFilter = document.getElementById('status-filter').value;
+    const dateFrom = document.getElementById('date-from').value;
+    const dateTo = document.getElementById('date-to').value;
+    const quickDateFilter = document.getElementById('quick-date-filter').value;
+    const rows = document.querySelectorAll('#leads-table tbody tr');
+    
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const weekStart = new Date(today.getTime() - (today.getDay() * 24 * 60 * 60 * 1000));
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    
+    // Show/hide date range container
+    const dateRangeContainer = document.getElementById('date-range-container');
+    if (quickDateFilter === 'range') {
+      dateRangeContainer.style.display = 'block';
+    } else {
+      dateRangeContainer.style.display = 'none';
+    }
+    
+    // Set date range based on quick filter
+    let fromDate = '';
+    let toDate = '';
+    
+    if (quickDateFilter === 'today') {
+      fromDate = todayStr;
+      toDate = todayStr;
+    } else if (quickDateFilter === 'week') {
+      fromDate = weekStart.toISOString().split('T')[0];
+      toDate = todayStr;
+    } else if (quickDateFilter === 'month') {
+      fromDate = monthStart.toISOString().split('T')[0];
+      toDate = todayStr;
+    } else if (quickDateFilter === 'range') {
+      fromDate = dateFrom;
+      toDate = dateTo;
+    } else if (quickDateFilter === 'all') {
+      fromDate = '';
+      toDate = '';
+    }
+    
+    rows.forEach(row => {
+      const ps = row.getAttribute('data-ps');
+      const status = row.getAttribute('data-status');
+      const createdDate = row.getAttribute('data-created');
+      
+      const psMatch = !psFilter || ps === psFilter;
+      const statusMatch = !statusFilter || status === statusFilter;
+      
+      let dateMatch = true;
+      if (fromDate && toDate) {
+        dateMatch = createdDate >= fromDate && createdDate <= toDate;
+      } else if (fromDate) {
+        dateMatch = createdDate >= fromDate;
+      } else if (toDate) {
+        dateMatch = createdDate <= toDate;
+      }
+      
+      row.style.display = psMatch && statusMatch && dateMatch ? '' : 'none';
+    });
+  }
+  
+
+  
+  // Reset filters
+  function resetFilters() {
+    document.getElementById('ps-filter').value = '';
+    document.getElementById('status-filter').value = '';
+    document.getElementById('date-from').value = '';
+    document.getElementById('date-to').value = '';
+    document.getElementById('quick-date-filter').value = '';
+    document.getElementById('date-range-container').style.display = 'none';
+    filterTable();
+  }
+  
+  // Toggle view
+  function toggleView() {
+    const allLeadsView = document.getElementById('all-leads-view');
+    const groupedView = document.getElementById('grouped-view');
+    
+    if (allLeadsView.style.display === 'none') {
+      allLeadsView.style.display = 'block';
+      groupedView.style.display = 'none';
+    } else {
+      allLeadsView.style.display = 'none';
+      groupedView.style.display = 'block';
+    }
+  }
+  
+  // Switch PS tab
+  function switchPSTab(psName) {
+    // Remove active class from all tabs
+    document.querySelectorAll('.ps-tab').forEach(tab => {
+      tab.classList.remove('active');
+    });
+    
+    // Add active class to clicked tab
+    document.querySelector(`[data-ps="${psName}"]`).classList.add('active');
+    
+    // Hide all content sections
+    document.querySelectorAll('.ps-content').forEach(content => {
+      content.classList.remove('active');
+    });
+    
+    // Show selected content section
+    document.getElementById(`ps-content-${psName}`).classList.add('active');
+  }
+  
+  // View lead details
+  function viewLeadDetails(leadId) {
+    // This could open a modal or redirect to a details page
+    alert('Lead details functionality can be implemented here');
+  }
+  
+  // Copy lead information
+  function copyLeadInfo(name, mobile) {
+    const text = `Name: ${name}\nMobile: ${mobile}`;
+    navigator.clipboard.writeText(text).then(() => {
+      // Show a temporary success message
+      const btn = event.target.closest('button');
+      const originalHTML = btn.innerHTML;
+      btn.innerHTML = '<i class="fas fa-check"></i>';
+      btn.classList.remove('btn-outline-success');
+      btn.classList.add('btn-success');
+      
+      setTimeout(() => {
+        btn.innerHTML = originalHTML;
+        btn.classList.remove('btn-success');
+        btn.classList.add('btn-outline-success');
+      }, 2000);
+    });
+  }
+  
+  // Event listeners
+  document.getElementById('ps-filter').addEventListener('change', filterTable);
+  document.getElementById('status-filter').addEventListener('change', filterTable);
+  document.getElementById('date-from').addEventListener('change', filterTable);
+  document.getElementById('date-to').addEventListener('change', filterTable);
+  document.getElementById('quick-date-filter').addEventListener('change', filterTable);
+  
+  // Initialize
+  document.addEventListener('DOMContentLoaded', function() {
+    filterTable();
+    
+    // Check for horizontal scroll overflow
+    const tabsScroll = document.querySelector('.ps-tabs-scroll');
+    if (tabsScroll) {
+      const checkOverflow = () => {
+        if (tabsScroll.scrollWidth > tabsScroll.clientWidth) {
+          tabsScroll.classList.add('has-overflow');
+        } else {
+          tabsScroll.classList.remove('has-overflow');
+        }
+      };
+      
+      checkOverflow();
+      window.addEventListener('resize', checkOverflow);
+    }
+  });
+</script>
+{% endblock %} 
