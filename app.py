@@ -4029,7 +4029,6 @@ def api_branch_head_dashboard_data():
         event_fresh_count += supabase.table('activity_leads').select('*', count='exact').eq('location', branch).eq('final_status', 'Pending').neq('ps_followup_date_ts', today_str).execute().count or 0
         
         fresh_leads_count = ps_fresh_count + walkin_fresh_count + event_fresh_count
-        print(f"DEBUG: KPI fresh_leads_count: {fresh_leads_count}")
         
         # Today's follow-ups count (using exact date matching like your SQL query)
         today_str = datetime.now().strftime('%Y-%m-%d')
@@ -4043,12 +4042,7 @@ def api_branch_head_dashboard_data():
         # Walk-in count with range query
         walkin_today_count = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).gte('next_followup_date', f'{today_str} 00:00:00').lt('next_followup_date', f'{today_str} 23:59:59').execute().count or 0
         
-        # Debug: Print KPI count queries
-        print(f"DEBUG: KPI PS count query - branch: {branch}, final_status: Pending, follow_up_date: {today_str}")
-        print(f"DEBUG: KPI Event count query - location: {branch}, final_status: Pending, ps_followup_date_ts: {today_str} 00:00:00")
-        print(f"DEBUG: KPI Walkin count query - branch: {branch}, next_followup_date: {today_str} 00:00:00")
         followup_leads_count = followup_today_count + event_today_count + walkin_today_count
-        print(f"DEBUG: KPI followup breakdown - PS: {followup_today_count}, Event: {event_today_count}, Walkin: {walkin_today_count}, Total: {followup_leads_count}")
         
     except Exception as e:
         print(f"Error calculating KPI counts: {str(e)}")
@@ -4114,20 +4108,11 @@ def api_branch_head_dashboard_data():
         return filtered_rows
 
     # Apply section-specific filters with OPTIMIZED queries
-    print(f"DEBUG: Processing section: {section}")
-    print(f"DEBUG: Search term: '{search}'")
-    print(f"DEBUG: PS name: '{ps_name}'")
-    print(f"DEBUG: Start date: '{start_date}'")
-    print(f"DEBUG: End date: '{end_date}'")
     
     if section == 'fresh_leads':
         # Get PS fresh leads - ONLY those with NULL follow_up_date (no follow-up scheduled)
         ps_query = supabase.table('ps_followup_master').select('lead_uid, customer_name, customer_mobile_number, final_status, ps_name, created_at, source, lead_category').eq('ps_branch', branch).eq('final_status', 'Pending').is_('follow_up_date', 'null')
         ps_rows = ps_query.execute().data or []
-        
-        # Debug: Check if first_call_date column exists
-        print(f"DEBUG: PS query conditions - branch: {branch}, final_status: Pending, follow_up_date: NULL")
-        print(f"DEBUG: PS rows with NULL follow_up_date: {len(ps_rows)}")
         
         # Get Walk-in fresh leads - EXCLUDE those with today's follow-up date
         # Get walk-ins with NULL next_followup_date
@@ -4141,10 +4126,6 @@ def api_branch_head_dashboard_data():
         # Combine the results
         walkin_rows = walkin_rows_null + walkin_rows_not_today
         
-        print(f"DEBUG: Walk-in rows with NULL next_followup_date: {len(walkin_rows_null)}")
-        print(f"DEBUG: Walk-in rows with next_followup_date != today: {len(walkin_rows_not_today)}")
-        print(f"DEBUG: Total Walk-in rows: {len(walkin_rows)}")
-        
         # Get Event fresh leads - EXCLUDE those with today's follow-up date
         # Get event leads with NULL ps_followup_date_ts
         event_query_null = supabase.table('activity_leads').select('activity_uid, customer_name, customer_phone_number, final_status, ps_name, created_at, lead_category').eq('location', branch).eq('final_status', 'Pending').is_('ps_followup_date_ts', 'null')
@@ -4156,22 +4137,6 @@ def api_branch_head_dashboard_data():
         
         # Combine the results
         event_rows = event_rows_null + event_rows_not_today
-        
-        print(f"DEBUG: Event rows with NULL ps_followup_date_ts: {len(event_rows_null)}")
-        print(f"DEBUG: Event rows with ps_followup_date_ts != today: {len(event_rows_not_today)}")
-        print(f"DEBUG: Total Event rows: {len(event_rows)}")
-        
-        print(f"DEBUG: Fresh leads breakdown - PS: {len(ps_rows)}, Walkin: {len(walkin_rows)}, Event: {len(event_rows)}")
-        print(f"DEBUG: Today's date for filtering: {today_str}")
-        print(f"DEBUG: PS Fresh Leads Logic: Only NULL follow_up_date")
-        
-        # Debug: Show sample data from each source
-        if ps_rows:
-            print(f"DEBUG: Sample PS row: {ps_rows[0]}")
-        if walkin_rows:
-            print(f"DEBUG: Sample Walkin row: {walkin_rows[0]}")
-        if event_rows:
-            print(f"DEBUG: Sample Event row: {event_rows[0]}")
         
         # Format PS rows
         ps_formatted = [
@@ -4223,8 +4188,6 @@ def api_branch_head_dashboard_data():
         
         # Note: Search will be handled client-side for better performance
         
-        print(f"DEBUG: Fresh leads total formatted rows: {len(all_formatted_rows)}")
-        
         try:
             response = {
                 'success': True,
@@ -4235,7 +4198,6 @@ def api_branch_head_dashboard_data():
             }
             return jsonify(response)
         except Exception as e:
-            print(f"DEBUG: Error creating response: {str(e)}")
             return jsonify({
                 'success': False,
                 'error': str(e),
@@ -4447,51 +4409,14 @@ def api_branch_head_dashboard_data():
         ps_today = ps_query.execute().data or []
         
         # Event follow-ups for today (exact date match)
-        # Try different date formats since the data might be stored differently
+        # Use date range queries for timestamp columns
         act_query = supabase.table('activity_leads').select('*').eq('location', branch).eq('final_status', 'Pending').gte('ps_followup_date_ts', f'{today_str} 00:00:00').lt('ps_followup_date_ts', f'{today_str} 23:59:59')
         act_today_raw = act_query.execute().data or []
         
-        # If no results, try without time component
-        if not act_today_raw:
-            act_query = supabase.table('activity_leads').select('*').eq('location', branch).eq('final_status', 'Pending').like('ps_followup_date_ts', f'{today_str}%')
-            act_today_raw = act_query.execute().data or []
-        
         # Walk-in follow-ups for today (exact date match)
-        # Try different date formats since the data might be stored differently
+        # Use date range queries for timestamp columns
         walkin_query = supabase.table('walkin_table').select('*').eq('branch', branch).gte('next_followup_date', f'{today_str} 00:00:00').lt('next_followup_date', f'{today_str} 23:59:59')
         walkin_today_raw = walkin_query.execute().data or []
-        
-        # If no results, try without time component
-        if not walkin_today_raw:
-            walkin_query = supabase.table('walkin_table').select('*').eq('branch', branch).like('next_followup_date', f'{today_str}%')
-            walkin_today_raw = walkin_query.execute().data or []
-        
-        # Debug: Print exact query conditions
-        print(f"DEBUG: PS query - branch: {branch}, final_status: Pending, follow_up_date: {today_str}")
-        print(f"DEBUG: Event query - location: {branch}, final_status: Pending, ps_followup_date_ts: {today_str} 00:00:00 to {today_str} 23:59:59")
-        print(f"DEBUG: Walkin query - branch: {branch}, next_followup_date: {today_str} 00:00:00 to {today_str} 23:59:59")
-        print(f"DEBUG: Today's date being used: {today_str}")
-        
-        # Debug: Print query results for today's follow-ups
-        print(f"DEBUG: Today's follow-ups query - branch: {branch}, today: {today_str}")
-        print(f"DEBUG: PS follow-ups for today: {len(ps_today)}")
-        print(f"DEBUG: Event follow-ups for today: {len(act_today_raw)}")
-        print(f"DEBUG: Walk-in follow-ups for today: {len(walkin_today_raw)}")
-        if walkin_today_raw:
-            print(f"DEBUG: Sample walk-in data: {walkin_today_raw[0]}")
-        else:
-            print(f"DEBUG: No walk-in data found for today. Checking all walk-in data...")
-            # Debug: Check all walk-in data to see what dates exist
-            all_walkin = supabase.table('walkin_table').select('next_followup_date').eq('branch', branch).execute().data or []
-            if all_walkin:
-                dates = [row.get('next_followup_date') for row in all_walkin if row.get('next_followup_date')]
-                print(f"DEBUG: Available walk-in dates: {set(dates)}")
-        
-        # Debug: Show sample data from each source
-        if ps_today:
-            print(f"DEBUG: Sample PS data: {ps_today[0]}")
-        if act_today_raw:
-            print(f"DEBUG: Sample Event data: {act_today_raw[0]}")
         
         # Mark all as not missed and set source_type and phone
         ps_today = [{**row, 'missed': False, 'lead_status': row.get('lead_status', '')} for row in ps_today]
@@ -6228,6 +6153,190 @@ def export_all_cre_leads():
     except Exception as e:
         flash(f'Error exporting all CRE leads: {str(e)}', 'error')
         return redirect(url_for('manage_leads'))
+
+@app.route('/api/export_branch_leads', methods=['POST'])
+def api_export_branch_leads():
+    """Export leads data for branch head with date range and branch filtering"""
+    try:
+        data = request.get_json()
+        lead_type = data.get('lead_type')
+        date_from = data.get('date_from')
+        date_to = data.get('date_to')
+        branch = data.get('branch')
+        
+        if not all([lead_type, date_from, date_to, branch]):
+            return jsonify({'success': False, 'message': 'Missing required parameters'}), 400
+        
+        # Convert dates to datetime objects
+        from datetime import datetime
+        try:
+            start_date = datetime.strptime(date_from, '%Y-%m-%d')
+            end_date = datetime.strptime(date_to, '%Y-%m-%d')
+        except ValueError as e:
+            return jsonify({'success': False, 'message': f'Invalid date format: {str(e)}'}), 400
+        
+        # Get data based on lead type
+        csv_data = []
+        
+        # Helper function to format date for database query
+        def format_date_for_query(date_str):
+            """Try different date formats for database queries"""
+            formats = [
+                f'{date_str} 00:00:00',
+                f'{date_str} 00:00:00+00',
+                date_str,
+                f'{date_str}T00:00:00',
+                f'{date_str}T00:00:00Z'
+            ]
+            return formats
+        
+        if lead_type == 'PS':
+            # Export PS leads from ps_followup_master
+            try:
+                leads_data = []
+                # Try different date formats
+                for start_format in format_date_for_query(date_from):
+                    for end_format in format_date_for_query(date_to):
+                        try:
+                            query = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).gte('created_at', start_format).lte('created_at', end_format)
+                            result = query.execute()
+                            if result.data:
+                                leads_data = result.data
+                                break
+                        except Exception as e:
+                            continue
+                    if leads_data:
+                        break
+                
+                # Format data for CSV
+                for lead in leads_data:
+                    csv_data.append({
+                        'Lead UID': lead.get('lead_uid', ''),
+                        'Customer Name': lead.get('customer_name', ''),
+                        'Mobile Number': lead.get('customer_mobile_number', ''),
+                        'Source': lead.get('source', ''),
+                        'Lead Category': lead.get('lead_category', 'Not Set'),
+                        'PS Name': lead.get('ps_name', ''),
+                        'CRE Name': lead.get('cre_name', ''),
+                        'Final Status': lead.get('final_status', ''),
+                        'Lead Status': lead.get('lead_status', ''),
+                        'Model Interested': lead.get('model_interested', ''),
+                        'Follow Up Date': lead.get('follow_up_date', ''),
+                        'Created At': lead.get('created_at', ''),
+                        'Updated At': lead.get('updated_at', '')
+                    })
+            except Exception as e:
+                print(f"Error fetching PS leads: {str(e)}")
+                return jsonify({'success': False, 'message': f'Error fetching PS leads: {str(e)}'}), 500
+                
+        elif lead_type == 'Walkin':
+            # Export Walk-in leads from walkin_table
+            try:
+                leads_data = []
+                # Try different date formats
+                for start_format in format_date_for_query(date_from):
+                    for end_format in format_date_for_query(date_to):
+                        try:
+                            query = supabase.table('walkin_table').select('*').eq('branch', branch).gte('created_at', start_format).lte('created_at', end_format)
+                            result = query.execute()
+                            if result.data:
+                                leads_data = result.data
+                                break
+                        except Exception as e:
+                            continue
+                    if leads_data:
+                        break
+                
+                # Format data for CSV
+                for lead in leads_data:
+                    csv_data.append({
+                        'UID': lead.get('uid', ''),
+                        'Customer Name': lead.get('customer_name', ''),
+                        'Mobile Number': lead.get('mobile_number', ''),
+                        'Model Interested': lead.get('model_interested', ''),
+                        'Occupation': lead.get('occupation', ''),
+                        'Lead Category': lead.get('lead_category', 'Not Set'),
+                        'Branch': lead.get('branch', ''),
+                        'PS Assigned': lead.get('ps_assigned', ''),
+                        'Status': lead.get('status', ''),
+                        'Followup No': lead.get('followup_no', ''),
+                        'Next Followup Date': lead.get('next_followup_date', ''),
+                        'First Call Date': lead.get('first_call_date', ''),
+                        'First Call Remark': lead.get('first_call_remark', ''),
+                        'Created At': lead.get('created_at', ''),
+                        'Updated At': lead.get('updated_at', '')
+                    })
+            except Exception as e:
+                print(f"Error fetching Walkin leads: {str(e)}")
+                return jsonify({'success': False, 'message': f'Error fetching Walkin leads: {str(e)}'}), 500
+                
+        elif lead_type == 'Event':
+            # Export Event leads from activity_leads
+            try:
+                leads_data = []
+                # Try different date formats
+                for start_format in format_date_for_query(date_from):
+                    for end_format in format_date_for_query(date_to):
+                        try:
+                            query = supabase.table('activity_leads').select('*').eq('location', branch).gte('created_at', start_format).lte('created_at', end_format)
+                            result = query.execute()
+                            if result.data:
+                                leads_data = result.data
+                                break
+                        except Exception as e:
+                            continue
+                    if leads_data:
+                        break
+                
+                # Format data for CSV
+                for lead in leads_data:
+                    csv_data.append({
+                        'Activity UID': lead.get('activity_uid', ''),
+                        'Customer Name': lead.get('customer_name', ''),
+                        'Phone Number': lead.get('customer_phone_number', ''),
+                        'Occupation': lead.get('occupation', ''),
+                        'Lead Category': lead.get('lead_category', 'Not Set'),
+                        'Location': lead.get('location', ''),
+                        'PS Name': lead.get('ps_name', ''),
+                        'Final Status': lead.get('final_status', ''),
+                        'Lead Status': lead.get('lead_status', ''),
+                        'Model Interested': lead.get('model_interested', ''),
+                        'PS Followup Date': lead.get('ps_followup_date_ts', ''),
+                        'Created At': lead.get('created_at', ''),
+                        'Updated At': lead.get('updated_at', '')
+                    })
+            except Exception as e:
+                print(f"Error fetching Event leads: {str(e)}")
+                return jsonify({'success': False, 'message': f'Error fetching Event leads: {str(e)}'}), 500
+        else:
+            return jsonify({'success': False, 'message': 'Invalid lead type'}), 400
+        
+        if not csv_data:
+            return jsonify({'success': False, 'message': 'No data found for the specified criteria'}), 404
+        
+        # Create CSV content
+        import csv
+        import io
+        
+        output = io.StringIO()
+        if csv_data:
+            fieldnames = csv_data[0].keys()
+            writer = csv.DictWriter(output, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(csv_data)
+        
+        # Create response
+        from flask import Response
+        response = Response(
+            output.getvalue(),
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename={lead_type}_leads_{date_from}_to_{date_to}_{branch}.csv'}
+        )
+        
+        return response
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Export failed: {str(e)}'}), 500
 
 @app.route('/cre_analytics')
 @require_cre
