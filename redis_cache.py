@@ -29,8 +29,10 @@ class RedisCache:
         try:
             # Try to connect to Redis
             if redis_url:
+                logger.info(f"🔗 Attempting to connect to Redis: {redis_url[:20]}...")
                 self.redis = redis.from_url(redis_url, decode_responses=False)
             else:
+                logger.warning("⚠️ No REDIS_URL found, using localhost fallback")
                 # Default to localhost for development
                 self.redis = redis.Redis(host='localhost', port=6379, db=0, decode_responses=False)
             
@@ -186,7 +188,9 @@ class RedisCache:
             return False
 
 # Global Redis cache instance
-redis_cache = RedisCache()
+import os
+redis_url = os.environ.get('REDIS_URL')
+redis_cache = RedisCache(redis_url=redis_url)
 
 def get_redis_cache() -> RedisCache:
     """Get the global Redis cache instance"""
