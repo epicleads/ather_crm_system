@@ -3472,7 +3472,7 @@ def branch_head_dashboard():
         ])
         
         # Walk-in leads count
-        walkin_leads = supabase.table('walkin_data').select('*').eq('ps_branch', branch).execute().data or []
+        walkin_leads = supabase.table('walkin_table').select('*').eq('branch', branch).execute().data or []
         walkin_leads_count = len(walkin_leads)
         
         # CRE assigned leads count
@@ -3482,14 +3482,14 @@ def branch_head_dashboard():
         # Pending leads count (from multiple sources)
         pending_followup = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Pending').execute().data or []
         pending_event = supabase.table('activity_leads').select('*').eq('location', branch).eq('final_status', 'Pending').execute().data or []
-        pending_walkin = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('ps_final_status', 'Pending').execute().data or []
+        pending_walkin = supabase.table('walkin_table').select('*').eq('branch', branch).eq('status', 'Pending').execute().data or []
         pending_leads_count = len(pending_followup) + len(pending_event) + len(pending_walkin)
         
         # Today's follow-ups count
         today_str = datetime.now().strftime('%Y-%m-%d')
         followup_today = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).execute().data or []
         event_today = supabase.table('activity_leads').select('*').eq('location', branch).eq('ps_followup_date_ts', today_str).execute().data or []
-        walkin_today = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).execute().data or []
+        walkin_today = supabase.table('walkin_table').select('*').eq('branch', branch).eq('next_followup_date', today_str).execute().data or []
         followup_leads_count = len(followup_today) + len(event_today) + len(walkin_today)
         
         # Event leads count
@@ -3525,18 +3525,13 @@ def api_branch_head_dashboard_data():
     """Get data for branch head dashboard"""
     # Get query parameters
     section = request.args.get('section', 'fresh_leads')
-    page = int(request.args.get('page', 1))
-    per_page = int(request.args.get('per_page', 25))
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
     uid = request.args.get('uid')
     ps_name = request.args.get('ps_name')
+    search = request.args.get('search', '').strip()
 
     # Validate and sanitize inputs
-    if not 1 <= page <= 1000:
-        return jsonify({'success': False, 'message': 'Invalid page number'})
-    if not 1 <= per_page <= 100:
-        return jsonify({'success': False, 'message': 'Invalid per_page value'})
     if start_date and not is_valid_date(start_date):
         return jsonify({'success': False, 'message': 'Invalid start_date format'})
     if end_date and not is_valid_date(end_date):
@@ -3547,42 +3542,43 @@ def api_branch_head_dashboard_data():
     # Get branch from session
     branch = session.get('branch_head_branch')
 
-    # Calculate KPI counts for all sections
+    # OPTIMIZED: Calculate KPI counts using efficient count queries
     try:
-        # Fresh leads count
-        fresh_leads = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).execute().data or []
-        fresh_leads_count = len([
-            row for row in fresh_leads
-            if (not row.get('first_call_date') or str(row.get('first_call_date')).strip() == '')
-                and row.get('final_status', '').strip().lower() == 'pending'
-        ])
-        
-        # Walk-in leads count
-        walkin_leads = supabase.table('walkin_data').select('*').eq('ps_branch', branch).execute().data or []
-        walkin_leads_count = len(walkin_leads)
-        
-        # CRE assigned leads count
-        cre_assigned_leads = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).execute().data or []
-        cre_assigned_leads_count = len(cre_assigned_leads)
-        
-        # Event leads count
-        event_leads = supabase.table('activity_leads').select('*').eq('location', branch).execute().data or []
-        event_leads_count = len(event_leads)
-        
-        # Won leads count
-        won_leads = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Won').execute().data or []
-        won_leads_count = len(won_leads)
-        
-        # Lost leads count
-        lost_leads = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Lost').execute().data or []
-        lost_leads_count = len(lost_leads)
-        
-        # Today's follow-ups count
+        # Fresh leads count - EXCLUDE those with today's follow-up date
         today_str = datetime.now().strftime('%Y-%m-%d')
-        followup_today = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).execute().data or []
-        event_today = supabase.table('activity_leads').select('*').eq('location', branch).eq('ps_followup_date_ts', today_str).execute().data or []
-        walkin_today = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).execute().data or []
-        followup_leads_count = len(followup_today) + len(event_today) + len(walkin_today)
+        
+        # PS fresh leads count - ONLY those with NULL follow_up_date
+        ps_fresh_count = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).eq('final_status', 'Pending').is_('follow_up_date', 'null').execute().count or 0
+        
+        # Walk-in fresh leads count (exclude today's follow-ups)
+        walkin_fresh_count = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('status', 'Pending').is_('next_followup_date', 'null').execute().count or 0
+        walkin_fresh_count += supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('status', 'Pending').neq('next_followup_date', today_str).execute().count or 0
+        
+        # Event fresh leads count (exclude today's follow-ups)
+        event_fresh_count = supabase.table('activity_leads').select('*', count='exact').eq('location', branch).eq('final_status', 'Pending').is_('ps_followup_date_ts', 'null').execute().count or 0
+        event_fresh_count += supabase.table('activity_leads').select('*', count='exact').eq('location', branch).eq('final_status', 'Pending').neq('ps_followup_date_ts', today_str).execute().count or 0
+        
+        fresh_leads_count = ps_fresh_count + walkin_fresh_count + event_fresh_count
+        print(f"DEBUG: KPI fresh_leads_count: {fresh_leads_count}")
+        
+        # Today's follow-ups count (using exact date matching like your SQL query)
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        
+        # Use the same logic as data loading for accurate counts
+        followup_today_count = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).eq('final_status', 'Pending').eq('follow_up_date', today_str).execute().count or 0
+        
+        # Event count with range query
+        event_today_count = supabase.table('activity_leads').select('*', count='exact').eq('location', branch).eq('final_status', 'Pending').gte('ps_followup_date_ts', f'{today_str} 00:00:00').lt('ps_followup_date_ts', f'{today_str} 23:59:59').execute().count or 0
+        
+        # Walk-in count with range query
+        walkin_today_count = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).gte('next_followup_date', f'{today_str} 00:00:00').lt('next_followup_date', f'{today_str} 23:59:59').execute().count or 0
+        
+        # Debug: Print KPI count queries
+        print(f"DEBUG: KPI PS count query - branch: {branch}, final_status: Pending, follow_up_date: {today_str}")
+        print(f"DEBUG: KPI Event count query - location: {branch}, final_status: Pending, ps_followup_date_ts: {today_str} 00:00:00")
+        print(f"DEBUG: KPI Walkin count query - branch: {branch}, next_followup_date: {today_str} 00:00:00")
+        followup_leads_count = followup_today_count + event_today_count + walkin_today_count
+        print(f"DEBUG: KPI followup breakdown - PS: {followup_today_count}, Event: {event_today_count}, Walkin: {walkin_today_count}, Total: {followup_leads_count}")
         
     except Exception as e:
         print(f"Error calculating KPI counts: {str(e)}")
@@ -3602,62 +3598,196 @@ def api_branch_head_dashboard_data():
     if ps_name:
         query = query.eq('ps_name', ps_name)
 
-    # Apply section-specific filters
+    # OPTIMIZED: Database-level search function
+    def build_search_query(base_query, search_term, table_type='ps'):
+        """Build optimized search query at database level"""
+        if not search_term:
+            return base_query
+        
+        # Create OR conditions for search across multiple columns
+        search_conditions = []
+        
+        # Define searchable fields based on table type
+        if table_type == 'ps':
+            searchable_fields = ['customer_name', 'customer_mobile_number', 'lead_uid', 'ps_name']
+        elif table_type == 'walkin':
+            searchable_fields = ['customer_name', 'mobile_number', 'uid', 'ps_assigned']
+        elif table_type == 'event':
+            searchable_fields = ['customer_name', 'customer_phone_number', 'activity_uid', 'ps_name']
+        else:
+            searchable_fields = ['customer_name', 'customer_mobile_number', 'uid']
+        
+        # Build search conditions for each field
+        for field in searchable_fields:
+            search_conditions.append(f"{field}.ilike.%{search_term}%")
+        
+        if search_conditions:
+            return base_query.or_(','.join(search_conditions))
+        
+        return base_query
+
+    # Helper function for client-side search filtering
+    def filter_rows_by_search(rows, search_term):
+        """Filter rows by search term across all fields"""
+        if not search_term:
+            return rows
+        
+        search_lower = search_term.lower()
+        filtered_rows = []
+        
+        for row in rows:
+            # Convert row to string and search
+            row_text = ' '.join(str(value) for value in row.values()).lower()
+            if search_lower in row_text:
+                filtered_rows.append(row)
+        
+        return filtered_rows
+
+    # Apply section-specific filters with OPTIMIZED queries
+    print(f"DEBUG: Processing section: {section}")
+    print(f"DEBUG: Search term: '{search}'")
+    print(f"DEBUG: PS name: '{ps_name}'")
+    print(f"DEBUG: Start date: '{start_date}'")
+    print(f"DEBUG: End date: '{end_date}'")
+    
     if section == 'fresh_leads':
-        all_rows = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).execute().data or []
-        filtered_rows = [
-                {
-                    'uid': row.get('lead_uid', ''),
-                    'customer_name': row.get('customer_name', ''),
-                    'customer_mobile_number': row.get('customer_mobile_number', ''),
-                    'final_status': row.get('final_status', ''),
-                    'ps_name': row.get('ps_name', ''),
-                    'created_at': row.get('created_at', '')
-                }
-            for row in all_rows
-            if (not row.get('first_call_date') or str(row.get('first_call_date')).strip() == '')
-                and row.get('final_status', '').strip().lower() == 'pending'
-        ]
-        total_count = len(filtered_rows)
-        offset = (page - 1) * per_page
-        paged_rows = filtered_rows[offset:offset + per_page]
-        response = {
-            'success': True,
-            'rows': paged_rows,
-            'total_count': total_count,
-            'total_pages': math.ceil(total_count / per_page),
-            'current_page': page,
-            'per_page': per_page,
-                'fresh_leads_count': total_count,
-                'walkin_leads_count': walkin_leads_count,
-                'cre_assigned_leads_count': cre_assigned_leads_count,
-                'followup_leads_count': followup_leads_count,
-                'event_leads_count': event_leads_count,
-                'won_leads_count': won_leads_count,
-                'lost_leads_count': lost_leads_count
-        }
-        auth_manager.log_audit_event(
-            user_id=session.get('user_id'),
-            user_type=session.get('user_type'),
-            action='BRANCH_HEAD_DASHBOARD_DATA_ACCESS',
-            resource='branch_head_dashboard_data',
-            details={
-                'section': section,
-                'page': page,
-                'per_page': per_page,
-                'start_date': start_date,
-                'end_date': end_date,
-                'uid': uid,
-                'ps_name': ps_name,
-                'total_count': total_count
+        # Get PS fresh leads - ONLY those with NULL follow_up_date (no follow-up scheduled)
+        ps_query = supabase.table('ps_followup_master').select('lead_uid, customer_name, customer_mobile_number, final_status, ps_name, created_at, source, lead_category').eq('ps_branch', branch).eq('final_status', 'Pending').is_('follow_up_date', 'null')
+        ps_rows = ps_query.execute().data or []
+        
+        # Debug: Check if first_call_date column exists
+        print(f"DEBUG: PS query conditions - branch: {branch}, final_status: Pending, follow_up_date: NULL")
+        print(f"DEBUG: PS rows with NULL follow_up_date: {len(ps_rows)}")
+        
+        # Get Walk-in fresh leads - EXCLUDE those with today's follow-up date
+        # Get walk-ins with NULL next_followup_date
+        walkin_query_null = supabase.table('walkin_table').select('uid, customer_name, mobile_number, branch, ps_assigned, status, created_at, lead_category').eq('branch', branch).eq('status', 'Pending').is_('next_followup_date', 'null')
+        walkin_rows_null = walkin_query_null.execute().data or []
+        
+        # Get walk-ins with next_followup_date NOT equal to today
+        walkin_query_not_today = supabase.table('walkin_table').select('uid, customer_name, mobile_number, branch, ps_assigned, status, created_at, lead_category').eq('branch', branch).eq('status', 'Pending').neq('next_followup_date', today_str)
+        walkin_rows_not_today = walkin_query_not_today.execute().data or []
+        
+        # Combine the results
+        walkin_rows = walkin_rows_null + walkin_rows_not_today
+        
+        print(f"DEBUG: Walk-in rows with NULL next_followup_date: {len(walkin_rows_null)}")
+        print(f"DEBUG: Walk-in rows with next_followup_date != today: {len(walkin_rows_not_today)}")
+        print(f"DEBUG: Total Walk-in rows: {len(walkin_rows)}")
+        
+        # Get Event fresh leads - EXCLUDE those with today's follow-up date
+        # Get event leads with NULL ps_followup_date_ts
+        event_query_null = supabase.table('activity_leads').select('activity_uid, customer_name, customer_phone_number, final_status, ps_name, created_at, lead_category').eq('location', branch).eq('final_status', 'Pending').is_('ps_followup_date_ts', 'null')
+        event_rows_null = event_query_null.execute().data or []
+        
+        # Get event leads with ps_followup_date_ts NOT equal to today
+        event_query_not_today = supabase.table('activity_leads').select('activity_uid, customer_name, customer_phone_number, final_status, ps_name, created_at, lead_category').eq('location', branch).eq('final_status', 'Pending').neq('ps_followup_date_ts', today_str)
+        event_rows_not_today = event_query_not_today.execute().data or []
+        
+        # Combine the results
+        event_rows = event_rows_null + event_rows_not_today
+        
+        print(f"DEBUG: Event rows with NULL ps_followup_date_ts: {len(event_rows_null)}")
+        print(f"DEBUG: Event rows with ps_followup_date_ts != today: {len(event_rows_not_today)}")
+        print(f"DEBUG: Total Event rows: {len(event_rows)}")
+        
+        print(f"DEBUG: Fresh leads breakdown - PS: {len(ps_rows)}, Walkin: {len(walkin_rows)}, Event: {len(event_rows)}")
+        print(f"DEBUG: Today's date for filtering: {today_str}")
+        print(f"DEBUG: PS Fresh Leads Logic: Only NULL follow_up_date")
+        
+        # Debug: Show sample data from each source
+        if ps_rows:
+            print(f"DEBUG: Sample PS row: {ps_rows[0]}")
+        if walkin_rows:
+            print(f"DEBUG: Sample Walkin row: {walkin_rows[0]}")
+        if event_rows:
+            print(f"DEBUG: Sample Event row: {event_rows[0]}")
+        
+        # Format PS rows
+        ps_formatted = [
+            {
+                'uid': row.get('lead_uid', ''),
+                'customer_name': row.get('customer_name', ''),
+                'customer_mobile_number': row.get('customer_mobile_number', ''),
+                'final_status': row.get('final_status', ''),
+                'ps_name': row.get('ps_name', ''),
+                'created_at': row.get('created_at', ''),
+                'source': row.get('source', 'PS'),
+                'lead_category': row.get('lead_category') if row.get('lead_category') else 'Not Set'
             }
-        )
-        return jsonify(response)
+            for row in ps_rows
+        ]
+        
+        # Format Walk-in rows
+        walkin_formatted = [
+            {
+                'uid': row.get('uid', ''),
+                'customer_name': row.get('customer_name', ''),
+                'customer_mobile_number': row.get('mobile_number', ''),
+                'final_status': row.get('status', ''),
+                'ps_name': row.get('ps_assigned', ''),
+                'created_at': row.get('created_at', ''),
+                'source': 'Walk In',
+                'lead_category': row.get('lead_category') if row.get('lead_category') else 'Not Set'
+            }
+            for row in walkin_rows
+        ]
+        
+        # Format Event rows
+        event_formatted = [
+            {
+                'uid': row.get('activity_uid', ''),
+                'customer_name': row.get('customer_name', ''),
+                'customer_mobile_number': row.get('customer_phone_number', ''),
+                'final_status': row.get('final_status', ''),
+                'ps_name': row.get('ps_name', ''),
+                'created_at': row.get('created_at', ''),
+                'source': 'Event',
+                'lead_category': row.get('lead_category') if row.get('lead_category') else 'Not Set'
+            }
+            for row in event_rows
+        ]
+        
+        # Combine all rows
+        all_formatted_rows = ps_formatted + walkin_formatted + event_formatted
+        
+        # Note: Search will be handled client-side for better performance
+        
+        print(f"DEBUG: Fresh leads total formatted rows: {len(all_formatted_rows)}")
+        
+        try:
+            response = {
+                'success': True,
+                'rows': all_formatted_rows,
+                'total_count': len(all_formatted_rows),
+                'fresh_leads_count': fresh_leads_count,
+                'followup_leads_count': followup_leads_count
+            }
+            return jsonify(response)
+        except Exception as e:
+            print(f"DEBUG: Error creating response: {str(e)}")
+            return jsonify({
+                'success': False,
+                'error': str(e),
+                'rows': [],
+                'total_count': 0,
+                'fresh_leads_count': fresh_leads_count,
+                'followup_leads_count': followup_leads_count
+            })
 
     elif section == 'walkin_leads':
         walkin_query = supabase.table('walkin_data').select('*').eq('ps_branch', branch)
+        
+        # Apply filters
         if uid:
             walkin_query = walkin_query.eq('uid', uid)
+        if ps_name:
+            walkin_query = walkin_query.eq('ps_name', ps_name)
+        if start_date:
+            walkin_query = walkin_query.gte('created_at', start_date)
+        if end_date:
+            walkin_query = walkin_query.lte('created_at', end_date)
+            
         all_rows = walkin_query.execute().data or []
         rows = [
             {
@@ -3674,6 +3804,10 @@ def api_branch_head_dashboard_data():
             }
             for row in all_rows
         ]
+        
+        # Apply search filter
+        rows = filter_rows_by_search(rows, search)
+        
         total_count = int(len(rows))
         offset = (page - 1) * per_page
         paged_rows = rows[offset:offset + per_page]
@@ -3697,7 +3831,17 @@ def api_branch_head_dashboard_data():
 
     elif section == 'cre_assigned_leads':
         # Fetch all rows from ps_followup_master for the current branch (and filters), with all columns
-        all_rows = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).execute().data or []
+        query = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch)
+        
+        # Apply filters
+        if ps_name:
+            query = query.eq('ps_name', ps_name)
+        if start_date:
+            query = query.gte('created_at', start_date)
+        if end_date:
+            query = query.lte('created_at', end_date)
+            
+        all_rows = query.execute().data or []
         
         # Structure the data properly for frontend
         rows = [
@@ -3712,6 +3856,9 @@ def api_branch_head_dashboard_data():
             }
             for row in all_rows
         ]
+        
+        # Apply search filter
+        rows = filter_rows_by_search(rows, search)
         
         total_count = len(rows)
         offset = (page - 1) * per_page
@@ -3735,7 +3882,17 @@ def api_branch_head_dashboard_data():
         return jsonify(response)
     elif section == 'pending_leads':
         # ps_followup_master
-        followup_rows_raw = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Pending').execute().data or []
+        query = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Pending')
+        
+        # Apply filters
+        if ps_name:
+            query = query.eq('ps_name', ps_name)
+        if start_date:
+            query = query.gte('created_at', start_date)
+        if end_date:
+            query = query.lte('created_at', end_date)
+            
+        followup_rows_raw = query.execute().data or []
         followup_rows = [
             {
                 'uid': row.get('lead_uid', ''),
@@ -3750,7 +3907,17 @@ def api_branch_head_dashboard_data():
         ]
 
         # activity_leads
-        event_rows_raw = supabase.table('activity_leads').select('*').eq('location', branch).eq('final_status', 'Pending').execute().data or []
+        query = supabase.table('activity_leads').select('*').eq('location', branch).eq('final_status', 'Pending')
+        
+        # Apply filters
+        if ps_name:
+            query = query.eq('ps_name', ps_name)
+        if start_date:
+            query = query.gte('created_at', start_date)
+        if end_date:
+            query = query.lte('created_at', end_date)
+            
+        event_rows_raw = query.execute().data or []
         event_rows = [
             {
                 'uid': row.get('activity_uid', ''),
@@ -3766,6 +3933,9 @@ def api_branch_head_dashboard_data():
 
         # Merge all
         all_rows = followup_rows + event_rows
+        
+        # Apply search filter
+        all_rows = filter_rows_by_search(all_rows, search)
 
         # Counts for KPI sub-boxes
         cre_assigned_count = len(followup_rows)
@@ -3799,16 +3969,59 @@ def api_branch_head_dashboard_data():
         return jsonify(response)
 
     elif section == 'followup_leads':
+        # Get today's follow-ups using proper date filtering (like your SQL query)
         today_str = datetime.now().strftime('%Y-%m-%d')
-        tomorrow_str = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
-        # Only today's follow-ups with correct status
-        ps_today = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).eq('final_status', 'Pending').execute().data or []
-        act_today_raw = supabase.table('activity_leads').select('*') \
-            .eq('location', branch) \
-            .gte('ps_followup_date_ts', f'{today_str} 00:00:00') \
-            .lt('ps_followup_date_ts', f'{tomorrow_str} 00:00:00') \
-            .eq('final_status', 'Pending').execute().data or []
-        walkin_today_raw = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).eq('ps_final_status', 'Pending').execute().data or []
+        
+        # PS follow-ups for today (exact date match)
+        ps_query = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Pending').eq('follow_up_date', today_str)
+        ps_today = ps_query.execute().data or []
+        
+        # Event follow-ups for today (exact date match)
+        # Try different date formats since the data might be stored differently
+        act_query = supabase.table('activity_leads').select('*').eq('location', branch).eq('final_status', 'Pending').gte('ps_followup_date_ts', f'{today_str} 00:00:00').lt('ps_followup_date_ts', f'{today_str} 23:59:59')
+        act_today_raw = act_query.execute().data or []
+        
+        # If no results, try without time component
+        if not act_today_raw:
+            act_query = supabase.table('activity_leads').select('*').eq('location', branch).eq('final_status', 'Pending').like('ps_followup_date_ts', f'{today_str}%')
+            act_today_raw = act_query.execute().data or []
+        
+        # Walk-in follow-ups for today (exact date match)
+        # Try different date formats since the data might be stored differently
+        walkin_query = supabase.table('walkin_table').select('*').eq('branch', branch).gte('next_followup_date', f'{today_str} 00:00:00').lt('next_followup_date', f'{today_str} 23:59:59')
+        walkin_today_raw = walkin_query.execute().data or []
+        
+        # If no results, try without time component
+        if not walkin_today_raw:
+            walkin_query = supabase.table('walkin_table').select('*').eq('branch', branch).like('next_followup_date', f'{today_str}%')
+            walkin_today_raw = walkin_query.execute().data or []
+        
+        # Debug: Print exact query conditions
+        print(f"DEBUG: PS query - branch: {branch}, final_status: Pending, follow_up_date: {today_str}")
+        print(f"DEBUG: Event query - location: {branch}, final_status: Pending, ps_followup_date_ts: {today_str} 00:00:00 to {today_str} 23:59:59")
+        print(f"DEBUG: Walkin query - branch: {branch}, next_followup_date: {today_str} 00:00:00 to {today_str} 23:59:59")
+        print(f"DEBUG: Today's date being used: {today_str}")
+        
+        # Debug: Print query results for today's follow-ups
+        print(f"DEBUG: Today's follow-ups query - branch: {branch}, today: {today_str}")
+        print(f"DEBUG: PS follow-ups for today: {len(ps_today)}")
+        print(f"DEBUG: Event follow-ups for today: {len(act_today_raw)}")
+        print(f"DEBUG: Walk-in follow-ups for today: {len(walkin_today_raw)}")
+        if walkin_today_raw:
+            print(f"DEBUG: Sample walk-in data: {walkin_today_raw[0]}")
+        else:
+            print(f"DEBUG: No walk-in data found for today. Checking all walk-in data...")
+            # Debug: Check all walk-in data to see what dates exist
+            all_walkin = supabase.table('walkin_table').select('next_followup_date').eq('branch', branch).execute().data or []
+            if all_walkin:
+                dates = [row.get('next_followup_date') for row in all_walkin if row.get('next_followup_date')]
+                print(f"DEBUG: Available walk-in dates: {set(dates)}")
+        
+        # Debug: Show sample data from each source
+        if ps_today:
+            print(f"DEBUG: Sample PS data: {ps_today[0]}")
+        if act_today_raw:
+            print(f"DEBUG: Sample Event data: {act_today_raw[0]}")
         
         # Mark all as not missed and set source_type and phone
         ps_today = [{**row, 'missed': False, 'lead_status': row.get('lead_status', '')} for row in ps_today]
@@ -3817,36 +4030,92 @@ def api_branch_head_dashboard_data():
             for row in act_today_raw
         ]
         walkin_today = [
-            {**row, 'missed': False, 'source_type': 'Walk-in', 'final_status': row.get('ps_final_status', ''), 'lead_status': row.get('lead_status', '')}
+            {**row, 'missed': False, 'source_type': 'Walk-in', 'final_status': row.get('status', ''), 'lead_status': row.get('lead_status', ''), 'customer_mobile_number': row.get('mobile_number', '')}
             for row in walkin_today_raw
         ]
         
-        # Merge only today's followups
-        all_rows = ps_today + act_today
-        total_count = len(all_rows)
-        offset = (page - 1) * per_page
-        paged_rows = all_rows[offset:offset + per_page]
-        total_pages = 1 if total_count == 0 else math.ceil(total_count / per_page)
+        # Debug: Print sample data from each source
+        if ps_today:
+            print(f"DEBUG: Sample PS data: {ps_today[0] if ps_today else 'None'}")
+            print(f"DEBUG: PS source column value: {ps_today[0].get('source') if ps_today else 'None'}")
+        if act_today:
+            print(f"DEBUG: Sample Event data: {act_today[0] if act_today else 'None'}")
+        if walkin_today:
+            print(f"DEBUG: Sample Walkin data: {walkin_today[0] if walkin_today else 'None'}")
+        
+        # Merge all today's followups (PS, Activity, and Walk-in)
+        all_rows = ps_today + act_today + walkin_today
+        
+        # Debug: Print counts before and after search filter
+        print(f"DEBUG: Before search filter - PS: {len(ps_today)}, Event: {len(act_today)}, Walkin: {len(walkin_today)}, Total: {len(all_rows)}")
+        print(f"DEBUG: Search term: '{search}'")
+        
+        # Search is now applied at database level, no need for client-side filtering
+        print(f"DEBUG: Search applied at database level - Total: {len(all_rows)}")
+        
+        # Format rows for frontend
+        formatted_rows = [
+            {
+                'uid': row.get('lead_uid', row.get('activity_uid', row.get('uid', ''))),
+                'customer_name': row.get('customer_name', ''),
+                'customer_mobile_number': row.get('customer_mobile_number', row.get('customer_phone_number', row.get('mobile_number', ''))),
+                'source': row.get('source', row.get('source_type', 'PS Followup')),  # Use source from ps_followup_master, fallback to source_type
+                'lead_category': row.get('lead_category') if row.get('lead_category') else 'Not Set',
+                'lead_status': row.get('lead_status', ''),
+                'ps_name': row.get('ps_name', row.get('ps_assigned', '')),
+                'follow_up_date': row.get('follow_up_date', row.get('ps_followup_date_ts', row.get('next_followup_date', '')))
+            }
+            for row in all_rows
+        ]
+        
+        print(f"DEBUG: Final formatted rows count: {len(formatted_rows)}")
+        
+        # Calculate actual counts from loaded data
+        actual_ps_count = len(ps_today)
+        actual_event_count = len(act_today_raw)
+        actual_walkin_count = len(walkin_today_raw)
+        actual_total_count = actual_ps_count + actual_event_count + actual_walkin_count
+        
+        print(f"DEBUG: Actual data counts - PS: {actual_ps_count}, Event: {actual_event_count}, Walkin: {actual_walkin_count}, Total: {actual_total_count}")
+        print(f"DEBUG: Formatted rows count: {len(formatted_rows)}")
         
         response = {
             'success': True,
-            'rows': paged_rows,
-            'total_count': total_count,
-            'total_pages': total_pages,
-            'current_page': page,
-            'per_page': per_page,
-            'followup_leads_count': total_count,
-            'fresh_leads_count': fresh_leads_count,
-            'walkin_leads_count': walkin_leads_count,
-            'cre_assigned_leads_count': cre_assigned_leads_count,
-            'event_leads_count': event_leads_count,
-            'won_leads_count': won_leads_count,
-            'lost_leads_count': lost_leads_count
+            'rows': formatted_rows,
+            'total_count': len(formatted_rows),
+            'followup_leads_count': actual_total_count,  # Use actual data count, not formatted rows
+            'fresh_leads_count': fresh_leads_count
         }
+        
+        auth_manager.log_audit_event(
+            user_id=session.get('user_id'),
+            user_type=session.get('user_type'),
+            action='BRANCH_HEAD_DASHBOARD_DATA_ACCESS',
+            resource='branch_head_dashboard_data',
+            details={
+                'section': section,
+                'start_date': start_date,
+                'end_date': end_date,
+                'uid': uid,
+                'ps_name': ps_name,
+                'search': search,
+                'total_count': len(formatted_rows)
+            }
+        )
         return jsonify(response)
 
     elif section == 'event_leads':
-        event_rows_raw = supabase.table('activity_leads').select('*').eq('location', branch).execute().data or []
+        query = supabase.table('activity_leads').select('*').eq('location', branch)
+        
+        # Apply filters
+        if ps_name:
+            query = query.eq('ps_name', ps_name)
+        if start_date:
+            query = query.gte('created_at', start_date)
+        if end_date:
+            query = query.lte('created_at', end_date)
+            
+        event_rows_raw = query.execute().data or []
         event_rows = [
             {
                 'customer_name': (row.get('customer_name') or '') if row.get('customer_name') is not None else '',
@@ -3859,6 +4128,9 @@ def api_branch_head_dashboard_data():
             }
             for row in event_rows_raw
         ]
+        
+        # Apply search filter
+        event_rows = filter_rows_by_search(event_rows, search)
         
         total_count = len(event_rows)
         offset = (page - 1) * per_page
@@ -3884,7 +4156,17 @@ def api_branch_head_dashboard_data():
 
     elif section == 'won_leads':
         # Fetch from ps_followup_master
-        ps_rows_raw = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Won').execute().data or []
+        query = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Won')
+        
+        # Apply filters
+        if ps_name:
+            query = query.eq('ps_name', ps_name)
+        if start_date:
+            query = query.gte('created_at', start_date)
+        if end_date:
+            query = query.lte('created_at', end_date)
+            
+        ps_rows_raw = query.execute().data or []
         ps_rows = [
             {
                 'customer_name': row.get('customer_name', ''),
@@ -3899,7 +4181,17 @@ def api_branch_head_dashboard_data():
         ]
         
         # Fetch from activity_leads
-        event_rows_raw = supabase.table('activity_leads').select('*').eq('location', branch).eq('final_status', 'Won').execute().data or []
+        query = supabase.table('activity_leads').select('*').eq('location', branch).eq('final_status', 'Won')
+        
+        # Apply filters
+        if ps_name:
+            query = query.eq('ps_name', ps_name)
+        if start_date:
+            query = query.gte('created_at', start_date)
+        if end_date:
+            query = query.lte('created_at', end_date)
+            
+        event_rows_raw = query.execute().data or []
         event_rows = [
             {
                 'customer_name': row.get('customer_name', ''),
@@ -3914,7 +4206,17 @@ def api_branch_head_dashboard_data():
         ]
         
         # Fetch from walkin_data
-        walkin_rows_raw = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('ps_final_status', 'Won').execute().data or []
+        query = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('ps_final_status', 'Won')
+        
+        # Apply filters
+        if ps_name:
+            query = query.eq('ps_name', ps_name)
+        if start_date:
+            query = query.gte('created_at', start_date)
+        if end_date:
+            query = query.lte('created_at', end_date)
+            
+        walkin_rows_raw = query.execute().data or []
         walkin_rows = [
             {
                 'customer_name': row.get('customer_name', ''),
@@ -3930,6 +4232,10 @@ def api_branch_head_dashboard_data():
         
         # Merge all rows
         all_rows = ps_rows + event_rows + walkin_rows
+        
+        # Apply search filter
+        all_rows = filter_rows_by_search(all_rows, search)
+        
         total_count = len(all_rows)
         offset = (page - 1) * per_page
         paged_rows = all_rows[offset:offset + per_page]
@@ -3954,7 +4260,17 @@ def api_branch_head_dashboard_data():
 
     elif section == 'lost_leads':
         # Fetch from ps_followup_master
-        ps_rows_raw = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Lost').execute().data or []
+        query = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Lost')
+        
+        # Apply filters
+        if ps_name:
+            query = query.eq('ps_name', ps_name)
+        if start_date:
+            query = query.gte('created_at', start_date)
+        if end_date:
+            query = query.lte('created_at', end_date)
+            
+        ps_rows_raw = query.execute().data or []
         ps_rows = [
             {
                 'customer_name': row.get('customer_name', ''),
@@ -3969,7 +4285,17 @@ def api_branch_head_dashboard_data():
         ]
         
         # Fetch from activity_leads
-        event_rows_raw = supabase.table('activity_leads').select('*').eq('location', branch).eq('final_status', 'Lost').execute().data or []
+        query = supabase.table('activity_leads').select('*').eq('location', branch).eq('final_status', 'Lost')
+        
+        # Apply filters
+        if ps_name:
+            query = query.eq('ps_name', ps_name)
+        if start_date:
+            query = query.gte('created_at', start_date)
+        if end_date:
+            query = query.lte('created_at', end_date)
+            
+        event_rows_raw = query.execute().data or []
         event_rows = [
             {
                 'customer_name': row.get('customer_name', ''),
@@ -3984,7 +4310,17 @@ def api_branch_head_dashboard_data():
         ]
         
         # Fetch from walkin_data
-        walkin_rows_raw = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('ps_final_status', 'Lost').execute().data or []
+        query = supabase.table('walkin_data').select('*').eq('ps_branch', branch).eq('ps_final_status', 'Lost')
+        
+        # Apply filters
+        if ps_name:
+            query = query.eq('ps_name', ps_name)
+        if start_date:
+            query = query.gte('created_at', start_date)
+        if end_date:
+            query = query.lte('created_at', end_date)
+            
+        walkin_rows_raw = query.execute().data or []
         walkin_rows = [
             {
                 'customer_name': row.get('customer_name', ''),
@@ -4000,6 +4336,10 @@ def api_branch_head_dashboard_data():
         
         # Merge all rows
         all_rows = ps_rows + event_rows + walkin_rows
+        
+        # Apply search filter
+        all_rows = filter_rows_by_search(all_rows, search)
+        
         total_count = len(all_rows)
         offset = (page - 1) * per_page
         paged_rows = all_rows[offset:offset + per_page]
