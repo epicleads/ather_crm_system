@@ -48,7 +48,7 @@
         <div class="stats-card bg-success text-white p-3 rounded h-100">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <h4 class="mb-1 text-white">{{ attended_leads|length }}</h4>
+                    <h4 class="mb-1 text-white">{{ pending_leads|length }}</h4>
                     <small class="text-white">Pending Leads</small>
                 </div>
                 <i class="fas fa-check-circle fa-2x text-white"></i>
@@ -316,7 +316,7 @@
             <!-- Pending Leads Tab -->
             <div class="tab-pane fade" id="pending" role="tabpanel" aria-labelledby="pending-tab">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="mb-0">Pending Leads ({{ attended_leads|length }})</h5>
+                    <h5 class="mb-0">Pending Leads ({{ pending_leads|length }})</h5>
                     <div class="d-flex gap-2">
                         <!-- Lead Category Toggle Buttons -->
                         <div class="btn-group me-2" role="group" aria-label="Lead Category Filters">
@@ -342,29 +342,25 @@
                     </div>
                 </div>
 
-                {% if attended_leads %}
+                {% if pending_leads %}
                 <div class="table-responsive">
-                    <table class="table table-striped table-hover" id="attendedLeadsTable">
+                    <table class="table table-striped table-hover" id="pendingLeadsTable">
                         <thead class="table-dark">
                             <tr>
                                 <th>Action</th>
                                 <th>Lead Status</th>
                                 <th>Customer Name</th>
                                 <th>Mobile</th>
-                                <th>First Call Date</th>
-                                <th>Last Call Date</th>
+                                <th>Source</th>
                                 <th>Category</th>
                                 <th>Model Interested</th>
-                                <th>Final Status</th>
+                                <th>Created Date</th>
                                 <th>UID</th>
-                                <th>Call History</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for lead in attended_leads %}
-                            <tr class="attended-lead-row"
-                                data-first-call="{{ lead.first_call_date or '' }}"
-                                data-last-call="{{ lead.third_call_date or lead.second_call_date or lead.first_call_date or '' }}"
+                            {% for lead in pending_leads %}
+                            <tr class="pending-lead-row"
                                 data-search="{{ ((lead.lead_uid or '') + ' ' + (lead.customer_name or '') + ' ' + (lead.customer_mobile_number or '') + ' ' + (lead.source or ''))|lower }}">
                                 <td>
                                     {% if lead.activity_uid %}
@@ -390,8 +386,7 @@
                                 </td>
                                 <td>{{ lead.customer_name }}</td>
                                 <td>{{ lead.customer_mobile_number }}</td>
-                                <td>{{ lead.first_call_date or 'N/A' }}</td>
-                                <td>{{ lead.third_call_date or lead.second_call_date or lead.first_call_date or 'N/A' }}</td>
+                                <td><span class="badge bg-secondary">{{ lead.source or 'N/A' }}</span></td>
                                 <td>
                                     {% if lead.lead_category and lead.lead_category|lower == 'hot' %}
                                         <span class="badge bg-danger">{{ lead.lead_category }}</span>
@@ -406,21 +401,8 @@
                                     {% endif %}
                                 </td>
                                 <td>{{ lead.model_interested or 'Not specified' }}</td>
-                                <td>
-                                    {% if lead.final_status == 'Won' %}
-                                        <span class="badge bg-success">{{ lead.final_status }}</span>
-                                    {% elif lead.final_status == 'Lost' %}
-                                        <span class="badge bg-danger">{{ lead.final_status }}</span>
-                                    {% else %}
-                                        <span class="badge bg-warning">{{ lead.final_status }}</span>
-                                    {% endif %}
-                                </td>
+                                <td>{{ lead.created_at[:10] if lead.created_at else 'N/A' }}</td>
                                 <td><span class="badge bg-primary">{{ lead.lead_uid }}</span></td>
-                                <td>
-                                    <button class="btn btn-sm btn-outline-info view-ps-call-history-btn" data-uid="{{ lead.lead_uid }}">
-                                        <i class="fas fa-history"></i> View
-                                    </button>
-                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -909,7 +891,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // For pending leads, also check category filter
                 let shouldShowByCategory = true;
-                if (tableId === 'attendedLeadsTable' && activeCategoryFilter) {
+                if (tableId === 'pendingLeadsTable' && activeCategoryFilter) {
                     const categoryCell = row.querySelector('td:nth-child(7)');
                     if (categoryCell) {
                         // Get the badge text which contains the category
@@ -929,7 +911,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             
             // Update count for pending leads
-            if (tableId === 'attendedLeadsTable') {
+            if (tableId === 'pendingLeadsTable') {
                 updatePendingLeadsCount();
             }
             
@@ -957,7 +939,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Setup search for all tabs
     setupSearch('pendingLeadSearchInput', 'pendingLeadSearchButton', 'pendingLeadClearButton', 'pendingLeadsTable');
     setupSearch('followupSearchInput', 'followupSearchButton', 'followupClearButton', 'followupTable');
-    setupSearch('attendedSearchInput', 'attendedSearchButton', 'attendedClearButton', 'attendedLeadsTable');
+            setupSearch('attendedSearchInput', 'attendedSearchButton', 'attendedClearButton', 'pendingLeadsTable');
     setupSearch('wonLostLeadSearchInput', 'wonLostLeadSearchButton', 'wonLostLeadClearButton', 'wonLostLeadsTable');
 
     setupSearch('eventLeadSearchInput', 'eventLeadSearchButton', 'eventLeadClearButton', 'eventLeadsTable');
@@ -967,12 +949,12 @@ document.addEventListener('DOMContentLoaded', function() {
     let activeCategoryFilter = null;
     
     function filterPendingLeadsByCategory() {
-        const tableRows = document.querySelectorAll('#attendedLeadsTable tbody tr');
+        const tableRows = document.querySelectorAll('#pendingLeadsTable tbody tr');
         console.log('Filtering pending leads by category. Active filter:', activeCategoryFilter);
         console.log('Total rows to check:', tableRows.length);
         
         tableRows.forEach((row, index) => {
-            const categoryCell = row.querySelector('td:nth-child(7)'); // Category column
+            const categoryCell = row.querySelector('td:nth-child(6)'); // Category column
             if (categoryCell) {
                 // Get the badge text which contains the category
                 const badge = categoryCell.querySelector('.badge');
@@ -1001,7 +983,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function updatePendingLeadsCount() {
-        const tableRows = document.querySelectorAll('#attendedLeadsTable tbody tr');
+        const tableRows = document.querySelectorAll('#pendingLeadsTable tbody tr');
         let visibleCount = 0;
         
         tableRows.forEach(row => {
