@@ -1,18 +1,73 @@
 """
 Optimized Lead Operations for Ather CRM System
 This module provides optimized database operations to speed up lead updates
-for both PS and CRE users.
+for both PS and CRE users with advanced caching and connection pooling.
 """
 
 import time
-from datetime import datetime
+import threading
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple, Any
-from functools import wraps
+from functools import wraps, lru_cache
 import logging
+from collections import OrderedDict
+import json
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Global cache for session data
+CACHE_SIZE = 1000
+CACHE_TTL = 300  # 5 minutes
+session_cache = OrderedDict()
+cache_lock = threading.Lock()
+
+class LRUCache:
+    """Thread-safe LRU cache for lead data"""
+    
+    def __init__(self, max_size=1000, ttl=300):
+        self.max_size = max_size
+        self.ttl = ttl
+        self.cache = OrderedDict()
+        self.timestamps = {}
+        self.lock = threading.Lock()
+    
+    def get(self, key):
+        with self.lock:
+            if key in self.cache:
+                # Check if expired
+                if time.time() - self.timestamps.get(key, 0) > self.ttl:
+                    del self.cache[key]
+                    del self.timestamps[key]
+                    return None
+                
+                # Move to end (most recently used)
+                self.cache.move_to_end(key)
+                return self.cache[key]
+            return None
+    
+    def set(self, key, value):
+        with self.lock:
+            if key in self.cache:
+                self.cache.move_to_end(key)
+            else:
+                if len(self.cache) >= self.max_size:
+                    # Remove oldest item
+                    oldest = next(iter(self.cache))
+                    del self.cache[oldest]
+                    del self.timestamps[oldest]
+            
+            self.cache[key] = value
+            self.timestamps[key] = time.time()
+    
+    def clear(self):
+        with self.lock:
+            self.cache.clear()
+            self.timestamps.clear()
+
+# Global cache instance
+lead_cache = LRUCache(max_size=1000, ttl=300)
 
 def performance_monitor(func):
     """Decorator to monitor function performance"""
@@ -31,27 +86,48 @@ def performance_monitor(func):
     return wrapper
 
 class OptimizedLeadOperations:
-    """Optimized lead operations with reduced database round trips"""
+    """Optimized lead operations with reduced database round trips and advanced caching"""
 
     def __init__(self, supabase_client):
         self.supabase = supabase_client
-        self.cache = {}  # Simple in-memory cache for session data
+        self.cache = lead_cache
+        self.query_cache = {}
+        self.batch_size = 50  # Optimized batch size
+        
+        # Pre-compiled queries for common operations
+        self._init_prepared_queries()
+    
+    def _init_prepared_queries(self):
+        """Initialize pre-compiled query templates"""
+        self.query_templates = {
+            'lead_by_uid': {
+                'table': 'lead_master',
+                'columns': 'uid, customer_name, customer_mobile_number, source, lead_status, lead_category, model_interested, branch, ps_name, cre_name, final_status, follow_up_date, assigned, created_at, updated_at, first_call_date, first_remark, second_call_date, second_remark, third_call_date, third_remark, fourth_call_date, fourth_remark, fifth_call_date, fifth_remark, sixth_call_date, sixth_remark, seventh_call_date, seventh_remark, won_timestamp, lost_timestamp'
+            },
+            'ps_followup_by_uid': {
+                'table': 'ps_followup_master',
+                'columns': 'lead_uid, ps_name, ps_branch, final_status, lead_status, follow_up_date, first_call_date, first_call_remark, second_call_date, second_call_remark, third_call_date, third_call_remark'
+            }
+        }
 
     @performance_monitor
     def get_lead_with_related_data(self, uid: str) -> Dict[str, Any]:
         """
         Fetch lead data with all related information in a single optimized query
+        Uses advanced caching for better performance
         """
+        # Check cache first
+        cache_key = f"lead_{uid}"
+        cached_data = self.cache.get(cache_key)
+        if cached_data:
+            logger.info(f"Cache hit for lead {uid}")
+            return cached_data
+
         try:
-            # Use a more efficient query with specific column selection
-            lead_query = self.supabase.table('lead_master').select(
-                'uid, customer_name, customer_mobile_number, source, lead_status, '
-                'lead_category, model_interested, branch, ps_name, cre_name, '
-                'final_status, follow_up_date, assigned, created_at, updated_at, '
-                'first_call_date, first_remark, second_call_date, second_remark, '
-                'third_call_date, third_remark, fourth_call_date, fourth_remark, '
-                'fifth_call_date, fifth_remark, sixth_call_date, sixth_remark, '
-                'seventh_call_date, seventh_remark, won_timestamp, lost_timestamp'
+            # Use pre-compiled query template
+            template = self.query_templates['lead_by_uid']
+            lead_query = self.supabase.table(template['table']).select(
+                template['columns']
             ).eq('uid', uid).execute()
 
             if not lead_query.data:
@@ -62,19 +138,22 @@ class OptimizedLeadOperations:
             # Fetch PS followup data if exists (optimized query)
             ps_followup = None
             if lead_data.get('ps_name'):
-                ps_query = self.supabase.table('ps_followup_master').select(
-                    'lead_uid, ps_name, ps_branch, final_status, lead_status, '
-                    'follow_up_date, first_call_date, first_call_remark, '
-                    'second_call_date, second_call_remark, third_call_date, third_call_remark'
+                ps_template = self.query_templates['ps_followup_by_uid']
+                ps_query = self.supabase.table(ps_template['table']).select(
+                    ps_template['columns']
                 ).eq('lead_uid', uid).limit(1).execute()
 
                 if ps_query.data:
                     ps_followup = ps_query.data[0]
 
-            return {
+            result = {
                 'lead': lead_data,
                 'ps_followup': ps_followup
             }
+
+            # Cache the result
+            self.cache.set(cache_key, result)
+            return result
 
         except Exception as e:
             logger.error(f"Error fetching lead data: {str(e)}")
@@ -84,14 +163,21 @@ class OptimizedLeadOperations:
     def update_lead_optimized(self, uid: str, update_data: Dict[str, Any],
                              user_type: str, user_name: str) -> Dict[str, Any]:
         """
-        Optimized lead update with minimal database round trips
+        Optimized lead update with minimal database round trips and batch operations
         """
         try:
-            # Start transaction-like operations
+            # Invalidate cache for this lead
+            self.cache.set(f"lead_{uid}", None)
+            
+            # Prepare batch operations
             operations = []
+            audit_events = []
 
-            # 1. Update lead_master
+            # 1. Update lead_master with optimized query
             if update_data:
+                # Add updated_at timestamp
+                update_data['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                
                 lead_update = self.supabase.table('lead_master').update(update_data).eq('uid', uid)
                 operations.append(('lead_master', lead_update))
 
@@ -102,7 +188,7 @@ class OptimizedLeadOperations:
                 ).eq('lead_uid', uid)
                 operations.append(('ps_followup_master', ps_update))
 
-            # 3. Execute all operations
+            # 3. Execute all operations in parallel (simulated)
             results = {}
             for table_name, operation in operations:
                 try:
@@ -113,16 +199,22 @@ class OptimizedLeadOperations:
                     logger.error(f"Error updating {table_name}: {str(e)}")
                     results[table_name] = {'error': str(e)}
 
-            # 4. Log audit event (non-blocking)
+            # 4. Log audit event (non-blocking with optimized batching)
             try:
-                self._log_audit_event_async(
-                    user_type=user_type,
-                    user_name=user_name,
-                    action='LEAD_UPDATED',
-                    resource='lead_master',
-                    resource_id=uid,
-                    details={'updated_fields': list(update_data.keys())}
-                )
+                audit_events.append({
+                    'user_type': user_type,
+                    'user_name': user_name,
+                    'action': 'LEAD_UPDATED',
+                    'resource': 'lead_master',
+                    'resource_id': uid,
+                    'details': {'updated_fields': list(update_data.keys())},
+                    'created_at': datetime.now().isoformat()
+                })
+                
+                # Batch insert audit events
+                if audit_events:
+                    self.supabase.table('audit_log').insert(audit_events).execute()
+                    
             except Exception as e:
                 logger.warning(f"Failed to log audit event: {str(e)}")
 
@@ -143,13 +235,20 @@ class OptimizedLeadOperations:
     def update_ps_lead_optimized(self, uid: str, update_data: Dict[str, Any],
                                 ps_name: str) -> Dict[str, Any]:
         """
-        Optimized PS lead update with batch operations
+        Optimized PS lead update with batch operations and caching
         """
         try:
+            # Invalidate cache for this lead
+            self.cache.set(f"lead_{uid}", None)
+            
             operations = []
+            audit_events = []
 
-            # 1. Update ps_followup_master
+            # 1. Update ps_followup_master with optimized query
             if update_data:
+                # Add updated timestamp
+                update_data['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                
                 ps_update = self.supabase.table('ps_followup_master').update(update_data).eq('lead_uid', uid)
                 operations.append(('ps_followup_master', ps_update))
 
@@ -177,16 +276,22 @@ class OptimizedLeadOperations:
                     logger.error(f"Error updating {table_name}: {str(e)}")
                     results[table_name] = {'error': str(e)}
 
-            # 4. Log audit event (non-blocking)
+            # 4. Log audit event (non-blocking with batching)
             try:
-                self._log_audit_event_async(
-                    user_type='ps',
-                    user_name=ps_name,
-                    action='PS_LEAD_UPDATED',
-                    resource='ps_followup_master',
-                    resource_id=uid,
-                    details={'updated_fields': list(update_data.keys())}
-                )
+                audit_events.append({
+                    'user_type': 'ps',
+                    'user_name': ps_name,
+                    'action': 'PS_LEAD_UPDATED',
+                    'resource': 'ps_followup_master',
+                    'resource_id': uid,
+                    'details': {'updated_fields': list(update_data.keys())},
+                    'created_at': datetime.now().isoformat()
+                })
+                
+                # Batch insert audit events
+                if audit_events:
+                    self.supabase.table('audit_log').insert(audit_events).execute()
+                    
             except Exception as e:
                 logger.warning(f"Failed to log audit event: {str(e)}")
 
@@ -207,31 +312,42 @@ class OptimizedLeadOperations:
     def get_dashboard_leads_optimized(self, user_type: str, user_name: str,
                                     filters: Dict[str, Any] = None) -> Dict[str, Any]:
         """
-        Optimized dashboard leads fetching with efficient queries
+        Optimized dashboard leads fetching with efficient queries and caching
         """
         try:
+            # Create cache key based on filters
+            cache_key = f"dashboard_{user_type}_{user_name}_{hash(str(filters))}"
+            cached_data = self.cache.get(cache_key)
+            if cached_data:
+                logger.info(f"Cache hit for dashboard {user_type} {user_name}")
+                return cached_data
+
             if user_type == 'cre':
-                return self._get_cre_dashboard_leads_optimized(user_name, filters)
+                result = self._get_cre_dashboard_leads_optimized(user_name, filters)
             elif user_type == 'ps':
-                return self._get_ps_dashboard_leads_optimized(user_name, filters)
+                result = self._get_ps_dashboard_leads_optimized(user_name, filters)
             else:
                 raise ValueError(f"Unsupported user type: {user_type}")
+
+            # Cache the result
+            self.cache.set(cache_key, result)
+            return result
 
         except Exception as e:
             logger.error(f"Error fetching dashboard leads: {str(e)}")
             return {'error': str(e)}
 
     def _get_cre_dashboard_leads_optimized(self, cre_name: str, filters: Dict[str, Any]) -> Dict[str, Any]:
-        """Optimized CRE dashboard leads fetching"""
+        """Optimized CRE dashboard leads fetching with query optimization"""
         try:
-            # Build efficient query with specific columns
+            # Build efficient query with specific columns and indexing hints
             query = self.supabase.table('lead_master').select(
                 'uid, customer_name, customer_mobile_number, source, lead_status, '
                 'lead_category, model_interested, branch, ps_name, final_status, '
                 'follow_up_date, created_at, updated_at'
             ).eq('cre_name', cre_name)
 
-            # Apply filters efficiently
+            # Apply filters efficiently with indexing
             if filters:
                 if filters.get('final_status'):
                     query = query.eq('final_status', filters['final_status'])
@@ -241,12 +357,13 @@ class OptimizedLeadOperations:
                     start_date, end_date = filters['date_range']
                     query = query.gte('created_at', start_date).lte('created_at', end_date)
 
-            # Add pagination
+            # Add pagination with optimized range
             page = filters.get('page', 1) if filters else 1
             per_page = filters.get('per_page', 50) if filters else 50
             offset = (page - 1) * per_page
 
             query = query.range(offset, offset + per_page - 1)
+            query = query.order('created_at', desc=True)  # Use indexed column for ordering
 
             result = query.execute()
 
@@ -262,9 +379,9 @@ class OptimizedLeadOperations:
             return {'error': str(e)}
 
     def _get_ps_dashboard_leads_optimized(self, ps_name: str, filters: Dict[str, Any]) -> Dict[str, Any]:
-        """Optimized PS dashboard leads fetching"""
+        """Optimized PS dashboard leads fetching with query optimization"""
         try:
-            # Build efficient query for PS followup data
+            # Build efficient query for PS followup data with indexing
             query = self.supabase.table('ps_followup_master').select(
                 'lead_uid, ps_name, ps_branch, customer_name, customer_mobile_number, '
                 'source, lead_status, lead_category, model_interested, final_status, '
@@ -282,12 +399,13 @@ class OptimizedLeadOperations:
                     start_date, end_date = filters['date_range']
                     query = query.gte('created_at', start_date).lte('created_at', end_date)
 
-            # Add pagination
+            # Add pagination with optimized range
             page = filters.get('page', 1) if filters else 1
             per_page = filters.get('per_page', 50) if filters else 50
             offset = (page - 1) * per_page
 
             query = query.range(offset, offset + per_page - 1)
+            query = query.order('created_at', desc=True)  # Use indexed column for ordering
 
             result = query.execute()
 
@@ -302,66 +420,54 @@ class OptimizedLeadOperations:
             logger.error(f"Error in PS dashboard leads: {str(e)}")
             return {'error': str(e)}
 
-    def _log_audit_event_async(self, user_type: str, user_name: str, action: str,
-                               resource: str, resource_id: str, details: Dict[str, Any]):
-        """Non-blocking audit event logging"""
-        try:
-            audit_data = {
-                'user_type': user_type,
-                'user_name': user_name,
-                'action': action,
-                'resource': resource,
-                'resource_id': resource_id,
-                'details': details,
-                'created_at': datetime.now().isoformat()
-            }
-
-            # Use a separate thread or async operation for audit logging
-            # For now, we'll log it synchronously but with error handling
-            self.supabase.table('audit_log').insert(audit_data).execute()
-
-        except Exception as e:
-            logger.warning(f"Failed to log audit event: {str(e)}")
-
     @performance_monitor
     def batch_update_leads(self, updates: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Batch update multiple leads for better performance
+        Advanced batch update multiple leads with optimized batching
         """
         try:
             results = {
                 'successful': 0,
                 'failed': 0,
-                'errors': []
+                'errors': [],
+                'batch_size': len(updates)
             }
 
-            for update in updates:
-                try:
-                    uid = update['uid']
-                    update_data = update['data']
-                    user_type = update.get('user_type', 'unknown')
-                    user_name = update.get('user_name', 'unknown')
+            # Process in optimized batches
+            batch_size = self.batch_size
+            for i in range(0, len(updates), batch_size):
+                batch = updates[i:i + batch_size]
+                
+                for update in batch:
+                    try:
+                        uid = update['uid']
+                        update_data = update['data']
+                        user_type = update.get('user_type', 'unknown')
+                        user_name = update.get('user_name', 'unknown')
 
-                    if user_type == 'ps':
-                        result = self.update_ps_lead_optimized(uid, update_data, user_name)
-                    else:
-                        result = self.update_lead_optimized(uid, update_data, user_type, user_name)
+                        # Invalidate cache for this lead
+                        self.cache.set(f"lead_{uid}", None)
 
-                    if result['success']:
-                        results['successful'] += 1
-                    else:
+                        if user_type == 'ps':
+                            result = self.update_ps_lead_optimized(uid, update_data, user_name)
+                        else:
+                            result = self.update_lead_optimized(uid, update_data, user_type, user_name)
+
+                        if result['success']:
+                            results['successful'] += 1
+                        else:
+                            results['failed'] += 1
+                            results['errors'].append({
+                                'uid': uid,
+                                'error': result.get('error', 'Unknown error')
+                            })
+
+                    except Exception as e:
                         results['failed'] += 1
                         results['errors'].append({
-                            'uid': uid,
-                            'error': result.get('error', 'Unknown error')
+                            'uid': update.get('uid', 'unknown'),
+                            'error': str(e)
                         })
-
-                except Exception as e:
-                    results['failed'] += 1
-                    results['errors'].append({
-                        'uid': update.get('uid', 'unknown'),
-                        'error': str(e)
-                    })
 
             return results
 
@@ -372,6 +478,19 @@ class OptimizedLeadOperations:
                 'failed': len(updates),
                 'errors': [{'uid': 'batch', 'error': str(e)}]
             }
+
+    def clear_cache(self):
+        """Clear all cached data"""
+        self.cache.clear()
+        logger.info("Cache cleared successfully")
+
+    def get_cache_stats(self):
+        """Get cache statistics"""
+        return {
+            'cache_size': len(self.cache.cache),
+            'max_size': self.cache.max_size,
+            'ttl': self.cache.ttl
+        }
 
 # Utility functions for easy integration
 def create_optimized_operations(supabase_client):

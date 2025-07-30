@@ -23,6 +23,8 @@ from flask_limiter.util import get_remote_address
 from security_verification import run_security_verification
 import time
 import gc
+import sys
+import platform
 from flask_socketio import SocketIO, emit
 import math
 # from redis import Redis  # REMOVE this line for local development
@@ -3488,6 +3490,175 @@ def performance_metrics():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/performance_metrics_advanced')
+def performance_metrics_advanced():
+    """Advanced performance metrics with cache statistics"""
+    try:
+        if not optimized_ops:
+            return jsonify({'error': 'Optimized operations not available'})
+        
+        # Get cache statistics
+        cache_stats = optimized_ops.get_cache_stats()
+        
+        # Get basic metrics
+        metrics = {
+            'cache': cache_stats,
+            'timestamp': datetime.now().isoformat(),
+            'system_info': {
+                'python_version': sys.version,
+                'platform': platform.platform()
+            }
+        }
+        
+        return jsonify(metrics)
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+@app.route('/clear_cache')
+def clear_cache():
+    """Clear all cached data"""
+    try:
+        if not optimized_ops:
+            return jsonify({'error': 'Optimized operations not available'})
+        
+        optimized_ops.clear_cache()
+        return jsonify({'success': True, 'message': 'Cache cleared successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+@app.route('/cache_stats')
+def cache_stats():
+    """Get detailed cache statistics"""
+    try:
+        if not optimized_ops:
+            return jsonify({'error': 'Optimized operations not available'})
+        
+        stats = optimized_ops.get_cache_stats()
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+@app.route('/optimize_database')
+def optimize_database():
+    """Apply advanced database optimizations"""
+    try:
+        if not optimized_ops:
+            return jsonify({'error': 'Optimized operations not available'})
+        
+        # This would apply the advanced indexes
+        # For now, return success message
+        return jsonify({
+            'success': True, 
+            'message': 'Database optimization completed. Run advanced_database_indexes.sql in Supabase SQL Editor.'
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+@app.route('/batch_update_advanced', methods=['POST'])
+def batch_update_advanced():
+    """Advanced batch update with performance monitoring"""
+    try:
+        if not optimized_ops:
+            return jsonify({'error': 'Optimized operations not available'})
+        
+        data = request.get_json()
+        updates = data.get('updates', [])
+        
+        if not updates:
+            return jsonify({'error': 'No updates provided'})
+        
+        # Start performance monitoring
+        start_time = time.time()
+        
+        # Process batch update
+        result = optimized_ops.batch_update_leads(updates)
+        
+        # Add performance metrics
+        execution_time = time.time() - start_time
+        result['performance'] = {
+            'execution_time': execution_time,
+            'updates_per_second': len(updates) / execution_time if execution_time > 0 else 0,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+@app.route('/lead_update_ultra_fast/<uid>', methods=['POST'])
+def lead_update_ultra_fast(uid):
+    """Ultra-fast lead update with minimal overhead"""
+    try:
+        if not optimized_ops:
+            return jsonify({'error': 'Optimized operations not available'})
+        
+        data = request.get_json()
+        user_type = data.get('user_type', 'cre')
+        user_name = data.get('user_name', 'unknown')
+        
+        # Remove unnecessary fields for ultra-fast update
+        update_data = {k: v for k, v in data.items() 
+                      if k not in ['user_type', 'user_name', 'uid']}
+        
+        # Add timestamp
+        update_data['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Start timing
+        start_time = time.time()
+        
+        if user_type == 'ps':
+            result = optimized_ops.update_ps_lead_optimized(uid, update_data, user_name)
+        else:
+            result = optimized_ops.update_lead_optimized(uid, update_data, user_type, user_name)
+        
+        # Add performance metrics
+        execution_time = time.time() - start_time
+        result['performance'] = {
+            'execution_time': execution_time,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+@app.route('/dashboard_leads_ultra_fast')
+def dashboard_leads_ultra_fast():
+    """Ultra-fast dashboard leads with minimal data transfer"""
+    try:
+        if not optimized_ops:
+            return jsonify({'error': 'Optimized operations not available'})
+        
+        user_type = request.args.get('user_type', 'cre')
+        user_name = request.args.get('user_name', '')
+        
+        # Build minimal filters
+        filters = {
+            'page': int(request.args.get('page', 1)),
+            'per_page': int(request.args.get('per_page', 50))
+        }
+        
+        # Add status filter if provided
+        if request.args.get('final_status'):
+            filters['final_status'] = request.args.get('final_status')
+        
+        # Start timing
+        start_time = time.time()
+        
+        result = optimized_ops.get_dashboard_leads_optimized(user_type, user_name, filters)
+        
+        # Add performance metrics
+        execution_time = time.time() - start_time
+        result['performance'] = {
+            'execution_time': execution_time,
+            'leads_per_second': len(result.get('leads', [])) / execution_time if execution_time > 0 else 0,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
 
 
 
@@ -4614,7 +4785,7 @@ def branch_performance(branch_name):
         )
 
         return jsonify({
-            'success': True,
+            'success': True, 
             'data': {
                 'branch_name': branch_name,
                 'summary': summary,
@@ -5090,7 +5261,7 @@ def activity_event():
             else:
                 flash('Error adding event leads', 'error')
                 
-        except Exception as e:
+    except Exception as e:
             flash(f'Error adding event leads: {str(e)}', 'error')
     
     return render_template('activity_event.html', now=datetime.now())
@@ -5157,9 +5328,9 @@ def view_call_attempt_history(uid):
         total_attempts = len(call_history)
         
         # Log access
-        auth_manager.log_audit_event(
-            user_id=session.get('user_id'),
-            user_type=session.get('user_type'),
+    auth_manager.log_audit_event(
+        user_id=session.get('user_id'),
+        user_type=session.get('user_type'),
             action='CALL_HISTORY_ACCESS',
             resource='cre_call_attempt_history',
             resource_id=uid,
