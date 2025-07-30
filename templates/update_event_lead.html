@@ -157,6 +157,19 @@
                 </div>
                 <div class="col-md-4">
                     <div class="mb-3">
+                        <label for="test_drive_done" class="form-label">Test Drive Done? <span class="text-danger">*</span></label>
+                        <select class="form-select" id="test_drive_done" name="test_drive_done" required>
+                            <option value="" {% if not lead.test_drive_done %}selected{% endif %}>Select</option>
+                            <option value="Yes" {% if lead.test_drive_done == 'Yes' %}selected{% endif %}>Yes</option>
+                            <option value="No" {% if lead.test_drive_done == 'No' %}selected{% endif %}>No</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-md-8">
+                    <div class="mb-3">
                         <label class="form-label">Interested Model</label>
                         <select class="form-select" id="interested_model" name="interested_model">
                             <option value="" disabled {% if not lead.interested_model %}selected{% endif %}>Select Model</option>

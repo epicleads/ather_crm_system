@@ -130,6 +130,19 @@
                 </div>
                 <div class="col-md-6">
                     <div class="mb-3">
+                        <label for="test_drive_done" class="form-label">Test Drive Done? <span class="text-danger">*</span></label>
+                        <select class="form-select" id="test_drive_done" name="test_drive_done" required>
+                            <option value="" {% if not lead.test_drive_done %}selected{% endif %}>Select</option>
+                            <option value="Yes" {% if lead.test_drive_done == 'Yes' %}selected{% endif %}>Yes</option>
+                            <option value="No" {% if lead.test_drive_done == 'No' %}selected{% endif %}>No</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="mb-3">
                         <label class="form-label">PS Branch</label>
                         <input type="text" class="form-control" value="{{ lead.ps_branch }}" readonly>
                     </div>

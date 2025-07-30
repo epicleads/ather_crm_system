@@ -174,12 +174,12 @@
               <div class="col-md-6">
                 <div class="field-group">
                   <label class="form-label">
-                    <i class="fas fa-envelope me-2"></i>Email Address
+                    <i class="fas fa-map-marker-alt me-2"></i>Customer Location
                   </label>
                   <div class="position-relative">
-                    <i class="fas fa-envelope field-icon"></i>
-                    <input type="email" class="form-control field-with-icon" name="email" 
-                           placeholder="Enter email address">
+                    <i class="fas fa-map-marker-alt field-icon"></i>
+                    <input type="text" class="form-control field-with-icon" name="customer_location" 
+                           placeholder="Enter customer location">
                   </div>
                 </div>
               </div>
@@ -197,20 +197,8 @@
               </div>
             </div>
 
-            <!-- Lead Details Row -->
+            <!-- Model and Branch Row -->
             <div class="row form-row">
-              <div class="col-md-6">
-                <div class="field-group">
-                  <label class="form-label">
-                    <i class="fas fa-tag me-2"></i>Lead Source
-                  </label>
-                  <div class="position-relative">
-                    <i class="fas fa-tag field-icon"></i>
-                    <input type="text" class="form-control field-with-icon" name="lead_source" 
-                           placeholder="Enter lead source" value="Walk-in">
-                  </div>
-                </div>
-              </div>
               <div class="col-md-6">
                 <div class="field-group">
                   <label class="form-label required-field">
@@ -223,26 +211,6 @@
                       {% for model in models %}
                       <option value="{{ model }}">{{ model }}</option>
                       {% endfor %}
-                    </select>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Category and Branch Row -->
-            <div class="row form-row">
-              <div class="col-md-6">
-                <div class="field-group">
-                  <label class="form-label required-field">
-                    <i class="fas fa-fire me-2"></i>Lead Category
-                  </label>
-                  <div class="position-relative">
-                    <i class="fas fa-fire field-icon"></i>
-                    <select class="form-select field-with-icon" name="lead_category" required>
-                      <option value="">Select category</option>
-                      <option value="Hot" class="text-danger">🔥 Hot</option>
-                      <option value="Warm" class="text-warning">🌡️ Warm</option>
-                      <option value="Cold" class="text-info">❄️ Cold</option>
                     </select>
                   </div>
                 </div>

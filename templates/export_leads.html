@@ -174,6 +174,49 @@
     </div>
 </div>
 
+<!-- Test Drive Filter Cards -->
+<div class="row mb-4">
+    <div class="col-12">
+        <h4 class="mb-3"><i class="fas fa-car"></i> Filter by Test Drive Status</h4>
+    </div>
+    <div class="col-lg-4 col-md-6 mb-3">
+        <div class="airbnb-card airbnb-card-success">
+            <div class="airbnb-icon">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <h6 class="airbnb-title">Test Drive Done (Yes)</h6>
+            <p class="airbnb-count">{{ test_drive_yes_count }} leads</p>
+            <button class="airbnb-btn airbnb-btn-success" onclick="loadTestDriveLeads('yes')">
+                <i class="fas fa-eye"></i> View Test Drive Done
+            </button>
+        </div>
+    </div>
+    <div class="col-lg-4 col-md-6 mb-3">
+        <div class="airbnb-card airbnb-card-danger">
+            <div class="airbnb-icon">
+                <i class="fas fa-times-circle"></i>
+            </div>
+            <h6 class="airbnb-title">Test Drive Not Done (No)</h6>
+            <p class="airbnb-count">{{ test_drive_no_count }} leads</p>
+            <button class="airbnb-btn airbnb-btn-danger" onclick="loadTestDriveLeads('no')">
+                <i class="fas fa-eye"></i> View Test Drive Not Done
+            </button>
+        </div>
+    </div>
+    <div class="col-lg-4 col-md-6 mb-3">
+        <div class="airbnb-card airbnb-card-info">
+            <div class="airbnb-icon">
+                <i class="fas fa-list"></i>
+            </div>
+            <h6 class="airbnb-title">All Test Drive Leads</h6>
+            <p class="airbnb-count">{{ test_drive_total_count }} leads</p>
+            <button class="airbnb-btn airbnb-btn-info" onclick="loadTestDriveLeads('all')">
+                <i class="fas fa-eye"></i> View All Test Drive Leads
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- Results Section -->
 <div id="resultsSection" style="display: none;">
     <div class="card">
@@ -222,19 +265,18 @@
                 <table class="table table-hover mb-0" id="resultsTable">
                     <thead class="table-dark">
                         <tr>
-                            <th>UID</th>
-                            <th>Date</th>
+                            <th>Original ID</th>
                             <th>Customer Name</th>
                             <th>Mobile</th>
-                            <th>Source</th>
-                            <th>CRE Name</th>
-                            <th>PS Name</th>
+                            <th>Test Drive Done</th>
+                            <th>Lead Status</th>
                             <th>Lead Category</th>
                             <th>Model Interested</th>
-                            <th>Branch</th>
-                            <th>Lead Status</th>
                             <th>Final Status</th>
-                            <th>Follow Up Date</th>
+                            <th>PS Name</th>
+                            <th>Branch</th>
+                            <th>Created At</th>
+                            <th>Updated At</th>
                         </tr>
                     </thead>
                     <tbody id="resultsTableBody">
@@ -473,6 +515,8 @@ let currentPage = 1;
 let rowsPerPage = 10;
 let isDateRangeFilter = false;
 let dateRangeParams = {};
+let isTestDriveFilter = false;
+let testDriveFilterType = null;
 
 // Date range functions
 function setDateRange(period) {
@@ -556,6 +600,7 @@ function loadLeads(filterType, filterValue) {
     currentFilter = filterType;
     currentValue = filterValue;
     isDateRangeFilter = false;
+    isTestDriveFilter = false;
 
     // Show loading spinner
     document.getElementById('loadingSpinner').style.display = 'block';
@@ -574,6 +619,34 @@ function loadLeads(filterType, filterValue) {
         .catch(error => {
             console.error('Error:', error);
             showAlert('error', 'An error occurred while loading leads');
+        })
+        .finally(() => {
+            document.getElementById('loadingSpinner').style.display = 'none';
+        });
+}
+
+function loadTestDriveLeads(filterType) {
+    testDriveFilterType = filterType;
+    isDateRangeFilter = false;
+    isTestDriveFilter = true;
+
+    // Show loading spinner
+    document.getElementById('loadingSpinner').style.display = 'block';
+    document.getElementById('resultsSection').style.display = 'none';
+
+    // Make API call
+    fetch(`{{ url_for('get_test_drive_leads') }}?filter_type=${filterType}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayTestDriveResults(data.leads, filterType);
+            } else {
+                showAlert('error', data.message || 'Error loading test drive leads');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showAlert('error', 'An error occurred while loading test drive leads');
         })
         .finally(() => {
             document.getElementById('loadingSpinner').style.display = 'none';
@@ -608,6 +681,36 @@ function displayResults(leads, filterType, filterValue) {
     document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
 }
 
+function displayTestDriveResults(leads, filterType) {
+    currentData = leads;
+    currentPage = 1;
+
+    // Update title
+    const title = document.getElementById('resultsTitle');
+    let displayName;
+    if (filterType === 'yes') {
+        displayName = 'Test Drive Done (Yes)';
+    } else if (filterType === 'no') {
+        displayName = 'Test Drive Not Done (No)';
+    } else {
+        displayName = 'All Test Drive Leads';
+    }
+    title.innerHTML = `<i class="fas fa-car"></i> ${displayName} (${leads.length} records)`;
+
+    // Reset pagination
+    document.getElementById('rowsPerPage').value = '10';
+    rowsPerPage = 10;
+
+    // Display paginated results
+    displayPaginatedResults();
+
+    // Show results section
+    document.getElementById('resultsSection').style.display = 'block';
+
+    // Scroll to results
+    document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+}
+
 function displayPaginatedResults() {
     const tbody = document.getElementById('resultsTableBody');
     tbody.innerHTML = '';
@@ -615,7 +718,7 @@ function displayPaginatedResults() {
     if (currentData.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="13" class="text-center py-4">
+                <td colspan="12" class="text-center py-4">
                     <i class="fas fa-inbox fa-2x text-muted mb-2"></i>
                     <p class="text-muted">No leads found</p>
                 </td>
@@ -644,28 +747,60 @@ function displayPaginatedResults() {
     // Populate table
     pageData.forEach(lead => {
         const row = document.createElement('tr');
-        row.innerHTML = `
-            <td><span class="badge bg-primary">${lead.uid || ''}</span></td>
-            <td>${lead.date || ''}</td>
-            <td>${lead.customer_name || ''}</td>
-            <td>${lead.customer_mobile_number || ''}</td>
-            <td><span class="badge bg-secondary">${lead.source || ''}</span></td>
-            <td>${lead.cre_name || 'Unassigned'}</td>
-            <td>${lead.ps_name || 'Not Assigned'}</td>
-            <td>
-                ${lead.lead_category ?
-                    `<span class="badge ${getCategoryBadgeClass(lead.lead_category)}">${lead.lead_category}</span>` :
-                    'Not specified'
-                }
-            </td>
-            <td>${lead.model_interested || 'Not specified'}</td>
-            <td>${lead.branch || 'Not specified'}</td>
-            <td>${lead.lead_status || 'Pending'}</td>
-            <td>
-                <span class="badge ${getStatusBadgeClass(lead.final_status)}">${lead.final_status || 'Pending'}</span>
-            </td>
-            <td>${lead.follow_up_date || ''}</td>
-        `;
+        
+        if (isTestDriveFilter) {
+            // Test drive data format
+            row.innerHTML = `
+                <td><span class="badge bg-primary">${lead.original_id || ''}</span></td>
+                <td>${lead.customer_name || ''}</td>
+                <td>${lead.mobile_number || ''}</td>
+                <td>
+                    <span class="badge ${lead.test_drive_done === 'Yes' ? 'bg-success' : 'bg-danger'}">
+                        ${lead.test_drive_done || ''}
+                    </span>
+                </td>
+                <td>${lead.lead_status || ''}</td>
+                <td>
+                    ${lead.lead_category ?
+                        `<span class="badge ${getCategoryBadgeClass(lead.lead_category)}">${lead.lead_category}</span>` :
+                        'Not specified'
+                    }
+                </td>
+                <td>${lead.model_interested || 'Not specified'}</td>
+                <td>
+                    <span class="badge ${getStatusBadgeClass(lead.final_status)}">${lead.final_status || 'Pending'}</span>
+                </td>
+                <td>${lead.ps_name || 'Not Assigned'}</td>
+                <td>${lead.branch || 'Not specified'}</td>
+                <td>${lead.created_at || ''}</td>
+                <td>${lead.updated_at || ''}</td>
+            `;
+        } else {
+            // Regular leads data format
+            row.innerHTML = `
+                <td><span class="badge bg-primary">${lead.uid || ''}</span></td>
+                <td>${lead.date || ''}</td>
+                <td>${lead.customer_name || ''}</td>
+                <td>${lead.customer_mobile_number || ''}</td>
+                <td><span class="badge bg-secondary">${lead.source || ''}</span></td>
+                <td>${lead.cre_name || 'Unassigned'}</td>
+                <td>${lead.ps_name || 'Not Assigned'}</td>
+                <td>
+                    ${lead.lead_category ?
+                        `<span class="badge ${getCategoryBadgeClass(lead.lead_category)}">${lead.lead_category}</span>` :
+                        'Not specified'
+                    }
+                </td>
+                <td>${lead.model_interested || 'Not specified'}</td>
+                <td>${lead.branch || 'Not specified'}</td>
+                <td>${lead.lead_status || 'Pending'}</td>
+                <td>
+                    <span class="badge ${getStatusBadgeClass(lead.final_status)}">${lead.final_status || 'Pending'}</span>
+                </td>
+                <td>${lead.follow_up_date || ''}</td>
+            `;
+        }
+        
         tbody.appendChild(row);
     });
 
@@ -789,7 +924,12 @@ function exportToCSV() {
     let url;
     let params;
 
-    if (isDateRangeFilter) {
+    if (isTestDriveFilter) {
+        params = new URLSearchParams({
+            filter_type: testDriveFilterType
+        });
+        url = `{{ url_for('export_test_drive_csv') }}?${params}`;
+    } else if (isDateRangeFilter) {
         params = new URLSearchParams(dateRangeParams);
         url = `{{ url_for('export_leads_by_date_csv') }}?${params}`;
     } else {
@@ -815,7 +955,9 @@ function exportToCSV() {
             a.href = url;
 
             let filename;
-            if (isDateRangeFilter) {
+            if (isTestDriveFilter) {
+                filename = `test_drive_leads_${testDriveFilterType}_${new Date().toISOString().split('T')[0]}.csv`;
+            } else if (isDateRangeFilter) {
                 filename = `leads_date_range_${dateRangeParams.start_date}_to_${dateRangeParams.end_date}_${new Date().toISOString().split('T')[0]}.csv`;
             } else {
                 filename = `leads_${currentFilter}_${currentValue}_${new Date().toISOString().split('T')[0]}.csv`;
@@ -846,6 +988,8 @@ function clearResults() {
     currentData = [];
     isDateRangeFilter = false;
     dateRangeParams = {};
+    isTestDriveFilter = false;
+    testDriveFilterType = null;
     currentPage = 1;
     rowsPerPage = 10;
 }

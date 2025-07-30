@@ -409,6 +409,100 @@ def safe_get_data(table_name, filters=None, select_fields='*', limit=10000):
         return []
 
 
+def sync_test_drive_to_alltest_drive(source_table, original_id, lead_data):
+    """
+    Sync test drive data to alltest_drive table when test_drive_done is updated
+    """
+    try:
+        # Check if test_drive_done is not null and is Yes/No or True/False
+        test_drive_done = lead_data.get('test_drive_done')
+        
+        # Handle both boolean and string values
+        if test_drive_done is None:
+            return
+        
+        # Convert boolean to string if needed
+        if test_drive_done is True:
+            test_drive_done = 'Yes'
+        elif test_drive_done is False:
+            test_drive_done = 'No'
+        elif test_drive_done not in ['Yes', 'No']:
+            return
+        
+        # Check if record already exists in alltest_drive
+        existing_record = supabase.table('alltest_drive').select('*').eq('source_table', source_table).eq('original_id', str(original_id)).execute()
+        
+        # Prepare data for alltest_drive table
+        alltest_drive_data = {
+            'source_table': source_table,
+            'original_id': str(original_id),
+            'test_drive_done': test_drive_done,
+            'updated_at': datetime.now().isoformat()
+        }
+        
+        # Map fields based on source table
+        if source_table == 'walkin_table':
+            alltest_drive_data.update({
+                'customer_name': lead_data.get('customer_name'),
+                'mobile_number': lead_data.get('mobile_number'),
+                'lead_status': lead_data.get('lead_status'),
+                'lead_category': lead_data.get('lead_category'),
+                'model_interested': lead_data.get('model_interested'),
+                'final_status': lead_data.get('status'),
+                'ps_name': lead_data.get('ps_assigned'),
+                'branch': lead_data.get('branch'),
+                'created_at': lead_data.get('created_at')
+            })
+            # For walkin_table, use uid instead of id
+            alltest_drive_data['original_id'] = lead_data.get('uid', str(original_id))
+        elif source_table == 'ps_followup_master':
+            alltest_drive_data.update({
+                'customer_name': lead_data.get('customer_name'),
+                'mobile_number': lead_data.get('customer_mobile_number'),
+                'lead_status': lead_data.get('lead_status'),
+                'lead_category': lead_data.get('lead_category'),
+                'model_interested': lead_data.get('model_interested'),
+                'final_status': lead_data.get('final_status'),
+                'ps_name': lead_data.get('ps_name'),
+                'branch': lead_data.get('branch'),
+                'created_at': lead_data.get('created_at'),
+                'lead_source': lead_data.get('lead_source'),
+                'cre_name': lead_data.get('cre_name'),
+                'ps_branch': lead_data.get('ps_branch')
+            })
+        elif source_table == 'activity_leads':
+            alltest_drive_data.update({
+                'customer_name': lead_data.get('customer_name'),
+                'mobile_number': lead_data.get('customer_phone_number'),
+                'lead_status': lead_data.get('lead_status'),
+                'lead_category': lead_data.get('lead_category'),
+                'model_interested': lead_data.get('interested_model'),
+                'final_status': lead_data.get('final_status'),
+                'ps_name': lead_data.get('ps_name'),
+                'branch': lead_data.get('location'),
+                'created_at': lead_data.get('created_at'),
+                'remarks': lead_data.get('remarks'),
+                'activity_name': lead_data.get('activity_name'),
+                'activity_location': lead_data.get('activity_location'),
+                'customer_location': lead_data.get('customer_location'),
+                'customer_profession': lead_data.get('customer_profession'),
+                'gender': lead_data.get('gender')
+            })
+        
+        # Insert or update record in alltest_drive table
+        if existing_record.data:
+            # Update existing record
+            supabase.table('alltest_drive').update(alltest_drive_data).eq('source_table', source_table).eq('original_id', str(original_id)).execute()
+        else:
+            # Insert new record
+            supabase.table('alltest_drive').insert(alltest_drive_data).execute()
+            
+        print(f"Successfully synced test drive data for {source_table} - {original_id}")
+        
+    except Exception as e:
+        print(f"Error syncing test drive data to alltest_drive: {e}")
+
+
 def create_or_update_ps_followup(lead_data, ps_name, ps_branch):
     from datetime import datetime
     try:
@@ -2498,7 +2592,18 @@ def ps_dashboard():
                 won_leads.append(lead_dict)
             elif final_status == 'Lost':
                 lost_leads.append(lead_dict)
-            elif final_status == 'Pending' or not final_status:  # Include leads with no final_status
+            elif final_status == 'Pending':
+                # All leads with final_status == 'Pending' go to pending_leads
+                print(f"[DEBUG] Found lead with final_status == 'Pending': {lead.get('lead_uid')} | first_call_date: {lead.get('first_call_date')} | lead_status: {lead_status}")
+                if not lead_status or lead_status not in excluded_statuses:
+                    # Set default lead_category if missing
+                    if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
+                        lead_dict['lead_category'] = 'Not Set'
+                    pending_leads.append(lead_dict)
+                    print(f"[DEBUG] Added to pending_leads (Pending status): {lead.get('lead_uid')}")
+                else:
+                    print(f"[DEBUG] Lead {lead.get('lead_uid')} excluded from pending_leads due to lead_status: {lead_status}")
+            elif not final_status:  # Include leads with no final_status
                 if lead.get('first_call_date'):
                     # Regular leads should already have lead_category from the database
                     # Set default if it's missing, None, or empty
@@ -2506,10 +2611,10 @@ def ps_dashboard():
                         lead_dict['lead_category'] = 'Not Set'
                     attended_leads.append(lead_dict)
                 else:
-                    # Fresh leads: no first_call_date and not excluded status
+                    # Pending leads: no first_call_date and not excluded status
                     if not lead_status or lead_status not in excluded_statuses:
-                        fresh_leads.append(lead_dict)
-                        print(f"[DEBUG] Added to fresh_leads: {lead.get('lead_uid')}")
+                        pending_leads.append(lead_dict)
+                        print(f"[DEBUG] Added to pending_leads (no final_status): {lead.get('lead_uid')}")
 
             # Add to today's followups if applicable (exclude Won/Lost and specific statuses)
             follow_up_date = lead.get('follow_up_date')
@@ -2519,15 +2624,7 @@ def ps_dashboard():
                 (not lead_status or lead_status not in excluded_statuses)):
                 todays_followups_regular.append(lead_dict)
 
-        # Get additional pending leads (leads without first_call_date, excluding specific statuses)
-        for lead in filtered_leads:
-            if (not lead.get('first_call_date') and
-                lead.get('lead_status') not in excluded_statuses and
-                lead.get('final_status') not in ['Won', 'Lost']):
-                lead_dict = dict(lead)
-                lead_dict['lead_uid'] = lead.get('lead_uid')
-                if lead_dict not in fresh_leads:  # Avoid duplicates
-                    pending_leads.append(lead_dict)
+
 
         print(f"[PERF] ps_dashboard: regular leads processing took {time.time() - t1:.3f} seconds")
         print(f"[DEBUG] Fresh leads count: {len(fresh_leads)}")
@@ -2561,6 +2658,12 @@ def ps_dashboard():
         print(f"[DEBUG] PS Dashboard - Fetching walk-in leads for PS: {ps_name}")
         walkin_leads = safe_get_data('walkin_table', {'ps_assigned': ps_name})
         print(f"[DEBUG] PS Dashboard - Walk-in leads count: {len(walkin_leads) if walkin_leads else 0}")
+        if walkin_leads:
+            print(f"[DEBUG] Walk-in leads details:")
+            for lead in walkin_leads:
+                print(f"  - ID: {lead.get('id')}, UID: {lead.get('uid')}, Status: {lead.get('status')}, First Call: {lead.get('first_call_date')}")
+
+
 
         # --- Process Event Leads ---
         print(f"[DEBUG] Processing {len(event_leads)} event leads")
@@ -2584,7 +2687,15 @@ def ps_dashboard():
                 lost_leads.append(lead_dict)
                 print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to lost_leads")
 
-            elif final_status == 'Pending' or not final_status:  # Include leads with no final_status
+            elif final_status == 'Pending':
+                # All event leads with final_status == 'Pending' go to pending_leads
+                if not lead_status or lead_status not in excluded_statuses:
+                    # Set default lead_category if missing
+                    if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
+                        lead_dict['lead_category'] = 'Not Set'
+                    pending_leads.append(lead_dict)
+                    print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to pending_leads (Pending status)")
+            elif not final_status:  # Include leads with no final_status
                 if ps_first_call_date:
                     # Event leads should already have lead_category from the database
                     # Set default if it's missing, None, or empty
@@ -2599,7 +2710,7 @@ def ps_dashboard():
                         if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
                             lead_dict['lead_category'] = 'Not Set'
                         pending_leads.append(lead_dict)  # Event leads without first call go to pending
-                        print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to pending_leads")
+                        print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to pending_leads (no final_status)")
 
             # Add event leads with today's ps_followup_date_ts to today's followups
             ps_followup_date_ts = lead.get('ps_followup_date_ts')
@@ -2628,6 +2739,8 @@ def ps_dashboard():
             lead_dict['is_walkin'] = True  # Flag to identify walk-in leads
             lead_dict['walkin_id'] = lead.get('id')  # Store the walk-in ID for URL generation
             lead_dict['cre_name'] = ''  # Set empty cre_name for walk-in leads
+            lead_dict['created_at'] = lead.get('created_at', '')  # Add created_at for template compatibility
+            lead_dict['lead_category'] = lead.get('lead_category', 'Not Set')  # Add lead_category for template compatibility
             
             final_status = lead.get('status')
             followup_no = lead.get('followup_no', 1)
@@ -2653,12 +2766,19 @@ def ps_dashboard():
                     todays_followups_walkin.append(lead_dict)
                     print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to today's followups")
                 
-                # Add to pending leads if no follow-up has been made yet
-                if followup_no == 1 and not any(lead.get(f'{i}_call_date') for i in range(1, 8)):
+                # Add to pending leads if no first call has been made yet
+                first_call_date = lead.get('first_call_date')
+                print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} - first_call_date: {first_call_date}, lead_status: {lead_status}")
+                
+                # For walk-in leads, check if any call dates exist
+                has_any_call = any(lead.get(f'{i}_call_date') for i in range(1, 8))
+                print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} - has_any_call: {has_any_call}")
+                
+                if not has_any_call and (not lead_status or lead_status not in excluded_statuses):
                     pending_leads.append(lead_dict)
                     print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to pending_leads")
                 else:
-                    # Add to attended leads if follow-ups have been made
+                    # Add to attended leads if any call has been made
                     attended_leads.append(lead_dict)
                     print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to attended_leads")
 
@@ -2802,14 +2922,39 @@ def update_walkin_lead(walkin_id):
         
         if request.method == 'POST':
             # Get form data
-            followup_no = int(request.form.get('followup_no', 1))
+            submitted_followup_no = int(request.form.get('followup_no', 1))
             call_date = request.form.get('call_date')
             call_remark = request.form.get('call_remark')
             status = request.form.get('status', 'Pending')
             lead_category = request.form.get('lead_category', 'Warm')
             lead_status = request.form.get('lead_status', '')
             model_interested = request.form.get('model_interested', '')
+            test_drive_done = request.form.get('test_drive_done', '')
             next_followup_date = request.form.get('next_followup_date')
+            
+            # Validate that the submitted followup number is the correct next call
+            next_call, completed_calls = get_next_ps_call_info(walkin_lead)
+            call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
+            expected_followup_no = call_order.index(next_call) + 1
+            
+            if submitted_followup_no != expected_followup_no:
+                flash(f'Invalid follow-up number. Only call #{expected_followup_no} can be recorded next.', 'error')
+                redirect_url = url_for('update_walkin_lead', walkin_id=walkin_id, return_tab=return_tab)
+                return redirect(redirect_url)
+            
+            # Validate next follow-up date is required unless status is Won/Lost
+            if status not in ['Won', 'Lost'] and not next_followup_date:
+                flash('Next follow-up date is required for Pending status.', 'error')
+                redirect_url = url_for('update_walkin_lead', walkin_id=walkin_id, return_tab=return_tab)
+                return redirect(redirect_url)
+            
+            # Validate test_drive_done is required
+            if not test_drive_done:
+                flash('Test Drive Done field is required.', 'error')
+                redirect_url = url_for('update_walkin_lead', walkin_id=walkin_id, return_tab=return_tab)
+                return redirect(redirect_url)
+            
+            followup_no = submitted_followup_no
             
             # Update the specific call field based on followup number
             update_data = {
@@ -2817,6 +2962,7 @@ def update_walkin_lead(walkin_id):
                 'lead_category': lead_category,
                 'lead_status': lead_status,
                 'model_interested': model_interested,
+                'test_drive_done': test_drive_done,
                 'followup_no': followup_no,
                 'updated_at': datetime.now().isoformat()
             }
@@ -2851,6 +2997,14 @@ def update_walkin_lead(walkin_id):
             # Update the walk-in lead
             supabase.table('walkin_table').update(update_data).eq('id', walkin_id).execute()
             
+            # Sync to alltest_drive table if test_drive_done is set
+            if test_drive_done in ['Yes', 'No', True, False]:
+                # Get the updated walkin lead data for syncing
+                updated_walkin_result = supabase.table('walkin_table').select('*').eq('id', walkin_id).execute()
+                if updated_walkin_result.data:
+                    updated_walkin_data = updated_walkin_result.data[0]
+                    sync_test_drive_to_alltest_drive('walkin_table', walkin_id, updated_walkin_data)
+            
             flash(f'Walk-in lead updated successfully! Follow-up {followup_no} recorded.', 'success')
             redirect_url = url_for('ps_dashboard', tab=return_tab)
             return redirect(redirect_url)
@@ -2858,6 +3012,24 @@ def update_walkin_lead(walkin_id):
         # For GET request, render the update form
         # Determine next call number and completed calls
         next_call, completed_calls = get_next_ps_call_info(walkin_lead)
+        
+        # Create a list of available call numbers for the dropdown
+        # Only allow the next call number to be selected
+        available_calls = []
+        call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
+        
+        # Find the index of the next call
+        next_call_index = call_order.index(next_call)
+        
+        # Only add the next call as an option
+        if next_call_index < len(call_order):
+            call_number = next_call_index + 1
+            available_calls.append({
+                'number': call_number,
+                'name': next_call,
+                'display': f"{call_number}{'st' if call_number == 1 else 'nd' if call_number == 2 else 'rd' if call_number == 3 else 'th'} Call"
+            })
+        
         models = [
             "450X", "450S", "Rizta S Mono (2.9 kWh)", "Rizta S Super Matte (2.9 kWh)",
             "Rizta Z Mono (2.9 kWh)", "Rizta Z Duo (2.9 kWh)", "Rizta Z Super Matte (2.9 kWh)",
@@ -2870,6 +3042,7 @@ def update_walkin_lead(walkin_id):
             walkin_lead=walkin_lead,
             next_call=next_call,
             completed_calls=completed_calls,
+            available_calls=available_calls,
             models=models
         )
         
@@ -2921,6 +3094,7 @@ def update_ps_lead(uid):
                 call_remark = request.form.get('call_remark', '')
                 lead_category = request.form.get('lead_category', '')
                 model_interested = request.form.get('model_interested', '')
+                test_drive_done = request.form.get('test_drive_done', '')
                 
                 # Always update lead_status from the form
                 if lead_status:
@@ -2929,6 +3103,11 @@ def update_ps_lead(uid):
                     update_data['lead_category'] = lead_category
                 if model_interested:
                     update_data['model_interested'] = model_interested
+                # Test Drive Done is now required
+                if not test_drive_done:
+                    flash('Test Drive Done field is required', 'error')
+                    return redirect(url_for('update_event_lead', activity_uid=activity_uid, return_tab=return_tab))
+                update_data['test_drive_done'] = test_drive_done
                 if request.form.get('follow_up_date'):
                     update_data['follow_up_date'] = follow_up_date
                 if request.form.get('final_status'):
@@ -2966,6 +3145,15 @@ def update_ps_lead(uid):
                         )
                     if update_data:
                         supabase.table('ps_followup_master').update(update_data).eq('lead_uid', uid).execute()
+                        
+                        # Sync to alltest_drive table if test_drive_done is set
+                        if test_drive_done in ['Yes', 'No', True, False]:
+                            # Get the updated ps_followup data for syncing
+                            updated_ps_result = supabase.table('ps_followup_master').select('*').eq('lead_uid', uid).execute()
+                            if updated_ps_result.data:
+                                updated_ps_data = updated_ps_result.data[0]
+                                sync_test_drive_to_alltest_drive('ps_followup_master', uid, updated_ps_data)
+                        
                         # Also update the main lead table final status
                         if request.form.get('final_status'):
                             final_status = request.form['final_status']
@@ -4915,6 +5103,12 @@ def export_leads():
         cold_count = len([l for l in all_leads if l.get('lead_category') == 'Cold'])
         not_interested_count = len([l for l in all_leads if l.get('lead_category') == 'Not Interested'])
 
+        # Count test drive leads from alltest_drive table
+        test_drive_leads = safe_get_data('alltest_drive')
+        test_drive_yes_count = len([l for l in test_drive_leads if l.get('test_drive_done') == 'Yes'])
+        test_drive_no_count = len([l for l in test_drive_leads if l.get('test_drive_done') == 'No'])
+        test_drive_total_count = len(test_drive_leads)
+
         # Log export dashboard access
         auth_manager.log_audit_event(
             user_id=session.get('user_id'),
@@ -4931,7 +5125,10 @@ def export_leads():
                                hot_count=hot_count,
                                warm_count=warm_count,
                                cold_count=cold_count,
-                               not_interested_count=not_interested_count)
+                               not_interested_count=not_interested_count,
+                               test_drive_yes_count=test_drive_yes_count,
+                               test_drive_no_count=test_drive_no_count,
+                               test_drive_total_count=test_drive_total_count)
 
     except Exception as e:
         flash(f'Error loading export dashboard: {str(e)}', 'error')
@@ -5276,6 +5473,128 @@ def export_leads_by_date_csv():
 
     except Exception as e:
         print(f"Error exporting date range CSV: {e}")
+        return jsonify({'success': False, 'message': str(e)})
+
+
+@app.route('/get_test_drive_leads')
+@require_admin
+def get_test_drive_leads():
+    """Get test drive leads from alltest_drive table"""
+    try:
+        filter_type = request.args.get('filter_type', 'all')  # all, yes, no
+        
+        # Get all test drive leads
+        test_drive_leads = safe_get_data('alltest_drive')
+        
+        # Filter based on type
+        if filter_type == 'yes':
+            filtered_leads = [l for l in test_drive_leads if l.get('test_drive_done') == 'Yes']
+        elif filter_type == 'no':
+            filtered_leads = [l for l in test_drive_leads if l.get('test_drive_done') == 'No']
+        else:  # all
+            filtered_leads = test_drive_leads
+        
+        # Log test drive leads access
+        auth_manager.log_audit_event(
+            user_id=session.get('user_id'),
+            user_type=session.get('user_type'),
+            action='TEST_DRIVE_LEADS_ACCESS',
+            resource='alltest_drive',
+            details={'filter_type': filter_type, 'result_count': len(filtered_leads)}
+        )
+        
+        return jsonify({
+            'success': True,
+            'leads': filtered_leads,
+            'count': len(filtered_leads)
+        })
+        
+    except Exception as e:
+        print(f"Error getting test drive leads: {e}")
+        return jsonify({'success': False, 'message': str(e)})
+
+
+@app.route('/export_test_drive_csv')
+@require_admin
+def export_test_drive_csv():
+    """Export test drive leads to CSV"""
+    try:
+        filter_type = request.args.get('filter_type', 'all')  # all, yes, no
+        
+        # Get all test drive leads
+        test_drive_leads = safe_get_data('alltest_drive')
+        
+        # Filter based on type
+        if filter_type == 'yes':
+            filtered_leads = [l for l in test_drive_leads if l.get('test_drive_done') == 'Yes']
+        elif filter_type == 'no':
+            filtered_leads = [l for l in test_drive_leads if l.get('test_drive_done') == 'No']
+        else:  # all
+            filtered_leads = test_drive_leads
+        
+        # Create CSV content
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write headers
+        headers = [
+            'Original ID', 'Customer Name', 'Mobile Number', 'Test Drive Done',
+            'Lead Status', 'Lead Category', 'Model Interested', 'Final Status', 'PS Name',
+            'Branch', 'Created At', 'Updated At', 'Remarks', 'Activity Name', 'Activity Location',
+            'Customer Location', 'Customer Profession', 'Gender', 'Lead Source', 'CRE Name', 'PS Branch'
+        ]
+        writer.writerow(headers)
+        
+        # Write data
+        for lead in filtered_leads:
+            row = [
+                lead.get('original_id', ''),
+                lead.get('customer_name', ''),
+                lead.get('mobile_number', ''),
+                lead.get('test_drive_done', ''),
+                lead.get('lead_status', ''),
+                lead.get('lead_category', ''),
+                lead.get('model_interested', ''),
+                lead.get('final_status', ''),
+                lead.get('ps_name', ''),
+                lead.get('branch', ''),
+                lead.get('created_at', ''),
+                lead.get('updated_at', ''),
+                lead.get('remarks', ''),
+                lead.get('activity_name', ''),
+                lead.get('activity_location', ''),
+                lead.get('customer_location', ''),
+                lead.get('customer_profession', ''),
+                lead.get('gender', ''),
+                lead.get('lead_source', ''),
+                lead.get('cre_name', ''),
+                lead.get('ps_branch', '')
+            ]
+            writer.writerow(row)
+        
+        # Log export
+        auth_manager.log_audit_event(
+            user_id=session.get('user_id'),
+            user_type=session.get('user_type'),
+            action='TEST_DRIVE_EXPORT',
+            resource='alltest_drive',
+            details={'filter_type': filter_type, 'exported_count': len(filtered_leads)}
+        )
+        
+        # Create response
+        output.seek(0)
+        response = app.response_class(
+            output.getvalue(),
+            mimetype='text/csv',
+            headers={
+                'Content-Disposition': f'attachment; filename=test_drive_leads_{filter_type}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+            }
+        )
+        
+        return response
+        
+    except Exception as e:
+        print(f"Error exporting test drive CSV: {e}")
         return jsonify({'success': False, 'message': str(e)})
 
 
@@ -6854,6 +7173,7 @@ def update_event_lead(activity_uid):
             customer_name = request.form.get('customer_name', '').strip()
             lead_category = request.form.get('lead_category', '').strip()
             interested_model = request.form.get('interested_model', '').strip()
+            test_drive_done = request.form.get('test_drive_done', '').strip()
             customer_location = request.form.get('customer_location', '').strip()
             ps_followup_date_ts = request.form.get('ps_followup_date_ts', '').strip()
             lead_status = request.form.get('lead_status', '').strip()
@@ -6867,6 +7187,16 @@ def update_event_lead(activity_uid):
                 update_data['lead_category'] = lead_category
             if interested_model:
                 update_data['interested_model'] = interested_model
+            # Test Drive Done is now required
+            if not test_drive_done:
+                flash('Test Drive Done field is required', 'error')
+                redirect_url = url_for('update_ps_lead', uid=uid, return_tab=return_tab)
+                if status_filter:
+                    redirect_url += f'&status_filter={status_filter}'
+                if category_filter:
+                    redirect_url += f'&category_filter={category_filter}'
+                return redirect(redirect_url)
+            update_data['test_drive_done'] = test_drive_done
             if customer_location:
                 update_data['customer_location'] = customer_location
             if ps_followup_date_ts:
@@ -6888,6 +7218,15 @@ def update_event_lead(activity_uid):
                 update_data.pop(f'ps_{next_call}_call_remark', None)
             if update_data:
                 supabase.table('activity_leads').update(update_data).eq('activity_uid', activity_uid).execute()
+                
+                # Sync to alltest_drive table if test_drive_done is set
+                if test_drive_done in ['Yes', 'No', True, False]:
+                    # Get the updated activity lead data for syncing
+                    updated_activity_result = supabase.table('activity_leads').select('*').eq('activity_uid', activity_uid).execute()
+                    if updated_activity_result.data:
+                        updated_activity_data = updated_activity_result.data[0]
+                        sync_test_drive_to_alltest_drive('activity_leads', activity_uid, updated_activity_data)
+                
                 flash('Event lead updated successfully', 'success')
                 return redirect(url_for('ps_dashboard', tab=return_tab))
             else:
@@ -6970,6 +7309,7 @@ def update_event_lead_cre(activity_uid):
             cre_followup_date_ts = request.form.get('cre_followup_date_ts', '').strip()
             lead_status = request.form.get('lead_status', '').strip()
             final_status = request.form.get('final_status', '').strip()
+            test_drive_done = request.form.get('test_drive_done', '').strip()
             call_date = request.form.get('call_date', '').strip()
             call_remark = request.form.get('call_remark', '').strip()
             
@@ -6988,6 +7328,8 @@ def update_event_lead_cre(activity_uid):
                 update_data['lead_status'] = lead_status
             if final_status:
                 update_data['final_status'] = final_status
+            if test_drive_done:
+                update_data['test_drive_done'] = test_drive_done
             
             # Handle CRE call date/remark for the next call
             skip_statuses = ["Call not Connected", "RNR", "Call me Back", "Busy on another Call"]
@@ -7003,6 +7345,15 @@ def update_event_lead_cre(activity_uid):
             
             if update_data:
                 supabase.table('activity_leads').update(update_data).eq('activity_uid', activity_uid).execute()
+                
+                # Sync to alltest_drive table if test_drive_done is set
+                if test_drive_done in ['Yes', 'No', True, False]:
+                    # Get the updated activity lead data for syncing
+                    updated_activity_result = supabase.table('activity_leads').select('*').eq('activity_uid', activity_uid).execute()
+                    if updated_activity_result.data:
+                        updated_activity_data = updated_activity_result.data[0]
+                        sync_test_drive_to_alltest_drive('activity_leads', activity_uid, updated_activity_data)
+                
                 flash('Event lead updated successfully', 'success')
                 # Redirect based on return_tab parameter
                 if return_tab:
@@ -8036,11 +8387,9 @@ def add_walkin_lead():
         data = {
             'customer_name': request.form['customer_name'],
             'mobile_number': request.form['mobile_number'],
-            'email': request.form.get('email'),
-            'lead_source': request.form.get('lead_source'),
+            'customer_location': request.form.get('customer_location'),
             'model_interested': request.form['model_interested'],
             'occupation': request.form.get('occupation'),
-            'lead_category': request.form['lead_category'],
             'branch': request.form['branch'],
             'ps_assigned': request.form['ps_assigned'],
             'status': 'Pending',
@@ -8050,7 +8399,9 @@ def add_walkin_lead():
             'updated_at': datetime.now().isoformat(),
         }
         try:
+            # Insert into walkin_table only
             supabase.table('walkin_table').insert(data).execute()
+            
             flash('Walk-in lead added and assigned to PS successfully!', 'success')
             return redirect(url_for('add_walkin_lead'))
         except Exception as e:

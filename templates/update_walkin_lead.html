@@ -280,6 +280,23 @@
   .bg-danger {
     background: linear-gradient(135deg, #dc3545 0%, #e83e8c 100%) !important;
   }
+  
+  .bg-secondary {
+    background: linear-gradient(135deg, #6c757d 0%, #495057 100%) !important;
+  }
+  
+  .call-history .col-md-6 {
+    transition: all 0.3s ease;
+  }
+  
+  .call-history .col-md-6:hover {
+    transform: translateY(-2px);
+  }
+  
+  .call-history .text-warning {
+    color: #ffc107 !important;
+    font-weight: 600;
+  }
 </style>
 
 <div class="container mt-4">
@@ -298,6 +315,9 @@
             <h5><i class="fas fa-user-circle me-2"></i>Customer Information</h5>
                         <div class="row">
               <div class="col-md-6">
+                <div class="info-item">
+                  <p><strong><i class="fas fa-id-card me-2"></i>UID:</strong> {{ walkin_lead.uid }}</p>
+                </div>
                 <div class="info-item">
                   <p><strong><i class="fas fa-user me-2"></i>Name:</strong> {{ walkin_lead.customer_name }}</p>
                 </div>
@@ -333,15 +353,16 @@
                     <i class="fas fa-phone me-2"></i>Follow-up Number
                   </label>
                   <select class="form-select" name="followup_no" required>
-                    {% for i in range(1, 8) %}
-                      {% set call_num = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh'][i-1] %}
-                      {% set call_date = walkin_lead.get(call_num + '_call_date') %}
-                      <option value="{{ i }}" {% if next_call == call_num %}selected{% endif %}>
-                        {{ i }}{% if i == 1 %}st{% elif i == 2 %}nd{% elif i == 3 %}rd{% else %}th{% endif %} Call
-                        {% if call_date %} (Already recorded){% endif %}
+                    {% for call in available_calls %}
+                      <option value="{{ call.number }}" selected>
+                        {{ call.display }}
                       </option>
                     {% endfor %}
                   </select>
+                  <small class="text-muted">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Only the next available call can be recorded. Previous calls are locked.
+                  </small>
                 </div>
               </div>
               <div class="col-md-6">
@@ -389,6 +410,22 @@
               <div class="col-md-3">
                 <div class="mb-3">
                   <label class="form-label">
+                    <i class="fas fa-car-side me-2"></i>Test Drive Done?
+                    <span class="text-danger">*</span>
+                  </label>
+                  <select class="form-select" name="test_drive_done" required>
+                    <option value="" {% if not walkin_lead.test_drive_done %}selected{% endif %}>Select</option>
+                    <option value="Yes" {% if walkin_lead.test_drive_done == 'Yes' %}selected{% endif %}>Yes</option>
+                    <option value="No" {% if walkin_lead.test_drive_done == 'No' %}selected{% endif %}>No</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <label class="form-label">
                     <i class="fas fa-car me-2"></i>Model Interested
                   </label>
                   <select class="form-select" name="model_interested" required>
@@ -398,7 +435,7 @@
                   </select>
                 </div>
               </div>
-              <div class="col-md-3">
+              <div class="col-md-6">
                 <div class="mb-3">
                   <label class="form-label">
                     <i class="fas fa-info-circle me-2"></i>Lead Status
@@ -432,9 +469,14 @@
                 <div class="mb-3">
                   <label class="form-label">
                     <i class="fas fa-calendar-plus me-2"></i>Next Follow-up Date
+                    <span class="text-danger">*</span>
                   </label>
                   <input type="datetime-local" class="form-control" name="next_followup_date" 
-                         placeholder="Leave empty if status is Won/Lost">
+                         placeholder="Required unless status is Won/Lost" required>
+                  <small class="text-muted">
+                    <i class="fas fa-info-circle me-1"></i>
+                    <span id="followup-date-hint">Required for Pending status. Not needed for Won/Lost status.</span>
+                  </small>
                 </div>
               </div>
               <!-- Removed call progress display -->
@@ -459,14 +501,25 @@
                 {% set call_date = walkin_lead.get(call_num + '_call_date') %}
                 {% set call_remark = walkin_lead.get(call_num + '_call_remark') %}
                 <div class="col-md-6 mb-2">
-                  <small class="text-muted">{{ i }}{% if i == 1 %}st{% elif i == 2 %}nd{% elif i == 3 %}rd{% else %}th{% endif %} Call:</small>
+                  <small class="text-muted">
+                    {{ i }}{% if i == 1 %}st{% elif i == 2 %}nd{% elif i == 3 %}rd{% else %}th{% endif %} Call:
+                    {% if call_date %}
+                      <span class="badge bg-success">✓ Completed</span>
+                    {% elif next_call == call_num %}
+                      <span class="badge bg-warning">⏳ Next</span>
+                    {% else %}
+                      <span class="badge bg-secondary">🔒 Locked</span>
+                    {% endif %}
+                  </small>
                   {% if call_date %}
                     <div class="text-success">{{ call_date }}</div>
                     {% if call_remark %}
                       <div class="text-muted small">{{ call_remark }}</div>
                     {% endif %}
+                  {% elif next_call == call_num %}
+                    <div class="text-warning">Ready to record</div>
                   {% else %}
-                    <div class="text-muted">Not recorded</div>
+                    <div class="text-muted">Not available yet</div>
                   {% endif %}
                 </div>
               {% endfor %}
@@ -484,16 +537,42 @@
     const now = new Date();
     const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     document.querySelector('input[name="call_date"]').value = localDateTime;
+    
+    // Initialize next followup date requirement based on current status
+    const statusSelect = document.querySelector('select[name="status"]');
+    const nextFollowupField = document.querySelector('input[name="next_followup_date"]');
+    const hintElement = document.getElementById('followup-date-hint');
+    const requiredIndicator = document.querySelector('label:has(input[name="next_followup_date"]) .text-danger');
+    
+    if (statusSelect.value === 'Won' || statusSelect.value === 'Lost') {
+      nextFollowupField.disabled = true;
+      nextFollowupField.removeAttribute('required');
+      hintElement.textContent = 'Not needed for Won/Lost status.';
+      if (requiredIndicator) requiredIndicator.style.display = 'none';
+    } else {
+      nextFollowupField.setAttribute('required', 'required');
+      hintElement.textContent = 'Required for Pending status.';
+      if (requiredIndicator) requiredIndicator.style.display = 'inline';
+    }
   });
   
   // Auto-hide next followup date if status is Won/Lost
   document.querySelector('select[name="status"]').addEventListener('change', function() {
     const nextFollowupField = document.querySelector('input[name="next_followup_date"]');
+    const hintElement = document.getElementById('followup-date-hint');
+    const requiredIndicator = document.querySelector('label[for="next_followup_date"] .text-danger, label:has(input[name="next_followup_date"]) .text-danger');
+    
     if (this.value === 'Won' || this.value === 'Lost') {
       nextFollowupField.value = '';
       nextFollowupField.disabled = true;
+      nextFollowupField.removeAttribute('required');
+      hintElement.textContent = 'Not needed for Won/Lost status.';
+      if (requiredIndicator) requiredIndicator.style.display = 'none';
     } else {
       nextFollowupField.disabled = false;
+      nextFollowupField.setAttribute('required', 'required');
+      hintElement.textContent = 'Required for Pending status.';
+      if (requiredIndicator) requiredIndicator.style.display = 'inline';
     }
   });
   
@@ -512,12 +591,14 @@
       const nextFollowupField = document.querySelector('input[name="next_followup_date"]');
       nextFollowupField.value = '';
       nextFollowupField.disabled = true;
+      nextFollowupField.removeAttribute('required');
     } else if (lostStatuses.includes(leadStatus)) {
       statusSelect.value = 'Lost';
       // Disable next followup date for Lost status
       const nextFollowupField = document.querySelector('input[name="next_followup_date"]');
       nextFollowupField.value = '';
       nextFollowupField.disabled = true;
+      nextFollowupField.removeAttribute('required');
     } else {
       // For other lead statuses, keep current status or set to Pending
       if (statusSelect.value === 'Won' || statusSelect.value === 'Lost') {
@@ -526,6 +607,7 @@
       // Enable next followup date for Pending status
       const nextFollowupField = document.querySelector('input[name="next_followup_date"]');
       nextFollowupField.disabled = false;
+      nextFollowupField.setAttribute('required', 'required');
     }
   });
 </script>
