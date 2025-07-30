@@ -27,6 +27,9 @@ from flask_socketio import SocketIO, emit
 import math
 # from redis import Redis  # REMOVE this line for local development
 
+# Import optimized operations for faster lead updates
+from optimized_lead_operations import create_optimized_operations
+
 # Add this instead:
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
@@ -98,6 +101,15 @@ try:
 except Exception as e:
     print(f"❌ Error initializing Supabase client: {e}")
     raise
+
+# Initialize optimized operations for faster lead updates
+try:
+    optimized_ops = create_optimized_operations(supabase)
+    print("✅ Optimized operations initialized successfully")
+except Exception as e:
+    print(f"❌ Error initializing optimized operations: {e}")
+    # Continue without optimized operations if there's an error
+    optimized_ops = None
 
 # Initialize AuthManager
 auth_manager = AuthManager(supabase)
@@ -3017,6 +3029,464 @@ def logout():
     session.clear()
     flash('You have been logged out successfully', 'info')
     return redirect(url_for('index'))
+
+# =====================================================
+# OPTIMIZED LEAD UPDATE ENDPOINTS
+# =====================================================
+
+@app.route('/update_lead_optimized/<uid>', methods=['GET', 'POST'])
+@require_cre
+def update_lead_optimized(uid):
+    """
+    Optimized lead update endpoint for CRE users
+    """
+    return_tab = request.args.get('return_tab', '')
+
+    try:
+        # Get lead data with optimized query
+        lead_data_result = optimized_ops.get_lead_with_related_data(uid)
+
+        if not lead_data_result or not lead_data_result['lead']:
+            flash('Lead not found', 'error')
+            return redirect(url_for('cre_dashboard'))
+
+        lead_data = lead_data_result['lead']
+        ps_followup = lead_data_result.get('ps_followup')
+
+        # Verify this lead belongs to the current CRE
+        if lead_data.get('cre_name') != session.get('cre_name'):
+            flash('Access denied - This lead is not assigned to you', 'error')
+            return redirect(url_for('cre_dashboard'))
+
+        # Get next call info
+        next_call, completed_calls = get_next_call_info(lead_data)
+
+        # Get PS users for branch selection
+        ps_users = safe_get_data('ps_users')
+
+        # Model options and other data (same as original)
+        rizta_models = [
+            'Rizta S Mono (2.9 kWh)',
+            'Rizta S Super Matte (2.9 kWh)',
+            'Rizta Z Mono (2.9 kWh)',
+            'Rizta Z Duo (2.9 kWh)',
+            'Rizta Z Super Matte (2.9 kWh)',
+            'Rizta Z Mono (3.7 kWh)',
+            'Rizta Z Duo (3.7 kWh)',
+            'Rizta Z Super Matte (3.7 kWh)'
+        ]
+
+        x450_models = [
+            '450 X (2.9 kWh)',
+            '450 X (3.7 kWh)',
+            '450 X (2.9 kWh) Pro Pack',
+            '450 X (3.7 kWh) Pro Pack',
+            '450 Apex STD'
+        ]
+
+        branches = ['SOMAJIGUDA', 'ATTAPUR', 'TOLICHOWKI', 'KOMPALLY', 'SRINAGAR COLONY', 'MALAKPET', 'VANASTHALIPURAM']
+
+        lead_statuses = [
+            'Busy on another Call', 'RNR', 'Call me Back', 'Interested',
+            'Not Interested', 'Did Not Inquire', 'Lost to Competition',
+            'Lost to Co Dealer', 'Call Disconnected', 'Wrong Number'
+        ]
+
+        if request.method == 'POST':
+            # Prepare update data
+            update_data = {}
+
+            # Process form data (same logic as original)
+            lead_status = request.form.get('lead_status', '')
+            follow_up_date = request.form.get('follow_up_date', '')
+            call_remark = request.form.get('call_remark', '')
+
+            # Lock follow_up_date and set final_status for certain statuses
+            lock_statuses = ['Booked', 'Retailed']
+            lost_statuses = ['Not Interested', 'Lost to Codealer', 'Lost to Competition']
+
+            if lead_status in lock_statuses:
+                update_data['lead_status'] = lead_status
+                update_data['follow_up_date'] = follow_up_date or lead_data.get('follow_up_date')
+                update_data['final_status'] = 'Won' if lead_status in ['Booked', 'Retailed'] else lead_data.get('final_status')
+            elif lead_status in lost_statuses:
+                update_data['lead_status'] = lead_status
+                update_data['follow_up_date'] = follow_up_date or lead_data.get('follow_up_date')
+                update_data['final_status'] = 'Lost'
+            else:
+                if lead_status:
+                    update_data['lead_status'] = lead_status
+
+            # Process other form fields
+            if request.form.get('customer_name'):
+                update_data['customer_name'] = request.form['customer_name']
+
+            if request.form.get('source'):
+                update_data['source'] = request.form['source']
+
+            if request.form.get('lead_category'):
+                update_data['lead_category'] = request.form['lead_category']
+
+            if request.form.get('model_interested'):
+                update_data['model_interested'] = request.form['model_interested']
+
+            if request.form.get('branch'):
+                update_data['branch'] = request.form['branch']
+
+            # Handle PS assignment
+            ps_name = request.form.get('ps_name')
+            if ps_name and ps_name != lead_data.get('ps_name'):
+                update_data['ps_name'] = ps_name
+                update_data['assigned'] = 'Yes'
+                update_data['ps_assigned_at'] = datetime.now().isoformat()
+
+                # Create PS followup record
+                ps_user = next((ps for ps in ps_users if ps['name'] == ps_name), None)
+                if ps_user:
+                    create_or_update_ps_followup(lead_data, ps_name, ps_user['branch'])
+
+                    # Send email notification (non-blocking)
+                    try:
+                        lead_data_for_email = {**lead_data, **update_data}
+                        socketio.start_background_task(send_email_to_ps, ps_user['email'], ps_user['name'], lead_data_for_email, session.get('cre_name'))
+                        flash(f'Lead assigned to {ps_name} and email notification sent', 'success')
+                    except Exception as e:
+                        print(f"Error sending email: {e}")
+                        flash(f'Lead assigned to {ps_name} (email notification failed)', 'warning')
+
+            if follow_up_date:
+                update_data['follow_up_date'] = follow_up_date
+
+            if request.form.get('final_status'):
+                final_status = request.form['final_status']
+                update_data['final_status'] = final_status
+                if final_status == 'Won':
+                    update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                elif final_status == 'Lost':
+                    update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+            # Handle call dates and remarks
+            if request.form.get('call_date') and call_remark:
+                combined_remark = f"{lead_status}, {call_remark}"
+                call_names = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
+                if next_call in call_names:
+                    update_data[f'{next_call}_call_date'] = request.form['call_date']
+                    update_data[f'{next_call}_remark'] = combined_remark
+
+            # Track call attempt (non-blocking)
+            if lead_status:
+                call_was_recorded = bool(request.form.get('call_date') and call_remark)
+                try:
+                    track_cre_call_attempt(
+                        uid=uid,
+                        cre_name=session.get('cre_name'),
+                        call_no=next_call,
+                        lead_status=lead_status,
+                        call_was_recorded=call_was_recorded,
+                        follow_up_date=follow_up_date if follow_up_date else None,
+                        remarks=call_remark if call_remark else None
+                    )
+                except Exception as e:
+                    print(f"Error tracking call attempt: {e}")
+
+            # Use optimized update operation
+            if update_data:
+                result = optimized_ops.update_lead_optimized(
+                    uid=uid,
+                    update_data=update_data,
+                    user_type='cre',
+                    user_name=session.get('cre_name')
+                )
+
+                if result['success']:
+                    flash('Lead updated successfully', 'success')
+                else:
+                    flash(f'Error updating lead: {result.get("error", "Unknown error")}', 'error')
+            else:
+                flash('No changes to update', 'info')
+
+            # Redirect based on return_tab parameter
+            if return_tab:
+                if return_tab in ['untouched-leads', 'called-leads']:
+                    return redirect(url_for('cre_dashboard', tab='fresh-leads', sub_tab=return_tab))
+                elif return_tab == 'followups':
+                    return redirect(url_for('cre_dashboard', tab='followups'))
+                elif return_tab == 'pending':
+                    return redirect(url_for('cre_dashboard', tab='pending'))
+                elif return_tab == 'ps-assigned':
+                    return redirect(url_for('cre_dashboard', tab='ps-assigned'))
+                elif return_tab == 'won-leads':
+                    return redirect(url_for('cre_dashboard', tab='won-leads'))
+                else:
+                    return redirect(url_for('cre_dashboard'))
+            else:
+                return redirect(url_for('cre_dashboard'))
+
+        # Fetch PS call summary from ps_followup_master
+        ps_call_summary = {}
+        if ps_followup:
+            call_order = ['first', 'second', 'third']
+            for call in call_order:
+                date_key = f"{call}_call_date"
+                remark_key = f"{call}_call_remark"
+                ps_call_summary[call] = {
+                    "date": ps_followup.get(date_key),
+                    "remark": ps_followup.get(remark_key)
+                }
+
+        return render_template('update_lead.html',
+                               lead=lead_data,
+                               ps_users=ps_users,
+                               rizta_models=rizta_models,
+                               x450_models=x450_models,
+                               branches=branches,
+                               lead_statuses=lead_statuses,
+                               next_call=next_call,
+                               completed_calls=completed_calls,
+                               today=date.today(),
+                               ps_call_summary=ps_call_summary)
+
+    except Exception as e:
+        flash(f'Error loading lead: {str(e)}', 'error')
+        return redirect(url_for('cre_dashboard'))
+
+@app.route('/update_ps_lead_optimized/<uid>', methods=['GET', 'POST'])
+@require_ps
+def update_ps_lead_optimized(uid):
+    """
+    Optimized PS lead update endpoint
+    """
+    return_tab = request.args.get('return_tab', 'fresh-leads')
+    status_filter = request.args.get('status_filter', '')
+    category_filter = request.args.get('category_filter', '')
+
+    try:
+        # Get PS followup data with optimized query
+        ps_result = optimized_ops.supabase.table('ps_followup_master').select('*').eq('lead_uid', uid).execute()
+
+        if not ps_result.data:
+            flash('Lead not found', 'error')
+            redirect_url = url_for('ps_dashboard', tab=return_tab)
+            if status_filter:
+                redirect_url += f'&status_filter={status_filter}'
+            return redirect(redirect_url)
+
+        ps_data = ps_result.data[0]
+
+        # Verify this lead belongs to the current PS
+        if ps_data.get('ps_name') != session.get('ps_name'):
+            flash('Access denied - This lead is not assigned to you', 'error')
+            redirect_url = url_for('ps_dashboard', tab=return_tab)
+            if status_filter:
+                redirect_url += f'&status_filter={status_filter}'
+            return redirect(redirect_url)
+
+        # Get next call info for PS
+        next_call, completed_calls = get_next_ps_call_info(ps_data)
+
+        # Fetch CRE call summary from lead_master
+        cre_call_summary = {}
+        lead_result = optimized_ops.supabase.table('lead_master').select('*').eq('uid', uid).execute()
+        if lead_result.data:
+            lead = lead_result.data[0]
+            call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
+            for call in call_order:
+                date_key = f"{call}_call_date"
+                remark_key = f"{call}_remark"
+                cre_call_summary[call] = {
+                    "date": lead.get(date_key),
+                    "remark": lead.get(remark_key)
+                }
+
+        if request.method == 'POST':
+            # Prepare update data
+            update_data = {}
+
+            # Process form data
+            lead_status = request.form.get('lead_status', '')
+            follow_up_date = request.form.get('follow_up_date', '')
+            call_remark = request.form.get('call_remark', '')
+            lead_category = request.form.get('lead_category', '')
+            model_interested = request.form.get('model_interested', '')
+
+            # Always update lead_status from the form
+            if lead_status:
+                update_data['lead_status'] = lead_status
+            if lead_category:
+                update_data['lead_category'] = lead_category
+            if model_interested:
+                update_data['model_interested'] = model_interested
+            if request.form.get('follow_up_date'):
+                update_data['follow_up_date'] = follow_up_date
+            if request.form.get('final_status'):
+                final_status = request.form['final_status']
+                update_data['final_status'] = final_status
+                if final_status == 'Won':
+                    update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                elif final_status == 'Lost':
+                    update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+            # Handle call dates and remarks for the next available call
+            skip_first_call_statuses = [
+                'Call not Connected',
+                'Busy on another call',
+                'RNR',
+                'Call me Back'
+            ]
+
+            if request.form.get('call_date') and lead_status not in skip_first_call_statuses:
+                update_data[f'{next_call}_call_date'] = request.form['call_date']
+            if call_remark:
+                combined_remark = f"{lead_status}, {call_remark}"
+                update_data[f'{next_call}_call_remark'] = combined_remark
+
+            # Track call attempt (non-blocking)
+            if lead_status:
+                call_was_recorded = bool(request.form.get('call_date') and call_remark)
+                try:
+                    track_ps_call_attempt(
+                        uid=uid,
+                        ps_name=session.get('ps_name'),
+                        call_no=next_call,
+                        lead_status=lead_status,
+                        call_was_recorded=call_was_recorded,
+                        follow_up_date=follow_up_date if follow_up_date else None,
+                        remarks=call_remark if call_remark else None
+                    )
+                except Exception as e:
+                    print(f"Error tracking PS call attempt: {e}")
+
+            # Use optimized update operation
+            if update_data:
+                result = optimized_ops.update_ps_lead_optimized(
+                    uid=uid,
+                    update_data=update_data,
+                    ps_name=session.get('ps_name')
+                )
+
+                if result['success']:
+                    flash('Lead updated successfully', 'success')
+                else:
+                    flash(f'Error updating lead: {result.get("error", "Unknown error")}', 'error')
+            else:
+                flash('No changes to update', 'info')
+
+            # Redirect with filters
+            redirect_url = url_for('ps_dashboard', tab=return_tab)
+            if status_filter:
+                redirect_url += f'&status_filter={status_filter}'
+            if category_filter:
+                redirect_url += f'&category_filter={category_filter}'
+            return redirect(redirect_url)
+
+        return render_template('update_ps_lead.html',
+                               lead=ps_data,
+                               next_call=next_call,
+                               completed_calls=completed_calls,
+                               today=date.today(),
+                               cre_call_summary=cre_call_summary)
+
+    except Exception as e:
+        flash(f'Error loading lead: {str(e)}', 'error')
+        return redirect(url_for('ps_dashboard'))
+
+@app.route('/dashboard_leads_optimized')
+@require_auth(['cre', 'ps'])
+def dashboard_leads_optimized():
+    """
+    Optimized dashboard leads endpoint for AJAX loading
+    """
+    try:
+        user_type = session.get('user_type')
+        user_name = session.get('cre_name') if user_type == 'cre' else session.get('ps_name')
+
+        # Get filters from request
+        filters = {
+            'final_status': request.args.get('final_status'),
+            'lead_status': request.args.get('lead_status'),
+            'page': int(request.args.get('page', 1)),
+            'per_page': int(request.args.get('per_page', 50))
+        }
+
+        # Add date range filter if provided
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        if start_date and end_date:
+            filters['date_range'] = (start_date, end_date)
+
+        # Get optimized dashboard data
+        result = optimized_ops.get_dashboard_leads_optimized(user_type, user_name, filters)
+
+        if 'error' in result:
+            return jsonify({'error': result['error']}), 500
+
+        return jsonify({
+            'success': True,
+            'leads': result['leads'],
+            'total_count': result['total_count'],
+            'page': result['page'],
+            'per_page': result['per_page']
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/batch_update_leads', methods=['POST'])
+@require_auth(['cre', 'ps'])
+def batch_update_leads():
+    """
+    Batch update multiple leads for better performance
+    """
+    try:
+        updates = request.json.get('updates', [])
+
+        if not updates:
+            return jsonify({'error': 'No updates provided'}), 400
+
+        # Add user information to each update
+        user_type = session.get('user_type')
+        user_name = session.get('cre_name') if user_type == 'cre' else session.get('ps_name')
+
+        for update in updates:
+            update['user_type'] = user_type
+            update['user_name'] = user_name
+
+        # Perform batch update
+        result = optimized_ops.batch_update_leads(updates)
+
+        return jsonify({
+            'success': True,
+            'successful': result['successful'],
+            'failed': result['failed'],
+            'errors': result['errors']
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/performance_metrics')
+@require_admin
+def performance_metrics():
+    """
+    Get performance metrics for monitoring
+    """
+    try:
+        # Get basic metrics
+        metrics = {
+            'total_leads': len(safe_get_data('lead_master')),
+            'total_ps_followups': len(safe_get_data('ps_followup_master')),
+            'active_cre_users': len([u for u in safe_get_data('cre_users') if u.get('is_active')]),
+            'active_ps_users': len([u for u in safe_get_data('ps_users') if u.get('is_active')])
+        }
+
+        return jsonify({
+            'success': True,
+            'metrics': metrics,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 
