@@ -1,34 +1,328 @@
 
 {% extends "base.html" %}
 {% block title %}Branch Head Dashboard - Ather CRM{% endblock %}
-{% block content %}
 
-<div class="container-fluid">
-    <!-- Profile Info Header -->
-    <div class="row mb-3">
-        <div class="col-12">
-            <div class="card shadow-sm mb-2 border-info">
-                <div class="card-body d-flex flex-column flex-md-row align-items-md-center justify-content-between p-3 bg-light">
-                    <div>
-                        <h4 class="mb-1 text-primary"><i class="fas fa-user-tie me-2"></i>{{ session.branch_head_name }}</h4>
-                        <div class="text-muted">Branch: <span class="fw-bold">{{ session.branch_head_branch }}</span></div>
+{% block head %}
+<style>
+    /* Override container constraints for full width layout */
+    .container-main {
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 1rem !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        border: none !important;
+    }
+    
+    /* Ensure full width for all content */
+    .w-100 {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    
+    /* Improve table responsiveness for full width */
+    .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Better spacing for full width layout */
+    .row {
+        margin-left: 0;
+        margin-right: 0;
+    }
+    
+    .col, .col-md-3, .col-md-4, .col-md-2, .col-auto {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+    
+    /* KPI cards better spacing for full width */
+    .card-body.p-2 {
+        padding: 1rem !important;
+    }
+    
+    /* Tab navigation full width */
+    .nav-tabs {
+        border-bottom: 2px solid #e9ecef;
+        width: 100%;
+        background: #f8f9fa;
+        border-radius: 8px 8px 0 0;
+        padding: 0.5rem 0.5rem 0;
+    }
+    
+    .nav-tabs .nav-link {
+        border: none;
+        border-radius: 6px 6px 0 0;
+        color: #6c757d;
+        font-weight: 600;
+        padding: 0.75rem 1.5rem;
+        transition: all 0.3s ease;
+        margin-right: 0.25rem;
+    }
+    
+    .nav-tabs .nav-link:hover {
+        border-color: #007bff;
+        color: #007bff;
+        background: rgba(0, 123, 255, 0.1);
+    }
+    
+    .nav-tabs .nav-link.active {
+        border-color: #007bff;
+        color: #007bff;
+        background: white;
+        border-bottom: 2px solid #007bff;
+    }
+    
+    /* Enhanced dashboard styling for full width */
+    .dashboard-header {
+        background: linear-gradient(135deg, var(--airbnb-gray-100) 0%, var(--airbnb-white) 100%);
+        border: 1px solid var(--airbnb-gray-200);
+        border-radius: var(--airbnb-border-radius);
+        margin-bottom: 1.5rem;
+    }
+    
+    /* KPI cards enhanced for full width */
+    .kpi-card {
+        background: var(--airbnb-white);
+        border: 1px solid var(--airbnb-gray-200);
+        border-radius: var(--airbnb-border-radius);
+        transition: all 0.3s ease;
+        height: 100%;
+        min-height: 120px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    
+    /* Loading spinner styling */
+    .fa-spinner {
+        margin-right: 0.5rem;
+    }
+    
+    /* KPI loading state */
+    .kpi-card .d-none {
+        display: none !important;
+    }
+    
+    /* Lead Category styling */
+    .lead-category-not-set {
+        background-color: #f8d7da;
+        color: #721c24;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.85em;
+        font-weight: 500;
+    }
+    
+    /* Export section styling */
+    .bg-gradient-primary {
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    }
+    
+    .bg-gradient-success {
+        background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);
+    }
+    
+    .card-header.bg-gradient-primary {
+        border-bottom: none;
+    }
+    
+    .form-control-lg, .form-select-lg {
+        border-radius: 8px;
+        border: 2px solid #e9ecef;
+        transition: all 0.3s ease;
+    }
+    
+    .form-control-lg:focus, .form-select-lg:focus {
+        border-color: #007bff;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    }
+    
+    .btn-lg {
+        border-radius: 8px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-lg:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    
+    .btn-group-vertical .btn {
+        border-radius: 8px !important;
+        margin-bottom: 0.5rem;
+    }
+    
+    .btn-group-vertical .btn:last-child {
+        margin-bottom: 0;
+    }
+    
+    /* Export section responsive */
+    @media (max-width: 768px) {
+        .btn-group-vertical {
+            flex-direction: row;
+            gap: 0.5rem;
+        }
+        
+        .btn-group-vertical .btn {
+            flex: 1;
+            margin-bottom: 0;
+        }
+    }
+    
+    .kpi-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--airbnb-shadow-hover);
+        border-color: var(--airbnb-gray-300);
+    }
+    
+    /* Table enhancements for full width */
+    .table {
+        margin-bottom: 0;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .table thead th {
+        background: linear-gradient(135deg, #495057 0%, #343a40 100%);
+        color: white;
+        border: none;
+        font-weight: 600;
+        padding: 1rem 0.75rem;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        letter-spacing: 0.5px;
+    }
+    
+    .table tbody tr {
+        transition: all 0.2s ease;
+    }
+    
+    .table tbody tr:hover {
+        background-color: rgba(0, 123, 255, 0.05);
+        transform: scale(1.001);
+    }
+    
+    .table tbody td {
+        padding: 0.75rem;
+        vertical-align: middle;
+        border-color: #e9ecef;
+    }
+    
+    .table th {
+        background-color: var(--airbnb-gray-100);
+        border-top: none;
+        font-weight: 600;
+        color: var(--airbnb-gray-700);
+    }
+    
+    .table td {
+        vertical-align: middle;
+        border-top: 1px solid var(--airbnb-gray-200);
+    }
+    
+    /* Filter section styling */
+    .filter-section {
+        background: var(--airbnb-gray-50);
+        border: 1px solid var(--airbnb-gray-200);
+        border-radius: var(--airbnb-border-radius);
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    /* Zoho Dashboard iframe styling for full desktop size */
+    .dashboard-iframe {
+        width: 100%;
+        height: 800px;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+    }
+    
+    .dashboard-card {
+        margin-bottom: 1rem;
+        border: 1px solid var(--airbnb-gray-200);
+        border-radius: var(--airbnb-border-radius);
+        overflow: hidden;
+    }
+    
+    .dashboard-card .card-header {
+        background: var(--airbnb-gray-100);
+        border-bottom: 1px solid var(--airbnb-gray-200);
+        padding: 0.75rem 1rem;
+    }
+    
+    .dashboard-card .card-body {
+        padding: 0;
+    }
+    
+    /* Responsive design for mobile */
+    @media (max-width: 768px) {
+        .col-md-3, .col-md-4, .col-md-2 {
+            margin-bottom: 0.5rem;
+        }
+        
+        .nav-tabs .nav-link {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.9rem;
+        }
+        
+        .kpi-card {
+            min-height: 100px;
+        }
+        
+        .kpi-card .h5 {
+            font-size: 1.1rem;
+        }
+        
+        .dashboard-iframe {
+            height: 600px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Full width layout without container constraints -->
+<div class="w-100">
+    <!-- Dashboard Header -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h2 class="mb-1">
+                        <i class="fas fa-chart-line me-2"></i>
+                        Branch Head Dashboard
+                    </h2>
+                    <p class="text-muted mb-0">
+                        Welcome back, {{ session.get('branch_head_name', 'Branch Head') }} | 
+                        Branch: <strong>{{ session.get('branch_head_branch', 'N/A') }}</strong>
+                    </p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <div class="d-flex justify-content-end align-items-center">
+                        <span class="text-muted me-3">
+                            <i class="fas fa-clock me-1"></i>
+                            <span id="currentDateTime"></span>
+                        </span>
                     </div>
-                    <div class="mt-2 mt-md-0">
-                        <span class="badge bg-info text-dark fs-6 py-2 px-3">Branch Head Dashboard</span>
-                    </div>
-                    <span class="me-4 text-dark"><i class="fas fa-user-circle me-1"></i> Welcome, {{ session.branch_head_name }}</span>
-            <a href="{{ url_for('logout') }}" class="text-dark text-decoration-none"><i class="fas fa-sign-out-alt me-1"></i> Logout</a>
                 </div>
             </div>
         </div>
     </div>
     
     <!-- Zoho Dashboards Section -->
-    <div class="row mb-3">
+    <div class="row mb-4">
         <div class="col-12">
-            <div class="card shadow-sm">
-                <div class="card-header bg-info text-white">
-                    <h5 class="mb-0"><i class="fas fa-tachometer-alt me-2"></i>Zoho Dashboards</h5>
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-tachometer-alt me-2"></i>
+                        Zoho Dashboards
+                    </h5>
                 </div>
                 <div class="card-body">
                     <div id="branchHeadDashboardsContainer">
@@ -39,121 +333,160 @@
         </div>
     </div>
     
-    <!-- Universal Filter Section (no UID search or rows per page) -->
-    <div class="row mb-3" id="universalFilterSection">
-      <div class="col-md-3 mb-2">
-        <label for="psSelect" class="fw-semibold">Product Specialist:</label>
-        <select id="psSelect" class="form-select">
-          <option value="">-- All PS --</option>
-          {% for ps in ps_users %}
-            <option value="{{ ps.name }}">{{ ps.name }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-md-3 mb-2">
-        <label for="dateFrom" class="fw-semibold">From:</label>
-        <input type="date" id="dateFrom" class="form-control">
-      </div>
-      <div class="col-md-3 mb-2">
-        <label for="dateTo" class="fw-semibold">To:</label>
-        <input type="date" id="dateTo" class="form-control">
-      </div>
-      <div class="col-md-3 mb-2 d-flex align-items-end">
-        <button id="applyFiltersBtn" class="btn btn-primary me-2">Apply</button>
-        <button id="resetFiltersBtn" class="btn btn-outline-secondary">Reset</button>
-      </div>
-    </div>
-    <!-- Per-section filter for Fresh Leads (add UID search and rows per page) -->
-    <!-- <div class="row mb-2" id="freshLeadsFilterRow">
-      <div class="col-md-4 mb-2">
-        <input type="text" id="freshLeadsUidSearch" class="form-control" placeholder="Search by UID">
-      </div>
-      <div class="col-md-2 mb-2">
-        <select id="freshLeadsRowsPerPage" class="form-select">
-          <option value="10">10</option>
-          <option value="25" selected>25</option>
-          <option value="50">50</option>
-          <option value="100">100</option>
-        </select>
-      </div>
-      <div class="col-md-2 mb-2 d-flex align-items-end">
-        <button id="freshLeadsApplyBtn" class="btn btn-outline-primary">Apply</button>
-      </div>
-    </div> -->
-    <!-- KPI Cards -->
-    <div class="row mb-3">
-        <div class="col">
-            <div class="card text-center bg-primary text-white mb-2">
-                <div class="card-body p-2">Fresh<br><span class="h5" id="freshLeadsKPI">{{ fresh_leads_count }}</span></div>
+    <!-- KPI Cards Row -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="stats-card">
+                <div class="d-flex align-items-center justify-content-center mb-2">
+                    <i class="fas fa-user-plus me-2 fs-4 text-primary"></i>
+                    <h6 class="mb-0 fw-bold">Fresh Leads</h6>
+                </div>
+                <h3 class="mb-0" id="freshLeadsKPI">
+                    <span id="freshLeadsCount">{{ fresh_leads_count }}</span>
+                    <span id="freshLeadsLoading" class="d-none">
+                        <i class="fas fa-spinner fa-spin"></i> Loading...
+                    </span>
+                </h3>
+                <small>Total fresh leads</small>
             </div>
         </div>
-        <div class="col">
-            <div class="card text-center bg-success text-white mb-2"><div class="card-body p-2">Walk-in<br><span class="h5" id="walkinLeadsKPI">{{ walkin_leads_count }}</span></div></div>
+        <div class="col-md-6">
+            <div class="stats-card">
+                <div class="d-flex align-items-center justify-content-center mb-2">
+                    <i class="fas fa-calendar-check me-2 fs-4 text-success"></i>
+                    <h6 class="mb-0 fw-bold">Today's Follow-ups</h6>
+                </div>
+                <h3 class="mb-0" id="followupLeadsKPI">
+                    <span id="followupLeadsCount">{{ followup_leads_count }}</span>
+                    <span id="followupLeadsLoading" class="d-none">
+                        <i class="fas fa-spinner fa-spin"></i> Loading...
+                    </span>
+                </h3>
+                <small>Follow-ups due today</small>
+            </div>
         </div>
-        <div class="col">
-            <div class="card text-center bg-info text-white mb-2"><div class="card-body p-2">CRE Assigned<br><span class="h5" id="creAssignedLeadsKPI">{{ cre_assigned_leads_count }}</span></div></div>
-        </div>
-        <div class="col">
-            <div class="card text-center bg-warning text-dark mb-2">
-                <div class="card-body p-2">
-                    Pending<br>
-                    <span class="h5" id="pendingLeadsKPI">{{ pending_leads_count }}</span>
-                    <div class="d-flex justify-content-center mt-2" style="gap: 8px;">
-                        <span class="badge bg-secondary text-white" id="pendingLeadsKPI_CRE" title="CRE Assigned Pending Leads">CRE: 0</span>
-                        <span class="badge bg-info text-dark" id="pendingLeadsKPI_Event" title="Event Pending Leads">Event: 0</span>
-                
+    </div>
+
+    <!-- Export Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-file-export me-2"></i>
+                        Export Leads Data
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-lg-3 col-md-6">
+                            <label for="exportDateFrom" class="form-label">
+                                <i class="fas fa-calendar-alt me-1"></i>From Date
+                            </label>
+                            <input type="date" id="exportDateFrom" class="form-control">
+                        </div>
+                        <div class="col-lg-3 col-md-6">
+                            <label for="exportDateTo" class="form-label">
+                                <i class="fas fa-calendar-alt me-1"></i>To Date
+                            </label>
+                            <input type="date" id="exportDateTo" class="form-control">
+                        </div>
+                        <div class="col-lg-3 col-md-6">
+                            <label for="exportBranch" class="form-label">
+                                <i class="fas fa-building me-1"></i>Branch
+                            </label>
+                            <select id="exportBranch" class="form-select">
+                                <option value="{{ session.get('branch_head_branch', 'N/A') }}">{{ session.get('branch_head_branch', 'N/A') }}</option>
+                            </select>
+                        </div>
+                        <div class="col-lg-3 col-md-6 d-flex align-items-end">
+                            <div class="d-grid gap-2 w-100">
+                                <div class="btn-group-vertical w-100" role="group">
+                                    <button type="button" class="btn btn-primary mb-2" id="exportPSLeads">
+                                        <i class="fas fa-download me-2"></i>PS Leads
+                                    </button>
+                                    <button type="button" class="btn btn-success mb-2" id="exportWalkinLeads">
+                                        <i class="fas fa-download me-2"></i>Walk-in Leads
+                                    </button>
+                                    <button type="button" class="btn btn-info" id="exportEventLeads">
+                                        <i class="fas fa-download me-2"></i>Event Leads
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="col">
-            <div class="card text-center bg-secondary text-white mb-2"><div class="card-body p-2">Today's Follow-ups<br><span class="h5" id="followupLeadsKPI">{{ followup_leads_count }}</span></div></div>
-        </div>
-        <div class="col">
-            <div class="card text-center bg-dark text-white mb-2"><div class="card-body p-2">Event<br><span class="h5" id="eventLeadsKPI">{{ event_leads_count }}</span></div></div>
-        </div>
-        <div class="col">
-            <div class="card text-center bg-success text-white mb-2"><div class="card-body p-2">Won<br><span class="h5" id="wonLeadsKPI">{{ won_leads_count }}</span></div></div>
-        </div>
-        <div class="col">
-            <div class="card text-center bg-danger text-white mb-2"><div class="card-body p-2">Lost<br><span class="h5" id="lostLeadsKPI">{{ lost_leads_count }}</span></div></div>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="card mb-4">
+        <div class="card-body p-0">
+            <ul class="nav nav-tabs" id="leadTabs" role="tablist">
+                <li class="nav-item">
+                    <a class="nav-link active" id="fresh-tab" data-bs-toggle="tab" href="#fresh" role="tab">
+                        <i class="fas fa-user-plus me-2"></i>Fresh Leads
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" id="followup-tab" data-bs-toggle="tab" href="#followup" role="tab">
+                        <i class="fas fa-calendar-check me-2"></i>Today's Follow-ups
+                    </a>
+                </li>
+            </ul>
         </div>
     </div>
-    <!-- Tab Navigation -->
-    <ul class="nav nav-tabs mb-3" id="leadTabs" role="tablist">
-        <li class="nav-item"><a class="nav-link active" id="fresh-tab" data-bs-toggle="tab" href="#fresh" role="tab">Fresh Leads</a></li>
-        
-        <li class="nav-item"><a class="nav-link" id="creassigned-tab" data-bs-toggle="tab" href="#creassigned" role="tab">CRE Assigned Leads</a></li>
-        <li class="nav-item"><a class="nav-link" id="pending-tab" data-bs-toggle="tab" href="#pending" role="tab">Pending Leads</a></li>
-        <li class="nav-item"><a class="nav-link" id="followup-tab" data-bs-toggle="tab" href="#followup" role="tab">Today's Follow-ups</a></li>
-        <li class="nav-item"><a class="nav-link" id="event-tab" data-bs-toggle="tab" href="#event" role="tab">Event Leads</a></li>
-        <li class="nav-item"><a class="nav-link" id="won-tab" data-bs-toggle="tab" href="#won" role="tab">Won Leads</a></li>
-        <li class="nav-item"><a class="nav-link" id="lost-tab" data-bs-toggle="tab" href="#lost" role="tab">Lost Leads</a></li>
-    </ul>
+
     <div class="tab-content" id="leadTabsContent">
         <!-- Fresh Leads Tab -->
         <div class="tab-pane fade show active" id="fresh" role="tabpanel">
-            
             <div class="card mb-3">
                 <div class="card-body">
-                    <div class="row mb-2" id="freshLeadsFilterRow">
-                        <div class="col-md-4 mb-2">
-                          <input type="text" id="freshLeadsUidSearch" class="form-control" placeholder="Search by UID">
+                    <!-- Section-specific Filter Controls -->
+                    <div class="filter-section mb-3">
+                        <div class="row">
+                            <div class="col-md-3 mb-2">
+                                <label for="freshLeadsPsSelect" class="fw-semibold">Product Specialist:</label>
+                                <select id="freshLeadsPsSelect" class="form-select">
+                                    <option value="">-- All PS --</option>
+                                    {% for ps in ps_users %}
+                                        <option value="{{ ps.name }}">{{ ps.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <label for="freshLeadsDateFrom" class="fw-semibold">From:</label>
+                                <input type="date" id="freshLeadsDateFrom" class="form-control">
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <label for="freshLeadsDateTo" class="fw-semibold">To:</label>
+                                <input type="date" id="freshLeadsDateTo" class="form-control">
+                            </div>
+                            <div class="col-md-3 mb-2 d-flex align-items-end">
+                                <button id="freshLeadsApplyFiltersBtn" class="btn btn-primary me-2">Apply</button>
+                                <button id="freshLeadsResetFiltersBtn" class="btn btn-outline-secondary">Reset</button>
+                            </div>
                         </div>
-                        <div class="col-md-2 mb-2">
-                          <select id="freshLeadsRowsPerPage" class="form-select">
-                            <option value="10">10</option>
-                            <option value="25" selected>25</option>
-                            <option value="50">50</option>
-                            <option value="100">100</option>
-                          </select>
+                    </div>
+                    
+                    <!-- Search and Filter Controls -->
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <div class="input-group">
+                                <input type="text" id="freshLeadsSearchInput" class="form-control" placeholder="Search by name, mobile, UID...">
+                                <button class="btn btn-outline-primary" type="button" id="freshLeadsSearchButton">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                                <button class="btn btn-outline-warning" type="button" id="freshLeadsClearButton">
+                                    <i class="fas fa-times"></i>
+                                </button>
                         </div>
-                        <div class="col-md-2 mb-2 d-flex align-items-end">
-                          <button id="freshLeadsApplyBtn" class="btn btn-outline-primary">Apply</button>
                         </div>
+
                       </div>
                     <div class="table-responsive">
-                        <table class="table table-striped table-hover mb-0">
+                        <table class="table table-striped table-hover mb-0" id="freshLeadsTable">
                             <thead class="thead-dark">
                                 <tr>
                                     <th>UID</th>
@@ -161,314 +494,79 @@
                                     <th>Phone No.</th>
                                     <th>Final Status</th>
                                     <th>PS Name</th>
+                                    <th>Source</th>
+                                    <th>Lead Category</th>
                                     <th>Created At</th>
                                 </tr>
                             </thead>
                             <tbody id="freshLeadsTableBody">
-                                <tr><td colspan="6">Loading...</td></tr>
+                                <tr><td colspan="8">Loading...</td></tr>
                             </tbody>
                         </table>
                     </div>
-                </div>
-            </div>
-        </div>
-        <!-- Walk-in Leads Tab -->
-        <div class="tab-pane fade" id="walkin" role="tabpanel">
-            <div class="card mb-3">
-                <div class="card-body">
-                    <!-- Add UID search and rows-per-page selector for Walk-in Leads -->
-                    <div class="row mb-2" id="walkinLeadsFilterRow">
-                      <div class="col-md-4 mb-2">
-                        <input type="text" id="walkinLeadsUidSearch" class="form-control" placeholder="Search by UID">
-                        </div>
-                      <div class="col-md-2 mb-2">
-                        <select id="walkinLeadsRowsPerPage" class="form-select">
-                          <option value="10">10</option>
-                          <option value="25" selected>25</option>
-                          <option value="50">50</option>
-                          <option value="100">100</option>
-                            </select>
-                        </div>
-                      <div class="col-md-2 mb-2 d-flex align-items-end">
-                        <button id="walkinLeadsApplyBtn" class="btn btn-outline-primary">Apply</button>
-                        </div>
-                    </div>
-                    <div class="table-responsive">
-                        <table class="table table-striped table-hover mb-0">
-                            <thead class="thead-dark">
-                                <tr>
-                                    <th>UID</th>
-                                    <th>Customer Name</th>
-                                    <th>Mobile</th>
-                                    <th>Email</th>
-                                    <th>Model Interested</th>
-                                    <th>Lead Source</th>
-                                    <th>Status</th>
-                                    <th>PS Name</th>
-                                    <th>Created At</th>
-                                </tr>
-                            </thead>
-                            <tbody id="walkinLeadsTableBody">
-                                <tr><td colspan="9">Loading...</td></tr>
-                            </tbody>
-                        </table>
-                        <div id="walkinLeadsPagination"></div>
-                    </div>
+
                 </div>
             </div>
         </div>
 
-        <!-- Pagination controls -->
-        <!-- CRE Assigned Leads Tab -->
-        <div class="tab-pane fade" id="creassigned" role="tabpanel">
-            <div class="card mb-3">
-                <div class="card-body">
-                    <!-- Filters -->
-                    <div class="row g-2 mb-2" id="creAssignedLeadsFilterRow">
-                        <div class="col-auto">
-                            <input type="text" class="form-control" id="creAssignedLeadsUidSearch" placeholder="Search by UID">
-                        </div>
-                        <div class="col-auto">
-                            <select class="form-select" id="creAssignedLeadsRowsPerPage">
-                                <option value="10">10</option>
-                                <option value="25" selected>25</option>
-                                <option value="50">50</option>
-                                <option value="100">100</option>
-                            </select>
-                        </div>
-                        <div class="col-auto">
-                            <button id="creAssignedLeadsApplyBtn" class="btn btn-outline-primary">Apply</button>
-                        </div>
-                    </div>
-                    <div class="table-responsive">
-                        <table class="table table-striped table-hover mb-0">
-                            <thead class="thead-dark">
-                                <tr>
-                                    <th>Customer Name</th>
-                                    <th>Phone No.</th>
-                                    <th>Final Status</th>
-                                    <th>UID</th>
-                                    <th>Source</th>
-                                    <th>Assigned Time</th>
-                                    <th>PS Name</th>
-                                </tr>
-                            </thead>
-                            <tbody id="creAssignedLeadsTableBody">
-                                <tr><td colspan="7">Loading...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <!-- Pending Leads Tab -->
-        <div class="tab-pane fade" id="pending" role="tabpanel">
-            <div class="card mb-3">
-                <div class="card-body">
-                    <!-- Filters -->
-                    <div class="row g-2 mb-2" id="pendingLeadsFilterRow">
-                        <div class="col-auto">
-                            <input type="text" class="form-control" id="pendingLeadsUidSearch" placeholder="Search by UID">
-                        </div>
-                        <div class="col-auto">
-                            <select class="form-select" id="pendingLeadsRowsPerPage">
-                                <option value="10">10</option>
-                                <option value="25" selected>25</option>
-                                <option value="50">50</option>
-                                <option value="100">100</option>
-                            </select>
-                        </div>
-                        <div class="col-auto">
-                            <button id="pendingLeadsApplyBtn" class="btn btn-outline-primary">Apply</button>
-                        </div>
-                    </div>
-                    <div class="table-responsive">
-                        <table class="table table-striped table-hover mb-0">
-                            <thead class="thead-dark">
-                                <tr>
-                                    <th>UID</th>
-                                    <th>Customer Name</th>
-                                    <th>Phone No.</th>
-                                    <th>Final Status</th>
-                                    <th>Source</th>
-                                    <th>Assigned Time</th>
-                                    <th>PS Name</th>
-                                </tr>
-                            </thead>
-                            <tbody id="pendingLeadsTableBody">
-                                <tr><td colspan="7">Loading...</td></tr>
-                            </tbody>
-                        </table>
-                        <div id="pendingLeadsPagination"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
         <!-- Today's Follow-ups Tab -->
         <div class="tab-pane fade" id="followup" role="tabpanel">
             <div class="card mb-3">
                 <div class="card-body">
-                    <!-- Filters -->
-                    <form class="row g-2 mb-2" onsubmit="return false;">
-                        <div class="col-auto">
-                            <input type="text" class="form-control" id="followupLeadsUidSearch" placeholder="Search by UID">
+                    <!-- Section-specific Filter Controls -->
+                    <div class="filter-section mb-3">
+                        <div class="row">
+                            <div class="col-md-3 mb-2">
+                                <label for="followupLeadsPsSelect" class="fw-semibold">Product Specialist:</label>
+                                <select id="followupLeadsPsSelect" class="form-select">
+                                    <option value="">-- All PS --</option>
+                                    {% for ps in ps_users %}
+                                        <option value="{{ ps.name }}">{{ ps.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3 mb-2 d-flex align-items-end">
+                                <button id="followupLeadsApplyFiltersBtn" class="btn btn-primary me-2">Apply</button>
+                                <button id="followupLeadsResetFiltersBtn" class="btn btn-outline-secondary">Reset</button>
+                            </div>
                         </div>
-                        <div class="col-auto">
-                            <select class="form-select" id="followupLeadsRowsPerPage">
-                                <option value="10">Show 10</option>
-                                <option value="25" selected>Show 25</option>
-                                <option value="50">Show 50</option>
-                                <option value="100">Show 100</option>
-                            </select>
+                    </div>
+                    
+                    <!-- Search and Filter Controls -->
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <div class="input-group">
+                                <input type="text" id="followupLeadsSearchInput" class="form-control" placeholder="Search by name, mobile, UID...">
+                                <button class="btn btn-outline-primary" type="button" id="followupLeadsSearchButton">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                                <button class="btn btn-outline-warning" type="button" id="followupLeadsClearButton">
+                                    <i class="fas fa-times"></i>
+                                </button>
+        </div>
                         </div>
-                        <div class="col-auto">
-                            <button type="button" id="followupLeadsApplyBtn" class="btn btn-outline-primary">Apply</button>
-                        </div>
-                    </form>
+
+                    </div>
                     <div class="table-responsive">
-                        <table class="table table-striped table-hover mb-0">
+                        <table class="table table-striped table-hover mb-0" id="followupLeadsTable">
                             <thead class="thead-dark">
                                 <tr>
+                                    <th>UID</th>
                                     <th>Customer Name</th>
                                     <th>Phone No.</th>
-                                    <th>Final Status</th>
-                                    <th>UID</th>
                                     <th>Source</th>
+                                    <th>Lead Category</th>
                                     <th>Lead Status</th>
                                     <th>PS Name</th>
+                                    <th>Follow-up Date</th>
                                 </tr>
                             </thead>
                             <tbody id="followupLeadsTableBody">
-                                <tr><td colspan="7">Loading...</td></tr>
+                                <tr><td colspan="8">Loading...</td></tr>
                             </tbody>
                         </table>
                     </div>
-                </div>
-            </div>
-        </div>
-        <!-- Event Leads Tab -->
-        <div class="tab-pane fade" id="event" role="tabpanel">
-            <div class="card mb-3">
-                <div class="card-body">
-                    <!-- Filters -->
-                    <form class="row g-2 mb-2" onsubmit="return false;">
-                        <div class="col-auto">
-                            <input type="text" class="form-control" id="eventLeadsUidSearch" placeholder="Search by UID">
-                        </div>
-                        <div class="col-auto">
-                            <select class="form-select" id="eventLeadsRowsPerPage">
-                                <option value="10">Show 10</option>
-                                <option value="25" selected>Show 25</option>
-                                <option value="50">Show 50</option>
-                                <option value="100">Show 100</option>
-                            </select>
-                        </div>
-                        <div class="col-auto">
-                            <button type="button" id="eventLeadsApplyBtn" class="btn btn-outline-primary">Apply</button>
-                        </div>
-                    </form>
-                    <div class="table-responsive">
-                        <table class="table table-striped table-hover mb-0">
-                            <thead class="thead-dark">
-                                <tr>
-                                    <th>Customer Name</th>
-                                    <th>Phone No.</th>
-                                    <th>Final Status</th>
-                                    <th>UID</th>
-                                    <th>Source</th>
-                                    <th>Lead Status</th>
-                                    <th>PS Name</th>
-                                </tr>
-                            </thead>
-                            <tbody id="eventLeadsTableBody">
-                                <tr><td colspan="7">Loading...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <!-- Won Leads Tab -->
-        <div class="tab-pane fade" id="won" role="tabpanel">
-            <div class="card mb-3">
-                <div class="card-body">
-                    <!-- Filters -->
-                    <form class="row g-2 mb-2" onsubmit="return false;">
-                        <div class="col-auto">
-                            <input type="text" class="form-control" id="wonLeadsUidSearch" placeholder="Search by UID">
-                        </div>
-                        <div class="col-auto">
-                            <select class="form-select" id="wonLeadsRowsPerPage">
-                                <option value="10">Show 10</option>
-                                <option value="25" selected>Show 25</option>
-                                <option value="50">Show 50</option>
-                                <option value="100">Show 100</option>
-                            </select>
-                        </div>
-                        <div class="col-auto">
-                            <button type="button" id="wonLeadsApplyBtn" class="btn btn-outline-primary">Apply</button>
-                        </div>
-                    </form>
-                    <div class="table-responsive">
-                        <table class="table table-striped table-hover mb-0">
-                            <thead class="thead-dark">
-                                <tr>
-                                    <th>Customer Name</th>
-                                    <th>Phone No.</th>
-                                    <th>Final Status</th>
-                                    <th>UID</th>
-                                    <th>Source</th>
-                                    <th>Lead Status</th>
-                                    <th>PS Name</th>
-                                </tr>
-                            </thead>
-                            <tbody id="wonLeadsTableBody">
-                                <tr><td colspan="7">Loading...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <!-- Lost Leads Tab -->
-        <div class="tab-pane fade" id="lost" role="tabpanel">
-            <div class="card mb-3">
-                <div class="card-body">
-                    <!-- Filters -->
-                    <form class="row g-2 mb-2" onsubmit="return false;">
-                        <div class="col-auto">
-                            <input type="text" class="form-control" id="lostLeadsUidSearch" placeholder="Search by UID">
-                        </div>
-                        <div class="col-auto">
-                            <select class="form-select" id="lostLeadsRowsPerPage">
-                                <option value="10">Show 10</option>
-                                <option value="25" selected>Show 25</option>
-                                <option value="50">Show 50</option>
-                                <option value="100">Show 100</option>
-                            </select>
-                        </div>
-                        <div class="col-auto">
-                            <button type="button" id="lostLeadsApplyBtn" class="btn btn-outline-primary">Apply</button>
-                        </div>
-                    </form>
-                    <div class="table-responsive">
-                        <table class="table table-striped table-hover mb-0">
-                            <thead class="thead-dark">
-                                <tr>
-                                    <th>Customer Name</th>
-                                    <th>Phone No.</th>
-                                    <th>Final Status</th>
-                                    <th>UID</th>
-                                    <th>Source</th>
-                                    <th>Lead Status</th>
-                                    <th>PS Name</th>
-                                </tr>
-                            </thead>
-                            <tbody id="lostLeadsTableBody">
-                                <tr><td colspan="7">Loading...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
+
                 </div>
             </div>
         </div>
@@ -476,184 +574,316 @@
 </div>
 
 <script>
-// Function to update all KPI counts
-function updateAllKPIs(data) {
-  // Update all KPI counts from the response
-  if (data.fresh_leads_count !== undefined) {
-    document.getElementById('freshLeadsKPI').textContent = data.fresh_leads_count;
-  }
-  if (data.walkin_leads_count !== undefined) {
-    document.getElementById('walkinLeadsKPI').textContent = data.walkin_leads_count;
-  }
-  if (data.cre_assigned_leads_count !== undefined) {
-    document.getElementById('creAssignedLeadsKPI').textContent = data.cre_assigned_leads_count;
-  }
-  if (data.pending_leads_count !== undefined) {
-    document.getElementById('pendingLeadsKPI').textContent = data.pending_leads_count;
-  }
-  if (data.followup_leads_count !== undefined) {
-    document.getElementById('followupLeadsKPI').textContent = data.followup_leads_count;
-  }
-  if (data.event_leads_count !== undefined) {
-    document.getElementById('eventLeadsKPI').textContent = data.event_leads_count;
-  }
-  if (data.won_leads_count !== undefined) {
-    document.getElementById('wonLeadsKPI').textContent = data.won_leads_count;
-  }
-  if (data.lost_leads_count !== undefined) {
-    document.getElementById('lostLeadsKPI').textContent = data.lost_leads_count;
-  }
-  
-  // Update pending leads sub-counts if available
-  if (data.pending_leads_cre_assigned_count !== undefined) {
-    document.getElementById('pendingLeadsKPI_CRE').textContent = `CRE: ${data.pending_leads_cre_assigned_count}`;
-  }
-  if (data.pending_leads_event_count !== undefined) {
-    document.getElementById('pendingLeadsKPI_Event').textContent = `Event: ${data.pending_leads_event_count}`;
-  }
-  if (data.pending_leads_walkin_count !== undefined) {
-    document.getElementById('pendingLeadsKPI_Walkin').textContent = `Walk-in: ${data.pending_leads_walkin_count}`;
-  }
-}
-
-// Utility to get universal filters
-function getUniversalFilters() {
-  return {
-    ps_name: document.getElementById('psSelect').value,
-    date_from: document.getElementById('dateFrom').value,
-    date_to: document.getElementById('dateTo').value
-  };
-}
-
-// Section config: section name, table body id, columns
+    // Configuration for sections
 const sectionConfig = {
   fresh_leads: {
     tab: 'fresh-tab',
     tbody: 'freshLeadsTableBody',
-    pagination: 'freshLeadsPagination',
-    columns: ['uid', 'customer_name', 'customer_mobile_number', 'final_status', 'ps_name', 'created_at']
-  },
-  walkin_leads: {
-    tab: 'walkin-tab',
-    tbody: 'walkinLeadsTableBody',
-    pagination: 'walkinLeadsPagination',
-    columns: ['uid', 'customer_name', 'customer_mobile_number', 'customer_email', 'model_interested', 'lead_source', 'status', 'ps_name', 'created_at']
-  },
-  cre_assigned_leads: {
-    tab: 'creassigned-tab',
-    tbody: 'creAssignedLeadsTableBody',
-    pagination: 'creAssignedLeadsPagination',
-    columns: ['customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source', 'ps_assigned_at', 'ps_name']
-  },
-  pending_leads: {
-    tab: 'pending-tab',
-    tbody: 'pendingLeadsTableBody',
-    pagination: 'pendingLeadsPagination',
-    columns: ['uid', 'customer_name', 'customer_mobile_number', 'final_status', 'source', 'assigned_time', 'ps_name']
+            psSelectId: 'freshLeadsPsSelect',
+            dateFromId: 'freshLeadsDateFrom',
+            dateToId: 'freshLeadsDateTo',
+            searchId: 'freshLeadsSearchInput',
+            columns: ['uid', 'customer_name', 'customer_mobile_number', 'final_status', 'ps_name', 'source', 'lead_category', 'created_at']
   },
   followup_leads: {
     tab: 'followup-tab',
     tbody: 'followupLeadsTableBody',
-    pagination: 'followupLeadsPagination',
-    columns: ['customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source', 'lead_status', 'ps_name']
-  },
-  event_leads: {
-    tab: 'event-tab',
-    tbody: 'eventLeadsTableBody',
-    pagination: 'eventLeadsPagination',
-    columns: ['customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source', 'lead_status', 'ps_name']
-  },
-  won_leads: {
-    tab: 'won-tab',
-    tbody: 'wonLeadsTableBody',
-    pagination: 'wonLeadsPagination',
-    columns: ['customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source', 'lead_status', 'ps_name']
-  },
-  lost_leads: {
-    tab: 'lost-tab',
-    tbody: 'lostLeadsTableBody',
-    pagination: 'lostLeadsPagination',
-    columns: ['customer_name', 'customer_mobile_number', 'final_status', 'uid', 'source', 'lead_status', 'ps_name']
-  }
-};
+            psSelectId: 'followupLeadsPsSelect',
+            dateFromId: 'followupLeadsDateFrom',
+            dateToId: 'followupLeadsDateTo',
+            searchId: 'followupLeadsSearchInput',
+            columns: ['uid', 'customer_name', 'customer_mobile_number', 'source', 'lead_category', 'lead_status', 'ps_name', 'follow_up_date']
+        }
+    };
 
-function loadSection(section, page = 1, per_page = 25) {
+    // Load section data
+    function loadSection(section) {
   const config = sectionConfig[section];
-  if (!config) return;
   const tbody = document.getElementById(config.tbody);
-  if (tbody) tbody.innerHTML = `<tr><td colspan="${config.columns.length}">Loading...</td></tr>`;
-  const filters = getUniversalFilters();
-  fetch(`/api/branch_head_dashboard_data?section=${section}&page=${page}&per_page=${per_page}&ps_name=${filters.ps_name}&date_from=${filters.date_from}&date_to=${filters.date_to}`)
-    .then(res => {
-      if (!res.ok) throw new Error('API error');
-      return res.json();
-    })
+        
+        // Show loading state for table
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center">Loading...</td></tr>';
+        
+        // Show loading state for KPI cards
+        showKPILoading();
+        
+        // Get filter values
+        const psSelect = document.getElementById(config.psSelectId);
+        const dateFrom = document.getElementById(config.dateFromId);
+        const dateTo = document.getElementById(config.dateToId);
+        const searchInput = document.getElementById(config.searchId);
+        
+        const ps_name = psSelect ? psSelect.value : '';
+        const start_date = dateFrom ? dateFrom.value : '';
+        const end_date = dateTo ? dateTo.value : '';
+        const searchTerm = searchInput ? searchInput.value.trim() : '';
+        
+        // Make API call
+        fetch(`/api/branch_head_dashboard_data?section=${section}&ps_name=${ps_name}&start_date=${start_date}&end_date=${end_date}&search=${encodeURIComponent(searchTerm)}`)
+            .then(response => response.json())
     .then(data => {
-      // Update all KPI counts
-      updateAllKPIs(data);
-      
-      if (tbody) {
-        if (data.rows && data.rows.length > 0) {
+                if (data.success) {
+                    // Update table
           tbody.innerHTML = '';
+                    if (data.rows.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="8" class="text-center">No data found</td></tr>';
+                    } else {
           data.rows.forEach(row => {
             const tr = document.createElement('tr');
-            tr.innerHTML = config.columns.map(col => `<td>${row[col] || ''}</td>`).join('');
+                            tr.setAttribute('data-search', Object.values(row).join(' ').toLowerCase());
+                            
+                            config.columns.forEach(column => {
+                                const td = document.createElement('td');
+                                const value = row[column] || '';
+                                
+                                // Special handling for lead_category column
+                                if (column === 'lead_category' && value === 'Not Set') {
+                                    td.innerHTML = '<span class="lead-category-not-set">Not Set</span>';
+                                } else {
+                                    td.textContent = value;
+                                }
+                                
+                                tr.appendChild(td);
+                            });
             tbody.appendChild(tr);
           });
+                    }
+                    
+                    // Update KPI counts
+                    updateKPICounts(data);
         } else {
-          tbody.innerHTML = `<tr><td colspan="${config.columns.length}">No data found.</td></tr>`;
+                    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Error loading data</td></tr>';
+                    hideKPILoading(); // Hide loading state on error
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Error loading data</td></tr>';
+                hideKPILoading(); // Hide loading state on error
+            });
+    }
+
+
+
+    // Show loading state for KPI cards
+    function showKPILoading() {
+        document.getElementById('freshLeadsCount').classList.add('d-none');
+        document.getElementById('freshLeadsLoading').classList.remove('d-none');
+        document.getElementById('followupLeadsCount').classList.add('d-none');
+        document.getElementById('followupLeadsLoading').classList.remove('d-none');
+    }
+
+    // Hide loading state and show counts
+    function hideKPILoading() {
+        document.getElementById('freshLeadsCount').classList.remove('d-none');
+        document.getElementById('freshLeadsLoading').classList.add('d-none');
+        document.getElementById('followupLeadsCount').classList.remove('d-none');
+        document.getElementById('followupLeadsLoading').classList.add('d-none');
+    }
+
+    // Update KPI counts
+    function updateKPICounts(data) {
+        hideKPILoading(); // Hide loading state
+        
+        if (data.fresh_leads_count !== undefined && data.fresh_leads_count !== null) {
+            document.getElementById('freshLeadsCount').textContent = data.fresh_leads_count;
+        } else {
+            document.getElementById('freshLeadsCount').textContent = '0';
         }
-      }
-      
-      // Pagination controls
-      let pagDiv = document.getElementById(config.pagination);
-      if (!pagDiv) {
-        pagDiv = document.createElement('div');
-        pagDiv.id = config.pagination;
-        tbody.parentElement.appendChild(pagDiv);
-      }
-      let html = '';
-      for (let p = 1; p <= data.total_pages; p++) {
-        html += `<button onclick="loadSection('${section}', ${p}, ${data.per_page})" ${p === data.page ? 'disabled' : ''}>${p}</button> `;
-      }
-      pagDiv.innerHTML = html;
-    })
-    .catch(err => {
-      if (tbody) {
-        tbody.innerHTML = `<tr><td colspan="${config.columns.length}">Error loading data.</td></tr>`;
-      }
-      let pagDiv = document.getElementById(config.pagination);
-      if (pagDiv) pagDiv.innerHTML = '';
+        
+        if (data.followup_leads_count !== undefined && data.followup_leads_count !== null) {
+            document.getElementById('followupLeadsCount').textContent = data.followup_leads_count;
+        } else {
+            document.getElementById('followupLeadsCount').textContent = '0';
+        }
+    }
+
+    // Setup search functionality with client-side filtering
+    function setupSearch(inputId, buttonId, clearId, tableId, sectionName) {
+        const input = document.getElementById(inputId);
+        const button = document.getElementById(buttonId);
+        const clearBtn = document.getElementById(clearId);
+        let searchTimeout;
+
+        // Search button click
+        if (button) {
+            button.addEventListener('click', function() {
+                filterTableData(sectionName);
+            });
+        }
+
+        // Clear button click
+        if (clearBtn) {
+            clearBtn.addEventListener('click', function() {
+                input.value = '';
+                filterTableData(sectionName);
+            });
+        }
+
+        // Real-time search on input
+        if (input) {
+            input.addEventListener('input', function() {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    filterTableData(sectionName);
+                }, 300); // Debounce search
+            });
+        }
+    }
+
+    // Client-side table filtering with all filters
+    function filterTableData(sectionName) {
+        const config = sectionConfig[sectionName];
+        const tbody = document.getElementById(config.tbody);
+        const searchInput = document.getElementById(config.searchId);
+        const psSelect = document.getElementById(config.psSelectId);
+        const dateFrom = document.getElementById(config.dateFromId);
+        const dateTo = document.getElementById(config.dateToId);
+        
+        // Get filter values
+        const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+        const psFilter = psSelect ? psSelect.value.toLowerCase().trim() : '';
+        const dateFromFilter = dateFrom ? dateFrom.value : '';
+        const dateToFilter = dateTo ? dateTo.value : '';
+        
+        // Get all rows
+        const rows = tbody.querySelectorAll('tr');
+        
+        rows.forEach(row => {
+            let showRow = true;
+            
+            // Search filter
+            if (searchTerm) {
+                const searchData = row.getAttribute('data-search') || '';
+                if (!searchData.includes(searchTerm)) {
+                    showRow = false;
+                }
+            }
+            
+            // PS filter
+            if (showRow && psFilter && psFilter !== '-- all ps --') {
+                let psCell;
+                // PS Name column position depends on section
+                if (sectionName === 'fresh_leads') {
+                    psCell = row.querySelector('td:nth-child(5)'); // PS Name column (5th)
+                } else if (sectionName === 'followup_leads') {
+                    psCell = row.querySelector('td:nth-child(7)'); // PS Name column (7th)
+                }
+                if (psCell && !psCell.textContent.toLowerCase().includes(psFilter)) {
+                    showRow = false;
+                }
+            }
+            
+            // Date range filter - handle different date columns for different sections
+            if (showRow && (dateFromFilter || dateToFilter)) {
+                let dateCell;
+                
+                // For Fresh Leads: use created_at (last column)
+                // For Today's Follow-ups: use follow_up_date (last column)
+                if (sectionName === 'fresh_leads') {
+                    dateCell = row.querySelector('td:last-child'); // Created At column
+                } else if (sectionName === 'followup_leads') {
+                    dateCell = row.querySelector('td:last-child'); // Follow Up Date column
+                }
+                
+                if (dateCell) {
+                    const dateText = dateCell.textContent.trim();
+                    if (dateText) {
+                        const rowDate = new Date(dateText);
+                        const fromDate = dateFromFilter ? new Date(dateFromFilter + 'T00:00:00') : null;
+                        const toDate = dateToFilter ? new Date(dateToFilter + 'T23:59:59') : null;
+                        
+                        // Check if date is valid
+                        if (!isNaN(rowDate.getTime())) {
+                            if (fromDate && rowDate < fromDate) showRow = false;
+                            if (toDate && rowDate > toDate) showRow = false;
+                        }
+                    }
+                }
+            }
+            
+            // Show/hide row
+            row.style.display = showRow ? '' : 'none';
+        });
+        
+        // Update row count
+        updateVisibleRowCount(sectionName);
+    }
+    
+    // Update visible row count
+    function updateVisibleRowCount(sectionName) {
+        const config = sectionConfig[sectionName];
+        const tbody = document.getElementById(config.tbody);
+        const visibleRows = tbody.querySelectorAll('tr:not([style*="display: none"])').length;
+        
+        // You can add a counter element to show filtered count
+    }
+
+    // Event listeners for filter buttons
+    const sections = ['fresh', 'followup'];
+    sections.forEach(section => {
+        const applyBtn = document.getElementById(section + 'LeadsApplyFiltersBtn');
+        const resetBtn = document.getElementById(section + 'LeadsResetFiltersBtn');
+        
+        if (applyBtn) {
+            applyBtn.addEventListener('click', function() {
+                const sectionMap = {
+                    'fresh': 'fresh_leads',
+                    'followup': 'followup_leads'
+                };
+                filterTableData(sectionMap[section]);
+            });
+        }
+        
+        if (resetBtn) {
+            resetBtn.addEventListener('click', function() {
+                const psSelect = document.getElementById(section + 'LeadsPsSelect');
+                const dateFrom = document.getElementById(section + 'LeadsDateFrom');
+                const dateTo = document.getElementById(section + 'LeadsDateTo');
+                const searchInput = document.getElementById(section + 'LeadsSearchInput');
+                
+                if (psSelect) psSelect.value = '';
+                if (dateFrom) dateFrom.value = '';
+                if (dateTo) dateTo.value = '';
+                if (searchInput) searchInput.value = '';
+                
+                const sectionMap = {
+                    'fresh': 'fresh_leads',
+                    'followup': 'followup_leads'
+                };
+                filterTableData(sectionMap[section]);
+            });
+        }
     });
-}
+
+    // Setup search for each section
+    setupSearch('freshLeadsSearchInput', 'freshLeadsSearchButton', 'freshLeadsClearButton', 'freshLeadsTable', 'fresh_leads');
+    setupSearch('followupLeadsSearchInput', 'followupLeadsSearchButton', 'followupLeadsClearButton', 'followupLeadsTable', 'followup_leads');
 
 // Load Branch Head dashboards
 function loadBranchHeadDashboards() {
-    console.log('Loading Branch Head dashboards...');
     fetch('/api/dashboards')
         .then(response => {
-            console.log('Dashboard API response status:', response.status);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             return response.json();
         })
         .then(data => {
-            console.log('Dashboard API response data:', data);
             if (data.success && data.dashboards['branch-head']) {
                 const container = document.getElementById('branchHeadDashboardsContainer');
                 let html = '';
                 
                 data.dashboards['branch-head'].forEach(dashboard => {
                     html += `
-                        <div class="card mb-3">
+                            <div class="dashboard-card">
                             <div class="card-header d-flex justify-content-between align-items-center">
                                 <h6 class="mb-0">${dashboard.name}</h6>
                                 <small class="text-muted">Added: ${new Date(dashboard.created_at).toLocaleDateString()}</small>
                             </div>
                             <div class="card-body p-0">
                                 <iframe src="${dashboard.url}" 
-                                        style="width: 100%; height: 800px; border: none;" 
+                                            class="dashboard-iframe"
                                         frameborder="0">
                                 </iframe>
                             </div>
@@ -667,8 +897,6 @@ function loadBranchHeadDashboards() {
                 
                 container.innerHTML = html;
             } else {
-                console.log('No Branch Head dashboards found in response'); // Debug log
-                console.log('Response data:', data); // Debug log
                 const container = document.getElementById('branchHeadDashboardsContainer');
                 container.innerHTML = `<div class="text-center text-muted py-4">
                     <i class="fas fa-chart-bar fa-3x mb-3"></i>
@@ -687,83 +915,127 @@ function loadBranchHeadDashboards() {
         });
 }
 
-// Initial load
-window.addEventListener('DOMContentLoaded', function() {
-  // Load Zoho dashboards first
-  loadBranchHeadDashboards();
-  
-  // Load fresh leads by default
-  loadSection('fresh_leads', 1);
-  
-  // Add click handlers for tab navigation
-  document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
-    tab.addEventListener('click', function(e) {
-      const target = this.getAttribute('href').substring(1);
-      const section = target.replace('-', '_');
-      loadSection(section, 1);
-    });
-  });
-  
-  // Fresh Leads rows per page Apply button
-  const freshApplyBtn = document.getElementById('freshLeadsApplyBtn');
-  if (freshApplyBtn) {
-    freshApplyBtn.addEventListener('click', function() {
-      const perPage = parseInt(document.getElementById('freshLeadsRowsPerPage').value, 10) || 25;
-      loadSection('fresh_leads', 1, perPage);
-    });
-  }
+    // Export functions
+    function exportLeadsData(leadType) {
+        const dateFrom = document.getElementById('exportDateFrom').value;
+        const dateTo = document.getElementById('exportDateTo').value;
+        const branch = document.getElementById('exportBranch').value;
+        
+        if (!dateFrom || !dateTo) {
+            alert('Please select both From and To dates for export.');
+            return;
+        }
+        
+        if (!branch || branch === 'N/A') {
+            alert('Please select a valid branch for export.');
+            return;
+        }
+        
+        // Show loading state
+        const exportBtn = document.getElementById(`export${leadType}Leads`);
+        const originalText = exportBtn.innerHTML;
+        exportBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Exporting...';
+        exportBtn.disabled = true;
+        
+        // Make export request
+        fetch('/api/export_branch_leads', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                lead_type: leadType,
+                date_from: dateFrom,
+                date_to: dateTo,
+                branch: branch
+            })
+        })
+        .then(response => {
+            if (response.ok) {
+                return response.blob();
+            } else {
+                return response.json().then(errorData => {
+                    throw new Error(errorData.message || 'Export failed');
+                });
+            }
+        })
+        .then(blob => {
+            // Create download link
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${leadType}_leads_${dateFrom}_to_${dateTo}_${branch}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            // Reset button
+            exportBtn.innerHTML = originalText;
+            exportBtn.disabled = false;
+        })
+        .catch(error => {
+            console.error('Export error:', error);
+            alert('Export failed. Please try again.');
+            exportBtn.innerHTML = originalText;
+            exportBtn.disabled = false;
+        });
+    }
 
-  const creAssignedApplyBtn = document.getElementById('creAssignedLeadsApplyBtn');
-  if (creAssignedApplyBtn) {
-    creAssignedApplyBtn.addEventListener('click', function() {
-      const perPage = parseInt(document.getElementById('creAssignedLeadsRowsPerPage').value, 10) || 25;
-      loadSection('cre_assigned_leads', 1, perPage);
+    // Export event listeners
+    document.addEventListener('DOMContentLoaded', function() {
+        // Export button event listeners
+        document.getElementById('exportPSLeads').addEventListener('click', () => exportLeadsData('PS'));
+        document.getElementById('exportWalkinLeads').addEventListener('click', () => exportLeadsData('Walkin'));
+        document.getElementById('exportEventLeads').addEventListener('click', () => exportLeadsData('Event'));
+        
+        // Set default dates (last 30 days)
+        const today = new Date();
+        const thirtyDaysAgo = new Date(today.getTime() - (30 * 24 * 60 * 60 * 1000));
+        
+        document.getElementById('exportDateFrom').value = thirtyDaysAgo.toISOString().split('T')[0];
+        document.getElementById('exportDateTo').value = today.toISOString().split('T')[0];
     });
-  }
-  // Pending Leads rows per page Apply button
-  const pendingApplyBtn = document.getElementById('pendingLeadsApplyBtn');
-  if (pendingApplyBtn) {
-    pendingApplyBtn.addEventListener('click', function() {
-      const perPage = parseInt(document.getElementById('pendingLeadsRowsPerPage').value, 10) || 25;
-      loadSection('pending_leads', 1, perPage);
+
+    // Load initial data
+    document.addEventListener('DOMContentLoaded', function() {
+        // Show initial loading state for KPI cards
+        showKPILoading();
+        
+        // Load Zoho dashboards first
+        loadBranchHeadDashboards();
+        
+        // Load fresh leads by default
+        loadSection('fresh_leads');
+        
+        // Update current date and time
+        function updateDateTime() {
+            const now = new Date();
+            const options = { 
+                day: '2-digit', 
+                month: 'short', 
+                year: 'numeric',
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: true 
+            };
+            document.getElementById('currentDateTime').textContent = now.toLocaleDateString('en-US', options);
+        }
+        
+        updateDateTime();
+        setInterval(updateDateTime, 60000); // Update every minute
     });
-  }
-  
-  // Follow-up Leads rows per page Apply button
-  const followupApplyBtn = document.getElementById('followupLeadsApplyBtn');
-  if (followupApplyBtn) {
-    followupApplyBtn.addEventListener('click', function() {
-      const perPage = parseInt(document.getElementById('followupLeadsRowsPerPage').value, 10) || 25;
-      loadSection('followup_leads', 1, perPage);
-    });
-  }
-  
-  // Event Leads rows per page Apply button
-  const eventApplyBtn = document.getElementById('eventLeadsApplyBtn');
-  if (eventApplyBtn) {
-    eventApplyBtn.addEventListener('click', function() {
-      const perPage = parseInt(document.getElementById('eventLeadsRowsPerPage').value, 10) || 25;
-      loadSection('event_leads', 1, perPage);
-    });
-  }
-  
-  // Won Leads rows per page Apply button
-  const wonApplyBtn = document.getElementById('wonLeadsApplyBtn');
-  if (wonApplyBtn) {
-    wonApplyBtn.addEventListener('click', function() {
-      const perPage = parseInt(document.getElementById('wonLeadsRowsPerPage').value, 10) || 25;
-      loadSection('won_leads', 1, perPage);
-    });
-  }
-  
-  // Lost Leads rows per page Apply button
-  const lostApplyBtn = document.getElementById('lostLeadsApplyBtn');
-  if (lostApplyBtn) {
-    lostApplyBtn.addEventListener('click', function() {
-      const perPage = parseInt(document.getElementById('lostLeadsRowsPerPage').value, 10) || 25;
-      loadSection('lost_leads', 1, perPage);
-    });
-  }
+
+    // Tab change event
+    document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
+        tab.addEventListener('shown.bs.tab', function(e) {
+            const targetId = e.target.getAttribute('href').substring(1);
+            if (targetId === 'fresh') {
+                loadSection('fresh_leads');
+            } else if (targetId === 'followup') {
+                loadSection('followup_leads');
+            }
+        });
 });
 </script>
 {% endblock %} 
