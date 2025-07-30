@@ -27,7 +27,9 @@ import sys
 import platform
 from flask_socketio import SocketIO, emit
 import math
-# from redis import Redis  # REMOVE this line for local development
+import os
+# Redis configuration
+REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379')
 
 # Import optimized operations for faster lead updates
 from optimized_lead_operations import create_optimized_operations
@@ -3500,9 +3502,18 @@ def performance_metrics_advanced():
         # Get cache statistics
         cache_stats = optimized_ops.get_cache_stats()
         
+        # Get Redis stats if available
+        try:
+            from redis_cache import get_redis_cache
+            redis_cache = get_redis_cache()
+            redis_stats = redis_cache.get_stats()
+        except:
+            redis_stats = {'available': False}
+        
         # Get basic metrics
         metrics = {
             'cache': cache_stats,
+            'redis': redis_stats,
             'timestamp': datetime.now().isoformat(),
             'system_info': {
                 'python_version': sys.version,
@@ -3513,6 +3524,30 @@ def performance_metrics_advanced():
         return jsonify(metrics)
     except Exception as e:
         return jsonify({'error': str(e)})
+
+@app.route('/redis_cache_stats')
+@require_admin
+def redis_cache_stats():
+    """Get detailed Redis cache statistics"""
+    try:
+        from redis_cache import get_redis_cache
+        redis_cache = get_redis_cache()
+        stats = redis_cache.get_stats()
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/clear_redis_cache')
+@require_admin
+def clear_redis_cache():
+    """Clear Redis cache"""
+    try:
+        from redis_cache import get_redis_cache
+        redis_cache = get_redis_cache()
+        success = redis_cache.clear()
+        return jsonify({'success': success, 'message': 'Redis cache cleared'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/clear_cache')
 def clear_cache():

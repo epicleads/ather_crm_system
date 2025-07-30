@@ -13,18 +13,27 @@ import logging
 from collections import OrderedDict
 import json
 
+# Import Redis cache
+try:
+    from redis_cache import get_redis_cache
+    redis_cache = get_redis_cache()
+    REDIS_AVAILABLE = redis_cache.available
+except ImportError:
+    REDIS_AVAILABLE = False
+    redis_cache = None
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Global cache for session data
+# Global cache for session data (fallback if Redis not available)
 CACHE_SIZE = 1000
 CACHE_TTL = 300  # 5 minutes
 session_cache = OrderedDict()
 cache_lock = threading.Lock()
 
 class LRUCache:
-    """Thread-safe LRU cache for lead data"""
+    """Thread-safe LRU cache for lead data (fallback)"""
     
     def __init__(self, max_size=1000, ttl=300):
         self.max_size = max_size
@@ -66,7 +75,7 @@ class LRUCache:
             self.cache.clear()
             self.timestamps.clear()
 
-# Global cache instance
+# Global cache instance (fallback)
 lead_cache = LRUCache(max_size=1000, ttl=300)
 
 def performance_monitor(func):
@@ -86,11 +95,11 @@ def performance_monitor(func):
     return wrapper
 
 class OptimizedLeadOperations:
-    """Optimized lead operations with reduced database round trips and advanced caching"""
+    """Optimized lead operations with Redis caching and reduced database round trips"""
 
     def __init__(self, supabase_client):
         self.supabase = supabase_client
-        self.cache = lead_cache
+        self.cache = redis_cache if REDIS_AVAILABLE else lead_cache
         self.query_cache = {}
         self.batch_size = 50  # Optimized batch size
         
@@ -114,11 +123,18 @@ class OptimizedLeadOperations:
     def get_lead_with_related_data(self, uid: str) -> Dict[str, Any]:
         """
         Fetch lead data with all related information in a single optimized query
-        Uses advanced caching for better performance
+        Uses Redis caching for ultra-fast performance
         """
-        # Check cache first
+        # Check Redis cache first
+        if REDIS_AVAILABLE:
+            cached_data = self.cache.get_lead_data(uid)
+            if cached_data:
+                logger.info(f"🎯 Redis cache HIT for lead {uid}")
+                return cached_data
+
+        # Check fallback cache
         cache_key = f"lead_{uid}"
-        cached_data = self.cache.get(cache_key)
+        cached_data = self.cache.get(cache_key) if not REDIS_AVAILABLE else None
         if cached_data:
             logger.info(f"Cache hit for lead {uid}")
             return cached_data
@@ -151,8 +167,13 @@ class OptimizedLeadOperations:
                 'ps_followup': ps_followup
             }
 
-            # Cache the result
-            self.cache.set(cache_key, result)
+            # Cache the result in Redis
+            if REDIS_AVAILABLE:
+                self.cache.set_lead_data(uid, result, ttl=300)
+            else:
+                # Cache in fallback cache
+                self.cache.set(cache_key, result)
+            
             return result
 
         except Exception as e:
@@ -163,11 +184,14 @@ class OptimizedLeadOperations:
     def update_lead_optimized(self, uid: str, update_data: Dict[str, Any],
                              user_type: str, user_name: str) -> Dict[str, Any]:
         """
-        Optimized lead update with minimal database round trips and batch operations
+        Ultra-fast lead update with Redis caching and minimal database round trips
         """
         try:
-            # Invalidate cache for this lead
-            self.cache.set(f"lead_{uid}", None)
+            # Invalidate Redis cache for this lead
+            if REDIS_AVAILABLE:
+                self.cache.invalidate_lead(uid)
+            else:
+                self.cache.set(f"lead_{uid}", None)
             
             # Prepare batch operations
             operations = []
@@ -235,11 +259,14 @@ class OptimizedLeadOperations:
     def update_ps_lead_optimized(self, uid: str, update_data: Dict[str, Any],
                                 ps_name: str) -> Dict[str, Any]:
         """
-        Optimized PS lead update with batch operations and caching
+        Ultra-fast PS lead update with Redis caching and batch operations
         """
         try:
-            # Invalidate cache for this lead
-            self.cache.set(f"lead_{uid}", None)
+            # Invalidate Redis cache for this lead
+            if REDIS_AVAILABLE:
+                self.cache.invalidate_lead(uid)
+            else:
+                self.cache.set(f"lead_{uid}", None)
             
             operations = []
             audit_events = []
@@ -312,12 +339,19 @@ class OptimizedLeadOperations:
     def get_dashboard_leads_optimized(self, user_type: str, user_name: str,
                                     filters: Dict[str, Any] = None) -> Dict[str, Any]:
         """
-        Optimized dashboard leads fetching with efficient queries and caching
+        Ultra-fast dashboard leads fetching with Redis caching
         """
         try:
-            # Create cache key based on filters
+            # Check Redis cache first
+            if REDIS_AVAILABLE:
+                cached_data = self.cache.get_dashboard_data(user_type, user_name, filters or {})
+                if cached_data:
+                    logger.info(f"🎯 Redis cache HIT for dashboard {user_type} {user_name}")
+                    return cached_data
+
+            # Check fallback cache
             cache_key = f"dashboard_{user_type}_{user_name}_{hash(str(filters))}"
-            cached_data = self.cache.get(cache_key)
+            cached_data = self.cache.get(cache_key) if not REDIS_AVAILABLE else None
             if cached_data:
                 logger.info(f"Cache hit for dashboard {user_type} {user_name}")
                 return cached_data
@@ -329,8 +363,13 @@ class OptimizedLeadOperations:
             else:
                 raise ValueError(f"Unsupported user type: {user_type}")
 
-            # Cache the result
-            self.cache.set(cache_key, result)
+            # Cache the result in Redis
+            if REDIS_AVAILABLE:
+                self.cache.set_dashboard_data(user_type, user_name, filters or {}, result, ttl=180)
+            else:
+                # Cache in fallback cache
+                self.cache.set(cache_key, result)
+            
             return result
 
         except Exception as e:
@@ -338,7 +377,7 @@ class OptimizedLeadOperations:
             return {'error': str(e)}
 
     def _get_cre_dashboard_leads_optimized(self, cre_name: str, filters: Dict[str, Any]) -> Dict[str, Any]:
-        """Optimized CRE dashboard leads fetching with query optimization"""
+        """Ultra-fast CRE dashboard leads fetching with query optimization"""
         try:
             # Build efficient query with specific columns and indexing hints
             query = self.supabase.table('lead_master').select(
@@ -379,7 +418,7 @@ class OptimizedLeadOperations:
             return {'error': str(e)}
 
     def _get_ps_dashboard_leads_optimized(self, ps_name: str, filters: Dict[str, Any]) -> Dict[str, Any]:
-        """Optimized PS dashboard leads fetching with query optimization"""
+        """Ultra-fast PS dashboard leads fetching with query optimization"""
         try:
             # Build efficient query for PS followup data with indexing
             query = self.supabase.table('ps_followup_master').select(
@@ -423,7 +462,7 @@ class OptimizedLeadOperations:
     @performance_monitor
     def batch_update_leads(self, updates: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Advanced batch update multiple leads with optimized batching
+        Ultra-fast batch update multiple leads with Redis caching
         """
         try:
             results = {
@@ -445,8 +484,11 @@ class OptimizedLeadOperations:
                         user_type = update.get('user_type', 'unknown')
                         user_name = update.get('user_name', 'unknown')
 
-                        # Invalidate cache for this lead
-                        self.cache.set(f"lead_{uid}", None)
+                        # Invalidate Redis cache for this lead
+                        if REDIS_AVAILABLE:
+                            self.cache.invalidate_lead(uid)
+                        else:
+                            self.cache.set(f"lead_{uid}", None)
 
                         if user_type == 'ps':
                             result = self.update_ps_lead_optimized(uid, update_data, user_name)
@@ -481,16 +523,24 @@ class OptimizedLeadOperations:
 
     def clear_cache(self):
         """Clear all cached data"""
-        self.cache.clear()
+        if REDIS_AVAILABLE:
+            self.cache.clear()
+        else:
+            self.cache.clear()
         logger.info("Cache cleared successfully")
 
     def get_cache_stats(self):
         """Get cache statistics"""
-        return {
-            'cache_size': len(self.cache.cache),
-            'max_size': self.cache.max_size,
-            'ttl': self.cache.ttl
-        }
+        if REDIS_AVAILABLE:
+            return self.cache.get_stats()
+        else:
+            return {
+                'cache_size': len(self.cache.cache),
+                'max_size': self.cache.max_size,
+                'ttl': self.cache.ttl,
+                'available': True,
+                'type': 'in-memory'
+            }
 
 # Utility functions for easy integration
 def create_optimized_operations(supabase_client):
