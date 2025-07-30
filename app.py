@@ -5261,7 +5261,7 @@ def activity_event():
             else:
                 flash('Error adding event leads', 'error')
                 
-    except Exception as e:
+        except Exception as e:
             flash(f'Error adding event leads: {str(e)}', 'error')
     
     return render_template('activity_event.html', now=datetime.now())
@@ -5328,9 +5328,9 @@ def view_call_attempt_history(uid):
         total_attempts = len(call_history)
         
         # Log access
-    auth_manager.log_audit_event(
-        user_id=session.get('user_id'),
-        user_type=session.get('user_type'),
+        auth_manager.log_audit_event(
+            user_id=session.get('user_id'),
+            user_type=session.get('user_type'),
             action='CALL_HISTORY_ACCESS',
             resource='cre_call_attempt_history',
             resource_id=uid,
