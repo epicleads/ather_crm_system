@@ -16,7 +16,7 @@ SF_SECURITY_TOKEN = os.getenv('SF_SECURITY_TOKEN')
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_ANON_KEY')
 
-sf = Salesforce(username=SF_USERNAME, password=SF_PASSWORD, security_token=SF_SECURITY_TOKEN)
+sf = Salesforce(username=SF_USERNAME, password=SF_PASSWORD + SF_SECURITY_TOKEN, security_token="")
 print("✅ Connected to Salesforce")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
