@@ -16,7 +16,7 @@ SF_SECURITY_TOKEN = os.getenv('SF_SECURITY_TOKEN')
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_ANON_KEY')
 
-sf = Salesforce(username=SF_USERNAME, password=SF_PASSWORD + SF_SECURITY_TOKEN, security_token="")
+sf = Salesforce(username=SF_USERNAME, password=SF_PASSWORD, security_token=SF_SECURITY_TOKEN)
 print("✅ Connected to Salesforce")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -132,7 +132,7 @@ class DuplicateLeadsHandler:
         try:
             slot = self.find_next_available_source_slot(duplicate_record)
             if slot is None:
-                print(f"⚠ All source slots full for phone: {duplicate_record['customer_mobile_number']}")
+                print(f"⚠️ All source slots full for phone: {duplicate_record['customer_mobile_number']}")
                 return False
             
             # Update the record with new source in the available slot
@@ -236,7 +236,7 @@ class DuplicateLeadsHandler:
                 
                 # Check if this is a duplicate source/sub_source combination
                 if self.is_duplicate_source(master_record, current_source, current_sub_source):
-                    print(f"⚠ Skipping duplicate: {phone} | Source: {current_source} | Sub-source: {current_sub_source}")
+                    print(f"⚠️ Skipping duplicate: {phone} | Source: {current_source} | Sub-source: {current_sub_source}")
                     skipped_duplicates += 1
                     continue
                 
@@ -246,7 +246,7 @@ class DuplicateLeadsHandler:
                     
                     # Check if this source/sub_source already exists in duplicate record
                     if self.is_duplicate_source(duplicate_record, current_source, current_sub_source):
-                        print(f"⚠ Skipping duplicate: {phone} | Source: {current_source} | Sub-source: {current_sub_source}")
+                        print(f"⚠️ Skipping duplicate: {phone} | Source: {current_source} | Sub-source: {current_sub_source}")
                         skipped_duplicates += 1
                         continue
                     
@@ -320,7 +320,7 @@ def map_source_and_subsource(raw_source):
         return ('OEM', 'Tele')
     else:
         # Log unmapped sources for debugging
-        print(f"⚠ Unmapped source found: {raw_source}")
+        print(f"⚠️ Unmapped source found: {raw_source}")
         return (None, None)
 
 def normalize_phone(phone: str) -> str:
@@ -412,7 +412,7 @@ for lead in results:
 
 # Report unmapped sources if any
 if unmapped_sources:
-    print(f"\n⚠ WARNING: Found {len(unmapped_sources)} unmapped sources:")
+    print(f"\n⚠️ WARNING: Found {len(unmapped_sources)} unmapped sources:")
     for source in sorted(unmapped_sources):
         print(f"   - {source}")
     print("   These leads were skipped. Please update the mapping function if needed.\n")
@@ -507,7 +507,7 @@ else:
             uid_conflicts.append(i)
     
     if uid_conflicts:
-        print(f"⚠ Found {len(uid_conflicts)} UID conflicts, regenerating...")
+        print(f"⚠️ Found {len(uid_conflicts)} UID conflicts, regenerating...")
         sequence_start = get_next_sequence_number(supabase) + 1000
         for i in uid_conflicts:
             row = new_leads_df.iloc[i]
@@ -556,7 +556,7 @@ else:
 print(f"\n📊 SUMMARY:")
 print(f"✅ New leads inserted: {len(new_leads_df) if not new_leads_df.empty else 0}")
 print(f"🔄 Duplicate records updated/created: {results['updated_duplicates']}")
-print(f"⚠ Skipped exact duplicates: {results['skipped_duplicates']}")
+print(f"⚠️ Skipped exact duplicates: {results['skipped_duplicates']}")
 print(f"📱 Total records processed: {len(df_oem_leads)}")
 print(f"🎯 Source: OEM | Various sub-sources (Web, Tele, Affiliate Bikewale, etc.)")
 print(f"📊 Each lead processed individually with duplicate handling")
@@ -565,6 +565,6 @@ print(f"⏰ Time range: Past 15 minutes")
 
 # Final report on unmapped sources
 if unmapped_sources:
-    print(f"\n⚠ UNMAPPED SOURCES FOUND:")
+    print(f"\n⚠️ UNMAPPED SOURCES FOUND:")
     print(f"   {len(unmapped_sources)} unique unmapped sources were skipped")
     print(f"   Please review and update the mapping function if needed")
