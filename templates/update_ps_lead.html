@@ -168,6 +168,7 @@
                             <option value="Discount Issue" {% if lead.lead_status == 'Discount Issue' %}selected{% endif %}>Discount Issue</option>
                             <option value="Delayed" {% if lead.lead_status == 'Delayed' %}selected{% endif %}>Delayed</option>
                             <option value="Booked" {% if lead.lead_status == 'Booked' %}selected{% endif %}>Booked</option>
+                            <option value="Booked with another number" {% if lead.lead_status == 'Booked with another number' %}selected{% endif %}>Booked with another number</option>
                             <option value="Test Drive" {% if lead.lead_status == 'Test Drive' %}selected{% endif %}>Test Drive</option>
                             <option value="Planning in Next Month" {% if lead.lead_status == 'Planning in Next Month' %}selected{% endif %}>Planning in Next Month</option>
                             <option value="Interested" {% if lead.lead_status == 'Interested' %}selected{% endif %}>Interested</option>
@@ -348,6 +349,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 const now = new Date();
                 const nextMonth = new Date(now.setMonth(now.getMonth() + 1));
                 followUpDate.value = nextMonth.toISOString().slice(0, 16);
+            }
+        }
+        
+        // Auto-set final status to Won for Booked with another number
+        if (leadStatus.value === 'Booked with another number') {
+            if (finalStatus) {
+                finalStatus.value = 'Won';
+                // Trigger change event to update any dependent UI
+                finalStatus.dispatchEvent(new Event('change'));
             }
         }
     }
