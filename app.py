@@ -464,11 +464,10 @@ def sync_test_drive_to_alltest_drive(source_table, original_id, lead_data):
                 'model_interested': lead_data.get('model_interested'),
                 'final_status': lead_data.get('final_status'),
                 'ps_name': lead_data.get('ps_name'),
-                'branch': lead_data.get('branch'),
+                'branch': lead_data.get('branch') or lead_data.get('ps_branch'),
                 'created_at': lead_data.get('created_at'),
                 'lead_source': lead_data.get('lead_source'),
-                'cre_name': lead_data.get('cre_name'),
-                'ps_branch': lead_data.get('ps_branch')
+                'cre_name': lead_data.get('cre_name')
             })
         elif source_table == 'activity_leads':
             alltest_drive_data.update({
@@ -5541,7 +5540,7 @@ def export_test_drive_csv():
             'Original ID', 'Customer Name', 'Mobile Number', 'Test Drive Done',
             'Lead Status', 'Lead Category', 'Model Interested', 'Final Status', 'PS Name',
             'Branch', 'Created At', 'Updated At', 'Remarks', 'Activity Name', 'Activity Location',
-            'Customer Location', 'Customer Profession', 'Gender', 'Lead Source', 'CRE Name', 'PS Branch'
+            'Customer Location', 'Customer Profession', 'Gender', 'Lead Source', 'CRE Name'
         ]
         writer.writerow(headers)
         
@@ -5567,8 +5566,7 @@ def export_test_drive_csv():
                 lead.get('customer_profession', ''),
                 lead.get('gender', ''),
                 lead.get('lead_source', ''),
-                lead.get('cre_name', ''),
-                lead.get('ps_branch', '')
+                lead.get('cre_name', '')
             ]
             writer.writerow(row)
         
@@ -6517,11 +6515,19 @@ def api_export_branch_leads():
                 for start_format in format_date_for_query(date_from):
                     for end_format in format_date_for_query(date_to):
                         try:
-                            query = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).gte('created_at', start_format).lte('created_at', end_format)
+                            # Try to filter by branch first, then fallback to ps_branch
+                            query = supabase.table('ps_followup_master').select('*').eq('branch', branch).gte('created_at', start_format).lte('created_at', end_format)
                             result = query.execute()
                             if result.data:
                                 leads_data = result.data
                                 break
+                            else:
+                                # Fallback to ps_branch if no results with branch
+                                query = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).gte('created_at', start_format).lte('created_at', end_format)
+                                result = query.execute()
+                                if result.data:
+                                    leads_data = result.data
+                                    break
                         except Exception as e:
                             continue
                     if leads_data:
@@ -6537,6 +6543,7 @@ def api_export_branch_leads():
                         'Lead Category': lead.get('lead_category', 'Not Set'),
                         'PS Name': lead.get('ps_name', ''),
                         'CRE Name': lead.get('cre_name', ''),
+                        'Branch': lead.get('branch') or lead.get('ps_branch', ''),
                         'Final Status': lead.get('final_status', ''),
                         'Lead Status': lead.get('lead_status', ''),
                         'Model Interested': lead.get('model_interested', ''),
