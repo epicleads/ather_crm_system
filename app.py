@@ -4603,7 +4603,7 @@ def api_branch_head_dashboard_data():
         
         # Walk-in follow-ups for today (exact date match)
         # Use date range queries for timestamp columns
-        walkin_query = supabase.table('walkin_table').select('*').eq('branch', branch).gte('next_followup_date', f'{today_str} 00:00:00').lt('next_followup_date', f'{today_str} 23:59:59')
+        walkin_query = supabase.table('walkin_table').select('*').eq('branch', branch).eq('status', 'Pending').gte('next_followup_date', f'{today_str} 00:00:00').lt('next_followup_date', f'{today_str} 23:59:59')
         walkin_today_raw = walkin_query.execute().data or []
         
         # Mark all as not missed and set source_type and phone
