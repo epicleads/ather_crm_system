@@ -2153,6 +2153,7 @@ def cre_dashboard():
     # Initialize buckets for leads for mutual exclusivity
     untouched_leads = []
     called_leads = []
+    follow_up_leads = []  # New list for "Call me Back" leads
     attended_leads = []
     assigned_to_ps = []
     won_leads = []
@@ -2187,7 +2188,11 @@ def cre_dashboard():
 
         # Called Fresh Leads: Non-contact status on FIRST update only
         if lead_status in non_contact_statuses and not has_first_call:
-            called_leads.append(lead)
+            # Separate "Call me Back" leads into follow_up_leads
+            if lead_status == 'Call me Back':
+                follow_up_leads.append(lead)
+            else:
+                called_leads.append(lead)
             continue
 
     print(f"Won leads count: {len(won_leads)}")
@@ -2195,10 +2200,11 @@ def cre_dashboard():
     
     untouched_count = len(untouched_leads)
     called_count = len(called_leads)
-    total_fresh_leads = untouched_count + called_count
+    follow_up_count = len(follow_up_leads)
+    total_fresh_leads = untouched_count + called_count + follow_up_count
 
     fresh_leads_sorted = sorted(
-        untouched_leads + called_leads,
+        untouched_leads + called_leads + follow_up_leads,
         key=lambda l: l.get('date') or '',  # Sort by 'date' column
         reverse=True
     )
@@ -2235,10 +2241,12 @@ def cre_dashboard():
         'cre_dashboard.html',
         untouched_count=untouched_count,
         called_count=called_count,
+        follow_up_count=follow_up_count,
         total_fresh_leads=total_fresh_leads,
         fresh_leads_sorted=fresh_leads_sorted,
         untouched_leads=untouched_leads,
         called_leads=called_leads,
+        follow_up_leads=follow_up_leads,
         pending_leads=attended_leads,
         todays_followups=todays_followups,
         attended_leads=attended_leads,
@@ -2431,7 +2439,7 @@ def update_lead(uid):
                 
                 # Redirect based on return_tab parameter
                 if return_tab:
-                    if return_tab in ['untouched-leads', 'called-leads']:
+                    if return_tab in ['untouched-leads', 'called-leads', 'follow-up-leads']:
                         return redirect(url_for('cre_dashboard', tab='fresh-leads', sub_tab=return_tab))
                     elif return_tab == 'followups':
                         return redirect(url_for('cre_dashboard', tab='followups'))
@@ -2586,34 +2594,58 @@ def ps_dashboard():
             # DEBUG: Print lead details for troubleshooting
             print(f"[DEBUG] Processing lead: {lead.get('lead_uid')} | final_status: {final_status} | lead_status: {lead_status} | first_call_date: {lead.get('first_call_date')} | ps_name: {lead.get('ps_name')}")
 
-            # Categorize leads based on final_status
+            # Categorize leads based on final_status and first_call_date
             if final_status == 'Won':
                 won_leads.append(lead_dict)
             elif final_status == 'Lost':
                 lost_leads.append(lead_dict)
             elif final_status == 'Pending':
-                # All leads with final_status == 'Pending' go to pending_leads
-                print(f"[DEBUG] Found lead with final_status == 'Pending': {lead.get('lead_uid')} | first_call_date: {lead.get('first_call_date')} | lead_status: {lead_status}")
-                if not lead_status or lead_status not in excluded_statuses:
-                    # Set default lead_category if missing
-                    if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
-                        lead_dict['lead_category'] = 'Not Set'
-                    pending_leads.append(lead_dict)
-                    print(f"[DEBUG] Added to pending_leads (Pending status): {lead.get('lead_uid')}")
+                # Check if lead has been called (has first_call_date)
+                if lead.get('first_call_date'):
+                    # Lead has been called, goes to pending_leads
+                    print(f"[DEBUG] Found lead with final_status == 'Pending' and first_call_date: {lead.get('lead_uid')} | first_call_date: {lead.get('first_call_date')} | lead_status: {lead_status}")
+                    if not lead_status or lead_status not in excluded_statuses:
+                        # Set default lead_category if missing
+                        if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
+                            lead_dict['lead_category'] = 'Not Set'
+                        pending_leads.append(lead_dict)
+                        print(f"[DEBUG] Added to pending_leads (Pending status with first_call_date): {lead.get('lead_uid')}")
+                    else:
+                        print(f"[DEBUG] Lead {lead.get('lead_uid')} excluded from pending_leads due to lead_status: {lead_status}")
                 else:
-                    print(f"[DEBUG] Lead {lead.get('lead_uid')} excluded from pending_leads due to lead_status: {lead_status}")
+                    # Lead hasn't been called yet, goes to fresh_leads
+                    print(f"[DEBUG] Found lead with final_status == 'Pending' but no first_call_date: {lead.get('lead_uid')} | lead_status: {lead_status}")
+                    if not lead_status or lead_status not in excluded_statuses:
+                        # Set default lead_category if missing
+                        if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
+                            lead_dict['lead_category'] = 'Not Set'
+                        fresh_leads.append(lead_dict)
+                        print(f"[DEBUG] Added to fresh_leads (Pending status without first_call_date): {lead.get('lead_uid')}")
+                    else:
+                        print(f"[DEBUG] Lead {lead.get('lead_uid')} excluded from fresh_leads due to lead_status: {lead_status}")
             elif not final_status:  # Include leads with no final_status
                 if lead.get('first_call_date'):
-                    # Regular leads should already have lead_category from the database
-                    # Set default if it's missing, None, or empty
-                    if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
-                        lead_dict['lead_category'] = 'Not Set'
-                    attended_leads.append(lead_dict)
-                else:
-                    # Pending leads: no first_call_date and not excluded status
+                    # Lead has been called, goes to pending_leads
+                    print(f"[DEBUG] Found lead with no final_status but has first_call_date: {lead.get('lead_uid')} | first_call_date: {lead.get('first_call_date')} | lead_status: {lead_status}")
                     if not lead_status or lead_status not in excluded_statuses:
+                        # Set default lead_category if missing
+                        if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
+                            lead_dict['lead_category'] = 'Not Set'
                         pending_leads.append(lead_dict)
-                        print(f"[DEBUG] Added to pending_leads (no final_status): {lead.get('lead_uid')}")
+                        print(f"[DEBUG] Added to pending_leads (no final_status with first_call_date): {lead.get('lead_uid')}")
+                    else:
+                        print(f"[DEBUG] Lead {lead.get('lead_uid')} excluded from pending_leads due to lead_status: {lead_status}")
+                else:
+                    # Lead hasn't been called yet, goes to fresh_leads
+                    print(f"[DEBUG] Found lead with no final_status and no first_call_date: {lead.get('lead_uid')} | lead_status: {lead_status}")
+                    if not lead_status or lead_status not in excluded_statuses:
+                        # Set default lead_category if missing
+                        if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
+                            lead_dict['lead_category'] = 'Not Set'
+                        fresh_leads.append(lead_dict)
+                        print(f"[DEBUG] Added to fresh_leads (no final_status without first_call_date): {lead.get('lead_uid')}")
+                    else:
+                        print(f"[DEBUG] Lead {lead.get('lead_uid')} excluded from fresh_leads due to lead_status: {lead_status}")
 
             # Add to today's followups if applicable (exclude Won/Lost and specific statuses)
             follow_up_date = lead.get('follow_up_date')
@@ -2687,29 +2719,52 @@ def ps_dashboard():
                 print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to lost_leads")
 
             elif final_status == 'Pending':
-                # All event leads with final_status == 'Pending' go to pending_leads
-                if not lead_status or lead_status not in excluded_statuses:
-                    # Set default lead_category if missing
-                    if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
-                        lead_dict['lead_category'] = 'Not Set'
-                    pending_leads.append(lead_dict)
-                    print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to pending_leads (Pending status)")
-            elif not final_status:  # Include leads with no final_status
+                # Check if event lead has been called (has ps_first_call_date)
                 if ps_first_call_date:
-                    # Event leads should already have lead_category from the database
-                    # Set default if it's missing, None, or empty
-                    if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
-                        lead_dict['lead_category'] = 'Not Set'
-                    attended_leads.append(lead_dict)
-                    print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to attended_leads")
-                else:
-                    # Fresh/Pending event leads: no ps_first_call_date and not excluded status
+                    # Event lead has been called, goes to pending_leads
+                    print(f"[DEBUG] Event lead with final_status == 'Pending' and ps_first_call_date: {lead_dict['lead_uid']} | ps_first_call_date: {ps_first_call_date} | lead_status: {lead_status}")
                     if not lead_status or lead_status not in excluded_statuses:
                         # Set default lead_category if missing
                         if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
                             lead_dict['lead_category'] = 'Not Set'
-                        pending_leads.append(lead_dict)  # Event leads without first call go to pending
-                        print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to pending_leads (no final_status)")
+                        pending_leads.append(lead_dict)
+                        print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to pending_leads (Pending status with ps_first_call_date)")
+                    else:
+                        print(f"[DEBUG] Event lead {lead_dict['lead_uid']} excluded from pending_leads due to lead_status: {lead_status}")
+                else:
+                    # Event lead hasn't been called yet, goes to fresh_leads
+                    print(f"[DEBUG] Event lead with final_status == 'Pending' but no ps_first_call_date: {lead_dict['lead_uid']} | lead_status: {lead_status}")
+                    if not lead_status or lead_status not in excluded_statuses:
+                        # Set default lead_category if missing
+                        if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
+                            lead_dict['lead_category'] = 'Not Set'
+                        fresh_leads.append(lead_dict)
+                        print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to fresh_leads (Pending status without ps_first_call_date)")
+                    else:
+                        print(f"[DEBUG] Event lead {lead_dict['lead_uid']} excluded from fresh_leads due to lead_status: {lead_status}")
+            elif not final_status:  # Include leads with no final_status
+                if ps_first_call_date:
+                    # Event lead has been called, goes to pending_leads
+                    print(f"[DEBUG] Event lead with no final_status but has ps_first_call_date: {lead_dict['lead_uid']} | ps_first_call_date: {ps_first_call_date} | lead_status: {lead_status}")
+                    if not lead_status or lead_status not in excluded_statuses:
+                        # Set default lead_category if missing
+                        if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
+                            lead_dict['lead_category'] = 'Not Set'
+                        pending_leads.append(lead_dict)
+                        print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to pending_leads (no final_status with ps_first_call_date)")
+                    else:
+                        print(f"[DEBUG] Event lead {lead_dict['lead_uid']} excluded from pending_leads due to lead_status: {lead_status}")
+                else:
+                    # Event lead hasn't been called yet, goes to fresh_leads
+                    print(f"[DEBUG] Event lead with no final_status and no ps_first_call_date: {lead_dict['lead_uid']} | lead_status: {lead_status}")
+                    if not lead_status or lead_status not in excluded_statuses:
+                        # Set default lead_category if missing
+                        if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
+                            lead_dict['lead_category'] = 'Not Set'
+                        fresh_leads.append(lead_dict)
+                        print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to fresh_leads (no final_status without ps_first_call_date)")
+                    else:
+                        print(f"[DEBUG] Event lead {lead_dict['lead_uid']} excluded from fresh_leads due to lead_status: {lead_status}")
 
             # Add event leads with today's ps_followup_date_ts to today's followups
             ps_followup_date_ts = lead.get('ps_followup_date_ts')
@@ -3098,6 +3153,12 @@ def update_ps_lead(uid):
                 # Always update lead_status from the form
                 if lead_status:
                     update_data['lead_status'] = lead_status
+                    
+                    # Auto-set final_status to Won for Booked with another number
+                    if lead_status == 'Booked with another number':
+                        update_data['final_status'] = 'Won'
+                        update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        
                 if lead_category:
                     update_data['lead_category'] = lead_category
                 if model_interested:
@@ -3394,7 +3455,7 @@ def update_lead_optimized(uid):
 
             # Redirect based on return_tab parameter
             if return_tab:
-                if return_tab in ['untouched-leads', 'called-leads']:
+                if return_tab in ['untouched-leads', 'called-leads', 'follow-up-leads']:
                     return redirect(url_for('cre_dashboard', tab='fresh-leads', sub_tab=return_tab))
                 elif return_tab == 'followups':
                     return redirect(url_for('cre_dashboard', tab='followups'))
@@ -3499,6 +3560,12 @@ def update_ps_lead_optimized(uid):
             # Always update lead_status from the form
             if lead_status:
                 update_data['lead_status'] = lead_status
+                
+                # Auto-set final_status to Won for Booked with another number
+                if lead_status == 'Booked with another number':
+                    update_data['final_status'] = 'Won'
+                    update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    
             if lead_category:
                 update_data['lead_category'] = lead_category
             if model_interested:
