@@ -201,3 +201,6 @@ public
 # Temporary folders
 tmp/
 temp/
+
+# Database schema files (auto-generated or sensitive)
+enhanced_auto_assign_schema.sql
