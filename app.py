@@ -518,7 +518,8 @@ def create_or_update_ps_followup(lead_data, ps_name, ps_branch):
             'model_interested': lead_data.get('model_interested'),
             'final_status': 'Pending',
             'ps_assigned_at': lead_data.get('ps_assigned_at'),
-            'created_at': lead_data.get('created_at') or datetime.now().isoformat()
+            'created_at': lead_data.get('created_at') or datetime.now().isoformat(),
+            'first_call_date': None  # Ensure fresh leads start without first_call_date
         }
         if existing.data:
             supabase.table('ps_followup_master').update(ps_followup_data).eq('lead_uid', lead_data['uid']).execute()
@@ -1975,7 +1976,17 @@ def add_lead():
                     remarks=remark if remark else None
                 )
             
-            flash('Lead added successfully!', 'success')
+            # Create PS followup if PS is assigned during lead creation
+            if ps_name:
+                ps_user = next((ps for ps in ps_users if ps['name'] == ps_name), None)
+                if ps_user:
+                    create_or_update_ps_followup(lead_data, ps_name, ps_user['branch'])
+                    flash(f'Lead added successfully and assigned to {ps_name}!', 'success')
+                else:
+                    flash('Lead added successfully! (PS assignment failed)', 'warning')
+            else:
+                flash('Lead added successfully!', 'success')
+            
             return redirect(url_for('cre_dashboard'))
         except Exception as e:
             flash(f'Error adding lead: {str(e)}', 'error')
