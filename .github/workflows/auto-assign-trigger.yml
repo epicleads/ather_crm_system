@@ -1,0 +1,33 @@
+name: Auto-Assign Trigger
+on:
+  schedule:
+    - cron: '* * * * *'  # Every minute
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  auto-assign-trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+        
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+        
+      - name: Run Auto-Assign Trigger
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          LOG_LEVEL: INFO
+          GITHUB_ACTIONS: "true"
+        run: python auto_assign_system.py worker
+        
+      - name: Log Results
+        run: |
+          echo "✅ Auto-assign trigger completed at $(date)"
+          echo "🔄 Next run in 1 minute" 

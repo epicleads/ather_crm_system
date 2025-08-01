@@ -237,6 +237,133 @@
         animation: pulse 2s infinite;
     }
     
+    .source-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .auto-assign-toggle {
+        font-size: 0.8rem;
+        padding: 4px 8px;
+        border-radius: 6px;
+        transition: all 0.2s ease;
+    }
+    
+    .auto-assign-toggle.active {
+        background: var(--accent-green);
+        color: white;
+        border-color: var(--accent-green);
+    }
+    
+    .auto-assign-toggle:hover {
+        transform: scale(1.05);
+    }
+    
+    .auto-assign-config {
+        background: var(--surface);
+        border: 1.5px solid var(--border);
+        border-radius: 10px;
+        padding: 12px;
+        margin-top: 8px;
+        display: none;
+    }
+    
+    .auto-assign-config.show {
+        display: block;
+    }
+    
+    .auto-assign-config h6 {
+        color: var(--accent-dark);
+        font-weight: 600;
+        margin-bottom: 8px;
+        font-size: 0.9rem;
+    }
+    
+    .auto-assign-cre-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 8px;
+    }
+    
+    .auto-assign-cre-item {
+        background: var(--bg-light);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-size: 0.8rem;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    
+    .auto-assign-cre-item .remove-cre {
+        background: none;
+        border: none;
+        color: #dc3545;
+        font-size: 0.7rem;
+        cursor: pointer;
+        padding: 0;
+        margin: 0;
+    }
+    
+    .auto-assign-cre-item .remove-cre:hover {
+        color: #c82333;
+    }
+    
+    .auto-assign-actions {
+        display: flex;
+        gap: 6px;
+        margin-top: 8px;
+    }
+    
+    .auto-assign-actions .btn {
+        font-size: 0.75rem;
+        padding: 4px 8px;
+    }
+    
+    .auto-assign-status {
+        background: var(--bg-light);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 8px 12px;
+        margin: 8px 0;
+        font-size: 0.85rem;
+        display: none;
+    }
+    
+    .auto-assign-status.show {
+        display: block;
+    }
+    
+    .auto-assign-status.active {
+        background: #E6F9ED;
+        border-color: var(--accent-green);
+        color: var(--accent-dark);
+    }
+    
+    .auto-assign-status .status-title {
+        font-weight: 600;
+        margin-bottom: 4px;
+    }
+    
+    .auto-assign-status .assigned-cres {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 4px;
+    }
+    
+    .auto-assign-status .cre-tag {
+        background: var(--accent-green);
+        color: white;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+    
     @keyframes pulse {
         0% { transform: scale(1); }
         50% { transform: scale(1.05); }
@@ -486,9 +613,34 @@
           <div class="lead-box" data-source="{{ source }}" data-total="{{ leads|length }}">
             <div class="source-header">
               <span>{{ source }} (<span class="remaining-leads" data-source="{{ source|replace(' ', '_') }}">{{ source_unassigned_counts[source] }}</span>)</span>
+              <div class="source-controls">
               <span class="cre-count-indicator" data-source="{{ source|replace(' ', '_') }}" title="Number of CREs assigned">0</span>
+                <button class="btn btn-sm btn-outline-success auto-assign-toggle" data-source="{{ source }}" title="Toggle Auto-Assign">
+                  <i class="fas fa-magic"></i> Auto-Assign
+                </button>
+              </div>
+            </div>
+            <div class="auto-assign-status" id="auto_assign_status_{{ source|replace(' ', '_') }}">
+              <!-- Auto-assign status will be displayed here -->
             </div>
             <div class="lead-column" id="column_{{ source|replace(' ', '_') }}"></div>
+            <div class="auto-assign-config" id="auto_assign_config_{{ source|replace(' ', '_') }}">
+              <h6><i class="fas fa-cog"></i> Auto-Assign Configuration</h6>
+              <div class="auto-assign-cre-list" id="auto_assign_cre_list_{{ source|replace(' ', '_') }}">
+                <!-- Auto-assigned CREs will be displayed here -->
+              </div>
+              <div class="auto-assign-actions">
+                <button class="btn btn-sm btn-outline-primary add-cre-btn" data-source="{{ source }}">
+                  <i class="fas fa-plus"></i> Add CRE
+                </button>
+                <button class="btn btn-sm btn-outline-success save-and-assign-btn" data-source="{{ source }}">
+                  <i class="fas fa-save"></i> Save & Auto-Assign
+                </button>
+                <button class="btn btn-sm btn-outline-danger delete-config-btn" data-source="{{ source }}">
+                  <i class="fas fa-trash"></i> Delete Config
+                </button>
+              </div>
+            </div>
           </div>
         </div>
         {% endfor %}
@@ -581,7 +733,13 @@
       .then(response => response.json())
       .then(data => {
         if (data.success) {
-          alert(`✅ Lead added successfully!\nUID: ${data.uid}`);
+          let message = `✅ Lead added successfully!\nUID: ${data.uid}`;
+          if (data.auto_assigned) {
+            message += `\n🔄 Auto-assigned to: ${data.assigned_cre}`;
+          } else if (data.assigned_cre) {
+            message += `\n👤 Manually assigned to: ${data.assigned_cre}`;
+          }
+          alert(message);
           this.reset(); // Reset form
         } else {
           alert(`❌ Failed to add lead: ${data.message}`);
@@ -916,7 +1074,436 @@
 
     // Initial state
     updateAssignments();
-    updateRemainingLeads()
+    updateRemainingLeads();
+    
+    // Auto-Assign Functionality
+    let autoAssignConfigs = {};
+    
+    // Load auto-assign configurations on page load
+    loadAutoAssignConfigs();
+    
+    function loadAutoAssignConfigs() {
+      fetch('/get_auto_assign_config')
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            autoAssignConfigs = data.configs;
+            console.log('Loaded auto-assign configs:', autoAssignConfigs);
+            console.log('Available CREs:', allCREs);
+            updateAutoAssignUI();
+          }
+        })
+        .catch(error => {
+          console.error('Error loading auto-assign configs:', error);
+        });
+    }
+    
+    function updateAutoAssignUI() {
+      console.log('Updating auto-assign UI for sources:', Object.keys(autoAssignConfigs));
+      // Update toggle buttons and config panels
+      Object.keys(autoAssignConfigs).forEach(source => {
+        const configs = autoAssignConfigs[source];
+        const toggleBtn = document.querySelector(`.auto-assign-toggle[data-source="${source}"]`);
+        const configPanel = document.getElementById(`auto_assign_config_${source.replace(/ /g, '_')}`);
+        const creList = document.getElementById(`auto_assign_cre_list_${source.replace(/ /g, '_')}`);
+        const statusDiv = document.getElementById(`auto_assign_status_${source.replace(/ /g, '_')}`);
+        
+        console.log(`Processing source: ${source}, configs:`, configs);
+        console.log(`Toggle button found:`, toggleBtn);
+        console.log(`Config panel found:`, configPanel);
+        console.log(`Status div found:`, statusDiv);
+        
+        if (configs.length > 0) {
+          // Show active state
+          toggleBtn.classList.add('active');
+          configPanel.classList.add('show');
+          
+          // Update status display
+          statusDiv.classList.add('show', 'active');
+          const creNames = configs.map(config => {
+            const cre = allCREs.find(c => c.id == config.cre_id);
+            return cre ? cre.name : `CRE ID: ${config.cre_id}`;
+          });
+          
+          statusDiv.innerHTML = `
+            <div class="status-title">
+              <i class="fas fa-check-circle"></i> Auto-Assign Active
+            </div>
+          `;
+          
+          if (creNames.length > 0) {
+            statusDiv.innerHTML += `
+              <div class="assigned-cres">
+                ${creNames.map(name => `<span class="cre-tag">${name}</span>`).join('')}
+              </div>
+            `;
+          }
+          
+          // Update CRE list
+          creList.innerHTML = '';
+          configs.forEach(config => {
+            const cre = allCREs.find(c => c.id == config.cre_id);
+            const creName = cre ? cre.name : `CRE ID: ${config.cre_id}`;
+            const creItem = document.createElement('div');
+            creItem.className = 'auto-assign-cre-item';
+            creItem.innerHTML = `
+              <span>${creName}</span>
+              <button class="remove-cre" data-cre-id="${config.cre_id}" data-source="${source}">&times;</button>
+            `;
+            creList.appendChild(creItem);
+          });
+        } else {
+          // Show inactive state
+          toggleBtn.classList.remove('active');
+          configPanel.classList.remove('show');
+          statusDiv.classList.remove('show', 'active');
+        }
+      });
+    }
+    
+    // Auto-assign toggle button click
+    document.addEventListener('click', function(e) {
+      if (e.target.closest('.auto-assign-toggle')) {
+        const toggleBtn = e.target.closest('.auto-assign-toggle');
+        const source = toggleBtn.dataset.source;
+        const configPanel = document.getElementById(`auto_assign_config_${source.replace(/ /g, '_')}`);
+        
+        if (toggleBtn.classList.contains('active')) {
+          // Deactivate auto-assign
+          toggleBtn.classList.remove('active');
+          configPanel.classList.remove('show');
+          delete autoAssignConfigs[source];
+        } else {
+          // Activate auto-assign
+          toggleBtn.classList.add('active');
+          configPanel.classList.add('show');
+          if (!autoAssignConfigs[source]) {
+            autoAssignConfigs[source] = [];
+          }
+        }
+      }
+    });
+    
+    // Add CRE to auto-assign configuration
+    document.addEventListener('click', function(e) {
+      if (e.target.closest('.add-cre-btn')) {
+        const addBtn = e.target.closest('.add-cre-btn');
+        const source = addBtn.dataset.source;
+        
+        // Get current configs for this source
+        const currentConfigs = autoAssignConfigs[source] || [];
+        const currentCreIds = currentConfigs.map(config => config.cre_id);
+        
+        // Get available CREs (excluding already added ones)
+        const availableCREs = allCREs.filter(cre => !currentCreIds.includes(cre.id));
+        
+        if (availableCREs.length === 0) {
+          alert('⚠️ All available CREs are already added to this auto-assign configuration.');
+          return;
+        }
+        
+        // Create modal for CRE selection
+        const dialog = document.createElement('div');
+        dialog.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: rgba(0, 0, 0, 0.5);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 1000;
+        `;
+        
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+          background: white;
+          padding: 20px;
+          border-radius: 8px;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+          min-width: 300px;
+          max-width: 400px;
+        `;
+        
+        const selectHtml = `
+          <label style="display: block; margin-bottom: 10px; font-weight: 600; color: var(--accent-dark);">
+            Select CRE to add:
+          </label>
+          <select id="cre-select" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 15px;">
+            <option value="">Choose a CRE...</option>
+            ${availableCREs.map(cre => `<option value="${cre.id}">${cre.name}</option>`).join('')}
+          </select>
+        `;
+        
+        modal.innerHTML = `
+          <h5 style="margin-top: 0; color: var(--accent-dark);">Add CRE to Auto-Assign</h5>
+          ${selectHtml}
+          <div style="margin-top: 15px; text-align: right;">
+            <button id="cancel-cre-btn" style="margin-right: 10px; padding: 6px 12px; border: 1px solid #ccc; background: white; border-radius: 4px; cursor: pointer;">Cancel</button>
+            <button id="confirm-cre-btn" style="padding: 6px 12px; background: var(--accent-green); color: white; border: none; border-radius: 4px; cursor: pointer;">Add CRE</button>
+          </div>
+        `;
+        
+        dialog.appendChild(modal);
+        document.body.appendChild(dialog);
+        
+        // Handle button clicks
+        document.getElementById('cancel-cre-btn').onclick = () => {
+          document.body.removeChild(dialog);
+        };
+        
+        document.getElementById('confirm-cre-btn').onclick = () => {
+          const selectedId = document.getElementById('cre-select').value;
+          if (selectedId) {
+            const selectedCRE = availableCREs.find(cre => cre.id == selectedId);
+            if (selectedCRE) {
+              if (!autoAssignConfigs[source]) {
+                autoAssignConfigs[source] = [];
+              }
+              autoAssignConfigs[source].push({ cre_id: selectedId });
+              updateAutoAssignUI();
+              
+              // Show success alert
+              showAlert(`✅ CRE "${selectedCRE.name}" added to auto-assign configuration for "${source}"`, 'success');
+            }
+          }
+          document.body.removeChild(dialog);
+        };
+      }
+    });
+    
+    // Remove CRE from auto-assign configuration
+    document.addEventListener('click', function(e) {
+      if (e.target.classList.contains('remove-cre') && e.target.closest('.auto-assign-cre-item')) {
+        const removeBtn = e.target;
+        const creId = removeBtn.dataset.creId;
+        const source = removeBtn.dataset.source;
+        
+        // Get CRE name for alert
+        const cre = allCREs.find(c => c.id == creId);
+        const creName = cre ? cre.name : `CRE ID: ${creId}`;
+        
+        if (autoAssignConfigs[source]) {
+          autoAssignConfigs[source] = autoAssignConfigs[source].filter(config => config.cre_id != creId);
+          if (autoAssignConfigs[source].length === 0) {
+            delete autoAssignConfigs[source];
+          }
+          updateAutoAssignUI();
+          
+          // Show removal alert
+          showAlert(`🗑️ CRE "${creName}" removed from auto-assign configuration for "${source}"`, 'warning');
+        }
+      }
+    });
+    
+    // Save and auto-assign configuration
+    document.addEventListener('click', function(e) {
+      if (e.target.closest('.save-and-assign-btn')) {
+        const saveBtn = e.target.closest('.save-and-assign-btn');
+        const source = saveBtn.dataset.source;
+        const configs = autoAssignConfigs[source] || [];
+        
+        if (configs.length === 0) {
+          showAlert('⚠️ Please add at least one CRE to the auto-assign configuration.', 'error');
+          return;
+        }
+        
+        // Get CRE names for confirmation
+        const creNames = configs.map(config => {
+          const cre = allCREs.find(c => c.id == config.cre_id);
+          return cre ? cre.name : `CRE ID: ${config.cre_id}`;
+        });
+        
+        const confirmationMessage = `Are you sure you want to save the auto-assign configuration for "${source}" with the following CREs?\n\n${creNames.join('\n')}\n\nThis will immediately assign all existing unassigned leads for this source.`;
+        
+        if (!confirm(confirmationMessage)) {
+          return;
+        }
+        
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving & Assigning...';
+        
+        // Show progress alert
+        showAlert(`🔄 Saving auto-assign configuration for "${source}" and assigning existing leads...`, 'info');
+        
+        // First save the configuration
+        fetch('/save_auto_assign_config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            source: source,
+            cre_ids: configs.map(config => config.cre_id)
+          })
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            // Then trigger auto-assignment for existing leads
+            return fetch(`/trigger_auto_assign/${encodeURIComponent(source)}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' }
+            });
+          } else {
+            throw new Error(data.message);
+          }
+        })
+        .then(response => response.json())
+        .then(data => {
+          saveBtn.disabled = false;
+          saveBtn.innerHTML = '<i class="fas fa-save"></i> Save & Auto-Assign';
+          
+          if (data.success) {
+            if (data.assigned_count > 0) {
+              showAlert(`✅ Configuration saved successfully! ${data.assigned_count} leads were auto-assigned to ${creNames.join(', ')}.`, 'success');
+            } else {
+              showAlert(`✅ Configuration saved successfully! No unassigned leads found to assign.`, 'success');
+            }
+            
+            // Auto-refresh the page after a short delay
+            setTimeout(() => {
+              showAlert('🔄 Refreshing page to show updated assignments...', 'info');
+              location.reload();
+            }, 2000);
+          } else {
+            showAlert(`❌ Error: ${data.message}`, 'error');
+          }
+        })
+        .catch(error => {
+          console.error('Error in save and assign:', error);
+          showAlert('❌ Error during save and assign operation. Please try again.', 'error');
+          saveBtn.disabled = false;
+          saveBtn.innerHTML = '<i class="fas fa-save"></i> Save & Auto-Assign';
+        });
+      }
+    });
+    
+    // Delete auto-assign configuration
+    document.addEventListener('click', function(e) {
+      if (e.target.closest('.delete-config-btn')) {
+        const deleteBtn = e.target.closest('.delete-config-btn');
+        const source = deleteBtn.dataset.source;
+        
+        if (!confirm(`Are you sure you want to delete the auto-assign configuration for "${source}"?\n\nThis will remove all CRE assignments for this source.`)) {
+          return;
+        }
+        
+        deleteBtn.disabled = true;
+        deleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+        
+        // Show progress alert
+        showAlert(`🗑️ Deleting auto-assign configuration for "${source}"...`, 'info');
+        
+        fetch('/delete_auto_assign_config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source: source })
+        })
+        .then(response => response.json())
+        .then(data => {
+          deleteBtn.disabled = false;
+          deleteBtn.innerHTML = '<i class="fas fa-trash"></i> Delete Config';
+          
+          if (data.success) {
+            showAlert(`✅ ${data.message}`, 'success');
+            delete autoAssignConfigs[source];
+            updateAutoAssignUI();
+            
+            // Auto-refresh the page after a short delay
+            setTimeout(() => {
+              showAlert('🔄 Refreshing page to show updated assignments...', 'info');
+              location.reload();
+            }, 2000);
+          } else {
+            showAlert(`❌ Error: ${data.message}`, 'error');
+          }
+        })
+        .catch(error => {
+          console.error('Error deleting config:', error);
+          showAlert('❌ Error deleting configuration. Please try again.', 'error');
+          deleteBtn.disabled = false;
+          deleteBtn.innerHTML = '<i class="fas fa-trash"></i> Delete Config';
+        });
+      }
+    });
+    
+    // Enhanced alert function
+    function showAlert(message, type = 'info') {
+      // Remove existing alerts
+      const existingAlerts = document.querySelectorAll('.custom-alert');
+      existingAlerts.forEach(alert => alert.remove());
+      
+      const alertDiv = document.createElement('div');
+      alertDiv.className = `custom-alert alert-${type}`;
+      alertDiv.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 20px;
+        border-radius: 8px;
+        color: white;
+        font-weight: 500;
+        z-index: 10000;
+        max-width: 400px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        animation: slideInRight 0.3s ease-out;
+      `;
+      
+      // Set background color based on type
+      const colors = {
+        'success': '#28a745',
+        'error': '#dc3545',
+        'warning': '#ffc107',
+        'info': '#17a2b8'
+      };
+      
+      alertDiv.style.backgroundColor = colors[type] || colors.info;
+      
+      alertDiv.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span>${message}</span>
+          <button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; color: white; font-size: 18px; cursor: pointer; margin-left: 10px;">×</button>
+        </div>
+      `;
+      
+      document.body.appendChild(alertDiv);
+      
+      // Auto-remove after 5 seconds
+      setTimeout(() => {
+        if (alertDiv.parentElement) {
+          alertDiv.style.animation = 'slideOutRight 0.3s ease-in';
+          setTimeout(() => alertDiv.remove(), 300);
+        }
+      }, 5000);
+    }
+    
+    // Add CSS animations
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes slideInRight {
+        from {
+          transform: translateX(100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+      
+      @keyframes slideOutRight {
+        from {
+          transform: translateX(0);
+          opacity: 1;
+        }
+        to {
+          transform: translateX(100%);
+          opacity: 0;
+        }
+      }
+    `;
+    document.head.appendChild(style);
   });
 
   let allLeads = [];

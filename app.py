@@ -312,7 +312,7 @@ def generate_uid(source, mobile_number, sequence):
         'Google': 'G',
         'Meta': 'M',
         'Affiliate': 'A',
-        'Know': 'K',
+        'Knowlarity': 'K',
         'Whatsapp': 'W',
         'Tele': 'T',
         'Activity': 'AC',
@@ -1203,9 +1203,24 @@ def upload_data():
                 result = supabase.table('lead_master').select('uid').execute()
                 current_count = len(result.data) if result.data else 0
 
+                # Check for auto-assign configuration for this source
+                auto_assign_result = supabase.table('auto_assign_config').select('*').eq('source', source).execute()
+                auto_assign_configs = auto_assign_result.data or []
+                
                 # Prepare leads data for batch insert
                 leads_to_insert = []
                 skipped_rows = 0
+                auto_assigned_count = 0
+                
+                # Track if auto-assign is configured
+                has_auto_assign = len(auto_assign_configs) > 0
+                
+                # Get CRE details for auto-assignment if configured
+                cres = []
+                if has_auto_assign:
+                    cre_ids = [config['cre_id'] for config in auto_assign_configs]
+                    cre_result = supabase.table('cre_users').select('*').in_('id', cre_ids).execute()
+                    cres = cre_result.data or []
 
                 for index, row in enumerate(data):
                     try:
@@ -1218,14 +1233,91 @@ def upload_data():
                         uid = generate_uid(source, row['customer_mobile_number'],
                                            current_count + len(leads_to_insert) + 1)
 
+                        # Determine if this lead should be auto-assigned
+                        assigned = 'No'
+                        cre_name = None
+                        cre_assigned_at = None
+                        
+                        if has_auto_assign and cres:
+                            # Use enhanced fair distribution to assign CRE
+                            try:
+                                from auto_assign_system import EnhancedAutoAssignTrigger
+                                trigger = EnhancedAutoAssignTrigger()
+                                
+                                # Get the fairest CRE for this source
+                                fairest_cre = trigger.get_fairest_cre_for_source(source)
+                                
+                                if fairest_cre:
+                                    assigned = 'Yes'
+                                    cre_name = fairest_cre['name']
+                                    cre_assigned_at = datetime.now().isoformat()
+                                    auto_assigned_count += 1
+                                else:
+                                    # Fallback to round-robin if fair distribution fails
+                                    cre_index = len(leads_to_insert) % len(cres)
+                                    selected_cre = cres[cre_index]
+                                    assigned = 'Yes'
+                                    cre_name = selected_cre['name']
+                                    cre_assigned_at = datetime.now().isoformat()
+                                    auto_assigned_count += 1
+                            except Exception as e:
+                                print(f"⚠️ Enhanced auto-assign failed, using fallback: {e}")
+                                # Fallback to round-robin
+                                cre_index = len(leads_to_insert) % len(cres)
+                                selected_cre = cres[cre_index]
+                                assigned = 'Yes'
+                                cre_name = selected_cre['name']
+                                cre_assigned_at = datetime.now().isoformat()
+                                auto_assigned_count += 1
+
+                        # Parse and format the date properly
+                        date_str = str(row['date']).strip()
+                        formatted_date = None
+                        
+                        try:
+                            # Try different date formats
+                            if '-' in date_str:
+                                # Handle DD-MM-YYYY format
+                                if len(date_str.split('-')[0]) == 2:
+                                    # DD-MM-YYYY format
+                                    parsed_date = datetime.strptime(date_str, '%d-%m-%Y')
+                                    formatted_date = parsed_date.strftime('%Y-%m-%d')
+                                else:
+                                    # YYYY-MM-DD format
+                                    parsed_date = datetime.strptime(date_str, '%Y-%m-%d')
+                                    formatted_date = parsed_date.strftime('%Y-%m-%d')
+                            elif '/' in date_str:
+                                # Handle DD/MM/YYYY format
+                                if len(date_str.split('/')[0]) == 2:
+                                    # DD/MM/YYYY format
+                                    parsed_date = datetime.strptime(date_str, '%d/%m/%Y')
+                                    formatted_date = parsed_date.strftime('%Y-%m-%d')
+                                else:
+                                    # YYYY/MM/DD format
+                                    parsed_date = datetime.strptime(date_str, '%Y/%m/%d')
+                                    formatted_date = parsed_date.strftime('%Y-%m-%d')
+                            else:
+                                # Assume YYYY-MM-DD format
+                                parsed_date = datetime.strptime(date_str, '%Y-%m-%d')
+                                formatted_date = parsed_date.strftime('%Y-%m-%d')
+                        except ValueError as e:
+                            print(f"⚠️ Invalid date format '{date_str}' in row {index + 1}: {e}")
+                            # Use current date as fallback
+                            formatted_date = datetime.now().strftime('%Y-%m-%d')
+
                         lead_data = {
                             'uid': uid,
-                            'date': str(row['date']).strip(),
+                            'date': formatted_date,
                             'customer_name': str(row['customer_name']).strip(),
                             'customer_mobile_number': str(row['customer_mobile_number']).strip(),
                             'source': source,
-                            'assigned': 'No',
-                            'final_status': 'Pending'
+                            'assigned': assigned,
+                            'final_status': 'Pending',
+                            'cre_name': cre_name,
+                            'lead_status': 'Pending',
+                            'cre_assigned_at': cre_assigned_at,
+                            'created_at': datetime.now().isoformat(),
+                            'updated_at': datetime.now().isoformat()
                         }
 
                         leads_to_insert.append(lead_data)
@@ -1265,7 +1357,12 @@ def upload_data():
                 message = f'Successfully uploaded {success_count} leads'
                 if skipped_rows > 0:
                     message += f' ({skipped_rows} rows skipped due to missing data)'
-                message += '. Please go to "Assign Leads" to assign them to CREs.'
+                
+                # Check if any leads were auto-assigned
+                if auto_assign_configs and auto_assigned_count > 0:
+                    message += f'. {auto_assigned_count} leads were auto-assigned to CREs using fair distribution.'
+                else:
+                    message += '. Please go to "Assign Leads" to assign them to CREs.'
 
                 flash(message, 'success')
 
@@ -1303,6 +1400,17 @@ def assign_leads():
         for lead in all_unassigned_leads:
             source = lead.get('source', 'Unknown')
             leads_by_source.setdefault(source, []).append(lead)
+
+        # Get auto-assign configurations to include sources even if they have no unassigned leads
+        auto_assign_result = supabase.table('auto_assign_config').select('source').execute()
+        auto_assign_sources = set()
+        if auto_assign_result.data:
+            auto_assign_sources = set([config['source'] for config in auto_assign_result.data])
+
+        # Add sources with auto-assign configs even if they have no unassigned leads
+        for source in auto_assign_sources:
+            if source not in leads_by_source:
+                leads_by_source[source] = []
 
         # Get CREs
         cres = safe_get_data('cre_users')
@@ -1384,8 +1492,8 @@ def assign_leads_dynamic_action():
                 update_data = {
                     'cre_name': cre['name'],
                     'assigned': 'Yes',
-                    'cre_assigned_at': datetime.now().isoformat()
-
+                    'cre_assigned_at': datetime.now().isoformat(),
+                    'lead_status': 'Pending'
                 }
 
                 try:
@@ -1403,6 +1511,373 @@ def assign_leads_dynamic_action():
     except Exception as e:
         print(f"Error in dynamic lead assignment: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
+
+# Auto-Assign Configuration Routes
+@app.route('/get_auto_assign_config')
+@require_admin
+def get_auto_assign_config():
+    try:
+        # Get auto-assign configurations
+        result = supabase.table('auto_assign_config').select('*').execute()
+        configs = result.data or []
+        
+        # Organize by source
+        configs_by_source = {}
+        for config in configs:
+            source = config.get('source')
+            if source not in configs_by_source:
+                configs_by_source[source] = []
+            configs_by_source[source].append(config)
+        
+        return jsonify({
+            'success': True,
+            'configs': configs_by_source
+        })
+    except Exception as e:
+        print(f"Error getting auto-assign config: {e}")
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/save_auto_assign_config', methods=['POST'])
+@require_admin
+def save_auto_assign_config():
+    try:
+        data = request.get_json()
+        source = data.get('source')
+        cre_ids = data.get('cre_ids', [])
+        
+        if not source:
+            return jsonify({'success': False, 'message': 'Source is required'})
+        
+        if not cre_ids:
+            return jsonify({'success': False, 'message': 'At least one CRE must be selected'})
+        
+        print(f"🔄 Saving auto-assign configuration for {source} with CREs: {cre_ids}")
+        
+        # Delete existing configs for this source
+        supabase.table('auto_assign_config').delete().eq('source', source).execute()
+        print(f"🗑️ Deleted existing configs for {source}")
+        
+        # Insert new configs
+        configs = []
+        for cre_id in cre_ids:
+            configs.append({
+                'source': source,
+                'cre_id': cre_id,
+                'created_at': datetime.now().isoformat()
+            })
+        
+        supabase.table('auto_assign_config').insert(configs).execute()
+        print(f"✅ Saved {len(configs)} new configs for {source}")
+        
+        # Get CRE names for feedback
+        cre_result = supabase.table('cre_users').select('name').in_('id', cre_ids).execute()
+        cre_names = [cre['name'] for cre in cre_result.data] if cre_result.data else [f"CRE ID: {id}" for id in cre_ids]
+        
+        # Immediately assign existing unassigned leads for this source using enhanced auto-assign
+        auto_assigned_count = 0
+        if cre_ids:
+            try:
+                print(f"🤖 Triggering enhanced auto-assign for existing leads in {source}")
+                
+                # Use the enhanced auto-assign trigger
+                from auto_assign_system import EnhancedAutoAssignTrigger
+                trigger = EnhancedAutoAssignTrigger()
+                
+                # Trigger assignment for this specific source
+                result = trigger.trigger_manual_assignment(source)
+                
+                if result and 'assigned_count' in result:
+                    auto_assigned_count = result['assigned_count']
+                    print(f"✅ Enhanced auto-assign completed: {auto_assigned_count} leads assigned")
+                else:
+                    print(f"⚠️ Enhanced auto-assign completed but no count returned")
+                    
+            except Exception as e:
+                print(f"❌ Error in enhanced auto-assign for {source}: {e}")
+                # Fallback to basic assignment if enhanced system fails
+                try:
+                    auto_assigned_count = _fallback_assign_existing_leads(source, cre_ids)
+                    print(f"🔄 Fallback assignment completed: {auto_assigned_count} leads assigned")
+                except Exception as fallback_error:
+                    print(f"❌ Fallback assignment also failed: {fallback_error}")
+                    auto_assigned_count = 0
+        
+        if auto_assigned_count > 0:
+            message = f'Auto-assign configuration saved for {source} with CREs: {", ".join(cre_names)}. {auto_assigned_count} existing unassigned leads were automatically assigned using fair distribution.'
+        else:
+            message = f'Auto-assign configuration saved for {source} with CREs: {", ".join(cre_names)}. No unassigned leads found to assign.'
+        
+        print(f"✅ Save operation completed: {message}")
+        
+        return jsonify({
+            'success': True,
+            'message': message,
+            'auto_assigned_count': auto_assigned_count,
+            'cre_names': cre_names
+        })
+    except Exception as e:
+        print(f"❌ Error saving auto-assign config: {e}")
+        return jsonify({'success': False, 'message': str(e)})
+
+def _fallback_assign_existing_leads(source, cre_ids):
+    """Fallback method for assigning existing leads if enhanced system fails"""
+    try:
+        # Get CRE details for round-robin assignment
+        cre_result = supabase.table('cre_users').select('*').in_('id', cre_ids).execute()
+        cres = cre_result.data or []
+        
+        if not cres:
+            print(f"⚠️ No CREs found for source {source}")
+            return 0
+        
+        # Get existing unassigned leads for this source
+        unassigned_result = supabase.table('lead_master').select('*').eq('assigned', 'No').eq('source', source).execute()
+        unassigned_leads = unassigned_result.data or []
+        
+        if not unassigned_leads:
+            print(f"ℹ️ No unassigned leads found for {source}")
+            return 0
+        
+        # Get the last assigned CRE for this source to determine starting point
+        last_assigned_result = supabase.table('lead_master').select('cre_name').eq('source', source).order('cre_assigned_at', desc=True).limit(1).execute()
+        last_cre_name = None
+        if last_assigned_result.data:
+            last_cre_name = last_assigned_result.data[0].get('cre_name')
+        
+        # Find starting index for round-robin
+        start_index = 0
+        if last_cre_name:
+            for i, cre in enumerate(cres):
+                if cre['name'] == last_cre_name:
+                    start_index = (i + 1) % len(cres)
+                    break
+        
+        # Assign existing unassigned leads using round-robin
+        assigned_count = 0
+        for i, lead in enumerate(unassigned_leads):
+            selected_cre = cres[(start_index + i) % len(cres)]
+            
+            update_data = {
+                'cre_name': selected_cre['name'],
+                'assigned': 'Yes',
+                'cre_assigned_at': datetime.now().isoformat(),
+                'lead_status': 'Pending'
+            }
+            
+            try:
+                supabase.table('lead_master').update(update_data).eq('uid', lead['uid']).execute()
+                assigned_count += 1
+                print(f"🤖 Fallback: Auto-assigned existing lead {lead['uid']} to {selected_cre['name']} (source: {source})")
+            except Exception as e:
+                print(f"❌ Error assigning existing lead {lead['uid']}: {e}")
+        
+        return assigned_count
+        
+    except Exception as e:
+        print(f"❌ Error in fallback assignment: {e}")
+        return 0
+
+@app.route('/auto_assign_leads', methods=['POST'])
+@require_admin
+def auto_assign_leads():
+    try:
+        data = request.get_json()
+        source = data.get('source')
+        
+        if not source:
+            return jsonify({'success': False, 'message': 'Source is required'})
+        
+        # Get auto-assign config for this source
+        config_result = supabase.table('auto_assign_config').select('*').eq('source', source).execute()
+        configs = config_result.data or []
+        
+        if not configs:
+            return jsonify({'success': False, 'message': f'No auto-assign configuration found for {source}'})
+        
+        # Get CRE details
+        cre_ids = [config['cre_id'] for config in configs]
+        cre_result = supabase.table('cre_users').select('*').in_('id', cre_ids).execute()
+        cres = cre_result.data or []
+        
+        if not cres:
+            return jsonify({'success': False, 'message': 'No CREs found for auto-assign configuration'})
+        
+        # Get existing unassigned leads for this source
+        unassigned_result = supabase.table('lead_master').select('*').eq('assigned', 'No').eq('source', source).execute()
+        unassigned_leads = unassigned_result.data or []
+        
+        if not unassigned_leads:
+            return jsonify({'success': False, 'message': f'No unassigned leads found for {source}'})
+        
+        # Get the last assigned CRE for this source to determine starting point
+        last_assigned_result = supabase.table('lead_master').select('cre_name').eq('source', source).order('cre_assigned_at', desc=True).limit(1).execute()
+        last_cre_name = None
+        if last_assigned_result.data:
+            last_cre_name = last_assigned_result.data[0].get('cre_name')
+        
+        # Find starting index for round-robin
+        start_index = 0
+        if last_cre_name:
+            for i, cre in enumerate(cres):
+                if cre['name'] == last_cre_name:
+                    start_index = (i + 1) % len(cres)
+                    break
+        
+        # Assign existing unassigned leads using round-robin
+        auto_assigned_count = 0
+        for i, lead in enumerate(unassigned_leads):
+            selected_cre = cres[(start_index + i) % len(cres)]
+            
+            update_data = {
+                'cre_name': selected_cre['name'],
+                'assigned': 'Yes',
+                'cre_assigned_at': datetime.now().isoformat(),
+                'lead_status': 'Pending'
+            }
+            
+            try:
+                supabase.table('lead_master').update(update_data).eq('uid', lead['uid']).execute()
+                auto_assigned_count += 1
+                print(f"Auto-assigned existing lead {lead['uid']} to {selected_cre['name']}")
+            except Exception as e:
+                print(f"Error assigning existing lead {lead['uid']}: {e}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Successfully auto-assigned {auto_assigned_count} leads from {source}',
+            'auto_assigned_count': auto_assigned_count
+        })
+    except Exception as e:
+        print(f"Error in auto-assign leads: {e}")
+        return jsonify({'success': False, 'message': str(e)})
+        cre_result = supabase.table('cre_users').select('*').in_('id', cre_ids).execute()
+        cres = cre_result.data or []
+        
+        if not cres:
+            return jsonify({'success': False, 'message': 'No valid CREs found in auto-assign configuration'})
+        
+        # Get unassigned leads for this source
+        leads_result = supabase.table('lead_master').select('*').eq('assigned', 'No').eq('source', source).execute()
+        unassigned_leads = leads_result.data or []
+        
+        if not unassigned_leads:
+            return jsonify({'success': False, 'message': f'No unassigned leads found for {source}'})
+        
+        # Implement round-robin assignment
+        total_assigned = 0
+        cre_index = 0
+        
+        for lead in unassigned_leads:
+            cre = cres[cre_index % len(cres)]
+            
+            update_data = {
+                'cre_name': cre['name'],
+                'assigned': 'Yes',
+                'cre_assigned_at': datetime.now().isoformat(),
+                'lead_status': 'Pending'
+            }
+            
+            try:
+                supabase.table('lead_master').update(update_data).eq('uid', lead['uid']).execute()
+                total_assigned += 1
+                cre_index += 1
+                
+                if total_assigned % 100 == 0:
+                    time.sleep(0.1)
+            except Exception as e:
+                print(f"Error assigning lead {lead['uid']}: {e}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Successfully auto-assigned {total_assigned} leads from {source} using round-robin distribution'
+        })
+        
+    except Exception as e:
+        print(f"Error in auto-assign leads: {e}")
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/delete_auto_assign_config', methods=['POST'])
+@require_admin
+def delete_auto_assign_config():
+    try:
+        data = request.get_json()
+        source = data.get('source')
+        
+        if not source:
+            return jsonify({'success': False, 'message': 'Source is required'})
+        
+        print(f"🗑️ Deleting auto-assign configuration for {source}")
+        
+        # Get current configs to show what was deleted
+        current_configs = supabase.table('auto_assign_config').select('cre_id').eq('source', source).execute()
+        cre_ids = [config['cre_id'] for config in current_configs.data] if current_configs.data else []
+        
+        # Get CRE names for feedback
+        cre_names = []
+        if cre_ids:
+            cre_result = supabase.table('cre_users').select('name').in_('id', cre_ids).execute()
+            cre_names = [cre['name'] for cre in cre_result.data] if cre_result.data else [f"CRE ID: {id}" for id in cre_ids]
+        
+        # Delete auto-assign configs for this source
+        supabase.table('auto_assign_config').delete().eq('source', source).execute()
+        print(f"✅ Deleted auto-assign configuration for {source}")
+        
+        if cre_names:
+            message = f'Auto-assign configuration deleted for {source}. Removed CREs: {", ".join(cre_names)}'
+        else:
+            message = f'Auto-assign configuration deleted for {source}'
+        
+        return jsonify({
+            'success': True,
+            'message': message,
+            'deleted_cre_names': cre_names
+        })
+    except Exception as e:
+        print(f"❌ Error deleting auto-assign config: {e}")
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/trigger_auto_assign/<source>', methods=['POST'])
+@require_admin
+def trigger_auto_assign_for_source(source):
+    """Manually trigger auto-assignment for existing leads of a specific source"""
+    try:
+        print(f"🔄 Triggering enhanced auto-assign for {source}")
+        
+        # Use the enhanced auto-assign trigger system
+        from auto_assign_system import EnhancedAutoAssignTrigger
+        trigger = EnhancedAutoAssignTrigger()
+        
+        # Trigger assignment for this specific source
+        result = trigger.trigger_manual_assignment(source)
+        
+        if result and 'assigned_count' in result:
+            assigned_count = result['assigned_count']
+            print(f"✅ Enhanced auto-assign completed: {assigned_count} leads assigned")
+            
+            if assigned_count > 0:
+                return jsonify({
+                    'success': True,
+                    'message': f'Successfully auto-assigned {assigned_count} leads from {source} using fair distribution',
+                    'assigned_count': assigned_count
+                })
+            else:
+                return jsonify({
+                    'success': True,
+                    'message': f'No unassigned leads found for {source} to assign',
+                    'assigned_count': 0
+                })
+        else:
+            print(f"⚠️ Enhanced auto-assign completed but no count returned")
+            return jsonify({
+                'success': True,
+                'message': f'Auto-assign triggered for {source} but no leads were assigned',
+                'assigned_count': 0
+            })
+            
+    except Exception as e:
+        print(f"❌ Error triggering enhanced auto-assign for {source}: {e}")
+        return jsonify({'success': False, 'message': str(e)})
+
 @app.route('/add_cre', methods=['GET', 'POST'])
 @require_admin
 def add_cre():
@@ -2043,13 +2518,59 @@ def add_lead_with_cre():
             sequence += 1
             uid = generate_uid(uid_source, mobile_digits, sequence)
 
+        # Check for auto-assign configuration first
+        auto_assign_result = supabase.table('auto_assign_config').select('*').eq('source', source).execute()
+        auto_assign_configs = auto_assign_result.data or []
+        
         # Get assigned CRE ID from form
         assigned_cre_id = request.form.get('assigned_cre')
         cre_name = None
-        if assigned_cre_id:
+        auto_assigned = False
+        
+        if auto_assign_configs and not assigned_cre_id:
+            # Auto-assign using round-robin logic
+            cre_ids = [config['cre_id'] for config in auto_assign_configs]
+            cre_result = supabase.table('cre_users').select('*').in_('id', cre_ids).execute()
+            cres = cre_result.data or []
+            
+            if cres:
+                # Get the last assigned CRE for this source to determine next in round-robin
+                last_assigned_result = supabase.table('lead_master').select('cre_name').eq('source', source).order('cre_assigned_at', desc=True).limit(1).execute()
+                
+                if last_assigned_result.data:
+                    last_cre_name = last_assigned_result.data[0].get('cre_name')
+                    # Find the index of the last assigned CRE
+                    last_index = -1
+                    for i, cre in enumerate(cres):
+                        if cre['name'] == last_cre_name:
+                            last_index = i
+                            break
+                    # Pick the next CRE in the list
+                    next_index = (last_index + 1) % len(cres)
+                    selected_cre = cres[next_index]
+                else:
+                    # First assignment for this source, pick the first CRE
+                    selected_cre = cres[0]
+                
+                cre_name = selected_cre['name']
+                auto_assigned = True
+                print(f"Auto-assigned lead to {cre_name} for source {source}")
+            else:
+                # No valid CREs found, leave unassigned
+                assigned = "No"
+                print(f"No valid CREs found for auto-assign configuration in {source}")
+        elif assigned_cre_id:
+            # Manual assignment
             cre_data = supabase.table('cre_users').select('name').eq('id', assigned_cre_id).execute()
             if cre_data.data:
                 cre_name = cre_data.data[0]['name']
+                print(f"Manually assigned lead to {cre_name}")
+            else:
+                return jsonify({'success': False, 'message': 'Invalid CRE selected'})
+        else:
+            # No assignment
+            assigned = "No"
+            print(f"No assignment for lead in {source}")
 
         # Prepare lead data (only required columns)
         lead_data = {
@@ -2063,7 +2584,7 @@ def add_lead_with_cre():
             'cre_name': cre_name,
             'lead_status': 'Pending',
             'lead_category': 'Cold',  # Default category
-            'cre_assigned_at': datetime.now().isoformat(),
+            'cre_assigned_at': datetime.now().isoformat() if cre_name else None,
             'created_at': datetime.now().isoformat(),
             'updated_at': datetime.now().isoformat()
         }
@@ -2075,7 +2596,19 @@ def add_lead_with_cre():
         # Insert lead
         result = supabase.table('lead_master').insert(lead_data).execute()
         if result.data:
-            return jsonify({'success': True, 'message': 'Lead added successfully', 'uid': uid})
+            message = 'Lead added successfully'
+            if auto_assigned:
+                message += f' and auto-assigned to {cre_name}'
+            elif cre_name:
+                message += f' and assigned to {cre_name}'
+            
+            return jsonify({
+                'success': True, 
+                'message': message, 
+                'uid': uid,
+                'auto_assigned': auto_assigned,
+                'assigned_cre': cre_name
+            })
         else:
             return jsonify({'success': False, 'message': 'Failed to add lead'})
 
@@ -5775,7 +6308,7 @@ def source_analysis_data():
                 start_date = None
                 end_date = None
         sources = [
-            'Google (KNOW)', 'Google', 'Meta(KNOW)', 'Know', 'OEM Web', 'OEM Tele',
+            'Google (KNOW)', 'Google', 'Meta(KNOW)', 'Knowlarity', 'OEM Web', 'OEM Tele',
             'Affiliate Bikewale', 'Affiliate 91wheels', 'Affiliate Bikedekho',
             'BTL (KNOW)', 'Meta'
         ]
@@ -8430,5 +8963,17 @@ if __name__ == '__main__':
     print(" Starting Ather CRM System...")
     print("📱 Server will be available at: http://127.0.0.1:5000")
     print("🌐 You can also try: http://localhost:5000")
+    
+    # Start the auto-assign trigger system (only in development)
+    if os.getenv('FLASK_ENV') != 'production':
+        try:
+            from auto_assign_system import start_auto_assign_trigger
+            start_auto_assign_trigger()
+            print("🤖 Auto-Assign Trigger system started (development mode)")
+        except Exception as e:
+            print(f"⚠️  Could not start auto-assign trigger: {e}")
+    else:
+        print("ℹ️  Auto-assign trigger disabled in production (use scheduled tasks)")
+    
     # socketio.run(app, host='127.0.0.1', port=5000, debug=True)
     socketio.run(app, host='0.0.0.0', port=5000, debug=True, use_reloader=False)

@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: ather-crm-system
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --worker-class eventlet --workers 1
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+    healthCheckPath: /
+    autoDeploy: true
+
+  # Auto-assign worker using consolidated system
+  - type: worker
+    name: auto-assign-worker
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python auto_assign_system.py render
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: LOG_LEVEL
+        value: INFO
+      - key: CHECK_INTERVAL
+        value: "60"
+      - key: MAX_LEADS_PER_BATCH
+        value: "50"
+    plan: starter
+    autoDeploy: true 
