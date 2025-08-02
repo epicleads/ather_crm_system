@@ -25,11 +25,11 @@ print("✅ Connected to Supabase")
 
 IST = pytz.timezone('Asia/Kolkata')
 now_ist = datetime.now(IST)
-past_15_minutes = now_ist - timedelta(minutes=15)  # Changed from 24 hours to 15 minutes
-start_time = past_15_minutes.astimezone(pytz.UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
+past_24_hours = now_ist - timedelta(hours=24)  # Changed from 15 minutes to 24 hours
+start_time = past_24_hours.astimezone(pytz.UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
 end_time = now_ist.astimezone(pytz.UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
 
-print(f"📅 Fetching leads from {past_15_minutes} IST to {now_ist} IST")
+print(f"📅 Fetching leads from {past_24_hours} IST to {now_ist} IST")
 
 # ===============================================
 # CRE MAPPING CONFIGURATION
@@ -433,24 +433,6 @@ def map_cre_name(owner_name):
     # Only return mapped CRE name if it exists in our mapping, otherwise None
     return CRE_MAPPING.get(owner_name, None)
 
-def map_lead_status(sf_status):
-    """
-    Map Salesforce Lead Status to our system's lead status
-    """
-    if not sf_status:
-        return 'Pending'
-    
-    status_mapping = {
-        'New': 'Pending',
-        'Working': 'In Progress',
-        'Nurturing': 'Follow Up',
-        'Qualified': 'Hot',
-        'Unqualified': 'Cold',
-        'Converted': 'Converted'
-    }
-    
-    return status_mapping.get(sf_status, 'Pending')
-
 def normalize_phone(phone: str) -> str:
     if not phone:
         return ""
@@ -498,7 +480,7 @@ query = f"""
 """
 
 results = sf.query_all(query)['records']
-print(f"\n📦 Total leads fetched (past 15 minutes): {len(results)}")
+print(f"\n📦 Total leads fetched (past 24 hours): {len(results)}")
 
 if not results:
     print("❌ No leads found in the specified time range")
@@ -558,9 +540,6 @@ for lead in results:
     except Exception:
         continue
 
-    # Map lead status
-    mapped_status = map_lead_status(lead_status)
-    
     # Extract first follow-up remark
     first_remark = extract_first_follow_up_remark(follow_up_remarks)
 
@@ -572,9 +551,6 @@ for lead in results:
             'source': source,
             'sub_sources': set(),
             'cre_name': cre_name,
-            'lead_status': mapped_status,
-            'branch': branch,
-            'is_home_tr_booked': is_home_tr_booked,
             'first_remark': first_remark
         }
 
@@ -623,10 +599,10 @@ for phone, lead_data in leads_by_phone.items():
         'cre_name': lead_data['cre_name'],
         'lead_category': None,
         'model_interested': None,
-        'branch': lead_data['branch'],
+        'branch': None,  # Set to null instead of branch value
         'ps_name': None,
         'assigned': 'Yes' if lead_data['cre_name'] else 'No',
-        'lead_status': lead_data['lead_status'],
+        'lead_status': None,  # Set to null instead of mapped lead_status
         'follow_up_date': None,
         'first_call_date': today_date,  # Set first_call_date to today
         'first_remark': lead_data['first_remark'],  # Only first follow-up remark
@@ -751,7 +727,9 @@ print(f"👥 CRE assignments mapped and queue assignments skipped")
 print(f"📅 First call date set to today for all new leads")
 print(f"💬 Only first follow-up remark extracted and stored")
 print(f"🎯 Final status set to 'Pending' for CRE pending leads section")
-print(f"⏰ Time range: Past 15 minutes")
+print(f"🏢 Branch field set to null (not mapped from Salesforce)")
+print(f"📊 Lead status field set to null (not mapped from Salesforce)")
+print(f"⏰ Time range: Past 24 hours")
 
 # CRE Assignment Summary
 if new_leads_df is not None and not new_leads_df.empty:
@@ -797,8 +775,8 @@ print(f"   - Invalid lead owners completely skipped")
 print(f"   - CRE queue assignments skipped until properly assigned")
 print(f"   - First call date set to today")
 print(f"   - Final status set to 'Pending'")
-print(f"   - Lead status mapped from Salesforce")
-print(f"   - Branch information preserved")
+print(f"   - Branch field set to null (not mapped from Salesforce)")
+print(f"   - Lead status field set to null (not mapped from Salesforce)")
 print(f"   - Only first follow-up remark extracted and stored in first_remark field")
 print(f"   - Smart parsing of numbered follow-up remarks (extracts only point 1)")
 
@@ -823,3 +801,10 @@ print(f"   Input:  '1. The CX Will Visit showroom on time and inform to carry DL
 print(f"   Output: 'The CX Will Visit showroom on time and inform to carry DL'")
 print(f"   Input:  '1. Customer interested in test ride 2. Will call back tomorrow'")
 print(f"   Output: 'Customer interested in test ride'")
+
+# Debug information for null field mapping
+print(f"\n🔍 NULL FIELD MAPPING DEBUG:")
+print(f"   Fields set to null in lead_master table:")
+print(f"   - branch: null (was previously mapped from Salesforce Branch__c)")
+print(f"   - lead_status: null (was previously mapped from Salesforce Status)")
+print(f"   These fields will be null for all new leads inserted into lead_master table")
