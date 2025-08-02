@@ -8472,7 +8472,41 @@ def add_walkin_lead():
             flash('Walk-in lead added and assigned to PS successfully!', 'success')
             return redirect(url_for('add_walkin_lead'))
         except Exception as e:
-            flash(f'Error adding walk-in lead: {str(e)}', 'danger')
+            error_str = str(e)
+            if 'duplicate key value violates unique constraint "walkin_table_pkey"' in error_str:
+                # This is a sequence issue - try to fix it by using a different approach
+                try:
+                    # Get the maximum ID from the table
+                    max_id_result = supabase.table('walkin_table').select('id').order('id', desc=True).limit(1).execute()
+                    if max_id_result.data:
+                        max_id = max_id_result.data[0]['id']
+                        
+                        # Try to insert with a higher ID manually
+                        # First, try to find the next available ID
+                        next_id = max_id + 1
+                        while True:
+                            # Check if this ID exists
+                            existing = supabase.table('walkin_table').select('id').eq('id', next_id).execute()
+                            if not existing.data:
+                                # This ID is available, use it
+                                data['id'] = next_id
+                                break
+                            next_id += 1
+                            if next_id > max_id + 100:  # Safety limit
+                                flash('Error: Could not find an available ID. Please contact administrator.', 'danger')
+                                break
+                        
+                        if 'id' in data:
+                            # Try the insertion with the specific ID
+                            supabase.table('walkin_table').insert(data).execute()
+                            flash('Walk-in lead added and assigned to PS successfully!', 'success')
+                            return redirect(url_for('add_walkin_lead'))
+                    else:
+                        flash('Error: Could not determine the maximum ID in the table', 'danger')
+                except Exception as reset_error:
+                    flash(f'Error fixing sequence: {str(reset_error)}. Please contact administrator.', 'danger')
+            else:
+                flash(f'Error adding walk-in lead: {error_str}', 'danger')
 
     # Get receptionist's branch from session
     rec_branch = session.get('rec_branch', '')
