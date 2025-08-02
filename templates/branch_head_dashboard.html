@@ -486,11 +486,12 @@
                                     <th>PS Name</th>
                                     <th>Source</th>
                                     <th>Lead Category</th>
+                                    <th>PS Assigned At</th>
                                     <th>Created At</th>
                                 </tr>
                             </thead>
                             <tbody id="freshLeadsTableBody">
-                                <tr><td colspan="8">Loading...</td></tr>
+                                <tr><td colspan="9">Loading...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -584,7 +585,7 @@ const sectionConfig = {
             dateFromId: 'freshLeadsDateFrom',
             dateToId: 'freshLeadsDateTo',
             searchId: 'freshLeadsSearchInput',
-            columns: ['uid', 'customer_name', 'customer_mobile_number', 'final_status', 'ps_name', 'source', 'lead_category', 'created_at']
+            columns: ['uid', 'customer_name', 'customer_mobile_number', 'final_status', 'ps_name', 'source', 'lead_category', 'ps_assigned_at', 'created_at']
   },
   followup_leads: {
     tab: 'followup-tab',
@@ -603,7 +604,7 @@ const sectionConfig = {
   const tbody = document.getElementById(config.tbody);
         
         // Show loading state for table
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center">Loading...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center">Loading...</td></tr>';
         
         // Show loading state for KPI cards
         showKPILoading();
@@ -619,15 +620,15 @@ const sectionConfig = {
         const end_date = dateTo ? dateTo.value : '';
         const searchTerm = searchInput ? searchInput.value.trim() : '';
         
-        // Make API call
-        fetch(`/api/branch_head_dashboard_data?section=${section}&ps_name=${ps_name}&start_date=${start_date}&end_date=${end_date}&search=${encodeURIComponent(searchTerm)}`)
+        // Make API call - no backend filtering, all data loaded and filtered client-side
+        fetch(`/api/branch_head_dashboard_data?section=${section}`)
             .then(response => response.json())
     .then(data => {
                 if (data.success) {
                     // Update table
           tbody.innerHTML = '';
                     if (data.rows.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="8" class="text-center">No data found</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="9" class="text-center">No data found</td></tr>';
                     } else {
           data.rows.forEach(row => {
             const tr = document.createElement('tr');
@@ -775,17 +776,9 @@ const sectionConfig = {
                 }
             }
             
-            // Date range filter - handle different date columns for different sections
-            if (showRow && (dateFromFilter || dateToFilter)) {
-                let dateCell;
-                
-                // For Fresh Leads: use created_at (last column)
-                // For Today's Follow-ups: use follow_up_date (last column)
-                if (sectionName === 'fresh_leads') {
-                    dateCell = row.querySelector('td:last-child'); // Created At column
-                } else if (sectionName === 'followup_leads') {
-                    dateCell = row.querySelector('td:last-child'); // Follow Up Date column
-                }
+            // Date range filter - only apply to fresh_leads section for PS Assigned At column
+            if (showRow && sectionName === 'fresh_leads' && (dateFromFilter || dateToFilter)) {
+                const dateCell = row.querySelector('td:nth-child(8)'); // PS Assigned At column (8th)
                 
                 if (dateCell) {
                     const dateText = dateCell.textContent.trim();
