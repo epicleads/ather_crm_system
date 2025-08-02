@@ -2824,10 +2824,11 @@ def ps_dashboard():
             lead_dict['lead_category'] = lead.get('lead_category', 'Not Set')  # Add lead_category for template compatibility
             
             final_status = lead.get('status')
+            lead_status = lead.get('lead_status')  # Add lead_status for walk-in leads
             followup_no = lead.get('followup_no', 1)
             next_followup_date = lead.get('next_followup_date')
             
-            print(f"[DEBUG] Walk-in lead: {lead_dict['lead_uid']} | status: {final_status} | followup_no: {followup_no} | next_followup_date: {next_followup_date}")
+            print(f"[DEBUG] Walk-in lead: {lead_dict['lead_uid']} | status: {final_status} | lead_status: {lead_status} | followup_no: {followup_no} | next_followup_date: {next_followup_date}")
 
             # Categorize walk-in leads based on status
             if final_status == 'Won':
