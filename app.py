@@ -2824,6 +2824,8 @@ def ps_dashboard():
                 
                 # Add to pending leads if no first call has been made yet
                 first_call_date = lead.get('first_call_date')
+                # Get lead_status for walk-in leads (use status field or default to None)
+                lead_status = lead.get('status') or lead.get('lead_status')
                 print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} - first_call_date: {first_call_date}, lead_status: {lead_status}")
                 
                 # For walk-in leads, check if any call dates exist
