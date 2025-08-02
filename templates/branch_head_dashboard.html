@@ -318,100 +318,17 @@
         </div>
     </div>
     
-    <!-- KPI Cards Row -->
-    <div class="row mb-4">
-        <div class="col-md-6">
-            <div class="stats-card">
-                <div class="d-flex align-items-center justify-content-center mb-2">
-                    <i class="fas fa-user-plus me-2 fs-4 text-primary"></i>
-                    <h6 class="mb-0 fw-bold">Fresh Leads</h6>
-                </div>
-                <h3 class="mb-0" id="freshLeadsKPI">
-                    <span id="freshLeadsCount">{{ fresh_leads_count }}</span>
-                    <span id="freshLeadsLoading" class="d-none">
-                        <i class="fas fa-spinner fa-spin"></i> Loading...
-                    </span>
-                </h3>
-                <small>Total fresh leads</small>
-            </div>
-        </div>
-        <div class="col-md-6">
-            <div class="stats-card">
-                <div class="d-flex align-items-center justify-content-center mb-2">
-                    <i class="fas fa-calendar-check me-2 fs-4 text-success"></i>
-                    <h6 class="mb-0 fw-bold">Today's Follow-ups</h6>
-                </div>
-                <h3 class="mb-0" id="followupLeadsKPI">
-                    <span id="followupLeadsCount">{{ followup_leads_count }}</span>
-                    <span id="followupLeadsLoading" class="d-none">
-                        <i class="fas fa-spinner fa-spin"></i> Loading...
-                    </span>
-                </h3>
-                <small>Follow-ups due today</small>
-            </div>
-        </div>
-    </div>
 
-    <!-- Export Section -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-file-export me-2"></i>
-                        Export Leads Data
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-lg-3 col-md-6">
-                            <label for="exportDateFrom" class="form-label">
-                                <i class="fas fa-calendar-alt me-1"></i>From Date
-                            </label>
-                            <input type="date" id="exportDateFrom" class="form-control">
-                        </div>
-                        <div class="col-lg-3 col-md-6">
-                            <label for="exportDateTo" class="form-label">
-                                <i class="fas fa-calendar-alt me-1"></i>To Date
-                            </label>
-                            <input type="date" id="exportDateTo" class="form-control">
-                        </div>
-                        <div class="col-lg-3 col-md-6">
-                            <label for="exportBranch" class="form-label">
-                                <i class="fas fa-building me-1"></i>Branch
-                            </label>
-                            <select id="exportBranch" class="form-select">
-                                <option value="{{ session.get('branch_head_branch', 'N/A') }}">{{ session.get('branch_head_branch', 'N/A') }}</option>
-                            </select>
-                        </div>
-                        <div class="col-lg-3 col-md-6 d-flex align-items-end">
-                            <div class="d-grid gap-2 w-100">
-                                <div class="btn-group-vertical w-100" role="group">
-                                    <button type="button" class="btn btn-primary mb-2" id="exportPSLeads">
-                                        <i class="fas fa-download me-2"></i>PS Leads
-                                    </button>
-                                    <button type="button" class="btn btn-success mb-2" id="exportWalkinLeads">
-                                        <i class="fas fa-download me-2"></i>Walk-in Leads
-                                    </button>
-                                    <button type="button" class="btn btn-info" id="exportEventLeads">
-                                        <i class="fas fa-download me-2"></i>Event Leads
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+
+
 
     <!-- Tab Navigation -->
     <div class="card mb-4">
         <div class="card-body p-0">
             <ul class="nav nav-tabs" id="leadTabs" role="tablist">
                 <li class="nav-item">
-                    <a class="nav-link active" id="fresh-tab" data-bs-toggle="tab" href="#fresh" role="tab">
-                        <i class="fas fa-user-plus me-2"></i>Fresh Leads
+                    <a class="nav-link active" id="analytics-tab" data-bs-toggle="tab" href="#analytics" role="tab">
+                        <i class="fas fa-chart-bar me-2"></i>Analytics Dashboard
                     </a>
                 </li>
                 <li class="nav-item">
@@ -420,8 +337,13 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" id="analytics-tab" data-bs-toggle="tab" href="#analytics" role="tab">
-                        <i class="fas fa-chart-bar me-2"></i>Analytics Dashboard
+                    <a class="nav-link" id="fresh-tab" data-bs-toggle="tab" href="#fresh" role="tab">
+                        <i class="fas fa-user-plus me-2"></i>Fresh Leads
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" id="export-tab" data-bs-toggle="tab" href="#export" role="tab">
+                        <i class="fas fa-file-export me-2"></i>Export Leads
                     </a>
                 </li>
             </ul>
@@ -429,8 +351,19 @@
     </div>
 
     <div class="tab-content" id="leadTabsContent">
+        <!-- Analytics Dashboard Tab -->
+        <div class="tab-pane fade show active" id="analytics" role="tabpanel">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div id="branchHeadDashboardsContainer">
+                        <!-- Branch Head dashboards will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Fresh Leads Tab -->
-        <div class="tab-pane fade show active" id="fresh" role="tabpanel">
+        <div class="tab-pane fade" id="fresh" role="tabpanel">
             <div class="card mb-3">
                 <div class="card-body">
                     <!-- Section-specific Filter Controls -->
@@ -562,12 +495,46 @@
             </div>
         </div>
 
-        <!-- Analytics Dashboard Tab -->
-        <div class="tab-pane fade" id="analytics" role="tabpanel">
+        <!-- Export Leads Tab -->
+        <div class="tab-pane fade" id="export" role="tabpanel">
             <div class="card mb-3">
                 <div class="card-body">
-                    <div id="branchHeadDashboardsContainer">
-                        <!-- Branch Head dashboards will be loaded here -->
+                    <div class="row g-3">
+                        <div class="col-lg-3 col-md-6">
+                            <label for="exportDateFrom" class="form-label">
+                                <i class="fas fa-calendar-alt me-1"></i>From Date
+                            </label>
+                            <input type="date" id="exportDateFrom" class="form-control">
+                        </div>
+                        <div class="col-lg-3 col-md-6">
+                            <label for="exportDateTo" class="form-label">
+                                <i class="fas fa-calendar-alt me-1"></i>To Date
+                            </label>
+                            <input type="date" id="exportDateTo" class="form-control">
+                        </div>
+                        <div class="col-lg-3 col-md-6">
+                            <label for="exportBranch" class="form-label">
+                                <i class="fas fa-building me-1"></i>Branch
+                            </label>
+                            <select id="exportBranch" class="form-select">
+                                <option value="{{ session.get('branch_head_branch', 'N/A') }}">{{ session.get('branch_head_branch', 'N/A') }}</option>
+                            </select>
+                        </div>
+                        <div class="col-lg-3 col-md-6 d-flex align-items-end">
+                            <div class="d-grid gap-2 w-100">
+                                <div class="btn-group-vertical w-100" role="group">
+                                    <button type="button" class="btn btn-primary mb-2" id="exportPSLeads">
+                                        <i class="fas fa-download me-2"></i>PS Leads
+                                    </button>
+                                    <button type="button" class="btn btn-success mb-2" id="exportWalkinLeads">
+                                        <i class="fas fa-download me-2"></i>Walk-in Leads
+                                    </button>
+                                    <button type="button" class="btn btn-info" id="exportEventLeads">
+                                        <i class="fas fa-download me-2"></i>Event Leads
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -605,9 +572,6 @@ const sectionConfig = {
         
         // Show loading state for table
         tbody.innerHTML = '<tr><td colspan="9" class="text-center">Loading...</td></tr>';
-        
-        // Show loading state for KPI cards
-        showKPILoading();
         
         // Get filter values
         const psSelect = document.getElementById(config.psSelectId);
@@ -650,55 +614,19 @@ const sectionConfig = {
             tbody.appendChild(tr);
           });
                     }
-                    
-                    // Update KPI counts
-                    updateKPICounts(data);
         } else {
                     tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Error loading data</td></tr>';
-                    hideKPILoading(); // Hide loading state on error
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
                 tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Error loading data</td></tr>';
-                hideKPILoading(); // Hide loading state on error
             });
     }
 
 
 
-    // Show loading state for KPI cards
-    function showKPILoading() {
-        document.getElementById('freshLeadsCount').classList.add('d-none');
-        document.getElementById('freshLeadsLoading').classList.remove('d-none');
-        document.getElementById('followupLeadsCount').classList.add('d-none');
-        document.getElementById('followupLeadsLoading').classList.remove('d-none');
-    }
 
-    // Hide loading state and show counts
-    function hideKPILoading() {
-        document.getElementById('freshLeadsCount').classList.remove('d-none');
-        document.getElementById('freshLeadsLoading').classList.add('d-none');
-        document.getElementById('followupLeadsCount').classList.remove('d-none');
-        document.getElementById('followupLeadsLoading').classList.add('d-none');
-    }
-
-    // Update KPI counts
-    function updateKPICounts(data) {
-        hideKPILoading(); // Hide loading state
-        
-        if (data.fresh_leads_count !== undefined && data.fresh_leads_count !== null) {
-            document.getElementById('freshLeadsCount').textContent = data.fresh_leads_count;
-        } else {
-            document.getElementById('freshLeadsCount').textContent = '0';
-        }
-        
-        if (data.followup_leads_count !== undefined && data.followup_leads_count !== null) {
-            document.getElementById('followupLeadsCount').textContent = data.followup_leads_count;
-        } else {
-            document.getElementById('followupLeadsCount').textContent = '0';
-        }
-    }
 
     // Setup search functionality with client-side filtering
     function setupSearch(inputId, buttonId, clearId, tableId, sectionName) {
@@ -993,11 +921,8 @@ function loadBranchHeadDashboards() {
 
     // Load initial data
     document.addEventListener('DOMContentLoaded', function() {
-        // Show initial loading state for KPI cards
-        showKPILoading();
-        
-        // Load fresh leads by default
-        loadSection('fresh_leads');
+        // Load analytics dashboard by default
+        loadBranchHeadDashboards();
         
         // Update current date and time
         function updateDateTime() {
