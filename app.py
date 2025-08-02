@@ -316,7 +316,8 @@ def generate_uid(source, mobile_number, sequence):
         'Whatsapp': 'W',
         'Tele': 'T',
         'Activity': 'AC',
-        'Walk-in': 'W'  # Add Walk-in mapping
+        'Walk-in': 'W',  # Walk-in mapping
+        'Walkin': 'W'    # Walkin mapping (without hyphen)
     }
 
     source_char = source_map.get(source, 'X')
