@@ -51,7 +51,7 @@
                 <td>{{ lead.customer_mobile_number }}</td>
                 <td>{{ lead.model_interested or 'Not specified' }}</td>
                 <td>{{ lead.cre_name or 'N/A' }}</td>
-                <td>{{ lead.ps_branch or 'N/A' }}</td>
+                                                <td>{{ lead.branch or lead.ps_branch or 'N/A' }}</td>
                 <td>
                     {% if status == 'won' and lead.won_timestamp %}
                         <span class="badge bg-success">{{ lead.won_timestamp[:10] }}</span>

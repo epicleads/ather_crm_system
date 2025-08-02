@@ -63,7 +63,7 @@ class OptimizedLeadOperations:
             ps_followup = None
             if lead_data.get('ps_name'):
                 ps_query = self.supabase.table('ps_followup_master').select(
-                    'lead_uid, ps_name, ps_branch, final_status, lead_status, '
+                    'lead_uid, ps_name, ps_branch, branch, final_status, lead_status, '
                     'follow_up_date, first_call_date, first_call_remark, '
                     'second_call_date, second_call_remark, third_call_date, third_call_remark'
                 ).eq('lead_uid', uid).limit(1).execute()
