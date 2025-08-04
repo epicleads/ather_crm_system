@@ -322,6 +322,74 @@
 
 
 
+    <!-- Branch Summary KPI Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card kpi-card border-primary">
+                <div class="card-body p-3 text-center">
+                    <div class="d-flex align-items-center justify-content-center mb-2">
+                        <i class="fas fa-users fa-2x text-primary me-3"></i>
+                        <div>
+                            <h3 class="mb-0" id="totalLeadsAssigned">-</h3>
+                            <small class="text-muted">Total Leads Assigned</small>
+                        </div>
+                    </div>
+                    <div class="progress" style="height: 4px;">
+                        <div class="progress-bar bg-primary" role="progressbar" style="width: 100%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card kpi-card border-warning">
+                <div class="card-body p-3 text-center">
+                    <div class="d-flex align-items-center justify-content-center mb-2">
+                        <i class="fas fa-clock fa-2x text-warning me-3"></i>
+                        <div>
+                            <h3 class="mb-0" id="totalPendingLeads">-</h3>
+                            <small class="text-muted">Pending Leads</small>
+                        </div>
+                    </div>
+                    <div class="progress" style="height: 4px;">
+                        <div class="progress-bar bg-warning" role="progressbar" style="width: 100%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card kpi-card border-success">
+                <div class="card-body p-3 text-center">
+                    <div class="d-flex align-items-center justify-content-center mb-2">
+                        <i class="fas fa-trophy fa-2x text-success me-3"></i>
+                        <div>
+                            <h3 class="mb-0" id="totalWonLeads">-</h3>
+                            <small class="text-muted">Won Leads</small>
+                        </div>
+                    </div>
+                    <div class="progress" style="height: 4px;">
+                        <div class="progress-bar bg-success" role="progressbar" style="width: 100%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card kpi-card border-danger">
+                <div class="card-body p-3 text-center">
+                    <div class="d-flex align-items-center justify-content-center mb-2">
+                        <i class="fas fa-times-circle fa-2x text-danger me-3"></i>
+                        <div>
+                            <h3 class="mb-0" id="totalLostLeads">-</h3>
+                            <small class="text-muted">Lost Leads</small>
+                        </div>
+                    </div>
+                    <div class="progress" style="height: 4px;">
+                        <div class="progress-bar bg-danger" role="progressbar" style="width: 100%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Tab Navigation -->
     <div class="card mb-4">
         <div class="card-body p-0">
@@ -338,7 +406,7 @@
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" id="fresh-tab" data-bs-toggle="tab" href="#fresh" role="tab">
-                        <i class="fas fa-user-plus me-2"></i>Fresh Leads
+                        <i class="fas fa-users me-2"></i>All Leads
                     </a>
                 </li>
                 <li class="nav-item">
@@ -353,6 +421,43 @@
     <div class="tab-content" id="leadTabsContent">
         <!-- Analytics Dashboard Tab -->
         <div class="tab-pane fade show active" id="analytics" role="tabpanel">
+            <!-- Global Analytics Filter -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-filter me-2"></i>Analytics Filter
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="analyticsFilterType" class="form-label fw-semibold">Filter Type:</label>
+                            <select id="analyticsFilterType" class="form-select">
+                                <option value="mtd">MTD (Month to Date) - Default</option>
+                                <option value="previous_month">Previous Month</option>
+                                <option value="date_range">Date Range</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3" id="dateRangeContainer" style="display: none;">
+                            <label for="analyticsDateFrom" class="form-label fw-semibold">From Date:</label>
+                            <input type="date" id="analyticsDateFrom" class="form-control">
+                        </div>
+                        <div class="col-md-4 mb-3" id="dateRangeContainer2" style="display: none;">
+                            <label for="analyticsDateTo" class="form-label fw-semibold">To Date:</label>
+                            <input type="date" id="analyticsDateTo" class="form-control">
+                        </div>
+                        <div class="col-md-12">
+                            <button id="applyAnalyticsFilter" class="btn btn-primary me-2">
+                                <i class="fas fa-search me-1"></i>Apply Filter
+                            </button>
+                            <button id="resetAnalyticsFilter" class="btn btn-outline-secondary">
+                                <i class="fas fa-undo me-1"></i>Reset
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Product Specialist Performance Table -->
             <div class="card mb-4">
                 <div class="card-header">
@@ -444,7 +549,7 @@
             </div>
         </div>
 
-        <!-- Fresh Leads Tab -->
+        <!-- All Leads Tab -->
         <div class="tab-pane fade" id="fresh" role="tabpanel">
             <div class="card mb-3">
                 <div class="card-body">
@@ -461,11 +566,49 @@
                                 </select>
                             </div>
                             <div class="col-md-3 mb-2">
-                                <label for="freshLeadsDateFrom" class="fw-semibold">From:</label>
-                                <input type="date" id="freshLeadsDateFrom" class="form-control">
+                                <label for="freshLeadsSourceSelect" class="fw-semibold">Source:</label>
+                                <select id="freshLeadsSourceSelect" class="form-select">
+                                    <option value="">-- All Sources --</option>
+                                    <option value="PS">PS</option>
+                                    <option value="Walk In">Walk In</option>
+                                    <option value="Event">Event</option>
+                                    <option value="Meta">Meta</option>
+                                    <option value="Google">Google</option>
+                                    <option value="Website">Website</option>
+                                    <option value="Referral">Referral</option>
+                                    <option value="Other">Other</option>
+                                </select>
                             </div>
                             <div class="col-md-3 mb-2">
-                                <label for="freshLeadsDateTo" class="fw-semibold">To:</label>
+                                <label for="freshLeadsStatusSelect" class="fw-semibold">Final Status:</label>
+                                <select id="freshLeadsStatusSelect" class="form-select">
+                                    <option value="">-- All Statuses --</option>
+                                    <option value="Pending">Pending</option>
+                                    <option value="Won">Won</option>
+                                    <option value="Lost">Lost</option>
+                                    <option value="Not Interested">Not Interested</option>
+                                    <option value="Follow Up">Follow Up</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <label for="freshLeadsDateFilter" class="fw-semibold">Date Filter:</label>
+                                <select id="freshLeadsDateFilter" class="form-select">
+                                    <option value="">-- All Dates --</option>
+                                    <option value="today">Today</option>
+                                    <option value="yesterday">Yesterday</option>
+                                    <option value="this_week">This Week</option>
+                                    <option value="last_week">Last Week</option>
+                                    <option value="this_month">This Month</option>
+                                    <option value="last_month">Last Month</option>
+                                    <option value="date_range">Date Range</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 mb-2" id="dateRangeContainer" style="display: none;">
+                                <label for="freshLeadsDateFrom" class="fw-semibold">From Date:</label>
+                                <input type="date" id="freshLeadsDateFrom" class="form-control">
+                            </div>
+                            <div class="col-md-3 mb-2" id="dateRangeContainer2" style="display: none;">
+                                <label for="freshLeadsDateTo" class="fw-semibold">To Date:</label>
                                 <input type="date" id="freshLeadsDateTo" class="form-control">
                             </div>
                             <div class="col-md-3 mb-2 d-flex align-items-end">
@@ -631,6 +774,9 @@ const sectionConfig = {
     tab: 'fresh-tab',
     tbody: 'freshLeadsTableBody',
             psSelectId: 'freshLeadsPsSelect',
+            sourceSelectId: 'freshLeadsSourceSelect',
+            statusSelectId: 'freshLeadsStatusSelect',
+            dateFilterId: 'freshLeadsDateFilter',
             dateFromId: 'freshLeadsDateFrom',
             dateToId: 'freshLeadsDateTo',
             searchId: 'freshLeadsSearchInput',
@@ -657,17 +803,33 @@ const sectionConfig = {
         
         // Get filter values
         const psSelect = document.getElementById(config.psSelectId);
+        const sourceSelect = document.getElementById(config.sourceSelectId);
+        const statusSelect = document.getElementById(config.statusSelectId);
+        const dateFilter = document.getElementById(config.dateFilterId);
         const dateFrom = document.getElementById(config.dateFromId);
         const dateTo = document.getElementById(config.dateToId);
         const searchInput = document.getElementById(config.searchId);
         
         const ps_name = psSelect ? psSelect.value : '';
+        const source = sourceSelect ? sourceSelect.value : '';
+        const final_status = statusSelect ? statusSelect.value : '';
+        const date_filter = dateFilter ? dateFilter.value : '';
         const start_date = dateFrom ? dateFrom.value : '';
         const end_date = dateTo ? dateTo.value : '';
         const searchTerm = searchInput ? searchInput.value.trim() : '';
         
-        // Make API call - no backend filtering, all data loaded and filtered client-side
-        fetch(`/api/branch_head_dashboard_data?section=${section}`)
+        // Make API call with filter parameters
+        const params = new URLSearchParams({
+            section: section,
+            ps_name: ps_name,
+            source: source,
+            final_status: final_status,
+            date_filter: date_filter,
+            start_date: start_date,
+            end_date: end_date,
+            search: searchTerm
+        });
+        fetch(`/api/branch_head_dashboard_data?${params}`)
             .then(response => response.json())
     .then(data => {
                 if (data.success) {
@@ -749,14 +911,14 @@ const sectionConfig = {
         const tbody = document.getElementById(config.tbody);
         const searchInput = document.getElementById(config.searchId);
         const psSelect = document.getElementById(config.psSelectId);
-        const dateFrom = document.getElementById(config.dateFromId);
-        const dateTo = document.getElementById(config.dateToId);
+        const sourceSelect = document.getElementById(config.sourceSelectId);
+        const statusSelect = document.getElementById(config.statusSelectId);
         
         // Get filter values
         const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
         const psFilter = psSelect ? psSelect.value.toLowerCase().trim() : '';
-        const dateFromFilter = dateFrom ? dateFrom.value : '';
-        const dateToFilter = dateTo ? dateTo.value : '';
+        const sourceFilter = sourceSelect ? sourceSelect.value.toLowerCase().trim() : '';
+        const statusFilter = statusSelect ? statusSelect.value.toLowerCase().trim() : '';
         
         // Get all rows
         const rows = tbody.querySelectorAll('tr');
@@ -786,23 +948,19 @@ const sectionConfig = {
                 }
             }
             
-            // Date range filter - only apply to fresh_leads section for PS Assigned At column
-            if (showRow && sectionName === 'fresh_leads' && (dateFromFilter || dateToFilter)) {
-                const dateCell = row.querySelector('td:nth-child(8)'); // PS Assigned At column (8th)
-                
-                if (dateCell) {
-                    const dateText = dateCell.textContent.trim();
-                    if (dateText) {
-                        const rowDate = new Date(dateText);
-                        const fromDate = dateFromFilter ? new Date(dateFromFilter + 'T00:00:00') : null;
-                        const toDate = dateToFilter ? new Date(dateToFilter + 'T23:59:59') : null;
-                        
-                        // Check if date is valid
-                        if (!isNaN(rowDate.getTime())) {
-                            if (fromDate && rowDate < fromDate) showRow = false;
-                            if (toDate && rowDate > toDate) showRow = false;
-                        }
-                    }
+            // Source filter - only apply to fresh_leads section for Source column
+            if (showRow && sectionName === 'fresh_leads' && sourceFilter && sourceFilter !== '-- all sources --') {
+                const sourceCell = row.querySelector('td:nth-child(6)'); // Source column (6th)
+                if (sourceCell && !sourceCell.textContent.toLowerCase().includes(sourceFilter)) {
+                    showRow = false;
+                }
+            }
+            
+            // Status filter - only apply to fresh_leads section for Final Status column
+            if (showRow && sectionName === 'fresh_leads' && statusFilter && statusFilter !== '-- all statuses --') {
+                const statusCell = row.querySelector('td:nth-child(4)'); // Final Status column (4th)
+                if (statusCell && !statusCell.textContent.toLowerCase().includes(statusFilter)) {
+                    showRow = false;
                 }
             }
             
@@ -842,14 +1000,26 @@ const sectionConfig = {
         if (resetBtn) {
             resetBtn.addEventListener('click', function() {
                 const psSelect = document.getElementById(section + 'LeadsPsSelect');
+                const sourceSelect = document.getElementById(section + 'LeadsSourceSelect');
+                const statusSelect = document.getElementById(section + 'LeadsStatusSelect');
+                const dateFilter = document.getElementById(section + 'LeadsDateFilter');
                 const dateFrom = document.getElementById(section + 'LeadsDateFrom');
                 const dateTo = document.getElementById(section + 'LeadsDateTo');
                 const searchInput = document.getElementById(section + 'LeadsSearchInput');
                 
                 if (psSelect) psSelect.value = '';
+                if (sourceSelect) sourceSelect.value = '';
+                if (statusSelect) statusSelect.value = '';
+                if (dateFilter) dateFilter.value = '';
                 if (dateFrom) dateFrom.value = '';
                 if (dateTo) dateTo.value = '';
                 if (searchInput) searchInput.value = '';
+                
+                // Hide date range containers
+                const dateRangeContainer = document.getElementById('dateRangeContainer');
+                const dateRangeContainer2 = document.getElementById('dateRangeContainer2');
+                if (dateRangeContainer) dateRangeContainer.style.display = 'none';
+                if (dateRangeContainer2) dateRangeContainer2.style.display = 'none';
                 
                 const sectionMap = {
                     'fresh': 'fresh_leads',
@@ -1129,6 +1299,249 @@ function loadWalkinLeadsData() {
         });
     }
 
+    // Analytics Filter Functions
+    function getAnalyticsFilterParams() {
+        const filterType = document.getElementById('analyticsFilterType').value;
+        const dateFrom = document.getElementById('analyticsDateFrom').value;
+        const dateTo = document.getElementById('analyticsDateTo').value;
+        
+        let params = {};
+        
+        switch(filterType) {
+            case 'mtd':
+                // Month to Date - current month from 1st to today
+                const today = new Date();
+                const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+                params.date_from = monthStart.toISOString().split('T')[0];
+                params.date_to = today.toISOString().split('T')[0];
+                break;
+            case 'previous_month':
+                // Previous month
+                const currentDate = new Date();
+                const prevMonthStart = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+                const prevMonthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), 0);
+                params.date_from = prevMonthStart.toISOString().split('T')[0];
+                params.date_to = prevMonthEnd.toISOString().split('T')[0];
+                break;
+            case 'date_range':
+                // Custom date range
+                if (!dateFrom || !dateTo) {
+                    alert('Please select both From and To dates for custom date range.');
+                    return null;
+                }
+                params.date_from = dateFrom;
+                params.date_to = dateTo;
+                break;
+        }
+        
+        return params;
+    }
+
+    function loadAnalyticsDataWithFilter() {
+        const params = getAnalyticsFilterParams();
+        if (!params) return;
+        
+        // Load Branch Summary Data with filter
+        loadBranchSummaryDataWithFilter(params);
+        
+        // Load PS Performance Data with filter
+        loadPSPerformanceDataWithFilter(params);
+        
+        // Load Source-wise Leads Data with filter
+        loadSourceLeadsDataWithFilter(params);
+        
+        // Load Walk-in Leads Data with filter
+        loadWalkinLeadsDataWithFilter(params);
+    }
+
+    function loadPSPerformanceDataWithFilter(params) {
+        const queryString = new URLSearchParams(params).toString();
+        fetch(`/api/branch_analytics/ps_performance?${queryString}`)
+            .then(response => response.json())
+            .then(data => {
+                const tbody = document.getElementById('psPerformanceTableBody');
+                tbody.innerHTML = '';
+                
+                if (data.success && data.data.length > 0) {
+                    data.data.forEach(row => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td>${row.ps_name}</td>
+                            <td>${row.leads_assigned}</td>
+                            <td>${row.leads_contacted}</td>
+                            <td>${row.gap}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="4" class="text-center">No data available</td></tr>';
+                }
+            })
+            .catch(error => {
+                console.error('Error loading PS performance data:', error);
+                document.getElementById('psPerformanceTableBody').innerHTML = 
+                    '<tr><td colspan="4" class="text-center text-danger">Error loading data</td></tr>';
+            });
+    }
+
+    function loadSourceLeadsDataWithFilter(params) {
+        const queryString = new URLSearchParams(params).toString();
+        fetch(`/api/branch_analytics/source_leads?${queryString}`)
+            .then(response => response.json())
+            .then(data => {
+                const tbody = document.getElementById('sourceLeadsTableBody');
+                const thead = document.getElementById('sourceLeadsTableHead');
+                tbody.innerHTML = '';
+                
+                if (data.success && data.data.length > 0) {
+                    // Update table headers with dynamic source columns
+                    const headerRow = thead.querySelector('tr');
+                    // Keep the first 4 columns (Product Specialist, Total Leads, Won Leads, Win Rate)
+                    headerRow.innerHTML = `
+                        <th>Product Specialist</th>
+                        <th>Total Leads</th>
+                        <th>Won Leads</th>
+                        <th>Win Rate (%)</th>
+                    `;
+                    
+                    // Add dynamic source columns
+                    if (data.sources && data.sources.length > 0) {
+                        data.sources.forEach(source => {
+                            const th = document.createElement('th');
+                            th.textContent = source;
+                            headerRow.appendChild(th);
+                        });
+                    }
+                    
+                    // Populate table data
+                    data.data.forEach(row => {
+                        const tr = document.createElement('tr');
+                        const winRate = row.total_leads > 0 ? ((row.won_leads / row.total_leads) * 100).toFixed(1) : '0.0';
+                        
+                        // Start with the basic columns
+                        let rowHTML = `
+                            <td>${row.ps_name}</td>
+                            <td>${row.total_leads}</td>
+                            <td>${row.won_leads}</td>
+                            <td>${winRate}%</td>
+                        `;
+                        
+                        // Add dynamic source columns
+                        if (data.sources && data.sources.length > 0) {
+                            data.sources.forEach(source => {
+                                const sourceStats = row.source_breakdown && row.source_breakdown[source] ? row.source_breakdown[source] : { total_leads: 0, won_leads: 0 };
+                                const sourceWinRate = sourceStats.total_leads > 0 ? ((sourceStats.won_leads / sourceStats.total_leads) * 100).toFixed(1) : '0.0';
+                                rowHTML += `<td>${sourceStats.total_leads} (${sourceStats.won_leads} won, ${sourceWinRate}%)</td>`;
+                            });
+                        }
+                        
+                        tr.innerHTML = rowHTML;
+                        tbody.appendChild(tr);
+                    });
+                } else {
+                    const colspan = data.sources ? 4 + data.sources.length : 4;
+                    tbody.innerHTML = `<tr><td colspan="${colspan}" class="text-center">No data available</td></tr>`;
+                }
+            })
+            .catch(error => {
+                console.error('Error loading source leads data:', error);
+                document.getElementById('sourceLeadsTableBody').innerHTML = 
+                    '<tr><td colspan="4" class="text-center text-danger">Error loading data</td></tr>';
+            });
+    }
+
+    function loadWalkinLeadsDataWithFilter(params) {
+        const queryString = new URLSearchParams(params).toString();
+        fetch(`/api/branch_analytics/walkin_leads?${queryString}`)
+            .then(response => response.json())
+            .then(data => {
+                const tbody = document.getElementById('walkinLeadsTableBody');
+                tbody.innerHTML = '';
+                
+                if (data.success && data.data.length > 0) {
+                    data.data.forEach(row => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td>${row.ps_name}</td>
+                            <td>${row.total_walkin_leads}</td>
+                            <td>${row.pending_leads}</td>
+                            <td>${row.lost_leads}</td>
+                            <td>${row.won_leads}</td>
+                            <td>${row.today_followups}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center">No data available</td></tr>';
+                }
+            })
+            .catch(error => {
+                console.error('Error loading walkin leads data:', error);
+                document.getElementById('walkinLeadsTableBody').innerHTML = 
+                    '<tr><td colspan="6" class="text-center text-danger">Error loading data</td></tr>';
+            });
+    }
+
+    function loadBranchSummaryDataWithFilter(params) {
+        const queryString = new URLSearchParams(params).toString();
+        fetch(`/api/branch_analytics/summary?${queryString}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.data) {
+                    document.getElementById('totalLeadsAssigned').textContent = data.data.total_leads_assigned;
+                    document.getElementById('totalPendingLeads').textContent = data.data.total_pending_leads;
+                    document.getElementById('totalWonLeads').textContent = data.data.total_won_leads;
+                    document.getElementById('totalLostLeads').textContent = data.data.total_lost_leads;
+                } else {
+                    console.error('Error loading branch summary data:', data.message);
+                    document.getElementById('totalLeadsAssigned').textContent = '-';
+                    document.getElementById('totalPendingLeads').textContent = '-';
+                    document.getElementById('totalWonLeads').textContent = '-';
+                    document.getElementById('totalLostLeads').textContent = '-';
+                }
+            })
+            .catch(error => {
+                console.error('Error loading branch summary data:', error);
+                document.getElementById('totalLeadsAssigned').textContent = '-';
+                document.getElementById('totalPendingLeads').textContent = '-';
+                document.getElementById('totalWonLeads').textContent = '-';
+                document.getElementById('totalLostLeads').textContent = '-';
+            });
+    }
+
+    // Analytics Filter Event Listeners
+    document.addEventListener('DOMContentLoaded', function() {
+        // Filter type change event
+        document.getElementById('analyticsFilterType').addEventListener('change', function() {
+            const filterType = this.value;
+            const dateRangeContainer = document.getElementById('dateRangeContainer');
+            const dateRangeContainer2 = document.getElementById('dateRangeContainer2');
+            
+            if (filterType === 'date_range') {
+                dateRangeContainer.style.display = 'block';
+                dateRangeContainer2.style.display = 'block';
+            } else {
+                dateRangeContainer.style.display = 'none';
+                dateRangeContainer2.style.display = 'none';
+            }
+        });
+        
+        // Apply filter button
+        document.getElementById('applyAnalyticsFilter').addEventListener('click', function() {
+            loadAnalyticsDataWithFilter();
+        });
+        
+        // Reset filter button
+        document.getElementById('resetAnalyticsFilter').addEventListener('click', function() {
+            document.getElementById('analyticsFilterType').value = 'mtd';
+            document.getElementById('analyticsDateFrom').value = '';
+            document.getElementById('analyticsDateTo').value = '';
+            document.getElementById('dateRangeContainer').style.display = 'none';
+            document.getElementById('dateRangeContainer2').style.display = 'none';
+            loadAnalyticsDataWithFilter(); // Load with default MTD filter
+        });
+    });
+
     // Export event listeners
     document.addEventListener('DOMContentLoaded', function() {
         // Export button event listeners
@@ -1147,7 +1560,7 @@ function loadWalkinLeadsData() {
     // Load initial data
     document.addEventListener('DOMContentLoaded', function() {
         // Load analytics data by default
-        loadAnalyticsData();
+        loadAnalyticsDataWithFilter();
         
         // Update current date and time
         function updateDateTime() {
@@ -1167,6 +1580,75 @@ function loadWalkinLeadsData() {
         setInterval(updateDateTime, 60000); // Update every minute
     });
 
+    // Date filter functionality for All Leads
+    document.addEventListener('DOMContentLoaded', function() {
+        const dateFilter = document.getElementById('freshLeadsDateFilter');
+        const dateRangeContainer = document.getElementById('dateRangeContainer');
+        const dateRangeContainer2 = document.getElementById('dateRangeContainer2');
+        const dateFrom = document.getElementById('freshLeadsDateFrom');
+        const dateTo = document.getElementById('freshLeadsDateTo');
+        
+        if (dateFilter) {
+            dateFilter.addEventListener('change', function() {
+                const filterValue = this.value;
+                
+                // Hide date range inputs by default
+                dateRangeContainer.style.display = 'none';
+                dateRangeContainer2.style.display = 'none';
+                
+                if (filterValue === 'date_range') {
+                    // Show date range inputs
+                    dateRangeContainer.style.display = 'block';
+                    dateRangeContainer2.style.display = 'block';
+                } else if (filterValue) {
+                    // Set date range based on filter value
+                    const today = new Date();
+                    let startDate = new Date();
+                    let endDate = new Date();
+                    
+                    switch (filterValue) {
+                        case 'today':
+                            startDate = today;
+                            endDate = today;
+                            break;
+                        case 'yesterday':
+                            startDate.setDate(today.getDate() - 1);
+                            endDate.setDate(today.getDate() - 1);
+                            break;
+                        case 'this_week':
+                            const dayOfWeek = today.getDay();
+                            const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+                            startDate.setDate(diff);
+                            endDate = today;
+                            break;
+                        case 'last_week':
+                            const lastWeekStart = new Date(today);
+                            lastWeekStart.setDate(today.getDate() - today.getDay() - 6);
+                            const lastWeekEnd = new Date(today);
+                            lastWeekEnd.setDate(today.getDate() - today.getDay());
+                            startDate = lastWeekStart;
+                            endDate = lastWeekEnd;
+                            break;
+                        case 'this_month':
+                            startDate.setDate(1);
+                            endDate = today;
+                            break;
+                        case 'last_month':
+                            startDate.setMonth(today.getMonth() - 1, 1);
+                            endDate.setMonth(today.getMonth(), 0);
+                            break;
+                    }
+                    
+                    // Set the date inputs
+                    if (dateFrom && dateTo) {
+                        dateFrom.value = startDate.toISOString().split('T')[0];
+                        dateTo.value = endDate.toISOString().split('T')[0];
+                    }
+                }
+            });
+        }
+    });
+
     // Tab change event
     document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
         tab.addEventListener('shown.bs.tab', function(e) {
@@ -1176,7 +1658,7 @@ function loadWalkinLeadsData() {
             } else if (targetId === 'followup') {
                 loadSection('followup_leads');
             } else if (targetId === 'analytics') {
-                loadAnalyticsData();
+                loadAnalyticsDataWithFilter();
             }
         });
 });
