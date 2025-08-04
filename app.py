@@ -1970,7 +1970,7 @@ def add_lead():
             'ps_name': ps_name if ps_name else None,
             'final_status': final_status,
             'follow_up_date': follow_up_date if follow_up_date else None,
-            'assigned': 'No',
+            'assigned': 'Yes' if cre_name else 'No',  # Set to Yes if CRE is adding the lead
             'created_at': datetime.now().isoformat(),
             'updated_at': datetime.now().isoformat(),
             'first_remark': remark,
@@ -2584,8 +2584,8 @@ def ps_dashboard():
         assigned_leads = safe_get_data('ps_followup_master', {'ps_name': ps_name})
         print(f"[DEBUG] PS Dashboard - Assigned leads count: {len(assigned_leads) if assigned_leads else 0}")
 
-        # Apply date filtering to assigned leads
-        filtered_leads = filter_leads_by_date(assigned_leads, filter_type, 'created_at')
+        # Apply date filtering to assigned leads using ps_assigned_at for ps_followup_master table
+        filtered_leads = filter_leads_by_date(assigned_leads, filter_type, 'ps_assigned_at')
         print(f"[DEBUG] PS Dashboard - Filtered leads count: {len(filtered_leads) if filtered_leads else 0}")
 
         # Initialize lists for different lead categories
@@ -2813,7 +2813,17 @@ def ps_dashboard():
         
         for lead in walkin_leads:
             lead_dict = dict(lead)  # Make a copy to avoid mutating the original
-            lead_dict['lead_uid'] = lead.get('uid', f"W{lead.get('id')}")  # Use actual UID or generate one
+            
+            # Ensure UID is properly set for walkin leads
+            if lead.get('uid'):
+                lead_dict['lead_uid'] = lead.get('uid')
+            else:
+                # Generate UID if not present (for older records)
+                lead_dict['lead_uid'] = f"W{lead.get('id')}"
+            
+            # Also set the uid field for consistency
+            lead_dict['uid'] = lead_dict['lead_uid']
+            print(f"[DEBUG] Walkin lead UID: {lead_dict['lead_uid']} for ID: {lead.get('id')}")
             lead_dict['customer_mobile_number'] = lead.get('mobile_number', '')  # For template compatibility
             lead_dict['customer_name'] = lead.get('customer_name', '')  # Ensure customer_name is set
             lead_dict['source'] = 'Walk-in'  # Set source for consistency
@@ -2864,6 +2874,34 @@ def ps_dashboard():
                     attended_leads.append(lead_dict)
                     print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to attended_leads")
 
+        # Update the walkin_leads list with processed data for template
+        processed_walkin_leads = []
+        for lead in walkin_leads:
+            lead_dict = dict(lead)  # Make a copy to avoid mutating the original
+            
+            # Ensure UID is properly set for walkin leads
+            if lead.get('uid'):
+                lead_dict['lead_uid'] = lead.get('uid')
+            else:
+                # Generate UID if not present (for older records)
+                lead_dict['lead_uid'] = f"W{lead.get('id')}"
+            
+            # Also set the uid field for consistency
+            lead_dict['uid'] = lead_dict['lead_uid']
+            lead_dict['customer_mobile_number'] = lead.get('mobile_number', '')
+            lead_dict['customer_name'] = lead.get('customer_name', '')
+            lead_dict['source'] = 'Walk-in'
+            lead_dict['is_walkin'] = True
+            lead_dict['walkin_id'] = lead.get('id')
+            lead_dict['cre_name'] = ''
+            lead_dict['created_at'] = lead.get('created_at', '')
+            lead_dict['lead_category'] = lead.get('lead_category', 'Not Set')
+            
+            processed_walkin_leads.append(lead_dict)
+        
+        # Replace the original walkin_leads with processed data
+        walkin_leads = processed_walkin_leads
+        
         print(f"[PERF] ps_dashboard: walk-in leads processing took {time.time() - t3_5:.3f} seconds")
 
         t4 = time.time()
