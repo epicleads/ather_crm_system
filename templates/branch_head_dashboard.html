@@ -829,6 +829,18 @@ const sectionConfig = {
             end_date: end_date,
             search: searchTerm
         });
+        
+        // Debug logging
+        console.log('DEBUG: API call parameters:', {
+            section: section,
+            ps_name: ps_name,
+            source: source,
+            final_status: final_status,
+            date_filter: date_filter,
+            start_date: start_date,
+            end_date: end_date,
+            search: searchTerm
+        });
         fetch(`/api/branch_head_dashboard_data?${params}`)
             .then(response => response.json())
     .then(data => {
@@ -1641,10 +1653,83 @@ function loadWalkinLeadsData() {
                     
                     // Set the date inputs
                     if (dateFrom && dateTo) {
-                        dateFrom.value = startDate.toISOString().split('T')[0];
-                        dateTo.value = endDate.toISOString().split('T')[0];
+                        // Use local timezone instead of UTC to avoid timezone issues
+                        const formatDate = (date) => {
+                            const year = date.getFullYear();
+                            const month = String(date.getMonth() + 1).padStart(2, '0');
+                            const day = String(date.getDate()).padStart(2, '0');
+                            return `${year}-${month}-${day}`;
+                        };
+                        dateFrom.value = formatDate(startDate);
+                        dateTo.value = formatDate(endDate);
                     }
                 }
+            });
+        }
+        
+        // Apply filter button for All Leads
+        const applyButton = document.getElementById('freshLeadsApplyFiltersBtn');
+        if (applyButton) {
+            applyButton.addEventListener('click', function() {
+                console.log('Apply button clicked - reloading data');
+                loadSection('fresh_leads');
+            });
+        }
+        
+        // Reset filter button for All Leads
+        const resetButton = document.getElementById('freshLeadsResetFiltersBtn');
+        if (resetButton) {
+            resetButton.addEventListener('click', function() {
+                console.log('Reset button clicked - clearing filters');
+                // Clear all filters
+                const psSelect = document.getElementById('freshLeadsPSSelect');
+                const sourceSelect = document.getElementById('freshLeadsSourceSelect');
+                const statusSelect = document.getElementById('freshLeadsStatusSelect');
+                const dateFilterSelect = document.getElementById('freshLeadsDateFilter');
+                const dateFromInput = document.getElementById('freshLeadsDateFrom');
+                const dateToInput = document.getElementById('freshLeadsDateTo');
+                
+                if (psSelect) psSelect.value = '';
+                if (sourceSelect) sourceSelect.value = '';
+                if (statusSelect) statusSelect.value = '';
+                if (dateFilterSelect) dateFilterSelect.value = '';
+                if (dateFromInput) dateFromInput.value = '';
+                if (dateToInput) dateToInput.value = '';
+                
+                // Hide date range containers
+                if (dateRangeContainer) dateRangeContainer.style.display = 'none';
+                if (dateRangeContainer2) dateRangeContainer2.style.display = 'none';
+                
+                // Reload data with cleared filters
+                loadSection('fresh_leads');
+            });
+        }
+        
+        // Apply filter button for Followup Leads
+        const followupApplyButton = document.getElementById('followupLeadsApplyFiltersBtn');
+        if (followupApplyButton) {
+            followupApplyButton.addEventListener('click', function() {
+                console.log('Followup Apply button clicked - reloading data');
+                loadSection('followup_leads');
+            });
+        }
+        
+        // Reset filter button for Followup Leads
+        const followupResetButton = document.getElementById('followupLeadsResetFiltersBtn');
+        if (followupResetButton) {
+            followupResetButton.addEventListener('click', function() {
+                console.log('Followup Reset button clicked - clearing filters');
+                // Clear all filters for followup section
+                const psSelect = document.getElementById('followupLeadsPSSelect');
+                const sourceSelect = document.getElementById('followupLeadsSourceSelect');
+                const statusSelect = document.getElementById('followupLeadsStatusSelect');
+                
+                if (psSelect) psSelect.value = '';
+                if (sourceSelect) sourceSelect.value = '';
+                if (statusSelect) statusSelect.value = '';
+                
+                // Reload data with cleared filters
+                loadSection('followup_leads');
             });
         }
     });
