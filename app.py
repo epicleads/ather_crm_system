@@ -4419,52 +4419,69 @@ def api_branch_head_dashboard_data():
         end_date = request.args.get('end_date', '')
         search = request.args.get('search', '')
         
-        # Build base queries for all leads (not just pending)
-        ps_query = supabase.table('ps_followup_master').select('lead_uid, customer_name, customer_mobile_number, final_status, ps_name, created_at, source, lead_category, ps_assigned_at').eq('ps_branch', branch)
+        # Debug logging
+        print(f"DEBUG: Filter parameters - ps_name: {ps_name}, source: {source}, final_status: {final_status}, date_filter: {date_filter}, start_date: {start_date}, end_date: {end_date}")
         
-        # Apply filters if provided
-        if ps_name:
-            ps_query = ps_query.eq('ps_name', ps_name)
-        if final_status:
-            ps_query = ps_query.eq('final_status', final_status)
-        if source:
-            ps_query = ps_query.eq('source', source)
-        if start_date and end_date:
-            ps_query = ps_query.gte('created_at', start_date).lte('created_at', end_date)
-        if search:
-            ps_query = build_search_query(ps_query, search, 'ps')
+        # Initialize empty lists for each table
+        ps_rows = []
+        walkin_rows = []
+        event_rows = []
         
-        ps_rows = ps_query.execute().data or []
+        # Only query ps_followup_master if source is not "Walk In" or if no source filter is applied
+        if not source or source != 'Walk In':
+            ps_query = supabase.table('ps_followup_master').select('lead_uid, customer_name, customer_mobile_number, final_status, ps_name, created_at, source, lead_category, ps_assigned_at').eq('ps_branch', branch)
+            
+            # Apply filters if provided
+            if ps_name:
+                ps_query = ps_query.eq('ps_name', ps_name)
+            if final_status:
+                ps_query = ps_query.eq('final_status', final_status)
+            if source:
+                ps_query = ps_query.eq('source', source)
+            if start_date and end_date:
+                ps_query = ps_query.gte('created_at', start_date).lte('created_at', end_date)
+            if search:
+                ps_query = build_search_query(ps_query, search, 'ps')
+            
+            ps_rows = ps_query.execute().data or []
         
-        # Get Walk-in leads - all leads for the branch
-        walkin_query = supabase.table('walkin_table').select('uid, customer_name, mobile_number, branch, ps_assigned, status, created_at, lead_category').eq('branch', branch)
+        # Only query walkin_table if source is "Walk In" or if no source filter is applied
+        if not source or source == 'Walk In':
+            print(f"DEBUG: Querying walkin_table for branch: {branch}")
+            walkin_query = supabase.table('walkin_table').select('uid, customer_name, mobile_number, branch, ps_assigned, status, created_at, lead_category').eq('branch', branch)
+            
+            # Apply filters if provided
+            if ps_name:
+                walkin_query = walkin_query.eq('ps_assigned', ps_name)
+                print(f"DEBUG: Applied ps_name filter: {ps_name}")
+            if final_status:
+                walkin_query = walkin_query.eq('status', final_status)
+                print(f"DEBUG: Applied final_status filter: {final_status}")
+            if start_date and end_date:
+                walkin_query = walkin_query.gte('created_at', start_date).lte('created_at', end_date)
+                print(f"DEBUG: Applied date filter: {start_date} to {end_date}")
+            if search:
+                walkin_query = build_search_query(walkin_query, search, 'walkin')
+                print(f"DEBUG: Applied search filter: {search}")
+            
+            walkin_rows = walkin_query.execute().data or []
+            print(f"DEBUG: Found {len(walkin_rows)} walkin rows")
         
-        # Apply filters if provided
-        if ps_name:
-            walkin_query = walkin_query.eq('ps_assigned', ps_name)
-        if final_status:
-            walkin_query = walkin_query.eq('status', final_status)
-        if start_date and end_date:
-            walkin_query = walkin_query.gte('created_at', start_date).lte('created_at', end_date)
-        if search:
-            walkin_query = build_search_query(walkin_query, search, 'walkin')
-        
-        walkin_rows = walkin_query.execute().data or []
-        
-        # Get Event leads - all leads for the branch
-        event_query = supabase.table('activity_leads').select('activity_uid, customer_name, customer_phone_number, final_status, ps_name, created_at, lead_category').eq('location', branch)
-        
-        # Apply filters if provided
-        if ps_name:
-            event_query = event_query.eq('ps_name', ps_name)
-        if final_status:
-            event_query = event_query.eq('final_status', final_status)
-        if start_date and end_date:
-            event_query = event_query.gte('created_at', start_date).lte('created_at', end_date)
-        if search:
-            event_query = build_search_query(event_query, search, 'event')
-        
-        event_rows = event_query.execute().data or []
+        # Only query activity_leads if source is not "Walk In" or if no source filter is applied
+        if not source or source != 'Walk In':
+            event_query = supabase.table('activity_leads').select('activity_uid, customer_name, customer_phone_number, final_status, ps_name, created_at, lead_category').eq('location', branch)
+            
+            # Apply filters if provided
+            if ps_name:
+                event_query = event_query.eq('ps_name', ps_name)
+            if final_status:
+                event_query = event_query.eq('final_status', final_status)
+            if start_date and end_date:
+                event_query = event_query.gte('created_at', start_date).lte('created_at', end_date)
+            if search:
+                event_query = build_search_query(event_query, search, 'event')
+            
+            event_rows = event_query.execute().data or []
         
         # Format PS rows
         ps_formatted = [
