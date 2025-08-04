@@ -8515,6 +8515,167 @@ def add_walkin_lead():
         default_branch=rec_branch
     )
 
+@app.route('/api/branch_analytics/ps_performance')
+def api_branch_analytics_ps_performance():
+    """API endpoint for Product Specialist Performance data"""
+    try:
+        # Get branch from session
+        branch = session.get('branch_head_branch')
+        if not branch:
+            return jsonify({'success': False, 'message': 'Branch not found in session'})
+        
+        # Get current month start and end dates
+        today = datetime.now()
+        month_start = today.replace(day=1).strftime('%Y-%m-%d')
+        month_end = today.strftime('%Y-%m-%d')
+        
+        # Get all PS from the branch
+        ps_query = supabase.table('ps_followup_master').select('ps_name').eq('ps_branch', branch).not_.is_('ps_name', 'null').execute()
+        ps_names = list(set([row['ps_name'] for row in ps_query.data if row['ps_name']]))
+        
+        result_data = []
+        
+        for ps_name in ps_names:
+            # Get leads assigned this month (month to date)
+            assigned_query = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).eq('ps_name', ps_name).gte('ps_assigned_at', month_start).lte('ps_assigned_at', month_end).execute()
+            leads_assigned = assigned_query.count or 0
+            
+            # Get leads contacted at least once from fresh leads this month
+            contacted_query = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).eq('ps_name', ps_name).gte('ps_assigned_at', month_start).lte('ps_assigned_at', month_end).not_.is_('first_call_date', 'null').execute()
+            leads_contacted = contacted_query.count or 0
+            
+            # Calculate gap
+            gap = leads_assigned - leads_contacted
+            
+            result_data.append({
+                'ps_name': ps_name,
+                'leads_assigned': leads_assigned,
+                'leads_contacted': leads_contacted,
+                'gap': gap
+            })
+        
+        return jsonify({'success': True, 'data': result_data})
+        
+    except Exception as e:
+        print(f"Error in ps_performance API: {str(e)}")
+        return jsonify({'success': False, 'message': 'Error loading PS performance data'})
+
+@app.route('/api/branch_analytics/source_leads')
+def api_branch_analytics_source_leads():
+    """API endpoint for Source-wise Leads Analysis data"""
+    try:
+        # Get branch from session
+        branch = session.get('branch_head_branch')
+        if not branch:
+            return jsonify({'success': False, 'message': 'Branch not found in session'})
+        
+        # Get MTD date range
+        today = datetime.now()
+        month_start = today.replace(day=1).strftime('%Y-%m-%d')
+        month_end = today.strftime('%Y-%m-%d')
+        
+        # Get all PS from the branch
+        ps_query = supabase.table('ps_followup_master').select('ps_name').eq('ps_branch', branch).not_.is_('ps_name', 'null').execute()
+        ps_names = list(set([row['ps_name'] for row in ps_query.data if row['ps_name']]))
+        
+        result_data = []
+        all_sources = set()  # To track all unique sources
+        
+        for ps_name in ps_names:
+            # Get all leads for this PS (MTD)
+            ps_leads_query = supabase.table('ps_followup_master').select('source, final_status').eq('ps_branch', branch).eq('ps_name', ps_name).gte('ps_assigned_at', month_start).lte('ps_assigned_at', month_end).execute()
+            
+            # Group by source
+            source_stats = {}
+            for lead in ps_leads_query.data:
+                source = lead.get('source', 'Unknown')
+                final_status = lead.get('final_status', 'Pending')
+                
+                if source not in source_stats:
+                    source_stats[source] = {'total_leads': 0, 'won_leads': 0}
+                
+                source_stats[source]['total_leads'] += 1
+                if final_status == 'Won':
+                    source_stats[source]['won_leads'] += 1
+                
+                all_sources.add(source)
+            
+            # Add to result data - one row per PS with aggregated data
+            total_leads = sum(stats['total_leads'] for stats in source_stats.values())
+            total_won_leads = sum(stats['won_leads'] for stats in source_stats.values())
+            
+            result_data.append({
+                'ps_name': ps_name,
+                'total_leads': total_leads,
+                'won_leads': total_won_leads,
+                'source_breakdown': source_stats
+            })
+        
+        # Convert all_sources to sorted list for consistent column order
+        all_sources_list = sorted(list(all_sources))
+        
+        return jsonify({
+            'success': True, 
+            'data': result_data,
+            'sources': all_sources_list
+        })
+        
+    except Exception as e:
+        print(f"Error in source_leads API: {str(e)}")
+        return jsonify({'success': False, 'message': 'Error loading source leads data'})
+
+@app.route('/api/branch_analytics/walkin_leads')
+def api_branch_analytics_walkin_leads():
+    """API endpoint for Walk-in Leads Summary data"""
+    try:
+        # Get branch from session
+        branch = session.get('branch_head_branch')
+        if not branch:
+            return jsonify({'success': False, 'message': 'Branch not found in session'})
+        
+        # Get all PS from the branch
+        ps_query = supabase.table('walkin_table').select('ps_assigned').eq('branch', branch).not_.is_('ps_assigned', 'null').execute()
+        ps_names = list(set([row['ps_assigned'] for row in ps_query.data if row['ps_assigned']]))
+        
+        result_data = []
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        
+        for ps_name in ps_names:
+            # Get total walk-in leads assigned to this PS
+            total_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('ps_assigned', ps_name).execute()
+            total_walkin_leads = total_query.count or 0
+            
+            # Get pending leads
+            pending_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('ps_assigned', ps_name).eq('status', 'Pending').execute()
+            pending_leads = pending_query.count or 0
+            
+            # Get lost leads
+            lost_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('ps_assigned', ps_name).eq('status', 'Lost').execute()
+            lost_leads = lost_query.count or 0
+            
+            # Get won leads
+            won_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('ps_assigned', ps_name).eq('status', 'Won').execute()
+            won_leads = won_query.count or 0
+            
+            # Get today's follow-ups
+            today_followup_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('ps_assigned', ps_name).eq('next_followup_date', today_str).execute()
+            today_followups = today_followup_query.count or 0
+            
+            result_data.append({
+                'ps_name': ps_name,
+                'total_walkin_leads': total_walkin_leads,
+                'pending_leads': pending_leads,
+                'lost_leads': lost_leads,
+                'won_leads': won_leads,
+                'today_followups': today_followups
+            })
+        
+        return jsonify({'success': True, 'data': result_data})
+        
+    except Exception as e:
+        print(f"Error in walkin_leads API: {str(e)}")
+        return jsonify({'success': False, 'message': 'Error loading walkin leads data'})
+
 if __name__ == '__main__':
     # socketio.run(app, debug=True)
     print(" Starting Ather CRM System...")
