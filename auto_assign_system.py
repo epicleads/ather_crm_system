@@ -274,7 +274,7 @@ class EnhancedAutoAssignTrigger:
     
     def log_auto_assignment(self, lead_uid, source, cre_id, cre_name, assignment_method='fair_distribution'):
         """
-        Log auto-assignment to history table.
+        Log auto-assignment to history table and create initial call attempt history.
         
         Args:
             lead_uid (str): The lead UID
@@ -302,8 +302,32 @@ class EnhancedAutoAssignTrigger:
             
             supabase.table('auto_assign_history').insert(history_data).execute()
             
+            # Create initial call attempt history record
+            call_attempt_data = {
+                'uid': lead_uid,
+                'call_no': 1,  # First call attempt
+                'attempt': 1,   # First attempt
+                'status': 'Pending',  # Initial status
+                'cre_name': cre_name,
+                'cre_id': cre_id,
+                'created_at': get_ist_timestamp().isoformat(),
+                'update_ts': get_ist_timestamp().isoformat()
+            }
+            
+            supabase.table('cre_call_attempt_history').insert(call_attempt_data).execute()
+            
             # Update the CRE's auto_assign_count
             supabase.table('cre_users').update({'auto_assign_count': current_count + 1}).eq('id', cre_id).execute()
+            
+            # Update the lead_master table to mark as assigned
+            supabase.table('lead_master').update({
+                'assigned': True,
+                'cre_name': cre_name,
+                'assigned': True,
+                'updated_at': get_ist_timestamp().isoformat()
+            }).eq('uid', lead_uid).execute()
+            
+            print(f"✅ Auto-assigned {lead_uid} to {cre_name} and created call attempt history")
             
         except Exception as e:
             print(f"❌ Error logging auto-assignment: {e}")

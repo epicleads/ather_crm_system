@@ -1,0 +1,26 @@
+name: Fix Call History - Uday3 Branch
+on:
+  workflow_dispatch:  # Manual trigger only
+
+jobs:
+  fix-call-history-uday3:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+        
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+        
+      - name: Fix Call Attempt History
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL_UDAY3 }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_UDAY3 }}
+        run: |
+          echo "🔧 Fixing call attempt history for Uday3 branch..."
+          python fix_call_history.py 
