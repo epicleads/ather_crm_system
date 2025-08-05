@@ -1,8 +1,12 @@
 name: Auto-Assign Trigger - Uday3 Branch
 on:
   schedule:
+    - cron: '*/2 * * * *'  # Every 2 minutes - More frequent
     - cron: '* * * * *'  # Every minute
   workflow_dispatch:  # Manual trigger
+  push:
+    branches:
+      - Uday3  # Also run when code is pushed
 
 jobs:
   auto-assign-trigger-uday3:
