@@ -622,15 +622,36 @@ def track_ps_call_attempt(uid, ps_name, call_no, lead_status, call_was_recorded=
         if attempt_result.data:
             next_attempt = attempt_result.data[0]['attempt'] + 1
 
-        # Fetch the current final_status from ps_followup_master, fallback to lead_master
+        # Fetch the current final_status from multiple tables
         final_status = None
-        ps_result = supabase.table('ps_followup_master').select('final_status').eq('lead_uid', uid).limit(1).execute()
-        if ps_result.data and 'final_status' in ps_result.data[0]:
-            final_status = ps_result.data[0]['final_status']
-        else:
-            lead_result = supabase.table('lead_master').select('final_status').eq('uid', uid).limit(1).execute()
-            if lead_result.data and 'final_status' in lead_result.data[0]:
-                final_status = lead_result.data[0]['final_status']
+        
+        # Try all possible tables and field combinations
+        tables_to_check = [
+            # (table_name, uid_field, status_field, uid_value)
+            ('ps_followup_master', 'lead_uid', 'final_status', uid),
+            ('lead_master', 'uid', 'final_status', uid),
+            ('walkin_table', 'uid', 'status', uid),
+            ('activity_leads', 'activity_uid', 'final_status', uid),
+            # Also try with different UID formats for walkin and activity
+            ('walkin_table', 'uid', 'status', uid.replace('WB-', 'W')),
+            ('activity_leads', 'activity_uid', 'final_status', uid.replace('WB-', 'A'))
+        ]
+        
+        for table_name, uid_field, status_field, uid_value in tables_to_check:
+            try:
+                result = supabase.table(table_name).select(status_field).eq(uid_field, uid_value).limit(1).execute()
+                if result.data and result.data[0].get(status_field):
+                    final_status = result.data[0][status_field]
+                    print(f"Found final_status '{final_status}' in {table_name} for {uid_value}")
+                    break
+            except Exception as e:
+                print(f"Error checking {table_name}: {e}")
+                continue
+        
+        # If still not found, set a default
+        if not final_status:
+            final_status = 'Pending'
+            print(f"No final_status found for {uid}, defaulting to 'Pending'")
 
         # Prepare attempt data
         attempt_data = {
@@ -1998,7 +2019,14 @@ def add_lead():
                 ps_user = next((ps for ps in ps_users if ps['name'] == ps_name), None)
                 if ps_user:
                     create_or_update_ps_followup(lead_data, ps_name, ps_user['branch'])
-                    flash(f'Lead added successfully and assigned to {ps_name}!', 'success')
+                    
+                    # Send email notification to PS
+                    try:
+                        socketio.start_background_task(send_email_to_ps, ps_user['email'], ps_user['name'], lead_data, cre_name)
+                        flash(f'Lead added successfully and assigned to {ps_name}! Email notification sent.', 'success')
+                    except Exception as e:
+                        print(f"Error sending email: {e}")
+                        flash(f'Lead added successfully and assigned to {ps_name}! (Email notification failed)', 'warning')
                 else:
                     flash('Lead added successfully! (PS assignment failed)', 'warning')
             else:
@@ -3119,6 +3147,19 @@ def update_walkin_lead(walkin_id):
             
             # Update the walk-in lead
             supabase.table('walkin_table').update(update_data).eq('id', walkin_id).execute()
+            
+            # Track the PS call attempt in ps_call_attempt_history
+            if lead_status:
+                call_was_recorded = bool(call_date and call_remark)
+                track_ps_call_attempt(
+                    uid=walkin_lead['uid'],
+                    ps_name=ps_name,
+                    call_no=next_call,
+                    lead_status=lead_status,
+                    call_was_recorded=call_was_recorded,
+                    follow_up_date=next_followup_date if next_followup_date else None,
+                    remarks=call_remark if call_remark else None
+                )
             
             # Sync to alltest_drive table if test_drive_done is set
             if test_drive_done in ['Yes', 'No', True, False]:
@@ -7456,6 +7497,19 @@ def update_event_lead(activity_uid):
                 update_data.pop(f'ps_{next_call}_call_remark', None)
             if update_data:
                 supabase.table('activity_leads').update(update_data).eq('activity_uid', activity_uid).execute()
+                
+                # Track the PS call attempt in ps_call_attempt_history
+                if lead_status:
+                    call_was_recorded = bool(call_date and call_remark)
+                    track_ps_call_attempt(
+                        uid=lead['activity_uid'],
+                        ps_name=session.get('ps_name'),
+                        call_no=next_call,
+                        lead_status=lead_status,
+                        call_was_recorded=call_was_recorded,
+                        follow_up_date=ps_followup_date_ts if ps_followup_date_ts else None,
+                        remarks=call_remark if call_remark else None
+                    )
                 
                 # Sync to alltest_drive table if test_drive_done is set
                 if test_drive_done in ['Yes', 'No', True, False]:

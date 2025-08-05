@@ -502,6 +502,7 @@
                                 <th>Lead Status</th>
                                 <th>Month</th>
                                 <th>Date</th>
+                                <th>Call History</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -527,6 +528,11 @@
                                 <td>{{ lead.lead_status }}</td>
                                 <td>{{ lead.month }}</td>
                                 <td>{{ lead.date }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-info view-call-history-btn" data-uid="{{ lead.activity_uid }}" title="View Call History">
+                                        <i class="fas fa-history"></i> View
+                                    </button>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -570,6 +576,7 @@
                                 <th>Branch</th>
                                 <th>UID</th>
                                 <th>Assigned At</th>
+                                <th>Call History</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -597,6 +604,11 @@
                                 <td>{{ lead.branch }}</td>
                                 <td><span class="badge bg-primary">{{ lead.lead_uid }}</span></td>
                                 <td>{{ (lead.ps_assigned_at[:10] if lead.ps_assigned_at else lead.created_at[:10] if lead.created_at else 'N/A') }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-info view-call-history-btn" data-uid="{{ lead.lead_uid }}" title="View Call History">
+                                        <i class="fas fa-history"></i> View
+                                    </button>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -1400,6 +1412,14 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // View Call History button click (for all lead types)
+    document.querySelectorAll('.view-call-history-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const uid = this.getAttribute('data-uid');
+            fetchPSCallHistory(uid);
+        });
+    });
+
     function fetchPSCallHistory(uid) {
         // Clear previous data
         const modal = new bootstrap.Modal(document.getElementById('psCallHistoryModal'));
@@ -1637,69 +1657,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Call History Modal Functionality
-    const callHistoryModal = new bootstrap.Modal(document.getElementById('callHistoryModal'));
-    const callHistoryTableContainer = document.getElementById('callHistoryTableContainer');
-    document.querySelectorAll('.view-call-history-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            const uid = this.getAttribute('data-uid');
-            callHistoryTableContainer.innerHTML = '<div class="text-center text-muted">Loading...</div>';
-            document.getElementById('callHistoryTotal').innerHTML = '';
-            callHistoryModal.show();
-            fetch(`/ps_call_attempt_history_json/${uid}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success && data.history.length > 0) {
-                        // Count RNR calls
-                        const rnrCount = data.history.filter(row => row.status && row.status.trim().toUpperCase() === 'RNR').length;
-                        const busyCount = data.history.filter(row => row.status && row.status.trim().toLowerCase() === 'busy on another call').length;
-                        const callMeBackCount = data.history.filter(row => row.status && row.status.trim().toLowerCase() === 'call me back').length;
-                        const callNotConnectedCount = data.history.filter(row => row.status && row.status.trim().toLowerCase() === 'call not connected').length;
-                        const excludedStatuses = ['rnr', 'busy on another call', 'call me back', 'call not connected'];
-                        const connectedCallsCount = data.history.filter(row =>
-                             row.status && !excludedStatuses.includes(row.status.trim().toLowerCase())
-                        ).length;
-                        document.getElementById('callHistoryTotal').innerHTML = 
-                            `<strong>Total Calls Made:</strong> ${data.history.length} &nbsp; | &nbsp; <strong>RNR Calls:</strong> ${rnrCount} &nbsp; | &nbsp; <strong>Busy on another Call:</strong> ${busyCount} &nbsp; | &nbsp; <strong>Call me Back:</strong> ${callMeBackCount} &nbsp; | &nbsp; <strong>Call not Connected:</strong> ${callNotConnectedCount} &nbsp; | &nbsp; <strong>Connected Calls:</strong> ${connectedCallsCount}`;
-                        let table = `<div class='table-responsive'><table class='table table-bordered table-striped'><thead><tr><th>UID</th><th>Call No</th><th>Attempt</th><th>Status</th><th>PS Name</th><th>Update TS</th></tr></thead><tbody>`;
-                        data.history.forEach(row => {
-                            table += `<tr><td>${row.uid}</td><td>${row.call_no}</td><td>${row.attempt}</td><td>${row.status}</td><td>${row.ps_name}</td><td>${row.update_ts ? row.update_ts.replace('T', ' ').slice(0, 19) : ''}</td></tr>`;
-                        });
-                        table += '</tbody></table></div>';
-                        callHistoryTableContainer.innerHTML = table;
-                    } else {
-                        document.getElementById('callHistoryTotal').innerHTML = '';
-                        callHistoryTableContainer.innerHTML = '<div class="alert alert-info">No call attempt history found for this lead.</div>';
-                    }
-                })
-                .catch(() => {
-                    document.getElementById('callHistoryTotal').innerHTML = '';
-                    callHistoryTableContainer.innerHTML = '<div class="alert alert-danger">Failed to load call attempt history.</div>';
-                });
-        });
-    });
+
 });
 </script>
 
-<!-- Call History Modal -->
-<div class="modal fade" id="callHistoryModal" tabindex="-1" aria-labelledby="callHistoryModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="callHistoryModalLabel">
-                    <i class="fas fa-history"></i> Call Attempt History
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div id="callHistoryTotal" class="mb-3"></div>
-                <div id="callHistoryTableContainer"></div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-            </div>
-        </div>
-    </div>
-</div>
+
 
 {% endblock %}
