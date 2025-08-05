@@ -1,0 +1,52 @@
+name: Test Meta Script - Uday3 Branch
+on:
+  workflow_dispatch:  # Manual trigger only
+
+jobs:
+  test-meta-script-uday3:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+        
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+        
+      - name: Test Environment Variables
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL_UDAY3 }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_UDAY3 }}
+          META_PAGE_ACCESS_TOKEN: ${{ secrets.META_PAGE_ACCESS_TOKEN }}
+          PAGE_ID: ${{ secrets.PAGE_ID }}
+        run: |
+          echo "🔍 Testing Meta Script Environment Variables..."
+          echo "SUPABASE_URL: ${SUPABASE_URL:0:30}..."
+          echo "SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:0:10}..."
+          echo "META_PAGE_ACCESS_TOKEN: ${META_PAGE_ACCESS_TOKEN:0:10}..."
+          echo "PAGE_ID: $PAGE_ID"
+          
+      - name: Test Meta Script
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL_UDAY3 }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_UDAY3 }}
+          META_PAGE_ACCESS_TOKEN: ${{ secrets.META_PAGE_ACCESS_TOKEN }}
+          PAGE_ID: ${{ secrets.PAGE_ID }}
+        run: |
+          echo "🚀 Running Meta script test..."
+          python test_meta_script.py
+          
+      - name: Run Meta Script
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL_UDAY3 }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_UDAY3 }}
+          META_PAGE_ACCESS_TOKEN: ${{ secrets.META_PAGE_ACCESS_TOKEN }}
+          PAGE_ID: ${{ secrets.PAGE_ID }}
+        run: |
+          echo "🚀 Running Meta script..."
+          python metatosupabase.py
+          echo "✅ Meta script completed!" 

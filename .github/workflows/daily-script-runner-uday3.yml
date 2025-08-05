@@ -29,13 +29,26 @@ jobs:
           KNOW_SR_KEY: ${{ secrets.KNOW_SR_KEY }}
           KNOW_X_API_KEY: ${{ secrets.KNOW_X_API_KEY }}
         run: python knowlaritytosupabase.py
+      - name: Test Meta Script Environment (Uday3)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL_UDAY3 }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_UDAY3 }}
+          META_PAGE_ACCESS_TOKEN: ${{ secrets.META_PAGE_ACCESS_TOKEN }}
+          PAGE_ID: ${{ secrets.PAGE_ID }}
+        run: python test_meta_script.py
       - name: Run metatosupabase.py (Uday3)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL_UDAY3 }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_UDAY3 }}
           META_PAGE_ACCESS_TOKEN: ${{ secrets.META_PAGE_ACCESS_TOKEN }}
           PAGE_ID: ${{ secrets.PAGE_ID }}
-        run: python metatosupabase.py
+        run: |
+          echo "🚀 Starting Meta script for Uday3 branch..."
+          echo "📊 Database URL: ${SUPABASE_URL:0:20}..."
+          echo "🔑 Meta Token: ${META_PAGE_ACCESS_TOKEN:0:10}..."
+          echo "📄 Page ID: $PAGE_ID"
+          python metatosupabase.py
+          echo "✅ Meta script completed!"
 
   run-salesforce-script-uday3:
     runs-on: ubuntu-latest
