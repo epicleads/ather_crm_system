@@ -22,6 +22,15 @@ jobs:
           python-version: '3.11'
       - name: Install dependencies
         run: pip install -r requirements.txt
+      - name: Test Uday3 Database Connection
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL_UDAY3 }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_UDAY3 }}
+        run: |
+          echo "🔍 Testing Uday3 database connection..."
+          echo "SUPABASE_URL: ${SUPABASE_URL:0:30}..."
+          echo "SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:0:10}..."
+          
       - name: Run knowlaritytosupabase.py (Uday3)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL_UDAY3 }}
