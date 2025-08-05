@@ -6,6 +6,7 @@ import pytz
 from supabase import create_client, Client
 import pandas as pd
 from typing import Dict, List, Optional, Tuple, Any
+import re
 
 # --- Load environment variables ---
 load_dotenv()
@@ -24,11 +25,44 @@ print("✅ Connected to Supabase")
 
 IST = pytz.timezone('Asia/Kolkata')
 now_ist = datetime.now(IST)
-past_15_minutes = now_ist - timedelta(minutes=15)  # Changed from 24 hours to 15 minutes
-start_time = past_15_minutes.astimezone(pytz.UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
+past_24_hours = now_ist - timedelta(hours=24)  # Changed from 15 minutes to 24 hours
+start_time = past_24_hours.astimezone(pytz.UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
 end_time = now_ist.astimezone(pytz.UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
 
-print(f"📅 Fetching leads from {past_15_minutes} IST to {now_ist} IST")
+print(f"📅 Fetching leads from {past_24_hours} IST to {now_ist} IST")
+
+# ===============================================
+# CRE MAPPING CONFIGURATION
+# ===============================================
+
+CRE_QUEUE_NAMES = [
+    'CRE-Q-1090-HYD-Raam Electric Two Wheeler',
+    'CRE-Q-1237-HYD-RAAM ELECTRIC TWO WHEELER', 
+    'CRE-Q-1318-HYD-RAAM ELECTRIC TWO WHEELER'
+]
+
+CRE_MAPPING = {
+    # Salesforce CRE names mapped to Database CRE names
+    'Kumari B': 'Kumari',
+    'Chippala Pelli Mounika': 'CHIPPALA PELLI MOUNIKA',
+    'Swapna P': 'PARAKALA SWAPNA',
+    'Vyshanvi J': 'VYSHNAVI', 
+    'Geetha': 'GEETHA',
+    'Anusha': 'ANUSHA',
+    
+
+    # Note: These Salesforce CREs don't appear in your current Salesforce list but keeping for future reference
+    # 'Vyshanvi J': 'VYSHNAVI',  # Not in current SF list
+    # 'Geetha': 'GEETHA',        # Not in current SF list  
+    # 'Anusha': 'ANUSHA',        # Not in current SF list
+    # 'Aishwarya': 'Aishwarya',  # Not in current SF list
+    # 'Sailaja': 'Sailaja',      # Not in current SF list
+    
+    # CRE Queue names (will be skipped until replaced by actual CRE name)
+    'CRE-Q-1090-HYD-Raam Electric Two Wheeler': 'CRE-Q-1090-HYD-Raam Electric Two Wheeler',
+    'CRE-Q-1237-HYD-RAAM ELECTRIC TWO WHEELER': 'CRE-Q-1237-HYD-RAAM ELECTRIC TWO WHEELER',
+    'CRE-Q-1318-HYD-RAAM ELECTRIC TWO WHEELER': 'CRE-Q-1318-HYD-RAAM ELECTRIC TWO WHEELER',
+}
 
 # ===============================================
 # DUPLICATE HANDLER CLASS (Embedded)
@@ -211,6 +245,7 @@ class DuplicateLeadsHandler:
                 'new_leads': DataFrame of truly new leads to insert,
                 'updated_duplicates': int count of duplicate records updated,
                 'skipped_duplicates': int count of exact duplicates skipped,
+                'skipped_queue_leads': int count of leads skipped due to CRE queue assignment,
                 'master_records': dict of existing master records (for reference),
                 'duplicate_records': dict of existing duplicate records (for reference)
             }
@@ -223,12 +258,20 @@ class DuplicateLeadsHandler:
         new_leads = []
         updated_duplicates = 0
         skipped_duplicates = 0
+        skipped_queue_leads = 0
         
         for _, row in new_leads_df.iterrows():
             phone = row['customer_mobile_number']
             current_source = row['source']
             current_sub_source = row['sub_source']
             current_date = row['date']
+            cre_name = row.get('cre_name')
+            
+            # Skip leads assigned to CRE queues (not actual CREs)
+            if cre_name in CRE_QUEUE_NAMES:
+                print(f"⚠️ Skipping lead assigned to CRE queue: {phone} | Queue: {cre_name}")
+                skipped_queue_leads += 1
+                continue
             
             # Check if phone exists in lead_master
             if phone in master_records:
@@ -276,6 +319,7 @@ class DuplicateLeadsHandler:
             'new_leads': pd.DataFrame(new_leads) if new_leads else pd.DataFrame(),
             'updated_duplicates': updated_duplicates,
             'skipped_duplicates': skipped_duplicates,
+            'skipped_queue_leads': skipped_queue_leads,
             'master_records': master_records,
             'duplicate_records': duplicate_records
         }
@@ -286,6 +330,57 @@ duplicate_handler = DuplicateLeadsHandler(supabase)
 # ===============================================
 # UPDATED HELPER FUNCTIONS
 # ===============================================
+
+def extract_first_follow_up_remark(follow_up_remarks: str) -> Optional[str]:
+    """
+    Extract only the first point from follow-up remarks string
+    
+    Examples:
+    "1. The CX Will Visit showroom on time and inform to carry DL 2. 3. Test Ride Booked"
+    -> "The CX Will Visit showroom on time and inform to carry DL"
+    
+    "1. Customer interested in test ride 2. Will call back tomorrow 3. Hot lead"
+    -> "Customer interested in test ride"
+    
+    Args:
+        follow_up_remarks: Raw follow-up remarks string from Salesforce
+        
+    Returns:
+        First remark only, or None if no valid first remark found
+    """
+    if not follow_up_remarks or not isinstance(follow_up_remarks, str):
+        return None
+    
+    # Clean the string
+    remarks = follow_up_remarks.strip()
+    
+    if not remarks:
+        return None
+    
+    # Pattern to match: "1. [content] 2." or "1. [content]" at end of string
+    # This will capture everything after "1. " until we hit " 2." or end of string
+    pattern = r'^1\.\s*(.*?)(?:\s+2\.|$)'
+    
+    match = re.search(pattern, remarks, re.IGNORECASE | re.DOTALL)
+    
+    if match:
+        first_remark = match.group(1).strip()
+        # Remove any trailing numbers or dots that might have been captured
+        first_remark = re.sub(r'\s+\d+\.\s*$', '', first_remark).strip()
+        return first_remark if first_remark else None
+    
+    # Fallback: if no numbered format, check if it starts with "1."
+    if remarks.lower().startswith('1.'):
+        # Extract everything after "1. "
+        first_remark = remarks[2:].strip()
+        # If there are other numbered points, cut at the first one
+        next_point = re.search(r'\s+[2-9]\.\s+', first_remark)
+        if next_point:
+            first_remark = first_remark[:next_point.start()].strip()
+        return first_remark if first_remark else None
+    
+    # If no numbered format at all, return None (don't guess)
+    return None
 
 def map_source_and_subsource(raw_source):
     """
@@ -322,6 +417,21 @@ def map_source_and_subsource(raw_source):
         # Log unmapped sources for debugging
         print(f"⚠️ Unmapped source found: {raw_source}")
         return (None, None)
+
+def map_cre_name(owner_name):
+    """
+    Map Salesforce Lead Owner to standardized CRE name
+    Only return CRE name if it's a valid CRE or queue, otherwise return None to skip
+    """
+    if not owner_name:
+        return None
+    
+    # Check if it's a CRE queue (these will be skipped)
+    if owner_name in CRE_QUEUE_NAMES:
+        return owner_name  # Return as is, will be handled in processing
+    
+    # Only return mapped CRE name if it exists in our mapping, otherwise None
+    return CRE_MAPPING.get(owner_name, None)
 
 def normalize_phone(phone: str) -> str:
     if not phone:
@@ -360,64 +470,112 @@ def get_next_sequence_number(supabase):
 # MAIN PROCESSING LOGIC
 # ===============================================
 
+# Updated query to fetch the new fields
 query = f"""
-    SELECT Id, Name, Phone, LeadSource, CreatedDate
+    SELECT Id, FirstName, LastName, Owner.Name, Phone, LeadSource, 
+           Status, CreatedDate, Is_Home_TR_Booked__c, 
+           Branch__c, Last_3_Follow_Up_Remarks__c
     FROM Lead
     WHERE CreatedDate >= {start_time} AND CreatedDate <= {end_time}
 """
+
 results = sf.query_all(query)['records']
-print(f"\n📦 Total leads fetched (past 15 minutes): {len(results)}")
+print(f"\n📦 Total leads fetched (past 24 hours): {len(results)}")
 
 if not results:
     print("❌ No leads found in the specified time range")
     exit()
 
-# Process leads with combined sub_sources per phone
+# Process leads with new field mapping
 leads_by_phone = {}
-unmapped_sources = set()  # Track all unmapped sources
+unmapped_sources = set()
+skipped_cre_queues = set()
+skipped_invalid_owners = set()
 
 for lead in results:
     raw_source = lead.get("LeadSource")
-    name = lead.get("Name", "Unknown")
+    first_name = lead.get("FirstName", "")
+    last_name = lead.get("LastName", "")
+    lead_owner = lead.get("Owner", {}).get("Name") if lead.get("Owner") else None
     raw_phone = lead.get("Phone", "")
+    lead_status = lead.get("Status")
     created = lead.get("CreatedDate")
+    is_home_tr_booked = lead.get("Is_Home_TR_Booked__c", False)
+    branch = lead.get("Branch__c")
+    follow_up_remarks = lead.get("Last_3_Follow_Up_Remarks__c")
 
     if not raw_source or not raw_phone:
         continue
 
+    # Map source and sub_source
     source, sub_source = map_source_and_subsource(raw_source)
     if not source or not sub_source:
         unmapped_sources.add(raw_source)
+        continue
+
+    # Map CRE name - only process if valid CRE or queue
+    cre_name = map_cre_name(lead_owner)
+    
+    # Skip if no valid CRE mapping found (invalid owner)
+    if cre_name is None:
+        skipped_invalid_owners.add(lead_owner or 'No Owner')
+        continue
+    
+    # Skip if assigned to CRE queue
+    if cre_name in CRE_QUEUE_NAMES:
+        skipped_cre_queues.add(cre_name)
         continue
 
     phone = normalize_phone(raw_phone)
     if not phone:
         continue
 
+    # Combine first and last name
+    customer_name = f"{first_name} {last_name}".strip()
+    if not customer_name:
+        customer_name = "Unknown"
+
     try:
         created_date = datetime.fromisoformat(created.replace("Z", "+00:00")).date().isoformat()
     except Exception:
         continue
 
+    # Extract first follow-up remark
+    first_remark = extract_first_follow_up_remark(follow_up_remarks)
+
     if phone not in leads_by_phone:
         leads_by_phone[phone] = {
-            'name': name,
+            'name': customer_name,
             'phone': phone,
             'date': created_date,
-            'source': source,  # Will always be 'OEM'
-            'sub_sources': set()
+            'source': source,
+            'sub_sources': set(),
+            'cre_name': cre_name,
+            'first_remark': first_remark
         }
 
     leads_by_phone[phone]['sub_sources'].add(sub_source)
 
-# Report unmapped sources if any
+# Report unmapped sources, skipped CRE queues, and invalid owners
 if unmapped_sources:
     print(f"\n⚠️ WARNING: Found {len(unmapped_sources)} unmapped sources:")
     for source in sorted(unmapped_sources):
         print(f"   - {source}")
     print("   These leads were skipped. Please update the mapping function if needed.\n")
 
-print(f"📱 Found {len(leads_by_phone)} unique phone numbers")
+if skipped_cre_queues:
+    print(f"\n⚠️ Skipped leads assigned to CRE queues:")
+    for queue in sorted(skipped_cre_queues):
+        print(f"   - {queue}")
+    print("   These leads will be processed once assigned to actual CREs.\n")
+
+if skipped_invalid_owners:
+    print(f"\n⚠️ Skipped leads with invalid/unmapped owners:")
+    for owner in sorted(skipped_invalid_owners):
+        print(f"   - {owner}")
+    print("   These leads were skipped as they're not assigned to valid CREs.\n")
+
+print(f"📱 Found {len(leads_by_phone)} unique phone numbers with valid CRE assignments")
 
 if not leads_by_phone:
     print("❌ No valid leads to process")
@@ -426,6 +584,7 @@ if not leads_by_phone:
 # Convert to DataFrame format for duplicate processing
 processed_leads = []
 current_time = datetime.now().isoformat()
+today_date = datetime.now().date().isoformat()
 
 for phone, lead_data in leads_by_phone.items():
     combined_sub_source = ','.join(sorted(lead_data['sub_sources']))
@@ -434,19 +593,19 @@ for phone, lead_data in leads_by_phone.items():
         'date': lead_data['date'],
         'customer_name': lead_data['name'],
         'customer_mobile_number': phone,
-        'source': lead_data['source'],  # Always 'OEM'
+        'source': lead_data['source'],
         'sub_source': combined_sub_source,
-        'campaign': None,  # Will be preserved from existing records if any
-        'cre_name': None,
+        'campaign': None,
+        'cre_name': lead_data['cre_name'],
         'lead_category': None,
         'model_interested': None,
-        'branch': None,
+        'branch': None,  # Set to null instead of branch value
         'ps_name': None,
-        'assigned': 'No',
-        'lead_status': 'Pending',
+        'assigned': 'Yes' if lead_data['cre_name'] else 'No',
+        'lead_status': None,  # Set to null instead of mapped lead_status
         'follow_up_date': None,
-        'first_call_date': None,
-        'first_remark': None,
+        'first_call_date': today_date,  # Set first_call_date to today
+        'first_remark': lead_data['first_remark'],  # Only first follow-up remark
         'second_call_date': None,
         'second_remark': None,
         'third_call_date': None,
@@ -459,7 +618,7 @@ for phone, lead_data in leads_by_phone.items():
         'sixth_remark': None,
         'seventh_call_date': None,
         'seventh_remark': None,
-        'final_status': 'Pending',
+        'final_status': 'Pending',  # Always set to Pending as requested
         'created_at': current_time,
         'updated_at': current_time
     }
@@ -541,7 +700,9 @@ else:
     for row in new_leads_df.to_dict(orient="records"):
         try:
             supabase.table("lead_master").insert(row).execute()
-            print(f"✅ Inserted new lead: {row['uid']} | Phone: {row['customer_mobile_number']} | Sub-source: {row['sub_source']}")
+            print(f"✅ Inserted new lead: {row['uid']} | Phone: {row['customer_mobile_number']} | CRE: {row['cre_name']} | Sub-source: {row['sub_source']}")
+            if row['first_remark']:
+                print(f"   💬 First remark: {row['first_remark']}")
             if row['campaign']:
                 print(f"   📊 Campaign preserved: {row['campaign']}")
             successful_inserts += 1
@@ -557,14 +718,93 @@ print(f"\n📊 SUMMARY:")
 print(f"✅ New leads inserted: {len(new_leads_df) if not new_leads_df.empty else 0}")
 print(f"🔄 Duplicate records updated/created: {results['updated_duplicates']}")
 print(f"⚠️ Skipped exact duplicates: {results['skipped_duplicates']}")
+print(f"🔒 Skipped CRE queue assignments: {results['skipped_queue_leads']}")
 print(f"📱 Total records processed: {len(df_oem_leads)}")
 print(f"🎯 Source: OEM | Various sub-sources (Web, Tele, Affiliate Bikewale, etc.)")
 print(f"📊 Each lead processed individually with duplicate handling")
 print(f"🔄 Duplicates with other sources (META, GOOGLE, BTL, etc.) handled via duplicate_leads table")
-print(f"⏰ Time range: Past 15 minutes")
+print(f"👥 CRE assignments mapped and queue assignments skipped")
+print(f"📅 First call date set to today for all new leads")
+print(f"💬 Only first follow-up remark extracted and stored")
+print(f"🎯 Final status set to 'Pending' for CRE pending leads section")
+print(f"🏢 Branch field set to null (not mapped from Salesforce)")
+print(f"📊 Lead status field set to null (not mapped from Salesforce)")
+print(f"⏰ Time range: Past 24 hours")
+
+# CRE Assignment Summary
+if new_leads_df is not None and not new_leads_df.empty:
+    cre_summary = new_leads_df.groupby('cre_name').size().to_dict()
+    print(f"\n👥 CRE ASSIGNMENT SUMMARY:")
+    for cre, count in cre_summary.items():
+        print(f"   {cre}: {count} leads")
+
+# Follow-up remarks processing summary
+if new_leads_df is not None and not new_leads_df.empty:
+    remarks_with_data = new_leads_df[new_leads_df['first_remark'].notna()]
+    print(f"\n💬 FOLLOW-UP REMARKS SUMMARY:")
+    print(f"   Total leads with first remarks: {len(remarks_with_data)}")
+    print(f"   Total leads without remarks: {len(new_leads_df) - len(remarks_with_data)}")
+    
+    if len(remarks_with_data) > 0:
+        print(f"   Sample extracted remarks:")
+        for _, row in remarks_with_data.head(3).iterrows():
+            print(f"   - Phone: {row['customer_mobile_number']} | Remark: {row['first_remark'][:60]}...")
 
 # Final report on unmapped sources
 if unmapped_sources:
     print(f"\n⚠️ UNMAPPED SOURCES FOUND:")
     print(f"   {len(unmapped_sources)} unique unmapped sources were skipped")
     print(f"   Please review and update the mapping function if needed")
+
+# Final report on invalid owners
+if skipped_invalid_owners:
+    print(f"\n🚫 INVALID LEAD OWNERS SKIPPED:")
+    print(f"   {len(skipped_invalid_owners)} lead owners were not recognized as valid CREs")
+    print(f"   These leads were completely skipped:")
+    for owner in sorted(skipped_invalid_owners):
+        print(f"   - {owner}")
+    print(f"   Only leads assigned to these CREs are processed:")
+    print(f"   - Kumari B → Kumari")
+    print(f"   - Chippala Pelli Mounika → CHIPPALA PELLI MOUNIKA") 
+    print(f"   - Swapna P → PARAKALA SWAPNA")
+
+print(f"\n🎉 Sync completed successfully!")
+print(f"💡 All new leads are now available in CRE pending leads sections with:")
+print(f"   - Only valid CRE assignments processed (Kumari, CHIPPALA PELLI MOUNIKA, PARAKALA SWAPNA)")
+print(f"   - Invalid lead owners completely skipped")
+print(f"   - CRE queue assignments skipped until properly assigned")
+print(f"   - First call date set to today")
+print(f"   - Final status set to 'Pending'")
+print(f"   - Branch field set to null (not mapped from Salesforce)")
+print(f"   - Lead status field set to null (not mapped from Salesforce)")
+print(f"   - Only first follow-up remark extracted and stored in first_remark field")
+print(f"   - Smart parsing of numbered follow-up remarks (extracts only point 1)")
+
+# Debug information for CRE filtering
+print(f"\n🔍 CRE FILTERING DEBUG:")
+print(f"   Valid Salesforce CREs:")
+print(f"   - 'Kumari B' → 'Kumari'")
+print(f"   - 'Chippala Pelli Mounika' → 'CHIPPALA PELLI MOUNIKA'")
+print(f"   - 'Swapna P' → 'PARAKALA SWAPNA'")
+print(f"   Skipped CRE Queues:")
+print(f"   - CRE-Q-1090-HYD-Raam Electric Two Wheeler")
+print(f"   - CRE-Q-1237-HYD-RAAM ELECTRIC TWO WHEELER") 
+print(f"   - CRE-Q-1318-HYD-RAAM ELECTRIC TWO WHEELER")
+print(f"   Any other lead owner: COMPLETELY SKIPPED")
+
+# Debug information for follow-up remarks extraction
+print(f"\n🔍 FOLLOW-UP REMARKS EXTRACTION DEBUG:")
+print(f"   Function: extract_first_follow_up_remark()")
+print(f"   Pattern: Extracts text after '1. ' until ' 2.' or end of string")
+print(f"   Examples handled:")
+print(f"   Input:  '1. The CX Will Visit showroom on time and inform to carry DL 2. 3. Test Ride Booked'")
+print(f"   Output: 'The CX Will Visit showroom on time and inform to carry DL'")
+print(f"   Input:  '1. Customer interested in test ride 2. Will call back tomorrow'")
+print(f"   Output: 'Customer interested in test ride'")
+
+# Debug information for null field mapping
+print(f"\n🔍 NULL FIELD MAPPING DEBUG:")
+print(f"   Fields set to null in lead_master table:")
+print(f"   - branch: null (was previously mapped from Salesforce Branch__c)")
+print(f"   - lead_status: null (was previously mapped from Salesforce Status)")
+print(f"   These fields will be null for all new leads inserted into lead_master table")

@@ -1,14 +1,11 @@
 name: Daily Script Runner
 on:
   schedule:
-    - cron: '*/10 * * * *'  # Every 10 minutes - For Knowlarity and Meta scripts
-    - cron: '*/15 * * * *'  # Every 15 minutes - For Salesforce script
+    - cron: '*/5 * * * *'  # Every 5 minutes - For all scripts
   workflow_dispatch:
-
 jobs:
-  run-knowlarity-meta-scripts:
+  run-all-scripts:
     runs-on: ubuntu-latest
-    if: github.event.schedule == '*/10 * * * *' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
@@ -32,19 +29,6 @@ jobs:
           META_PAGE_ACCESS_TOKEN: ${{ secrets.META_PAGE_ACCESS_TOKEN }}
           PAGE_ID: ${{ secrets.PAGE_ID }}
         run: python metatosupabase.py
-
-  run-salesforce-script:
-    runs-on: ubuntu-latest
-    if: github.event.schedule == '*/15 * * * *' || github.event_name == 'workflow_dispatch'
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Install dependencies
-        run: pip install -r requirements.txt
       - name: Run syncsalesforcetosupabase.py
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
