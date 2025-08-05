@@ -1,11 +1,11 @@
-name: Auto-Assign Trigger
+name: Auto-Assign Trigger - Uday3 Branch
 on:
   schedule:
     - cron: '* * * * *'  # Every minute
   workflow_dispatch:  # Manual trigger
 
 jobs:
-  auto-assign-trigger:
+  auto-assign-trigger-uday3:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -19,10 +19,10 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
         
-      - name: Run Enhanced Auto-Assign Trigger
+      - name: Run Enhanced Auto-Assign Trigger (Uday3)
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL_UDAY3 }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_UDAY3 }}
           LOG_LEVEL: INFO
           GITHUB_ACTIONS: "true"
           CHECK_INTERVAL: "60"
@@ -31,5 +31,5 @@ jobs:
         
       - name: Log Results
         run: |
-          echo "✅ Auto-assign trigger completed at $(date)"
+          echo "✅ Enhanced auto-assign trigger completed at $(date) for Uday3 branch"
           echo "🔄 Next run in 1 minute" 
