@@ -209,6 +209,8 @@ def main():
     end_date = now.strftime("%Y-%m-%d")
     
     print(f"🔍 Fetching call logs from {start_date} to {end_date}")
+    print(f"🎯 Enhanced duplicate handling - new duplicates go to duplicate_leads table")
+    
     records = client.extract_records(client.get_call_logs(start_date, end_date))
     df = pd.DataFrame(records)
 
@@ -240,10 +242,15 @@ def main():
     # Check existing records in both tables
     master_records, duplicate_records = check_existing_leads(supabase, df_processed)
     
-    # Process each lead
+    # Process each lead with enhanced duplicate handling
     new_leads = []
     updated_duplicates = 0
     skipped_duplicates = 0
+    
+    print(f"\n🔄 Processing leads with duplicate handling logic:")
+    print(f"   • New phone numbers → lead_master")
+    print(f"   • Existing phones with new sources → duplicate_leads")
+    print(f"   • Exact source/sub_source matches → skipped")
     
     for _, row in df_processed.iterrows():
         phone = row['customer_mobile_number']
@@ -251,33 +258,41 @@ def main():
         current_sub_source = row['sub_source']
         current_date = row['date']
         
+        print(f"\n📱 Processing: {phone} | Source: {current_source} | Sub-source: {current_sub_source}")
+        
         # Check if phone exists in lead_master
         if phone in master_records:
             master_record = master_records[phone]
+            print(f"   📋 Found existing lead in lead_master: {master_record['uid']}")
             
             # Check if this is a duplicate source/sub_source combination
             if is_duplicate_source(master_record, current_source, current_sub_source):
-                print(f"⚠️ Skipping duplicate: {phone} | Source: {current_source} | Sub-source: {current_sub_source}")
+                print(f"   ⚠️ Exact duplicate - skipping (same source/sub_source combination)")
                 skipped_duplicates += 1
                 continue
+            
+            print(f"   🔄 Different source detected - handling as duplicate")
             
             # Check if already exists in duplicate_leads
             if phone in duplicate_records:
                 duplicate_record = duplicate_records[phone]
+                print(f"   📋 Found existing duplicate record: {duplicate_record['uid']}")
                 
                 # Check if this source/sub_source already exists in duplicate record
                 if is_duplicate_source(duplicate_record, current_source, current_sub_source):
-                    print(f"⚠️ Skipping duplicate: {phone} | Source: {current_source} | Sub-source: {current_sub_source}")
+                    print(f"   ⚠️ Source already exists in duplicate record - skipping")
                     skipped_duplicates += 1
                     continue
                 
                 # Add to existing duplicate record
+                print(f"   ➕ Adding new source to existing duplicate record")
                 if add_source_to_duplicate_record(supabase, duplicate_record, current_source, current_sub_source, current_date):
                     updated_duplicates += 1
                     # Update local duplicate_records to avoid conflicts in same batch
                     duplicate_records[phone]['duplicate_count'] += 1
             else:
                 # Create new duplicate record
+                print(f"   🆕 Creating new duplicate record")
                 if create_duplicate_record(supabase, master_record, current_source, current_sub_source, current_date):
                     updated_duplicates += 1
                     # Add to local duplicate_records to avoid conflicts in same batch
@@ -287,18 +302,20 @@ def main():
                         'source1': master_record['source'],
                         'source2': current_source,
                         'sub_source1': master_record['sub_source'],
-                        'sub_source2': current_sub_source
+                        'sub_source2': current_sub_source,
+                        'uid': master_record['uid']
                     }
         else:
             # Completely new lead - add to new_leads list
+            print(f"   🆕 New phone number - will add to lead_master")
             new_leads.append(row)
     
     # Process new leads
     if not new_leads:
-        print("✅ No new leads to insert.")
+        print("\n✅ No new leads to insert.")
     else:
         df_new = pd.DataFrame(new_leads)
-        print(f"🆕 Found {len(df_new)} new leads to insert")
+        print(f"\n🆕 Processing {len(df_new)} new leads for lead_master insertion")
         
         # Generate UIDs for new leads
         sequence = get_next_sequence_number(supabase)
@@ -343,25 +360,34 @@ def main():
         successful_inserts = 0
         failed_inserts = 0
         
+        print(f"\n📥 Inserting new leads into lead_master:")
         for row in df_new.to_dict(orient="records"):
             try:
                 supabase.table("lead_master").insert(row).execute()
-                print(f"✅ Inserted new lead: {row['uid']} | Phone: {row['customer_mobile_number']} | Source: {row['source']} | Sub-source: {row['sub_source']}")
+                print(f"   ✅ {row['uid']} | {row['customer_mobile_number']} | {row['source']} | {row['sub_source']}")
                 successful_inserts += 1
             except Exception as e:
-                print(f"❌ Failed to insert {row['uid']} | Phone: {row['customer_mobile_number']}: {e}")
+                print(f"   ❌ Failed {row['uid']} | {row['customer_mobile_number']}: {e}")
                 failed_inserts += 1
         
-        print(f"✅ Successfully inserted new leads: {successful_inserts}")
-        print(f"❌ Failed insertions: {failed_inserts}")
+        print(f"\n✅ Successfully inserted new leads: {successful_inserts}")
+        if failed_inserts > 0:
+            print(f"❌ Failed insertions: {failed_inserts}")
     
-    # Summary
-    print(f"\n📊 SUMMARY:")
-    print(f"✅ New leads inserted: {len(new_leads) if new_leads else 0}")
+    # Enhanced Summary
+    print(f"\n" + "="*60)
+    print(f"📊 KNOWLARITY SYNC SUMMARY - ENHANCED DUPLICATE HANDLING")
+    print(f"="*60)
+    print(f"🆕 New leads inserted into lead_master: {len(new_leads) if new_leads else 0}")
     print(f"🔄 Duplicate records updated/created: {updated_duplicates}")
     print(f"⚠️ Skipped exact duplicates: {skipped_duplicates}")
     print(f"📱 Total records processed: {len(df_processed)}")
-    print(f"📊 No source consolidation - each lead maintains individual source/sub_source")
+    print(f"🎯 Source mapping: Google Know, Meta Know, BTL Know")
+    print(f"📋 Duplicate handling:")
+    print(f"   • New phones → lead_master")
+    print(f"   • Duplicate phones + different sources → duplicate_leads")
+    print(f"   • Exact source/sub_source matches → skipped")
+    print(f"="*60)
 
 if __name__ == "__main__":
-    main()  
+    main()
