@@ -1138,11 +1138,7 @@
         return false;
       } else {
         // No duplicate found, proceed with form submission
-        console.log('✅ No duplicate found, proceeding with form submission');
-        // Trigger the form submission event manually to use the fetch-based submission
-        const form = document.getElementById('addLeadForm');
-        const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
-        form.dispatchEvent(submitEvent);
+        document.getElementById('addLeadForm').submit();
         return true;
       }
     } catch (error) {

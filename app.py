@@ -2414,7 +2414,7 @@ def add_lead_with_cre():
             'final_status': 'Pending',
             'cre_name': cre_name,
             'lead_status': 'Pending',
-            'lead_category': 'Cold',  # Default category
+            'lead_category': None,  # Keep as null for assign leads page
             'cre_assigned_at': datetime.now().isoformat() if cre_name else None,
             'created_at': datetime.now().isoformat(),
             'updated_at': datetime.now().isoformat()
@@ -7148,48 +7148,58 @@ def api_export_branch_leads():
             # Export PS leads from ps_followup_master
             try:
                 leads_data = []
+                print(f"🔍 Exporting PS leads for branch: {branch}, date range: {date_from} to {date_to}")
+                
                 # Try different date formats
                 for start_format in format_date_for_query(date_from):
                     for end_format in format_date_for_query(date_to):
                         try:
-                            # Try to filter by branch first, then fallback to ps_branch
-                            query = supabase.table('ps_followup_master').select('*').eq('branch', branch).gte('created_at', start_format).lte('created_at', end_format)
+                            # PS table uses ps_branch, not branch
+                            # Use ps_assigned_at for PS leads filtering - ONLY export leads with ps_assigned_at timestamps
+                            query = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).not_.is_('ps_assigned_at', 'null').gte('ps_assigned_at', start_format).lte('ps_assigned_at', end_format)
                             result = query.execute()
                             if result.data:
                                 leads_data = result.data
+                                print(f"✅ Found {len(leads_data)} PS leads with ps_branch + ps_assigned_at filter")
                                 break
                             else:
-                                # Fallback to ps_branch if no results with branch
-                                query = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).gte('created_at', start_format).lte('created_at', end_format)
-                                result = query.execute()
-                                if result.data:
-                                    leads_data = result.data
-                                    break
+                                print(f"⚠️ No PS leads found with ps_assigned_at between {start_format} and {end_format}")
+                                continue
                         except Exception as e:
+                            print(f"❌ Error with date format {start_format} to {end_format}: {e}")
                             continue
                     if leads_data:
                         break
                 
-                # Format data for CSV
+                # Format data for CSV - only include leads with ps_assigned_at
+                print(f"📊 Formatting {len(leads_data)} PS leads for CSV export")
                 for lead in leads_data:
-                    csv_data.append({
-                        'Lead UID': lead.get('lead_uid', ''),
-                        'Customer Name': lead.get('customer_name', ''),
-                        'Mobile Number': lead.get('customer_mobile_number', ''),
-                        'Source': lead.get('source', ''),
-                        'Lead Category': lead.get('lead_category', 'Not Set'),
-                        'PS Name': lead.get('ps_name', ''),
-                        'CRE Name': lead.get('cre_name', ''),
-                        'Branch': lead.get('branch') or lead.get('ps_branch', ''),
-                        'Final Status': lead.get('final_status', ''),
-                        'Lead Status': lead.get('lead_status', ''),
-                        'Model Interested': lead.get('model_interested', ''),
-                        'Follow Up Date': lead.get('follow_up_date', ''),
-                        'Created At': lead.get('created_at', ''),
-                        'Updated At': lead.get('updated_at', '')
-                    })
+                    # Only include leads that have ps_assigned_at timestamp
+                    if lead.get('ps_assigned_at'):
+                        csv_data.append({
+                            'Lead UID': lead.get('lead_uid', ''),
+                            'Customer Name': lead.get('customer_name', ''),
+                            'Mobile Number': lead.get('customer_mobile_number', ''),
+                            'Source': lead.get('source', ''),
+                            'Lead Category': lead.get('lead_category', 'Not Set'),
+                            'PS Name': lead.get('ps_name', ''),
+                            'CRE Name': lead.get('cre_name', ''),
+                            'Branch': lead.get('branch') or lead.get('ps_branch', ''),
+                            'Final Status': lead.get('final_status', ''),
+                            'Lead Status': lead.get('lead_status', ''),
+                            'Model Interested': lead.get('model_interested', ''),
+                            'Follow Up Date': lead.get('follow_up_date', ''),
+                            'PS Assigned At': lead.get('ps_assigned_at', ''),
+                            'Created At': lead.get('created_at', ''),
+                            'Updated At': lead.get('updated_at', '')
+                        })
+                    else:
+                        print(f"⚠️ Skipping lead {lead.get('lead_uid', 'N/A')} - no ps_assigned_at timestamp")
+                print(f"✅ Successfully formatted {len(csv_data)} PS leads for export")
             except Exception as e:
-                print(f"Error fetching PS leads: {str(e)}")
+                print(f"❌ Error fetching PS leads: {str(e)}")
+                import traceback
+                traceback.print_exc()
                 return jsonify({'success': False, 'message': f'Error fetching PS leads: {str(e)}'}), 500
                 
         elif lead_type == 'Walkin':
@@ -7281,22 +7291,45 @@ def api_export_branch_leads():
         import csv
         import io
         
+        print(f"📊 Creating CSV with {len(csv_data)} rows")
+        
         output = io.StringIO()
         if csv_data:
-            fieldnames = csv_data[0].keys()
-            writer = csv.DictWriter(output, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(csv_data)
+            try:
+                fieldnames = csv_data[0].keys()
+                print(f"📋 CSV fieldnames: {list(fieldnames)}")
+                writer = csv.DictWriter(output, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(csv_data)
+                print("✅ CSV content created successfully")
+            except Exception as e:
+                print(f"❌ Error creating CSV: {e}")
+                import traceback
+                traceback.print_exc()
+                return jsonify({'success': False, 'message': f'Error creating CSV: {str(e)}'}), 500
+        else:
+            print("❌ No CSV data to export")
+            return jsonify({'success': False, 'message': 'No data found for the specified criteria'}), 404
         
         # Create response
         from flask import Response
-        response = Response(
-            output.getvalue(),
-            mimetype='text/csv',
-            headers={'Content-Disposition': f'attachment; filename={lead_type}_leads_{date_from}_to_{date_to}_{branch}.csv'}
-        )
-        
-        return response
+        try:
+            csv_content = output.getvalue()
+            print(f"📄 CSV content length: {len(csv_content)} characters")
+            
+            response = Response(
+                csv_content,
+                mimetype='text/csv',
+                headers={'Content-Disposition': f'attachment; filename={lead_type}_leads_{date_from}_to_{date_to}_{branch}.csv'}
+            )
+            
+            print("✅ Response created successfully")
+            return response
+        except Exception as e:
+            print(f"❌ Error creating response: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'message': f'Error creating response: {str(e)}'}), 500
         
     except Exception as e:
         return jsonify({'success': False, 'message': f'Export failed: {str(e)}'}), 500
