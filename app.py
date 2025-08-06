@@ -84,8 +84,16 @@ def is_valid_uid(uid):
 app.jinja_env.filters['tojsonfilter'] = to_json
 
 # Get environment variables with fallback values for testing
-SUPABASE_URL = os.environ.get('SUPABASE_URL')
-SUPABASE_KEY = os.environ.get('SUPABASE_ANON_KEY')
+# Auto-detect environment and use appropriate database credentials
+SUPABASE_URL = os.environ.get('SUPABASE_URL_UDAY3') or os.environ.get('SUPABASE_URL')
+SUPABASE_KEY = os.environ.get('SUPABASE_ANON_KEY_UDAY3') or os.environ.get('SUPABASE_ANON_KEY')
+
+# Log which environment we're using
+if os.environ.get('SUPABASE_URL_UDAY3'):
+    print("🔧 Using Uday3 database credentials")
+else:
+    print("🔧 Using main database credentials")
+
 SECRET_KEY = os.environ.get('FLASK_SECRET_KEY', 'fallback-secret-key-change-this')
 
 # Email configuration (add these to your .env file)
@@ -1291,6 +1299,28 @@ def upload_data():
                                     cre_name = fairest_cre['name']
                                     cre_assigned_at = datetime.now().isoformat()
                                     auto_assigned_count += 1
+                                    
+                                    # Log auto-assignment to history
+                                    try:
+                                        history_data = {
+                                            'lead_uid': uid,
+                                            'source': source,
+                                            'assigned_cre_id': fairest_cre['id'],
+                                            'assigned_cre_name': cre_name,
+                                            'cre_total_leads_before': fairest_cre.get('auto_assign_count', 0),
+                                            'cre_total_leads_after': fairest_cre.get('auto_assign_count', 0) + 1,
+                                            'assignment_method': 'fair_distribution',
+                                            'created_at': datetime.now().isoformat()
+                                        }
+                                        
+                                        supabase.table('auto_assign_history').insert(history_data).execute()
+                                        
+                                        # Update CRE auto_assign_count
+                                        supabase.table('cre_users').update({'auto_assign_count': fairest_cre.get('auto_assign_count', 0) + 1}).eq('id', fairest_cre['id']).execute()
+                                        
+                                        print(f"✅ Logged auto-assignment to auto_assign_history: {uid} -> {cre_name}")
+                                    except Exception as e:
+                                        print(f"❌ Error logging auto-assignment: {e}")
                                 else:
                                     # Fallback to round-robin if fair distribution fails
                                     cre_index = len(leads_to_insert) % len(cres)
@@ -1299,6 +1329,28 @@ def upload_data():
                                     cre_name = selected_cre['name']
                                     cre_assigned_at = datetime.now().isoformat()
                                     auto_assigned_count += 1
+                                    
+                                    # Log fallback auto-assignment to history
+                                    try:
+                                        history_data = {
+                                            'lead_uid': uid,
+                                            'source': source,
+                                            'assigned_cre_id': selected_cre['id'],
+                                            'assigned_cre_name': cre_name,
+                                            'cre_total_leads_before': selected_cre.get('auto_assign_count', 0),
+                                            'cre_total_leads_after': selected_cre.get('auto_assign_count', 0) + 1,
+                                            'assignment_method': 'round_robin_fallback',
+                                            'created_at': datetime.now().isoformat()
+                                        }
+                                        
+                                        supabase.table('auto_assign_history').insert(history_data).execute()
+                                        
+                                        # Update CRE auto_assign_count
+                                        supabase.table('cre_users').update({'auto_assign_count': selected_cre.get('auto_assign_count', 0) + 1}).eq('id', selected_cre['id']).execute()
+                                        
+                                        print(f"✅ Logged fallback auto-assignment to auto_assign_history: {uid} -> {cre_name}")
+                                    except Exception as e:
+                                        print(f"❌ Error logging fallback auto-assignment: {e}")
                             except Exception as e:
                                 print(f"⚠️ Enhanced auto-assign failed, using fallback: {e}")
                                 # Fallback to round-robin
@@ -1308,6 +1360,28 @@ def upload_data():
                                 cre_name = selected_cre['name']
                                 cre_assigned_at = datetime.now().isoformat()
                                 auto_assigned_count += 1
+                                
+                                # Log exception fallback auto-assignment to history
+                                try:
+                                    history_data = {
+                                        'lead_uid': uid,
+                                        'source': source,
+                                        'assigned_cre_id': selected_cre['id'],
+                                        'assigned_cre_name': cre_name,
+                                        'cre_total_leads_before': selected_cre.get('auto_assign_count', 0),
+                                        'cre_total_leads_after': selected_cre.get('auto_assign_count', 0) + 1,
+                                        'assignment_method': 'exception_fallback',
+                                        'created_at': datetime.now().isoformat()
+                                    }
+                                    
+                                    supabase.table('auto_assign_history').insert(history_data).execute()
+                                    
+                                    # Update CRE auto_assign_count
+                                    supabase.table('cre_users').update({'auto_assign_count': selected_cre.get('auto_assign_count', 0) + 1}).eq('id', selected_cre['id']).execute()
+                                    
+                                    print(f"✅ Logged exception fallback auto-assignment to auto_assign_history: {uid} -> {cre_name}")
+                                except Exception as e2:
+                                    print(f"❌ Error logging exception fallback auto-assignment: {e2}")
 
                         # Parse and format the date properly
                         date_str = str(row['date']).strip()
@@ -2617,10 +2691,33 @@ def add_lead_with_cre():
                 print(f"No valid CREs found for auto-assign configuration in {source}")
         elif assigned_cre_id:
             # Manual assignment
-            cre_data = supabase.table('cre_users').select('name').eq('id', assigned_cre_id).execute()
+            cre_data = supabase.table('cre_users').select('name, auto_assign_count').eq('id', assigned_cre_id).execute()
             if cre_data.data:
                 cre_name = cre_data.data[0]['name']
+                current_count = cre_data.data[0].get('auto_assign_count', 0)
                 print(f"Manually assigned lead to {cre_name}")
+                
+                # Log manual CRE assignment to auto_assign_history
+                try:
+                    history_data = {
+                        'lead_uid': uid,
+                        'source': source,
+                        'assigned_cre_id': assigned_cre_id,
+                        'assigned_cre_name': cre_name,
+                        'cre_total_leads_before': current_count,
+                        'cre_total_leads_after': current_count + 1,
+                        'assignment_method': 'manual_assignment',
+                        'created_at': datetime.now().isoformat()
+                    }
+                    
+                    supabase.table('auto_assign_history').insert(history_data).execute()
+                    
+                    # Update CRE auto_assign_count
+                    supabase.table('cre_users').update({'auto_assign_count': current_count + 1}).eq('id', assigned_cre_id).execute()
+                    
+                    print(f"✅ Logged manual CRE assignment to auto_assign_history: {uid} -> {cre_name}")
+                except Exception as e:
+                    print(f"❌ Error logging manual CRE assignment: {e}")
             else:
                 return jsonify({'success': False, 'message': 'Invalid CRE selected'})
         else:
@@ -2954,7 +3051,32 @@ def update_lead(uid):
                     updated_lead_data = {**lead_data, **update_data}
                     create_or_update_ps_followup(updated_lead_data, ps_name, ps_user['branch'])
 
-                # Send email to PS
+                    # Log auto-assign history for manual PS assignment
+                    try:
+                        # Get PS data (ps_users table doesn't have auto_assign_count column)
+                        ps_result = supabase.table('ps_users').select('id').eq('name', ps_name).execute()
+                        if ps_result.data:
+                            ps_data = ps_result.data[0]
+                            
+                            # Insert into auto_assign_history (using 0 for PS since they don't track auto_assign_count)
+                            history_data = {
+                                'lead_uid': uid,
+                                'source': lead_data.get('source', 'MANUAL'),
+                                'assigned_cre_id': ps_data['id'],
+                                'assigned_cre_name': ps_name,
+                                'cre_total_leads_before': 0,
+                                'cre_total_leads_after': 0,
+                                'assignment_method': 'manual_assignment',
+                                'created_at': datetime.now().isoformat()
+                            }
+                            
+                            supabase.table('auto_assign_history').insert(history_data).execute()
+                            
+                            print(f"✅ Logged manual PS assignment to auto_assign_history: {uid} -> {ps_name}")
+                    except Exception as e:
+                        print(f"❌ Error logging manual PS assignment: {e}")
+
+                    # Send email to PS
                 try:
                     if ps_user:
                         lead_data_for_email = {**lead_data, **update_data}
@@ -4035,6 +4157,31 @@ def update_lead_optimized(uid):
                 ps_user = next((ps for ps in ps_users if ps['name'] == ps_name), None)
                 if ps_user:
                     create_or_update_ps_followup(lead_data, ps_name, ps_user['branch'])
+
+                    # Log auto-assign history for manual PS assignment
+                    try:
+                        # Get PS data (ps_users table doesn't have auto_assign_count column)
+                        ps_result = supabase.table('ps_users').select('id').eq('name', ps_name).execute()
+                        if ps_result.data:
+                            ps_data = ps_result.data[0]
+                            
+                            # Insert into auto_assign_history (using 0 for PS since they don't track auto_assign_count)
+                            history_data = {
+                                'lead_uid': uid,
+                                'source': lead_data.get('source', 'MANUAL'),
+                                'assigned_cre_id': ps_data['id'],
+                                'assigned_cre_name': ps_name,
+                                'cre_total_leads_before': 0,
+                                'cre_total_leads_after': 0,
+                                'assignment_method': 'manual_assignment',
+                                'created_at': datetime.now().isoformat()
+                            }
+                            
+                            supabase.table('auto_assign_history').insert(history_data).execute()
+                            
+                            print(f"✅ Logged manual PS assignment to auto_assign_history: {uid} -> {ps_name}")
+                    except Exception as e:
+                        print(f"❌ Error logging manual PS assignment: {e}")
 
                     # Send email notification (non-blocking)
                     try:

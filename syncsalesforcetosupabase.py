@@ -14,8 +14,15 @@ load_dotenv()
 SF_USERNAME = os.getenv('SF_USERNAME')
 SF_PASSWORD = os.getenv('SF_PASSWORD')
 SF_SECURITY_TOKEN = os.getenv('SF_SECURITY_TOKEN')
-SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_KEY = os.getenv('SUPABASE_ANON_KEY')
+# Auto-detect environment and use appropriate database credentials
+SUPABASE_URL = os.getenv('SUPABASE_URL_UDAY3') or os.getenv('SUPABASE_URL')
+SUPABASE_KEY = os.getenv('SUPABASE_ANON_KEY_UDAY3') or os.getenv('SUPABASE_ANON_KEY')
+
+# Log which environment we're using
+if os.getenv('SUPABASE_URL_UDAY3'):
+    print("🔧 Using Uday3 database credentials")
+else:
+    print("🔧 Using main database credentials")
 
 sf = Salesforce(username=SF_USERNAME, password=SF_PASSWORD, security_token=SF_SECURITY_TOKEN)
 print("✅ Connected to Salesforce")

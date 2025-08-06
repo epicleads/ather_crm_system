@@ -40,8 +40,16 @@ from supabase import create_client, Client
 load_dotenv()
 
 # Initialize Supabase client
-supabase_url = os.getenv('SUPABASE_URL')
-supabase_key = os.getenv('SUPABASE_ANON_KEY')
+# Auto-detect environment and use appropriate database credentials
+supabase_url = os.getenv('SUPABASE_URL_UDAY3') or os.getenv('SUPABASE_URL')
+supabase_key = os.getenv('SUPABASE_ANON_KEY_UDAY3') or os.getenv('SUPABASE_ANON_KEY')
+
+# Log which environment we're using
+if os.getenv('SUPABASE_URL_UDAY3'):
+    print("🔧 Using Uday3 database credentials")
+else:
+    print("🔧 Using main database credentials")
+
 supabase: Client = create_client(supabase_url, supabase_key)
 
 # IST Timezone for Indian Standard Time

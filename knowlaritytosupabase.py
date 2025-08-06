@@ -7,8 +7,17 @@ from supabase import create_client, Client
 
 # Load .env credentials
 load_dotenv()
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY")
+
+# Auto-detect environment and use appropriate database credentials
+SUPABASE_URL = os.getenv('SUPABASE_URL_UDAY3') or os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv('SUPABASE_ANON_KEY_UDAY3') or os.getenv("SUPABASE_ANON_KEY")
+
+# Log which environment we're using
+if os.getenv('SUPABASE_URL_UDAY3'):
+    print("🔧 Using Uday3 database credentials")
+else:
+    print("🔧 Using main database credentials")
+
 KNOW_SR_KEY = os.getenv("KNOW_SR_KEY")
 KNOW_X_API_KEY = os.getenv("KNOW_X_API_KEY")
 
