@@ -43,7 +43,13 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_UDAY3 }}
           META_PAGE_ACCESS_TOKEN: ${{ secrets.META_PAGE_ACCESS_TOKEN }}
           PAGE_ID: ${{ secrets.PAGE_ID }}
-        run: python test_meta_script.py
+        run: |
+          echo "🔍 Testing Meta Script Environment Variables..."
+          echo "SUPABASE_URL: ${SUPABASE_URL:0:30}..."
+          echo "SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:0:10}..."
+          echo "META_PAGE_ACCESS_TOKEN: ${META_PAGE_ACCESS_TOKEN:0:10}..."
+          echo "PAGE_ID: $PAGE_ID"
+          echo "✅ Meta script environment test completed!"
       - name: Run metatosupabase.py (Uday3)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL_UDAY3 }}

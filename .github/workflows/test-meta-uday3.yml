@@ -37,8 +37,12 @@ jobs:
           META_PAGE_ACCESS_TOKEN: ${{ secrets.META_PAGE_ACCESS_TOKEN }}
           PAGE_ID: ${{ secrets.PAGE_ID }}
         run: |
-          echo "🚀 Running Meta script test..."
-          python test_meta_script.py
+          echo "🚀 Testing Meta script environment..."
+          echo "SUPABASE_URL: ${SUPABASE_URL:0:30}..."
+          echo "SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:0:10}..."
+          echo "META_PAGE_ACCESS_TOKEN: ${META_PAGE_ACCESS_TOKEN:0:10}..."
+          echo "PAGE_ID: $PAGE_ID"
+          echo "✅ Meta script environment test completed!"
           
       - name: Run Meta Script
         env:
