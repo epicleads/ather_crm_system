@@ -111,6 +111,7 @@
                     <option value="Call Disconnected" {{ 'selected' if lead.lead_status == 'Call Disconnected' else '' }}>Call Disconnected</option>
                     <option value="Lead Already Assigned" {{ 'selected' if lead.lead_status == 'Lead Already Assigned' else '' }}>Lead Already Assigned</option>
                     <option value="Wrong Number" {{ 'selected' if lead.lead_status == 'Wrong Number' else '' }}>Wrong Number</option>
+                    <option value="Out of Station" {{ 'selected' if lead.lead_status == 'Out of Station' else '' }}>Out of Station</option>
                 </select>
             </div>
         </div>
@@ -326,6 +327,7 @@
                                 <option value="Lost to Competition" {{ 'selected' if lead.lead_status == 'Lost to Competition' else '' }}>Lost to Competition</option>
                                 <option value="Finance Rejected" {{ 'selected' if lead.lead_status == 'Finance Rejected' else '' }}>Finance Rejected</option>
                                 <option value="Dropped" {{ 'selected' if lead.lead_status == 'Dropped' else '' }}>Dropped</option>
+                                <option value="Out of Station" {{ 'selected' if lead.lead_status == 'Out of Station' else '' }}>Out of Station</option>
                             </select>
                         </div>
                     </div>
