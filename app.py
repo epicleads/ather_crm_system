@@ -60,9 +60,7 @@ log = logging.getLogger('werkzeug')
 log.setLevel(logging.WARNING)
 
 # Add custom Jinja2 filters
-@app.template_filter('tojson')
-def to_json(value):
-    return json.dumps(value)
+# Note: Using Flask's built-in tojson filter instead of custom one
 
 # Utility functions
 def is_valid_date(date_string):
@@ -81,7 +79,7 @@ def is_valid_uid(uid):
     return True
 
 
-app.jinja_env.filters['tojsonfilter'] = to_json
+# Using Flask's built-in tojson filter
 
 # Get environment variables with fallback values for testing
 SUPABASE_URL = os.environ.get('SUPABASE_URL')
@@ -9426,6 +9424,411 @@ def api_branch_analytics_summary():
     except Exception as e:
         print(f"Error in branch summary API: {str(e)}")
         return jsonify({'success': False, 'message': 'Error loading branch summary data'})
+
+@app.route('/lead_transfer')
+@require_admin
+def lead_transfer():
+    """Lead Transfer Dashboard for Admin"""
+    try:
+        # Get all branches
+        branches = get_all_branches()
+        
+        return render_template('lead_transfer.html', branches=branches)
+    except Exception as e:
+        print(f"Error in lead_transfer: {str(e)}")
+        return render_template('lead_transfer.html', branches=[])
+
+@app.route('/api/cre_pending_leads')
+@require_admin
+def api_cre_pending_leads():
+    """API to get pending leads summary for CRE transfer from lead_master only"""
+    try:
+        # Get all pending leads from lead_master grouped by CRE only
+        lead_result = supabase.table('lead_master').select('cre_name').eq('final_status', 'Pending').execute()
+        lead_pending_leads = lead_result.data if lead_result.data else []
+        
+        # Group leads by CRE and count them from lead_master only
+        cre_summary = {}
+        
+        # Count from lead_master only
+        for lead in lead_pending_leads:
+            cre_name = lead.get('cre_name', 'Unassigned')
+            if cre_name not in cre_summary:
+                cre_summary[cre_name] = 0
+            cre_summary[cre_name] += 1
+        
+        # Format the data for display (exclude Unassigned leads)
+        formatted_summary = []
+        for cre_name, count in cre_summary.items():
+            # Skip unassigned leads
+            if cre_name and cre_name != 'Unassigned' and cre_name != 'null':
+                formatted_summary.append({
+                    'cre_name': cre_name,
+                    'pending_count': count
+                })
+        
+        return jsonify({'success': True, 'data': formatted_summary})
+    except Exception as e:
+        print(f"Error in api_cre_pending_leads: {str(e)}")
+        return jsonify({'success': False, 'message': 'Error fetching pending leads'})
+
+@app.route('/api/ps_pending_leads')
+@require_admin
+def api_ps_pending_leads():
+    """API to get pending leads summary for PS transfer from multiple tables"""
+    try:
+        # Get branch filter from request
+        branch_filter = request.args.get('branch', '')
+        
+        # Build query for ps_followup_master
+        ps_followup_query = supabase.table('ps_followup_master').select('ps_name, ps_branch').eq('final_status', 'Pending')
+        if branch_filter:
+            ps_followup_query = ps_followup_query.eq('ps_branch', branch_filter)
+        
+        ps_followup_result = ps_followup_query.execute()
+        ps_followup_leads = ps_followup_result.data if ps_followup_result.data else []
+        
+        # Get pending leads from walkin_table where status is 'Pending' (if table exists)
+        walkin_leads = []
+        try:
+            walkin_query = supabase.table('walkin_table').select('ps_assigned, branch').eq('status', 'Pending')
+            if branch_filter:
+                walkin_query = walkin_query.eq('branch', branch_filter)
+            walkin_result = walkin_query.execute()
+            walkin_leads = walkin_result.data if walkin_result.data else []
+        except Exception as e:
+            print(f"Warning: walkin_table not found or error: {str(e)}")
+            walkin_leads = []
+        
+        # Get pending leads from activity_leads where final_status is 'Pending' (if table exists)
+        activity_leads = []
+        try:
+            activity_query = supabase.table('activity_leads').select('ps_name, location').eq('final_status', 'Pending')
+            if branch_filter:
+                activity_query = activity_query.eq('location', branch_filter)
+            activity_result = activity_query.execute()
+            activity_leads = activity_result.data if activity_result.data else []
+        except Exception as e:
+            print(f"Warning: activity_leads table not found or error: {str(e)}")
+            activity_leads = []
+        
+        # Group leads by PS and count them from all tables
+        ps_summary = {}
+        
+        # Count from ps_followup_master
+        for lead in ps_followup_leads:
+            ps_name = lead.get('ps_name', 'Unassigned')
+            ps_branch = lead.get('ps_branch', '')
+            key = f"{ps_name}|{ps_branch}"
+            if key not in ps_summary:
+                ps_summary[key] = {
+                    'ps_name': ps_name,
+                    'ps_branch': ps_branch,
+                    'ps_followup_count': 0,
+                    'walkin_count': 0,
+                    'activity_count': 0,
+                    'total_count': 0
+                }
+            ps_summary[key]['ps_followup_count'] += 1
+            ps_summary[key]['total_count'] += 1
+        
+        # Count from walkin_table
+        for lead in walkin_leads:
+            ps_name = lead.get('ps_assigned', 'Unassigned')  # Changed from ps_name to ps_assigned
+            ps_branch = lead.get('branch', '')
+            key = f"{ps_name}|{ps_branch}"
+            if key not in ps_summary:
+                ps_summary[key] = {
+                    'ps_name': ps_name,
+                    'ps_branch': ps_branch,
+                    'ps_followup_count': 0,
+                    'walkin_count': 0,
+                    'activity_count': 0,
+                    'total_count': 0
+                }
+            ps_summary[key]['walkin_count'] += 1
+            ps_summary[key]['total_count'] += 1
+        
+        # Count from activity_leads
+        for lead in activity_leads:
+            ps_name = lead.get('ps_name', 'Unassigned')
+            ps_branch = lead.get('location', '')  # location is branch in activity_leads
+            key = f"{ps_name}|{ps_branch}"
+            if key not in ps_summary:
+                ps_summary[key] = {
+                    'ps_name': ps_name,
+                    'ps_branch': ps_branch,
+                    'ps_followup_count': 0,
+                    'walkin_count': 0,
+                    'activity_count': 0,
+                    'total_count': 0
+                }
+            ps_summary[key]['activity_count'] += 1
+            ps_summary[key]['total_count'] += 1
+        
+        # Format the data for display (exclude Unassigned leads)
+        formatted_summary = []
+        for key, summary in ps_summary.items():
+            # Skip unassigned leads
+            if summary['ps_name'] and summary['ps_name'] != 'Unassigned' and summary['ps_name'] != 'null':
+                formatted_summary.append(summary)
+        
+        return jsonify({'success': True, 'data': formatted_summary})
+    except Exception as e:
+        print(f"Error in api_ps_pending_leads: {str(e)}")
+        return jsonify({'success': False, 'message': 'Error fetching pending leads'})
+
+@app.route('/api/transfer_cre_lead', methods=['POST'])
+@require_admin
+def api_transfer_cre_lead():
+    """API to transfer CRE lead to another CRE"""
+    try:
+        data = request.get_json()
+        lead_uid = data.get('lead_uid')
+        new_cre_name = data.get('new_cre_name')
+        
+        if not lead_uid or not new_cre_name:
+            return jsonify({'success': False, 'message': 'Missing required parameters'})
+        
+        # Verify the CRE exists and is active, and get the name
+        cre_result = supabase.table('cre_users').select('name, username').eq('username', new_cre_name).eq('is_active', True).execute()
+        if not cre_result.data:
+            return jsonify({'success': False, 'message': 'CRE not found or inactive'})
+        
+        # Get the target CRE's name (not username)
+        target_cre_name = cre_result.data[0].get('name')
+        
+        # Update the lead in lead_master
+        lead_result = supabase.table('lead_master').update({'cre_name': target_cre_name}).eq('uid', lead_uid).execute()
+        
+        # Update the lead in ps_followup_master if it exists there
+        ps_followup_result = supabase.table('ps_followup_master').update({'cre_name': target_cre_name}).eq('lead_uid', lead_uid).execute()
+        
+        if lead_result.data or ps_followup_result.data:
+            return jsonify({'success': True, 'message': 'Lead transferred successfully'})
+        else:
+            return jsonify({'success': False, 'message': 'Lead not found or transfer failed'})
+            
+    except Exception as e:
+        print(f"Error in api_transfer_cre_lead: {str(e)}")
+        return jsonify({'success': False, 'message': 'Error transferring lead'})
+
+@app.route('/api/bulk_transfer_cre_leads', methods=['POST'])
+@require_admin
+def api_bulk_transfer_cre_leads():
+    """API to bulk transfer all pending leads from one CRE to another"""
+    try:
+        data = request.get_json()
+        from_cre_name = data.get('from_cre_name')
+        to_cre_name = data.get('to_cre_name')
+        
+        if not from_cre_name or not to_cre_name:
+            return jsonify({'success': False, 'message': 'Missing required parameters'})
+        
+        if from_cre_name == to_cre_name:
+            return jsonify({'success': False, 'message': 'Cannot transfer to the same CRE'})
+        
+        # Verify the target CRE exists and is active, and get the name
+        cre_result = supabase.table('cre_users').select('name, username').eq('username', to_cre_name).eq('is_active', True).execute()
+        if not cre_result.data:
+            return jsonify({'success': False, 'message': 'Target CRE not found or inactive'})
+        
+        # Get the target CRE's name (not username)
+        target_cre_name = cre_result.data[0].get('name')
+        
+        # Update all pending leads from the source CRE to the target CRE in lead_master
+        lead_result = supabase.table('lead_master').update({'cre_name': target_cre_name}).eq('cre_name', from_cre_name).eq('final_status', 'Pending').execute()
+        
+        # Update all pending leads from the source CRE to the target CRE in ps_followup_master
+        ps_followup_result = supabase.table('ps_followup_master').update({'cre_name': target_cre_name}).eq('cre_name', from_cre_name).eq('final_status', 'Pending').execute()
+        
+        # Count transferred leads from lead_master only (for display purposes)
+        lead_count = len(lead_result.data) if lead_result.data else 0
+        
+        if lead_count > 0:
+            return jsonify({
+                'success': True, 
+                'message': f'Pending Lead Transfer Successful - {lead_count} leads transferred from {from_cre_name} to {to_cre_name}'
+            })
+        else:
+            return jsonify({'success': False, 'message': 'No leads found to transfer'})
+            
+    except Exception as e:
+        print(f"Error in api_bulk_transfer_cre_leads: {str(e)}")
+        return jsonify({'success': False, 'message': 'Error transferring leads'})
+
+@app.route('/api/transfer_options')
+@require_admin
+def api_transfer_options():
+    """API to get transfer options (CRE and PS lists)"""
+    try:
+        # Get all CREs for transfer options - CRE doesn't have branch
+        cre_result = supabase.table('cre_users').select('id, name, username, email, phone, is_active').eq('is_active', True).execute()
+        cre_options = cre_result.data if cre_result.data else []
+        
+        # Get all PS for transfer options - PS has branch
+        ps_result = supabase.table('ps_users').select('id, name, username, email, phone, branch, is_active').eq('is_active', True).execute()
+        ps_options = ps_result.data if ps_result.data else []
+        
+        # Sanitize the data to ensure no problematic characters
+        for cre in cre_options:
+            if isinstance(cre.get('name'), str):
+                cre['name'] = cre['name'].strip()
+            if isinstance(cre.get('username'), str):
+                cre['username'] = cre['username'].strip()
+                
+        for ps in ps_options:
+            if isinstance(ps.get('name'), str):
+                ps['name'] = ps['name'].strip()
+            if isinstance(ps.get('username'), str):
+                ps['username'] = ps['username'].strip()
+            if isinstance(ps.get('branch'), str):
+                ps['branch'] = ps['branch'].strip()
+        
+        return jsonify({
+            'success': True,
+            'cre_options': cre_options,
+            'ps_options': ps_options
+        })
+    except Exception as e:
+        print(f"Error in api_transfer_options: {str(e)}")
+        return jsonify({'success': False, 'message': 'Error fetching transfer options'})
+
+@app.route('/api/branches')
+@require_admin
+def api_branches():
+    """API to get all available branches"""
+    try:
+        # Get unique branches from ps_users table
+        ps_result = supabase.table('ps_users').select('branch').eq('is_active', True).execute()
+        branches = []
+        if ps_result.data:
+            branches = list(set([ps.get('branch', '').strip() for ps in ps_result.data if ps.get('branch', '').strip()]))
+            branches.sort()  # Sort alphabetically
+        
+        return jsonify({
+            'success': True,
+            'branches': branches
+        })
+    except Exception as e:
+        print(f"Error in api_branches: {str(e)}")
+        return jsonify({'success': False, 'message': 'Error fetching branches'})
+
+@app.route('/api/transfer_ps_lead', methods=['POST'])
+@require_admin
+def api_transfer_ps_lead():
+    """API to transfer PS lead to another PS"""
+    try:
+        data = request.get_json()
+        lead_uid = data.get('lead_uid')
+        new_ps_name = data.get('new_ps_name')
+        
+        if not lead_uid or not new_ps_name:
+            return jsonify({'success': False, 'message': 'Missing required parameters'})
+        
+        # Get the new PS details with branch information
+        ps_result = supabase.table('ps_users').select('name, username, branch').eq('name', new_ps_name).eq('is_active', True).execute()
+        if not ps_result.data:
+            return jsonify({'success': False, 'message': 'PS not found or inactive'})
+        
+        new_ps = ps_result.data[0]
+        
+        # Update the lead in ps_followup_master
+        result = supabase.table('ps_followup_master').update({
+            'ps_name': new_ps_name,
+            'ps_branch': new_ps.get('branch', '')
+        }).eq('lead_uid', lead_uid).execute()
+        
+        if result.data:
+            return jsonify({'success': True, 'message': 'Lead transferred successfully'})
+        else:
+            return jsonify({'success': False, 'message': 'Lead not found or transfer failed'})
+            
+    except Exception as e:
+        print(f"Error in api_transfer_ps_lead: {str(e)}")
+        return jsonify({'success': False, 'message': 'Error transferring lead'})
+
+@app.route('/api/bulk_transfer_ps_leads', methods=['POST'])
+@require_admin
+def api_bulk_transfer_ps_leads():
+    """API to bulk transfer all pending leads from one PS to another PS in the same branch"""
+    try:
+        data = request.get_json()
+        from_ps_name = data.get('from_ps_name')
+        to_ps_name = data.get('to_ps_name')
+        
+        if not from_ps_name or not to_ps_name:
+            return jsonify({'success': False, 'message': 'Missing required parameters'})
+        
+        if from_ps_name == to_ps_name:
+            return jsonify({'success': False, 'message': 'Cannot transfer to the same PS'})
+        
+        # Get the target PS details with branch information
+        ps_result = supabase.table('ps_users').select('name, username, branch').eq('name', to_ps_name).eq('is_active', True).execute()
+        if not ps_result.data:
+            return jsonify({'success': False, 'message': 'Target PS not found or inactive'})
+        
+        target_ps = ps_result.data[0]
+        target_branch = target_ps.get('branch', '')
+        target_username = target_ps.get('username', '')
+        
+        # Get the source PS branch to ensure same branch transfer
+        source_ps_result = supabase.table('ps_users').select('name, username, branch').eq('name', from_ps_name).eq('is_active', True).execute()
+        if not source_ps_result.data:
+            return jsonify({'success': False, 'message': 'Source PS not found or inactive'})
+        
+        source_branch = source_ps_result.data[0].get('branch', '')
+        source_username = source_ps_result.data[0].get('username', '')
+        
+        # Verify both PS are in the same branch
+        if source_branch != target_branch:
+            return jsonify({'success': False, 'message': 'Can only transfer between PS in the same branch'})
+        
+        # Update all pending leads from the source PS to the target PS in ps_followup_master
+        ps_followup_result = supabase.table('ps_followup_master').update({
+            'ps_name': to_ps_name,
+            'ps_branch': target_branch
+        }).eq('ps_name', from_ps_name).eq('final_status', 'Pending').execute()
+        
+        # Update all pending leads from the source PS to the target PS in walkin_table (if table exists)
+        walkin_count = 0
+        try:
+            walkin_result = supabase.table('walkin_table').update({
+                'ps_assigned': to_ps_name,
+                'branch': target_branch
+            }).eq('ps_assigned', from_ps_name).eq('status', 'Pending').execute()
+            walkin_count = len(walkin_result.data) if walkin_result.data else 0
+        except Exception as e:
+            print(f"Warning: walkin_table not found or error: {str(e)}")
+            walkin_count = 0
+        
+        # Update all pending leads from the source PS to the target PS in activity_leads (if table exists)
+        activity_count = 0
+        try:
+            activity_result = supabase.table('activity_leads').update({
+                'ps_name': to_ps_name,
+                'location': target_branch
+            }).eq('ps_name', from_ps_name).eq('final_status', 'Pending').execute()
+            activity_count = len(activity_result.data) if activity_result.data else 0
+        except Exception as e:
+            print(f"Warning: activity_leads table not found or error: {str(e)}")
+            activity_count = 0
+        
+        # Count transferred leads from all tables
+        ps_followup_count = len(ps_followup_result.data) if ps_followup_result.data else 0
+        total_count = ps_followup_count + walkin_count + activity_count
+        
+        if total_count > 0:
+            return jsonify({
+                'success': True, 
+                'message': f'Pending Lead Transfer Successful - {total_count} leads transferred from {from_ps_name} to {to_ps_name} ({ps_followup_count} from ps_followup, {walkin_count} from walkin, {activity_count} from activity)'
+            })
+        else:
+            return jsonify({'success': False, 'message': 'No leads found to transfer'})
+            
+    except Exception as e:
+        print(f"Error in api_bulk_transfer_ps_leads: {str(e)}")
+        return jsonify({'success': False, 'message': 'Error transferring leads'})
 
 if __name__ == '__main__':
     # socketio.run(app, debug=True)
