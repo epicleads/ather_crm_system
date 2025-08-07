@@ -2943,7 +2943,7 @@ def update_lead(uid):
                 elif final_status == 'Lost':
                     update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-            # Handle call dates and remarks - only record for actual conversations
+            # Handle call dates and remarks - record for all statuses including RNR
             if request.form.get('call_date') and call_remark:
                 combined_remark = f"{lead_status}, {call_remark}"
                 # For all 7 calls, use the correct schema columns
@@ -2954,11 +2954,11 @@ def update_lead(uid):
                 # Notification removed - no longer sending notifications between PS and CRE
 
             try:
-                # Track the call attempt before updating the lead
+                # Track the call attempt before updating the lead - ALWAYS track regardless of status
                 if lead_status:
                     # Determine if this attempt resulted in a recorded call
                     call_was_recorded = bool(request.form.get('call_date') and call_remark)
-                    # Track the attempt
+                    # Track the attempt - this ensures RNR and other statuses are properly tracked
                     track_cre_call_attempt(
                         uid=uid,
                         cre_name=session.get('cre_name'),
