@@ -1829,35 +1829,59 @@ def bulk_unassign_leads():
 @require_admin
 def delete_cre(cre_id):
     try:
-        # Get CRE name before deletion for updating leads
-        cre_result = supabase.table('cre_users').select('name').eq('id', cre_id).execute()
-        if cre_result.data:
-            cre_name = cre_result.data[0]['name']
-
-            # Update leads assigned to this CRE to unassigned
-            supabase.table('lead_master').update({
-                'cre_name': None,
-                'assigned': 'No'
-            }).eq('cre_name', cre_name).execute()
-
-            # Delete the CRE user
-            supabase.table('cre_users').delete().eq('id', cre_id).execute()
-
-            # Log CRE deletion
-            auth_manager.log_audit_event(
-                user_id=session.get('user_id'),
-                user_type=session.get('user_type'),
-                action='CRE_DELETED',
-                resource='cre_users',
-                resource_id=str(cre_id),
-                details={'cre_name': cre_name}
-            )
-
-            flash('CRE deleted successfully', 'success')
-        else:
+        # Get the CRE details first
+        cre_result = supabase.table('cre_users').select('*').eq('id', cre_id).execute()
+        if not cre_result.data:
             flash('CRE not found', 'error')
+            return redirect(url_for('manage_cre'))
+        
+        cre = cre_result.data[0]
+        cre_name = cre.get('name')
+        
+        # Check if CRE has any pending leads in lead_master
+        pending_leads_result = supabase.table('lead_master').select('id').eq('cre_name', cre_name).eq('final_status', 'Pending').execute()
+        pending_count = len(pending_leads_result.data) if pending_leads_result.data else 0
+        
+        # Check if CRE has any pending leads in ps_followup_master
+        ps_pending_result = supabase.table('ps_followup_master').select('id').eq('cre_name', cre_name).eq('final_status', 'Pending').execute()
+        ps_pending_count = len(ps_pending_result.data) if ps_pending_result.data else 0
+        
+        total_pending = pending_count + ps_pending_count
+        
+        if total_pending > 0:
+            flash(f'Cannot delete CRE {cre_name}. They have {total_pending} pending leads ({pending_count} in lead_master, {ps_pending_count} in ps_followup). Please transfer or close these leads first.', 'error')
+            return redirect(url_for('manage_cre'))
+        
+        # If no pending leads, proceed with deletion
+        # Update leads assigned to this CRE to unassigned
+        supabase.table('lead_master').update({
+            'cre_name': None,
+            'assigned': 'No'
+        }).eq('cre_name', cre_name).execute()
+        
+        # Update ps_followup_master leads
+        supabase.table('ps_followup_master').update({
+            'cre_name': None
+        }).eq('cre_name', cre_name).execute()
+
+        # Delete the CRE user
+        supabase.table('cre_users').delete().eq('id', cre_id).execute()
+
+        # Log CRE deletion
+        auth_manager.log_audit_event(
+            user_id=session.get('user_id'),
+            user_type=session.get('user_type'),
+            action='CRE_DELETED',
+            resource='cre_users',
+            resource_id=str(cre_id),
+            details={'cre_name': cre_name}
+        )
+
+        flash(f'CRE {cre_name} has been deleted successfully', 'success')
+        
     except Exception as e:
-        flash(f'Error deleting CRE: {str(e)}', 'error')
+        print(f"Error deleting CRE: {str(e)}")
+        flash('Error deleting CRE', 'error')
 
     return redirect(url_for('manage_cre'))
 
@@ -1866,36 +1890,148 @@ def delete_cre(cre_id):
 @require_admin
 def delete_ps(ps_id):
     try:
-        # Get PS name before deletion for updating leads
-        ps_result = supabase.table('ps_users').select('name').eq('id', ps_id).execute()
-        if ps_result.data:
-            ps_name = ps_result.data[0]['name']
+        # Get the PS details first
+        ps_result = supabase.table('ps_users').select('*').eq('id', ps_id).execute()
+        if not ps_result.data:
+            flash('PS not found', 'error')
+            return redirect(url_for('manage_ps'))
+        
+        ps = ps_result.data[0]
+        ps_name = ps.get('name')
+        
+        # Check if PS has any pending leads in ps_followup_master
+        ps_pending_result = supabase.table('ps_followup_master').select('id').eq('ps_name', ps_name).eq('final_status', 'Pending').execute()
+        ps_pending_count = len(ps_pending_result.data) if ps_pending_result.data else 0
+        
+        # Check if PS has any pending leads in walkin_table
+        walkin_pending_result = supabase.table('walkin_table').select('id').eq('ps_assigned', ps_name).eq('status', 'Pending').execute()
+        walkin_pending_count = len(walkin_pending_result.data) if walkin_pending_result.data else 0
+        
+        # Check if PS has any pending leads in activity_leads
+        activity_pending_result = supabase.table('activity_leads').select('id').eq('ps_name', ps_name).eq('final_status', 'Pending').execute()
+        activity_pending_count = len(activity_pending_result.data) if activity_pending_result.data else 0
+        
+        total_pending = ps_pending_count + walkin_pending_count + activity_pending_count
+        
+        if total_pending > 0:
+            flash(f'Cannot delete PS {ps_name}. They have {total_pending} pending leads ({ps_pending_count} in ps_followup, {walkin_pending_count} in walkin, {activity_pending_count} in activity). Please transfer or close these leads first.', 'error')
+            return redirect(url_for('manage_ps'))
+        
+        # If no pending leads, proceed with deletion
+        # Update leads assigned to this PS to unassigned
+        supabase.table('lead_master').update({
+            'ps_name': None
+        }).eq('ps_name', ps_name).execute()
+        
+        # Update ps_followup_master leads
+        supabase.table('ps_followup_master').update({
+            'ps_name': None
+        }).eq('ps_name', ps_name).execute()
+        
+        # Update walkin_table leads
+        supabase.table('walkin_table').update({
+            'ps_assigned': None
+        }).eq('ps_assigned', ps_name).execute()
+        
+        # Update activity_leads
+        supabase.table('activity_leads').update({
+            'ps_name': None
+        }).eq('ps_name', ps_name).execute()
 
-            # Update leads assigned to this PS to unassigned
-            supabase.table('lead_master').update({
-                'ps_name': None
-            }).eq('ps_name', ps_name).execute()
+        # Delete the PS user
+        supabase.table('ps_users').delete().eq('id', ps_id).execute()
 
-            # Delete the PS user
-            supabase.table('ps_users').delete().eq('id', ps_id).execute()
+        # Log PS deletion
+        auth_manager.log_audit_event(
+            user_id=session.get('user_id'),
+            user_type=session.get('user_type'),
+            action='PS_DELETED',
+            resource='ps_users',
+            resource_id=str(ps_id),
+            details={'ps_name': ps_name}
+        )
 
-            # Log PS deletion
-            auth_manager.log_audit_event(
-                user_id=session.get('user_id'),
-                user_type=session.get('user_type'),
-                action='PS_DELETED',
-                resource='ps_users',
-                resource_id=str(ps_id),
-                details={'ps_name': ps_name}
-            )
-
-            flash('Product Specialist deleted successfully', 'success')
-        else:
-            flash('Product Specialist not found', 'error')
+        flash(f'PS {ps_name} has been deleted successfully', 'success')
+        
     except Exception as e:
-        flash(f'Error deleting Product Specialist: {str(e)}', 'error')
+        print(f"Error deleting PS: {str(e)}")
+        flash('Error deleting PS', 'error')
 
     return redirect(url_for('manage_ps'))
+
+
+@app.route('/edit_cre/<int:cre_id>', methods=['GET', 'POST'])
+@require_admin
+def edit_cre(cre_id):
+    """Edit CRE user details"""
+    try:
+        if request.method == 'POST':
+            email = request.form.get('email')
+            phone = request.form.get('phone')
+            
+            if not email or not phone:
+                flash('Email and phone are required', 'error')
+                return redirect(url_for('edit_cre', cre_id=cre_id))
+            
+            # Update the CRE
+            supabase.table('cre_users').update({
+                'email': email,
+                'phone': phone
+            }).eq('id', cre_id).execute()
+            
+            flash('CRE details updated successfully', 'success')
+            return redirect(url_for('manage_cre'))
+        
+        # Get CRE details for editing
+        cre_result = supabase.table('cre_users').select('*').eq('id', cre_id).execute()
+        if not cre_result.data:
+            flash('CRE not found', 'error')
+            return redirect(url_for('manage_cre'))
+        
+        cre = cre_result.data[0]
+        return render_template('edit_cre.html', cre=cre)
+        
+    except Exception as e:
+        print(f"Error editing CRE: {str(e)}")
+        flash('Error editing CRE', 'error')
+        return redirect(url_for('manage_cre'))
+
+
+@app.route('/edit_ps/<int:ps_id>', methods=['GET', 'POST'])
+@require_admin
+def edit_ps(ps_id):
+    """Edit PS user details"""
+    try:
+        if request.method == 'POST':
+            email = request.form.get('email')
+            phone = request.form.get('phone')
+            
+            if not email or not phone:
+                flash('Email and phone are required', 'error')
+                return redirect(url_for('edit_ps', ps_id=ps_id))
+            
+            # Update the PS
+            supabase.table('ps_users').update({
+                'email': email,
+                'phone': phone
+            }).eq('id', ps_id).execute()
+            
+            flash('PS details updated successfully', 'success')
+            return redirect(url_for('manage_ps'))
+        
+        # Get PS details for editing
+        ps_result = supabase.table('ps_users').select('*').eq('id', ps_id).execute()
+        if not ps_result.data:
+            flash('PS not found', 'error')
+            return redirect(url_for('manage_ps'))
+        
+        ps = ps_result.data[0]
+        return render_template('edit_ps.html', ps=ps)
+        
+    except Exception as e:
+        print(f"Error editing PS: {str(e)}")
+        flash('Error editing PS', 'error')
+        return redirect(url_for('manage_ps'))
 
 
 @app.route('/manage_rec', methods=['GET', 'POST'])
