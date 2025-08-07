@@ -4205,6 +4205,161 @@ def analytics():
         return render_template('analytics.html', analytics=empty_analytics)
 
 
+@app.route('/marketing_reports')
+@require_auth(['admin'])
+def marketing_reports():
+    try:
+        # Get filter parameters from request
+        filter_type = request.args.get('filter_type', 'mtd')
+        start_date = request.args.get('start_date', '')
+        end_date = request.args.get('end_date', '')
+        
+        # Calculate date ranges based on filter type
+        today = datetime.now().date()
+        
+        if filter_type == 'mtd':
+            # Month to Date: from 1st of current month to today
+            start_of_month = today.replace(day=1)
+            filter_start = start_of_month
+            filter_end = today
+        elif filter_type == 'today':
+            # Today only
+            filter_start = today
+            filter_end = today
+        elif filter_type == 'week':
+            # This Week: from Monday of current week to today
+            days_since_monday = today.weekday()
+            monday = today - timedelta(days=days_since_monday)
+            filter_start = monday
+            filter_end = today
+        elif filter_type == 'range':
+            # Custom date range
+            if start_date and end_date:
+                try:
+                    filter_start = datetime.strptime(start_date, '%Y-%m-%d').date()
+                    filter_end = datetime.strptime(end_date, '%Y-%m-%d').date()
+                except ValueError:
+                    # If date parsing fails, default to MTD
+                    filter_start = today.replace(day=1)
+                    filter_end = today
+            else:
+                # If no dates provided, default to MTD
+                filter_start = today.replace(day=1)
+                filter_end = today
+        else:
+            # Default to MTD
+            filter_start = today.replace(day=1)
+            filter_end = today
+        
+        # Get all leads from lead_master table
+        all_leads = safe_get_data('lead_master')
+        
+        # Filter leads based on date range
+        filtered_leads = []
+        for lead in all_leads:
+            # Get the lead date - try different possible date fields
+            lead_date_str = lead.get('created_at') or lead.get('date') or lead.get('lead_date')
+            
+            if lead_date_str:
+                try:
+                    # Try to parse the date string
+                    if isinstance(lead_date_str, str):
+                        # Handle different date formats
+                        if 'T' in lead_date_str:  # ISO format
+                            lead_date = datetime.fromisoformat(lead_date_str.replace('Z', '+00:00')).date()
+                        else:
+                            lead_date = datetime.strptime(lead_date_str, '%Y-%m-%d').date()
+                    else:
+                        # If it's already a date object
+                        lead_date = lead_date_str
+                    
+                    # Check if lead date is within filter range
+                    if filter_start <= lead_date <= filter_end:
+                        filtered_leads.append(lead)
+                except (ValueError, TypeError):
+                    # If date parsing fails, include the lead (don't filter out)
+                    filtered_leads.append(lead)
+            else:
+                # If no date field found, include the lead (don't filter out)
+                filtered_leads.append(lead)
+        
+        # Group leads by source and calculate metrics
+        source_data = {}
+        
+        for lead in filtered_leads:
+            source = lead.get('source', 'Unknown')
+            
+            if source not in source_data:
+                source_data[source] = {
+                    'name': source,
+                    'enquiries': 0,
+                    'qualified': 0,
+                    'retail': 0
+                }
+            
+            # Count total enquiries (all leads from this source)
+            source_data[source]['enquiries'] += 1
+            
+            # Count qualified leads (leads assigned to PS)
+            if lead.get('ps_name') and lead['ps_name'].strip():
+                source_data[source]['qualified'] += 1
+            
+            # Count retail leads (leads with final_status = "Won")
+            if lead.get('final_status') == 'Won':
+                source_data[source]['retail'] += 1
+        
+        # Calculate percentages for each source
+        for source in source_data.values():
+            # Enquiry to Qualification Percentage
+            if source['enquiries'] > 0:
+                source['enquiry_to_qualification_percentage'] = round((source['qualified'] / source['enquiries']) * 100, 1)
+            else:
+                source['enquiry_to_qualification_percentage'] = 0.0
+            
+            # Qualification to Retail Percentage
+            if source['qualified'] > 0:
+                source['qualification_to_retail_percentage'] = round((source['retail'] / source['qualified']) * 100, 1)
+            else:
+                source['qualification_to_retail_percentage'] = 0.0
+        
+        # Convert to list for template
+        source_list = list(source_data.values())
+        
+        # Sort by enquiries count (descending)
+        source_list.sort(key=lambda x: x['enquiries'], reverse=True)
+        
+        # Log marketing reports access
+        auth_manager.log_audit_event(
+            user_id=session.get('user_id'),
+            user_type=session.get('user_type'),
+            action='MARKETING_REPORTS_ACCESS',
+            resource='marketing_reports',
+            details={
+                'filter_type': filter_type,
+                'start_date': str(filter_start) if filter_type == 'range' else None,
+                'end_date': str(filter_end) if filter_type == 'range' else None
+            }
+        )
+        
+        return render_template('marketing_reports.html', 
+                             source_data=source_list,
+                             filter_type=filter_type,
+                             start_date=start_date,
+                             end_date=end_date)
+                             
+    except Exception as e:
+        print(f"Error in marketing_reports: {e}")
+        flash(f'Error loading marketing reports: {str(e)}', 'error')
+        return render_template('marketing_reports.html', 
+                             source_data=[],
+                             filter_type='mtd',
+                             start_date='',
+                             end_date='')
+
+
+
+
+
 @app.route('/branch_head_dashboard')
 def branch_head_dashboard():
     if 'branch_head_id' not in session:
