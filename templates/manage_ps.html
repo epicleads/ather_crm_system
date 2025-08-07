@@ -11,9 +11,14 @@
             </h2>
             <p class="text-muted">View and manage Product Specialists</p>
         </div>
-        <a href="{{ url_for('add_ps') }}" class="btn btn-info">
-            <i class="fas fa-plus"></i> Add New PS
-        </a>
+        <div>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary me-2">
+                <i class="fas fa-tachometer-alt"></i> Back to Dashboard
+            </a>
+            <a href="{{ url_for('add_ps') }}" class="btn btn-info">
+                <i class="fas fa-plus"></i> Add New PS
+            </a>
+        </div>
     </div>
 </div>
 
@@ -81,11 +86,14 @@
                                     <i class="fas fa-play"></i> Activate
                                 </button>
                                 {% endif %}
-                                <a href="{{ url_for('delete_ps', ps_id=ps.id) }}"
-                                   class="btn btn-danger btn-sm"
-                                   onclick="return confirm('Are you sure you want to delete {{ ps.name }}? This will unassign all leads currently assigned to this PS.')">
-                                    <i class="fas fa-trash"></i> Delete
+                                <a href="{{ url_for('edit_ps', ps_id=ps.id) }}"
+                                   class="btn btn-primary btn-sm">
+                                    <i class="fas fa-edit"></i> Edit
                                 </a>
+                                <button type="button" class="btn btn-danger btn-sm" 
+                                        onclick="checkAndDeletePS({{ ps.id }}, '{{ ps.name }}')">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
                             </div>
                         </td>
                     </tr>
@@ -193,6 +201,43 @@ function togglePSStatus(psId, activate) {
             console.error('Error:', error);
             alert('An error occurred while updating PS status');
         });
+    }
+}
+
+function checkAndDeletePS(psId, psName) {
+    if (confirm(`Are you sure you want to delete ${psName}? This action will check for pending leads first.`)) {
+        // Show loading state
+        const deleteBtn = event.target.closest('.btn');
+        const originalText = deleteBtn.innerHTML;
+        deleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...';
+        deleteBtn.disabled = true;
+        
+        // Check for pending leads first
+        fetch(`/api/ps_pending_leads`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const psLeads = data.data.find(item => item.ps_name === psName);
+                    if (psLeads && psLeads.total_count > 0) {
+                        alert(`Cannot delete ${psName}. They have ${psLeads.total_count} pending leads (${psLeads.ps_followup_count} in ps_followup, ${psLeads.walkin_count} in walkin, ${psLeads.activity_count} in activity). Please transfer or close these leads first.`);
+                        deleteBtn.innerHTML = originalText;
+                        deleteBtn.disabled = false;
+                    } else {
+                        // No pending leads, proceed with deletion
+                        window.location.href = `/delete_ps/${psId}`;
+                    }
+                } else {
+                    alert('Error checking pending leads. Please try again.');
+                    deleteBtn.innerHTML = originalText;
+                    deleteBtn.disabled = false;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error checking pending leads. Please try again.');
+                deleteBtn.innerHTML = originalText;
+                deleteBtn.disabled = false;
+            });
     }
 }
 </script>

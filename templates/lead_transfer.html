@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lead Transfer - EPIC CRM</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --airbnb-red: #FF385C;
+            --airbnb-red-dark: #E31C5F;
+            --airbnb-gray-100: #F7F7F7;
+            --airbnb-gray-200: #EBEBEB;
+            --airbnb-gray-300: #DDDDDD;
+            --airbnb-gray-500: #717171;
+            --airbnb-gray-700: #222222;
+            --airbnb-white: #FFFFFF;
+            --airbnb-green: #00A699;
+            --airbnb-blue: #007A87;
+            --airbnb-yellow: #FFB400;
+            --airbnb-border-radius: 12px;
+            --airbnb-border-radius-lg: 16px;
+            --airbnb-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.05);
+            --airbnb-shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.08), 0 8px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            font-family: 'Lexend', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, var(--airbnb-gray-100) 0%, var(--airbnb-white) 100%);
+            min-height: 100vh;
+            color: var(--airbnb-gray-700);
+            margin: 0;
+            padding: 0;
+        }
+
+        .navbar {
+            background: var(--airbnb-white);
+            border-bottom: 1px solid var(--airbnb-gray-200);
+            box-shadow: var(--airbnb-shadow);
+        }
+
+        .navbar-brand {
+            font-weight: 700;
+            color: var(--airbnb-red);
+        }
+
+        .main-content {
+            padding: 30px;
+            margin-left: 0;
+        }
+
+        .page-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .page-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--airbnb-gray-700);
+            margin-bottom: 10px;
+        }
+
+        .page-subtitle {
+            font-size: 1.1rem;
+            color: var(--airbnb-gray-500);
+            margin-bottom: 0;
+        }
+
+        .transfer-section {
+            background: var(--airbnb-white);
+            border: 1px solid var(--airbnb-gray-200);
+            border-radius: var(--airbnb-border-radius);
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: var(--airbnb-shadow);
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--airbnb-gray-700);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-title i {
+            color: var(--airbnb-red);
+        }
+
+        .leads-table {
+            background: var(--airbnb-white);
+            border-radius: var(--airbnb-border-radius);
+            overflow: hidden;
+            box-shadow: var(--airbnb-shadow);
+        }
+
+        .table {
+            margin-bottom: 0;
+        }
+
+        .table th {
+            background: var(--airbnb-gray-100);
+            border: none;
+            font-weight: 600;
+            color: var(--airbnb-gray-700);
+            padding: 15px;
+        }
+
+        .table td {
+            border: none;
+            border-bottom: 1px solid var(--airbnb-gray-200);
+            padding: 15px;
+            vertical-align: middle;
+        }
+
+        .table tbody tr:hover {
+            background: var(--airbnb-gray-100);
+        }
+
+        .transfer-btn {
+            background: var(--airbnb-red);
+            color: var(--airbnb-white);
+            border: none;
+            padding: 8px 16px;
+            border-radius: var(--airbnb-border-radius);
+            font-weight: 500;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .transfer-btn:hover {
+            background: var(--airbnb-red-dark);
+            color: var(--airbnb-white);
+        }
+
+        .transfer-btn:disabled {
+            background: var(--airbnb-gray-300);
+            cursor: not-allowed;
+        }
+
+        .select-cre, .select-ps {
+            border: 1px solid var(--airbnb-gray-300);
+            border-radius: var(--airbnb-border-radius);
+            padding: 8px 12px;
+            font-size: 0.9rem;
+            width: 200px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: var(--airbnb-gray-500);
+        }
+
+        .alert {
+            border-radius: var(--airbnb-border-radius);
+            border: none;
+            margin-bottom: 20px;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .alert-danger {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .back-btn {
+            background: var(--airbnb-gray-200);
+            color: var(--airbnb-gray-700);
+            border: none;
+            padding: 10px 20px;
+            border-radius: var(--airbnb-border-radius);
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .back-btn:hover {
+            background: var(--airbnb-gray-300);
+            color: var(--airbnb-gray-700);
+            text-decoration: none;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .customer-info {
+            font-weight: 500;
+        }
+
+        .mobile-number {
+            color: var(--airbnb-gray-500);
+            font-size: 0.9rem;
+        }
+
+        .source-badge {
+            background: var(--airbnb-blue);
+            color: var(--airbnb-white);
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .badge {
+            font-size: 0.9rem;
+            padding: 6px 12px;
+            border-radius: 20px;
+        }
+
+        .fs-6 {
+            font-size: 1rem !important;
+        }
+        
+        .form-label {
+            font-weight: 600;
+            color: var(--airbnb-gray-700);
+            margin-bottom: 8px;
+        }
+        
+        .btn-outline-primary {
+            border-color: var(--airbnb-blue);
+            color: var(--airbnb-blue);
+        }
+        
+        .btn-outline-primary:hover {
+            background-color: var(--airbnb-blue);
+            border-color: var(--airbnb-blue);
+            color: var(--airbnb-white);
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                padding: 20px;
+            }
+            
+            .page-title {
+                font-size: 2rem;
+            }
+            
+            .transfer-section {
+                padding: 20px;
+            }
+            
+            .table-responsive {
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('admin_dashboard') }}">
+                <i class="fas fa-chart-line"></i> EPIC CRM
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a href="{{ url_for('admin_dashboard') }}" class="back-btn">
+                    <i class="fas fa-arrow-left"></i>
+                    Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Page Header -->
+        <div class="page-header">
+            <h1 class="page-title">Lead Transfer Management</h1>
+            <p class="page-subtitle">Transfer pending leads between CREs and PS</p>
+        </div>
+
+        <!-- Alert Messages -->
+        <div id="alert-container"></div>
+
+        <!-- CRE Lead Transfer Section -->
+        <div class="transfer-section">
+            <h2 class="section-title">
+                <i class="fas fa-user-tie"></i>
+                CRE Lead Transfer
+            </h2>
+            <p class="text-muted mb-4">Transfer all pending leads from one CRE to another</p>
+            
+            <div class="table-responsive">
+                <table class="table leads-table" id="cre-leads-table">
+                    <thead>
+                        <tr>
+                            <th>Current CRE</th>
+                            <th>Pending Leads Count</th>
+                            <th>Transfer To</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cre-leads-tbody">
+                        <tr>
+                            <td colspan="4" class="loading">
+                                <i class="fas fa-spinner fa-spin"></i> Loading CRE pending leads summary...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- PS Lead Transfer Section -->
+        <div class="transfer-section">
+            <h2 class="section-title">
+                <i class="fas fa-users-cog"></i>
+                PS Lead Transfer
+            </h2>
+            <p class="text-muted mb-4">Transfer pending leads from multiple tables between PS (same branch only)</p>
+            
+            <!-- Branch Filter -->
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label for="branch-filter" class="form-label">Filter by Branch:</label>
+                    <select class="form-select" id="branch-filter">
+                        <option value="">All Branches</option>
+                    </select>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button class="btn btn-outline-primary" onclick="loadPSPendingLeads()">
+                        <i class="fas fa-filter"></i> Apply Filter
+                    </button>
+                </div>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="table leads-table" id="ps-leads-table">
+                    <thead>
+                        <tr>
+                            <th>Current PS</th>
+                            <th>PS Branch</th>
+                            <th>Total Pending Leads</th>
+                            <th>PS Followup</th>
+                            <th>Walkin</th>
+                            <th>Activity</th>
+                            <th>Transfer To</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ps-leads-tbody">
+                        <tr>
+                            <td colspan="8" class="loading">
+                                <i class="fas fa-spinner fa-spin"></i> Loading PS pending leads summary...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Global variables
+        let creLeads = [];
+        let psLeads = [];
+        
+        // Load options data via AJAX to avoid template parsing issues
+        let creOptions = [];
+        let psOptions = [];
+        let branches = [];
+        
+        // Function to load options data
+        async function loadOptionsData() {
+            try {
+                const response = await fetch('/api/transfer_options');
+                const data = await response.json();
+                if (data.success) {
+                    creOptions = data.cre_options || [];
+                    psOptions = data.ps_options || [];
+                    console.log('CRE Options loaded:', creOptions);
+                    console.log('PS Options loaded:', psOptions);
+                    
+                    // Re-render tables if they already have data
+                    if (creLeads.length > 0) {
+                        renderCRELeads();
+                    }
+                    if (psLeads.length > 0) {
+                        renderPSLeads();
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading options data:', error);
+            }
+        }
+        
+        // Function to load branches
+        async function loadBranches() {
+            try {
+                const response = await fetch('/api/branches');
+                const data = await response.json();
+                if (data.success) {
+                    branches = data.branches || [];
+                    populateBranchFilter();
+                }
+            } catch (error) {
+                console.error('Error loading branches:', error);
+            }
+        }
+        
+        // Function to populate branch filter
+        function populateBranchFilter() {
+            const branchFilter = document.getElementById('branch-filter');
+            branchFilter.innerHTML = '<option value="">All Branches</option>';
+            
+            branches.forEach(branch => {
+                const option = document.createElement('option');
+                option.value = branch;
+                option.textContent = branch;
+                branchFilter.appendChild(option);
+            });
+        }
+
+        // Show alert function
+        function showAlert(message, type = 'success') {
+            const alertContainer = document.getElementById('alert-container');
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            alertContainer.appendChild(alertDiv);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 5000);
+        }
+
+        // Load CRE pending leads
+        async function loadCREPendingLeads() {
+            try {
+                const response = await fetch('/api/cre_pending_leads');
+                const data = await response.json();
+                
+                if (data.success) {
+                    creLeads = data.data;
+                    renderCRELeads();
+                } else {
+                    document.getElementById('cre-leads-tbody').innerHTML = 
+                        '<tr><td colspan="4" class="text-center text-danger">Error loading CRE leads</td></tr>';
+                }
+            } catch (error) {
+                console.error('Error loading CRE leads:', error);
+                document.getElementById('cre-leads-tbody').innerHTML = 
+                    '<tr><td colspan="4" class="text-center text-danger">Error loading CRE leads</td></tr>';
+            }
+        }
+
+        // Load PS pending leads
+        async function loadPSPendingLeads() {
+            try {
+                const branchFilter = document.getElementById('branch-filter');
+                const selectedBranch = branchFilter ? branchFilter.value : '';
+                
+                let url = '/api/ps_pending_leads';
+                if (selectedBranch) {
+                    url += `?branch=${encodeURIComponent(selectedBranch)}`;
+                }
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.success) {
+                    psLeads = data.data;
+                    renderPSLeads();
+                } else {
+                    document.getElementById('ps-leads-tbody').innerHTML = 
+                        '<tr><td colspan="8" class="text-center text-danger">Error loading PS leads</td></tr>';
+                }
+            } catch (error) {
+                console.error('Error loading PS leads:', error);
+                document.getElementById('ps-leads-tbody').innerHTML = 
+                    '<tr><td colspan="8" class="text-center text-danger">Error loading PS leads</td></tr>';
+            }
+        }
+
+                // Render CRE leads table
+        function renderCRELeads() {
+            const tbody = document.getElementById('cre-leads-tbody');
+            
+            if (creLeads.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No pending CRE leads found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = creLeads.map(creSummary => `
+                <tr>
+                    <td>
+                        <span class="status-badge status-pending">${creSummary.cre_name || 'Unassigned'}</span>
+                    </td>
+                    <td>
+                        <span class="badge bg-primary fs-6">${creSummary.pending_count}</span>
+                    </td>
+                    <td>
+                        <select class="select-cre form-select" data-from-cre="${creSummary.cre_name}">
+                            <option value="">Select CRE to transfer to...</option>
+                            ${creOptions.length > 0 ? creOptions.filter(cre => cre.name !== creSummary.cre_name).map(cre => `
+                                <option value="${cre.username}">${cre.name} (${cre.username})</option>
+                            `).join('') : '<option value="">Loading CRE options...</option>'}
+                        </select>
+                    </td>
+                    <td>
+                        <button class="transfer-btn" onclick="bulkTransferCRELeads('${creSummary.cre_name}')" disabled>
+                            Transfer All
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+
+            // Add event listeners to CRE selects
+            document.querySelectorAll('.select-cre').forEach(select => {
+                select.addEventListener('change', function() {
+                    const transferBtn = this.closest('tr').querySelector('.transfer-btn');
+                    transferBtn.disabled = !this.value;
+                });
+            });
+        }
+
+        // Render PS leads table
+        function renderPSLeads() {
+            const tbody = document.getElementById('ps-leads-tbody');
+            
+            if (psLeads.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No pending PS leads found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = psLeads.map(psSummary => `
+                <tr>
+                    <td>
+                        <span class="status-badge status-pending">${psSummary.ps_name || 'Unassigned'}</span>
+                    </td>
+                    <td>${psSummary.ps_branch || 'N/A'}</td>
+                    <td>
+                        <span class="badge bg-primary fs-6">${psSummary.total_count}</span>
+                    </td>
+                    <td>
+                        <span class="badge bg-info">${psSummary.ps_followup_count}</span>
+                    </td>
+                    <td>
+                        <span class="badge bg-warning">${psSummary.walkin_count}</span>
+                    </td>
+                    <td>
+                        <span class="badge bg-success">${psSummary.activity_count}</span>
+                    </td>
+                    <td>
+                        <select class="select-ps form-select" data-from-ps="${psSummary.ps_name}" data-branch="${psSummary.ps_branch}">
+                            <option value="">Select PS to transfer to...</option>
+                            ${psOptions.length > 0 ? psOptions.filter(ps => ps.branch === psSummary.ps_branch && ps.name !== psSummary.ps_name).map(ps => `
+                                <option value="${ps.name}">${ps.name} (${ps.username})</option>
+                            `).join('') : '<option value="">Loading PS options...</option>'}
+                        </select>
+                    </td>
+                    <td>
+                        <button class="transfer-btn" onclick="bulkTransferPSLeads('${psSummary.ps_name}', '${psSummary.ps_branch}')" disabled>
+                            Transfer All
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+
+            // Add event listeners to PS selects
+            document.querySelectorAll('.select-ps').forEach(select => {
+                select.addEventListener('change', function() {
+                    const transferBtn = this.closest('tr').querySelector('.transfer-btn');
+                    transferBtn.disabled = !this.value;
+                });
+            });
+        }
+
+        // Bulk transfer CRE leads
+        async function bulkTransferCRELeads(fromCRE) {
+            const select = document.querySelector(`select[data-from-cre="${fromCRE}"]`);
+            const toCRE = select.value;
+            
+            if (!toCRE) {
+                showAlert('Please select a CRE to transfer to', 'danger');
+                return;
+            }
+
+            if (fromCRE === toCRE) {
+                showAlert('Cannot transfer to the same CRE', 'danger');
+                return;
+            }
+
+            if (!confirm(`Are you sure you want to transfer all pending leads from ${fromCRE} to ${toCRE}?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/bulk_transfer_cre_leads', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        from_cre_name: fromCRE,
+                        to_cre_name: toCRE
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert(data.message, 'success');
+                    // Reload the page after successful transfer
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    showAlert(data.message || 'Transfer failed', 'danger');
+                }
+            } catch (error) {
+                console.error('Error transferring CRE leads:', error);
+                showAlert('Error transferring leads', 'danger');
+            }
+        }
+
+        // Bulk transfer PS leads
+        async function bulkTransferPSLeads(fromPS, branch) {
+            const select = document.querySelector(`select[data-from-ps="${fromPS}"][data-branch="${branch}"]`);
+            const toPS = select.value;
+            
+            if (!toPS) {
+                showAlert('Please select a PS to transfer to', 'danger');
+                return;
+            }
+
+            if (fromPS === toPS) {
+                showAlert('Cannot transfer to the same PS', 'danger');
+                return;
+            }
+
+            if (!confirm(`Are you sure you want to transfer all pending leads from ${fromPS} to ${toPS}?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/bulk_transfer_ps_leads', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        from_ps_name: fromPS,
+                        to_ps_name: toPS
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert(data.message, 'success');
+                    // Reload the page after successful transfer
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    showAlert(data.message || 'Transfer failed', 'danger');
+                }
+            } catch (error) {
+                console.error('Error transferring PS leads:', error);
+                showAlert('Error transferring leads', 'danger');
+            }
+        }
+
+        // Format date function
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleDateString('en-IN') + ' ' + date.toLocaleTimeString('en-IN', {hour: '2-digit', minute: '2-digit'});
+            } catch (error) {
+                return dateString;
+            }
+        }
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', async function() {
+            await loadOptionsData();
+            await loadBranches();
+            loadCREPendingLeads();
+            loadPSPendingLeads();
+        });
+    </script>
+</body>
+</html> 
