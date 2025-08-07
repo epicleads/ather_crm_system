@@ -313,4 +313,29 @@
         </form>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const finalStatus = document.getElementById('final_status');
+    const followupDate = document.getElementById('ps_followup_date_ts');
+    
+    function toggleFollowUpRequired() {
+        if (finalStatus && followupDate) {
+            if (finalStatus.value === 'Won' || finalStatus.value === 'Lost') {
+                followupDate.required = false;
+                followupDate.disabled = true;
+            } else {
+                followupDate.required = true;
+                followupDate.disabled = false;
+            }
+        }
+    }
+    
+    if (finalStatus) {
+        finalStatus.addEventListener('change', toggleFollowUpRequired);
+        // Initial check
+        toggleFollowUpRequired();
+    }
+});
+</script>
 {% endblock %} 

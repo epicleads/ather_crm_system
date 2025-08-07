@@ -622,15 +622,36 @@ def track_ps_call_attempt(uid, ps_name, call_no, lead_status, call_was_recorded=
         if attempt_result.data:
             next_attempt = attempt_result.data[0]['attempt'] + 1
 
-        # Fetch the current final_status from ps_followup_master, fallback to lead_master
+        # Fetch the current final_status from multiple tables
         final_status = None
-        ps_result = supabase.table('ps_followup_master').select('final_status').eq('lead_uid', uid).limit(1).execute()
-        if ps_result.data and 'final_status' in ps_result.data[0]:
-            final_status = ps_result.data[0]['final_status']
-        else:
-            lead_result = supabase.table('lead_master').select('final_status').eq('uid', uid).limit(1).execute()
-            if lead_result.data and 'final_status' in lead_result.data[0]:
-                final_status = lead_result.data[0]['final_status']
+        
+        # Try all possible tables and field combinations
+        tables_to_check = [
+            # (table_name, uid_field, status_field, uid_value)
+            ('ps_followup_master', 'lead_uid', 'final_status', uid),
+            ('lead_master', 'uid', 'final_status', uid),
+            ('walkin_table', 'uid', 'status', uid),
+            ('activity_leads', 'activity_uid', 'final_status', uid),
+            # Also try with different UID formats for walkin and activity
+            ('walkin_table', 'uid', 'status', uid.replace('WB-', 'W')),
+            ('activity_leads', 'activity_uid', 'final_status', uid.replace('WB-', 'A'))
+        ]
+        
+        for table_name, uid_field, status_field, uid_value in tables_to_check:
+            try:
+                result = supabase.table(table_name).select(status_field).eq(uid_field, uid_value).limit(1).execute()
+                if result.data and result.data[0].get(status_field):
+                    final_status = result.data[0][status_field]
+                    print(f"Found final_status '{final_status}' in {table_name} for {uid_value}")
+                    break
+            except Exception as e:
+                print(f"Error checking {table_name}: {e}")
+                continue
+        
+        # If still not found, set a default
+        if not final_status:
+            final_status = 'Pending'
+            print(f"No final_status found for {uid}, defaulting to 'Pending'")
 
         # Prepare attempt data
         attempt_data = {
@@ -1927,6 +1948,125 @@ def delete_rec(rec_id):
     return redirect(url_for('manage_rec'))
 
 
+@app.route('/check_duplicate_lead', methods=['POST'])
+@require_auth(['admin', 'cre'])
+def check_duplicate_lead():
+    """
+    Check if a lead with the same phone number already exists.
+    Returns duplicate information if found.
+    """
+    try:
+        data = request.get_json()
+        phone_number = data.get('phone_number', '').strip()
+        source = data.get('source', '').strip()
+        subsource = data.get('subsource', '').strip()
+        
+        if not phone_number:
+            return jsonify({'success': False, 'message': 'Phone number is required'}), 400
+        
+        # Normalize phone number (remove all non-digits)
+        normalized_phone = ''.join(filter(str.isdigit, phone_number))
+        
+        # Check in lead_master table
+        result = supabase.table('lead_master').select('*').eq('customer_mobile_number', normalized_phone).execute()
+        existing_leads = result.data or []
+        
+        if existing_leads:
+            # Found existing lead(s)
+            existing_lead = existing_leads[0]  # Get the first one
+            
+            # Check if this exact source-subsource combination already exists
+            exact_match = any(
+                lead.get('source') == source and lead.get('sub_source') == subsource 
+                for lead in existing_leads
+            )
+            
+            if exact_match:
+                # This is a true duplicate - same phone, same source, same subsource
+                return jsonify({
+                    'success': True,
+                    'is_duplicate': True,
+                    'existing_lead': existing_lead,
+                    'duplicate_type': 'exact_match',
+                    'message': 'Lead with this phone number and source-subsource combination already exists'
+                })
+            else:
+                # Phone exists but with different source/subsource
+                # Get all existing sources for this phone number
+                existing_sources = []
+                for lead in existing_leads:
+                    if lead.get('source') and lead.get('sub_source'):
+                        existing_sources.append({
+                            'source': lead.get('source'),
+                            'sub_source': lead.get('sub_source')
+                        })
+                
+                return jsonify({
+                    'success': True,
+                    'is_duplicate': True,
+                    'existing_lead': existing_lead,
+                    'existing_sources': existing_sources,
+                    'duplicate_type': 'new_source',
+                    'message': 'Phone number exists with different sources'
+                })
+        
+        # Check in duplicate_leads table
+        duplicate_result = supabase.table('duplicate_leads').select('*').eq('customer_mobile_number', normalized_phone).execute()
+        duplicate_leads = duplicate_result.data or []
+        
+        if duplicate_leads:
+            # Found in duplicate_leads table
+            duplicate_lead = duplicate_leads[0]
+            
+            # Check if this exact source-subsource combination already exists in any slot
+            exact_match = False
+            existing_sources = []
+            
+            # Check all source slots (source1 to source10)
+            for i in range(1, 11):
+                source_field = f'source{i}'
+                sub_source_field = f'sub_source{i}'
+                
+                if duplicate_lead.get(source_field) and duplicate_lead.get(sub_source_field):
+                    existing_sources.append({
+                        'source': duplicate_lead.get(source_field),
+                        'sub_source': duplicate_lead.get(sub_source_field)
+                    })
+                    
+                    # Check if this slot matches the new source/subsource
+                    if (duplicate_lead.get(source_field) == source and 
+                        duplicate_lead.get(sub_source_field) == subsource):
+                        exact_match = True
+            
+            if exact_match:
+                return jsonify({
+                    'success': True,
+                    'is_duplicate': True,
+                    'existing_lead': duplicate_lead,
+                    'duplicate_type': 'exact_match',
+                    'message': 'Lead with this phone number and source-subsource combination already exists in duplicates'
+                })
+            else:
+                return jsonify({
+                    'success': True,
+                    'is_duplicate': True,
+                    'existing_lead': duplicate_lead,
+                    'existing_sources': existing_sources,
+                    'duplicate_type': 'new_source',
+                    'message': 'Phone number exists in duplicates with different sources'
+                })
+        
+        # No duplicate found
+        return jsonify({
+            'success': True,
+            'is_duplicate': False,
+            'message': 'No duplicate found'
+        })
+        
+    except Exception as e:
+        print(f"Error checking duplicate lead: {e}")
+        return jsonify({'success': False, 'message': f'Error checking duplicate: {str(e)}'}), 500
+
 @app.route('/add_lead', methods=['GET', 'POST'])
 @require_cre
 def add_lead():
@@ -1937,6 +2077,7 @@ def add_lead():
         customer_name = request.form.get('customer_name', '').strip()
         customer_mobile_number = request.form.get('customer_mobile_number', '').strip()
         source = request.form.get('source', '').strip()
+        subsource = request.form.get('subsource', '').strip()
         lead_status = request.form.get('lead_status', '').strip()
         lead_category = request.form.get('lead_category', '').strip()
         model_interested = request.form.get('model_interested', '').strip()
@@ -1945,25 +2086,81 @@ def add_lead():
         final_status = request.form.get('final_status', 'Pending').strip()
         follow_up_date = request.form.get('follow_up_date', '').strip()
         remark = request.form.get('remark', '').strip()
+        is_duplicate_new_source = request.form.get('is_duplicate_new_source', '').strip()
         date_now = datetime.now().strftime('%Y-%m-%d')
+        
         # Validation
-        if not customer_name or not customer_mobile_number or not source:
+        if not customer_name or not customer_mobile_number or not source or not subsource:
             flash('Please fill all required fields', 'error')
             return render_template('add_lead.html', branches=branches, ps_users=ps_users)
+        
+        # Normalize phone number
+        normalized_phone = ''.join(filter(str.isdigit, customer_mobile_number))
+        
+        # Check for duplicates if not already confirmed as new source
+        if not is_duplicate_new_source:
+            try:
+                # Check in lead_master
+                result = supabase.table('lead_master').select('*').eq('customer_mobile_number', normalized_phone).execute()
+                existing_leads = result.data or []
+                
+                if existing_leads:
+                    # Check for exact source-subsource match
+                    exact_match = any(
+                        lead.get('source') == source and lead.get('sub_source') == subsource 
+                        for lead in existing_leads
+                    )
+                    
+                    if exact_match:
+                        flash('Lead with this phone number and source-subsource combination already exists!', 'error')
+                        return render_template('add_lead.html', branches=branches, ps_users=ps_users)
+                
+                # Check in duplicate_leads
+                duplicate_result = supabase.table('duplicate_leads').select('*').eq('customer_mobile_number', normalized_phone).execute()
+                duplicate_leads = duplicate_result.data or []
+                
+                if duplicate_leads:
+                    # Check if this exact source-subsource combination already exists in any slot
+                    exact_match = False
+                    for duplicate_lead in duplicate_leads:
+                        # Check all source slots (source1 to source10)
+                        for i in range(1, 11):
+                            source_field = f'source{i}'
+                            sub_source_field = f'sub_source{i}'
+                            
+                            if (duplicate_lead.get(source_field) == source and 
+                                duplicate_lead.get(sub_source_field) == subsource):
+                                exact_match = True
+                                break
+                        if exact_match:
+                            break
+                    
+                    if exact_match:
+                        flash('Lead with this phone number and source-subsource combination already exists in duplicates!', 'error')
+                        return render_template('add_lead.html', branches=branches, ps_users=ps_users)
+                        
+            except Exception as e:
+                print(f"Error checking duplicates: {e}")
+                flash('Error checking for duplicates. Please try again.', 'error')
+                return render_template('add_lead.html', branches=branches, ps_users=ps_users)
+        
         # UID: Source initial (uppercase) + '-' + first 5 letters of name (no spaces, uppercase) + last 5 digits of phone
         src_initial = source[0].upper() if source else 'X'
         name_part = ''.join(customer_name.split()).upper()[:5]
-        phone_part = customer_mobile_number[-5:] if len(customer_mobile_number) >= 5 else customer_mobile_number
+        phone_part = normalized_phone[-5:] if len(normalized_phone) >= 5 else normalized_phone
         uid = f"{src_initial}-{name_part}{phone_part}"
+        
         # CRE name from session
         cre_name = session.get('cre_name')
+        
         # Prepare lead data
         lead_data = {
             'uid': uid,
             'date': date_now,
             'customer_name': customer_name,
-            'customer_mobile_number': customer_mobile_number,
+            'customer_mobile_number': normalized_phone,
             'source': source,
+            'sub_source': subsource,
             'lead_status': lead_status,
             'lead_category': lead_category,
             'model_interested': model_interested,
@@ -1971,7 +2168,7 @@ def add_lead():
             'ps_name': ps_name if ps_name else None,
             'final_status': final_status,
             'follow_up_date': follow_up_date if follow_up_date else None,
-            'assigned': 'No',
+            'assigned': 'Yes' if cre_name else 'No',  # Set to Yes if CRE is adding the lead
             'created_at': datetime.now().isoformat(),
             'updated_at': datetime.now().isoformat(),
             'first_remark': remark,
@@ -1979,30 +2176,92 @@ def add_lead():
             'first_call_date': date_now
         }
         try:
-            supabase.table('lead_master').insert(lead_data).execute()
-            
-            # Track the initial call attempt for fresh leads
-            if lead_status:
-                track_cre_call_attempt(
-                    uid=uid,
-                    cre_name=cre_name,
-                    call_no='first',
-                    lead_status=lead_status,
-                    call_was_recorded=True,  # Fresh leads always have first_call_date recorded
-                    follow_up_date=follow_up_date if follow_up_date else None,
-                    remarks=remark if remark else None
-                )
-            
-            # Create PS followup if PS is assigned during lead creation
-            if ps_name:
-                ps_user = next((ps for ps in ps_users if ps['name'] == ps_name), None)
-                if ps_user:
-                    create_or_update_ps_followup(lead_data, ps_name, ps_user['branch'])
-                    flash(f'Lead added successfully and assigned to {ps_name}!', 'success')
+            # If this is a duplicate with new source, add to duplicate_leads table
+            if is_duplicate_new_source:
+                # Check if there's already a duplicate record
+                existing_duplicate = supabase.table('duplicate_leads').select('*').eq('customer_mobile_number', normalized_phone).execute()
+                
+                if existing_duplicate.data:
+                    # Add to existing duplicate record
+                    duplicate_record = existing_duplicate.data[0]
+                    # Find next available slot
+                    next_slot = None
+                    for i in range(1, 11):
+                        source_field = f'source{i}'
+                        if not duplicate_record.get(source_field):
+                            next_slot = i
+                            break
+                    
+                    if next_slot:
+                        # Update the existing duplicate record
+                        update_data = {
+                            f'source{next_slot}': source,
+                            f'sub_source{next_slot}': subsource,
+                            f'date{next_slot}': date_now,
+                            'duplicate_count': duplicate_record.get('duplicate_count', 0) + 1,
+                            'updated_at': datetime.now().isoformat()
+                        }
+                        supabase.table('duplicate_leads').update(update_data).eq('id', duplicate_record['id']).execute()
+                        flash(f'Lead added to existing duplicate record with new source: {source} - {subsource}', 'success')
+                    else:
+                        flash('Error: Duplicate record is full (max 10 sources reached)', 'error')
                 else:
-                    flash('Lead added successfully! (PS assignment failed)', 'warning')
+                    # Create new duplicate record
+                    original_lead = supabase.table('lead_master').select('*').eq('customer_mobile_number', normalized_phone).execute()
+                    if original_lead.data:
+                        original = original_lead.data[0]
+                        # Create duplicate record with proper structure
+                        duplicate_data = {
+                            'uid': uid,
+                            'customer_mobile_number': normalized_phone,
+                            'customer_name': customer_name,
+                            'original_lead_id': original['id'],
+                            'source1': original['source'],
+                            'sub_source1': original.get('sub_source'),
+                            'date1': original['date'],
+                            'source2': source,
+                            'sub_source2': subsource,
+                            'date2': date_now,
+                            'duplicate_count': 2,
+                            'created_at': datetime.now().isoformat(),
+                            'updated_at': datetime.now().isoformat()
+                        }
+                        supabase.table('duplicate_leads').insert(duplicate_data).execute()
+                        flash(f'Lead added to duplicates with new source: {source} - {subsource}', 'success')
+                    else:
+                        flash('Error: Original lead not found for duplicate creation', 'error')
             else:
-                flash('Lead added successfully!', 'success')
+                supabase.table('lead_master').insert(lead_data).execute()
+                
+                # Track the initial call attempt for fresh leads
+                if lead_status:
+                    track_cre_call_attempt(
+                        uid=uid,
+                        cre_name=cre_name,
+                        call_no='first',
+                        lead_status=lead_status,
+                        call_was_recorded=True,  # Fresh leads always have first_call_date recorded
+                        follow_up_date=follow_up_date if follow_up_date else None,
+                        remarks=remark if remark else None
+                    )
+                
+                # Create PS followup if PS is assigned during lead creation
+                if ps_name:
+                    ps_user = next((ps for ps in ps_users if ps['name'] == ps_name), None)
+                    if ps_user:
+                        create_or_update_ps_followup(lead_data, ps_name, ps_user['branch'])
+                        
+                        # Send email notification to PS
+                        try:
+                            socketio.start_background_task(send_email_to_ps, ps_user['email'], ps_user['name'], lead_data, cre_name)
+                            flash(f'Lead added successfully and assigned to {ps_name}! Email notification sent.', 'success')
+                        except Exception as e:
+                            print(f"Error sending email: {e}")
+                            flash(f'Lead added successfully and assigned to {ps_name}! (Email notification failed)', 'warning')
+                    else:
+                        flash('Lead added successfully! (PS assignment failed)', 'warning')
+                else:
+                    flash('Lead added successfully!', 'success')
             
             return redirect(url_for('cre_dashboard'))
         except Exception as e:
@@ -2023,15 +2282,16 @@ def add_lead_with_cre():
     try:
         customer_name = request.form.get('customer_name', '').strip()
         customer_mobile_number = request.form.get('customer_mobile_number', '').strip()
-        source = request.form.get('source', 'Google(Web)').strip()  # Get from form, default to Google(Web)    
+        source = request.form.get('source', 'GOOGLE').strip()  # Get from form, default to GOOGLE
+        subsource = request.form.get('subsource', '').strip()
         assigned = "Yes"
         date_now = datetime.now().strftime('%Y-%m-%d')
 
         # Validate required fields
-        if not customer_name or not customer_mobile_number:
+        if not customer_name or not customer_mobile_number or not source or not subsource:
             return jsonify({
                 'success': False,
-                'message': 'Customer name and mobile number are required'
+                'message': 'Customer name, mobile number, source, and subsource are required'
             })
 
         # Normalize phone number to last 10 digits
@@ -2043,24 +2303,66 @@ def add_lead_with_cre():
                 'message': 'Invalid mobile number. Please provide a 10-digit number.'
             })
 
-        # Check for duplicate by last 10 digits
-        existing_leads = supabase.table('lead_master').select('uid, customer_mobile_number').execute()
-        for lead in existing_leads.data or []:
-            db_mobile = ''.join(filter(str.isdigit, lead.get('customer_mobile_number', '')))[-10:]
-            if db_mobile == mobile_digits:
-                return jsonify({
-                    'success': False,
-                    'message': f'Lead with this phone number already exists. UID: {lead["uid"]}',
-                    'uid': lead["uid"]
-                })
+        # Check if this is a duplicate with new source from form
+        is_duplicate_new_source = request.form.get('is_duplicate_new_source', '').strip() == 'true'
+        
+        # Check for duplicate by phone number and source-subsource combination
+        existing_leads = supabase.table('lead_master').select('*').eq('customer_mobile_number', mobile_digits).execute()
+        duplicate_leads = supabase.table('duplicate_leads').select('*').eq('customer_mobile_number', mobile_digits).execute()
+        
+        original_lead = None
+        
+        # Only check for duplicates if not already confirmed as duplicate with new source
+        if not is_duplicate_new_source:
+            # Check in lead_master table
+            if existing_leads.data:
+                original_lead = existing_leads.data[0]
+                # Check if this exact source-subsource combination already exists
+                if original_lead.get('source') == source and original_lead.get('sub_source') == subsource:
+                    return jsonify({
+                        'success': False,
+                        'message': f'Lead with this phone number and source-subsource combination already exists. UID: {original_lead["uid"]}',
+                        'uid': original_lead["uid"]
+                    })
+                else:
+                    # Phone exists but with different source/subsource - this is a duplicate with new source
+                    is_duplicate_new_source = True
+            
+            # Check in duplicate_leads table
+            if duplicate_leads.data:
+                duplicate_lead = duplicate_leads.data[0]
+                # Check if this exact source-subsource combination already exists in any slot
+                exact_match = False
+                for i in range(1, 11):
+                    source_field = f'source{i}'
+                    sub_source_field = f'sub_source{i}'
+                    
+                    if (duplicate_lead.get(source_field) == source and 
+                        duplicate_lead.get(sub_source_field) == subsource):
+                        exact_match = True
+                        break
+                
+                if exact_match:
+                    return jsonify({
+                        'success': False,
+                        'message': f'Lead with this phone number and source-subsource combination already exists in duplicates. UID: {duplicate_lead["uid"]}',
+                        'uid': duplicate_lead["uid"]
+                    })
+                else:
+                    # Phone exists in duplicates but with different source/subsource
+                    is_duplicate_new_source = True
+        else:
+            # If is_duplicate_new_source is true, we need to get the original lead
+            if existing_leads.data:
+                original_lead = existing_leads.data[0]
 
         # Generate UID using the correct function based on source
         # Map source to UID source character
         source_mapping = {
-            'Google(Web)': 'Google',
-            'Google(Knowlarity)': 'Google',
-            'Knowlarity': 'Knowlarity',
-            'Meta(Knowlarity)': 'Meta'
+            'GOOGLE': 'Google',
+            'META': 'Meta',
+            'BTL': 'BTL',
+            'OEM': 'OEM'
         }
         uid_source = source_mapping.get(source, 'Google')
         
@@ -2073,39 +2375,130 @@ def add_lead_with_cre():
 
         # Get assigned CRE ID from form
         assigned_cre_id = request.form.get('assigned_cre')
+        print(f"🔍 Raw assigned_cre_id from form: '{assigned_cre_id}' (type: {type(assigned_cre_id)})")
+        
         cre_name = None
-        if assigned_cre_id:
-            cre_data = supabase.table('cre_users').select('name').eq('id', assigned_cre_id).execute()
-            if cre_data.data:
-                cre_name = cre_data.data[0]['name']
+        if assigned_cre_id and assigned_cre_id.strip():
+            try:
+                # Convert to integer if it's a string
+                cre_id = int(assigned_cre_id) if isinstance(assigned_cre_id, str) else assigned_cre_id
+                print(f"🔍 Looking up CRE with ID: {cre_id}")
+                
+                cre_data = supabase.table('cre_users').select('name').eq('id', cre_id).execute()
+                if cre_data.data:
+                    cre_name = cre_data.data[0]['name']
+                    print(f"✅ Found CRE: {cre_name} for ID: {cre_id}")
+                else:
+                    print(f"❌ No CRE found for ID: {cre_id}")
+                    print(f"Available CRE IDs: {[cre['id'] for cre in supabase.table('cre_users').select('id,name').execute().data]}")
+            except Exception as e:
+                print(f"❌ Error fetching CRE data: {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            print("❌ No assigned_cre_id provided in form or it's empty")
+            print(f"All form fields: {dict(request.form)}")
 
         # Prepare lead data (only required columns)
+        # Set assigned based on whether CRE is assigned
+        assigned_status = "Yes" if cre_name else "No"
+        
         lead_data = {
             'uid': uid,
             'customer_name': customer_name,
             'customer_mobile_number': mobile_digits,
             'source': source,
+            'sub_source': subsource,
             'date': date_now,   
-            'assigned': assigned,
+            'assigned': assigned_status,
             'final_status': 'Pending',
             'cre_name': cre_name,
             'lead_status': 'Pending',
-            'lead_category': 'Cold',  # Default category
-            'cre_assigned_at': datetime.now().isoformat(),
+            'lead_category': None,  # Keep as null for assign leads page
+            'cre_assigned_at': datetime.now().isoformat() if cre_name else None,
             'created_at': datetime.now().isoformat(),
             'updated_at': datetime.now().isoformat()
         }
+        print('=== DEBUG INFO ===')
         print('Form data:', dict(request.form))
         print('Assigned CRE ID:', assigned_cre_id)
         print('CRE name fetched:', cre_name)
+        print('Is duplicate new source:', is_duplicate_new_source)
         print('Lead data to insert:', lead_data)
+        print('==================')
 
-        # Insert lead
-        result = supabase.table('lead_master').insert(lead_data).execute()
-        if result.data:
-            return jsonify({'success': True, 'message': 'Lead added successfully', 'uid': uid})
+        # Insert lead based on whether it's a duplicate with new source
+        if is_duplicate_new_source:
+            print("=== DUPLICATE HANDLING ===")
+            print(f"Original lead: {original_lead}")
+            print(f"Duplicate leads: {duplicate_leads.data}")
+            
+            if original_lead:
+                # Create new duplicate record
+                duplicate_data = {
+                    'uid': uid,
+                    'customer_mobile_number': mobile_digits,
+                    'customer_name': customer_name,
+                    'original_lead_id': original_lead['id'],
+                    'source1': original_lead['source'],
+                    'sub_source1': original_lead.get('sub_source'),
+                    'date1': original_lead['date'],
+                    'source2': source,
+                    'sub_source2': subsource,
+                    'date2': date_now,
+                    'duplicate_count': 2,
+                    'created_at': datetime.now().isoformat(),
+                    'updated_at': datetime.now().isoformat()
+                }
+                print(f"Creating duplicate record: {duplicate_data}")
+                result = supabase.table('duplicate_leads').insert(duplicate_data).execute()
+                if result.data:
+                    print("Duplicate record created successfully")
+                    return jsonify({'success': True, 'message': 'Lead added to duplicates with new source', 'uid': uid})
+                else:
+                    print("Failed to create duplicate record")
+                    return jsonify({'success': False, 'message': 'Failed to add duplicate lead'})
+            elif duplicate_leads.data:
+                # Add to existing duplicate record
+                duplicate_record = duplicate_leads.data[0]
+                # Find next available slot
+                next_slot = None
+                for i in range(1, 11):
+                    source_field = f'source{i}'
+                    if not duplicate_record.get(source_field):
+                        next_slot = i
+                        break
+                
+                if next_slot:
+                    # Update the existing duplicate record
+                    update_data = {
+                        f'source{next_slot}': source,
+                        f'sub_source{next_slot}': subsource,
+                        f'date{next_slot}': date_now,
+                        'duplicate_count': duplicate_record.get('duplicate_count', 0) + 1,
+                        'updated_at': datetime.now().isoformat()
+                    }
+                    result = supabase.table('duplicate_leads').update(update_data).eq('id', duplicate_record['id']).execute()
+                    if result.data:
+                        return jsonify({'success': True, 'message': 'Lead added to existing duplicate record', 'uid': uid})
+                    else:
+                        return jsonify({'success': False, 'message': 'Failed to update duplicate record'})
+                else:
+                    return jsonify({'success': False, 'message': 'Duplicate record is full (max 10 sources reached)'})
+            else:
+                # Phone exists in duplicate_leads but not in lead_master - this shouldn't happen
+                return jsonify({'success': False, 'message': 'Error: Original lead not found for duplicate creation'})
         else:
-            return jsonify({'success': False, 'message': 'Failed to add lead'})
+            # Insert as new lead
+            print("=== FRESH LEAD INSERTION ===")
+            print(f"Inserting fresh lead: {lead_data}")
+            result = supabase.table('lead_master').insert(lead_data).execute()
+            if result.data:
+                print("Fresh lead inserted successfully")
+                return jsonify({'success': True, 'message': 'Lead added successfully', 'uid': uid})
+            else:
+                print("Failed to insert fresh lead")
+                return jsonify({'success': False, 'message': 'Failed to add lead'})
 
     except Exception as e:
         print(f"Error adding lead with CRE: {e}")
@@ -2585,8 +2978,8 @@ def ps_dashboard():
         assigned_leads = safe_get_data('ps_followup_master', {'ps_name': ps_name})
         print(f"[DEBUG] PS Dashboard - Assigned leads count: {len(assigned_leads) if assigned_leads else 0}")
 
-        # Apply date filtering to assigned leads
-        filtered_leads = filter_leads_by_date(assigned_leads, filter_type, 'created_at')
+        # Apply date filtering to assigned leads using ps_assigned_at for ps_followup_master table
+        filtered_leads = filter_leads_by_date(assigned_leads, filter_type, 'ps_assigned_at')
         print(f"[DEBUG] PS Dashboard - Filtered leads count: {len(filtered_leads) if filtered_leads else 0}")
 
         # Initialize lists for different lead categories
@@ -2814,7 +3207,17 @@ def ps_dashboard():
         
         for lead in walkin_leads:
             lead_dict = dict(lead)  # Make a copy to avoid mutating the original
-            lead_dict['lead_uid'] = lead.get('uid', f"W{lead.get('id')}")  # Use actual UID or generate one
+            
+            # Ensure UID is properly set for walkin leads
+            if lead.get('uid'):
+                lead_dict['lead_uid'] = lead.get('uid')
+            else:
+                # Generate UID if not present (for older records)
+                lead_dict['lead_uid'] = f"W{lead.get('id')}"
+            
+            # Also set the uid field for consistency
+            lead_dict['uid'] = lead_dict['lead_uid']
+            print(f"[DEBUG] Walkin lead UID: {lead_dict['lead_uid']} for ID: {lead.get('id')}")
             lead_dict['customer_mobile_number'] = lead.get('mobile_number', '')  # For template compatibility
             lead_dict['customer_name'] = lead.get('customer_name', '')  # Ensure customer_name is set
             lead_dict['source'] = 'Walk-in'  # Set source for consistency
@@ -2867,6 +3270,34 @@ def ps_dashboard():
                     attended_leads.append(lead_dict)
                     print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to attended_leads")
 
+        # Update the walkin_leads list with processed data for template
+        processed_walkin_leads = []
+        for lead in walkin_leads:
+            lead_dict = dict(lead)  # Make a copy to avoid mutating the original
+            
+            # Ensure UID is properly set for walkin leads
+            if lead.get('uid'):
+                lead_dict['lead_uid'] = lead.get('uid')
+            else:
+                # Generate UID if not present (for older records)
+                lead_dict['lead_uid'] = f"W{lead.get('id')}"
+            
+            # Also set the uid field for consistency
+            lead_dict['uid'] = lead_dict['lead_uid']
+            lead_dict['customer_mobile_number'] = lead.get('mobile_number', '')
+            lead_dict['customer_name'] = lead.get('customer_name', '')
+            lead_dict['source'] = 'Walk-in'
+            lead_dict['is_walkin'] = True
+            lead_dict['walkin_id'] = lead.get('id')
+            lead_dict['cre_name'] = ''
+            lead_dict['created_at'] = lead.get('created_at', '')
+            lead_dict['lead_category'] = lead.get('lead_category', 'Not Set')
+            
+            processed_walkin_leads.append(lead_dict)
+        
+        # Replace the original walkin_leads with processed data
+        walkin_leads = processed_walkin_leads
+        
         print(f"[PERF] ps_dashboard: walk-in leads processing took {time.time() - t3_5:.3f} seconds")
 
         t4 = time.time()
@@ -3081,6 +3512,19 @@ def update_walkin_lead(walkin_id):
             
             # Update the walk-in lead
             supabase.table('walkin_table').update(update_data).eq('id', walkin_id).execute()
+            
+            # Track the PS call attempt in ps_call_attempt_history
+            if lead_status:
+                call_was_recorded = bool(call_date and call_remark)
+                track_ps_call_attempt(
+                    uid=walkin_lead['uid'],
+                    ps_name=ps_name,
+                    call_no=next_call,
+                    lead_status=lead_status,
+                    call_was_recorded=call_was_recorded,
+                    follow_up_date=next_followup_date if next_followup_date else None,
+                    remarks=call_remark if call_remark else None
+                )
             
             # Sync to alltest_drive table if test_drive_done is set
             if test_drive_done in ['Yes', 'No', True, False]:
@@ -4441,151 +4885,282 @@ def api_branch_head_dashboard_data():
     # Get branch from session
     branch = session.get('branch_head_branch')
 
-    # OPTIMIZED: Calculate KPI counts using efficient count queries
+    # OPTIMIZED: Calculate KPI counts using efficient count queries with caching
     try:
-        # Fresh leads count - EXCLUDE those with today's follow-up date
-        today_str = datetime.now().strftime('%Y-%m-%d')
+        # Cache key for KPI counts
+        cache_key = f"branch_kpi_{branch}_{datetime.now().strftime('%Y-%m-%d')}"
         
-        # PS fresh leads count - ONLY those with NULL follow_up_date AND final_status = 'Pending'
-        ps_fresh_count = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).eq('final_status', 'Pending').is_('follow_up_date', 'null').execute().count or 0
-        
-        # Walk-in fresh leads count - ONLY those with NULL next_followup_date AND status = 'Pending'
-        walkin_fresh_count = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('status', 'Pending').is_('next_followup_date', 'null').execute().count or 0
-        
-        # Event fresh leads count - ONLY those with NULL ps_followup_date_ts AND final_status = 'Pending'
-        event_fresh_count = supabase.table('activity_leads').select('*', count='exact').eq('location', branch).eq('final_status', 'Pending').is_('ps_followup_date_ts', 'null').execute().count or 0
-        
-        fresh_leads_count = ps_fresh_count + walkin_fresh_count + event_fresh_count
-        
-        # Today's follow-ups count (using exact date matching like your SQL query)
-        today_str = datetime.now().strftime('%Y-%m-%d')
-        
-        # Use the same logic as data loading for accurate counts
-        followup_today_count = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).eq('final_status', 'Pending').eq('follow_up_date', today_str).execute().count or 0
-        
-        # Event count with range query AND final_status = 'Pending'
-        event_today_count = supabase.table('activity_leads').select('*', count='exact').eq('location', branch).eq('final_status', 'Pending').gte('ps_followup_date_ts', f'{today_str} 00:00:00').lt('ps_followup_date_ts', f'{today_str} 23:59:59').execute().count or 0
-        
-        # Walk-in count with range query AND status = 'Pending'
-        walkin_today_count = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('status', 'Pending').gte('next_followup_date', f'{today_str} 00:00:00').lt('next_followup_date', f'{today_str} 23:59:59').execute().count or 0
-        
-        followup_leads_count = followup_today_count + event_today_count + walkin_today_count
+        # Check if we have cached KPI counts (cache for 5 minutes)
+        cached_kpis = session.get(cache_key)
+        if cached_kpis and (datetime.now() - cached_kpis.get('timestamp', datetime.now())).seconds < 300:
+            fresh_leads_count = cached_kpis.get('fresh_leads_count', 0)
+            followup_leads_count = cached_kpis.get('followup_leads_count', 0)
+        else:
+            # Fresh leads count - EXCLUDE those with today's follow-up date
+            today_str = datetime.now().strftime('%Y-%m-%d')
+            
+            # PS fresh leads count - ONLY those with NULL follow_up_date AND final_status = 'Pending'
+            ps_fresh_count = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).eq('final_status', 'Pending').is_('follow_up_date', 'null').execute().count or 0
+            
+            # Walk-in fresh leads count - ONLY those with NULL next_followup_date AND status = 'Pending'
+            walkin_fresh_count = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('status', 'Pending').is_('next_followup_date', 'null').execute().count or 0
+            
+            # Event fresh leads count - ONLY those with NULL ps_followup_date_ts AND final_status = 'Pending'
+            event_fresh_count = supabase.table('activity_leads').select('*', count='exact').eq('location', branch).eq('final_status', 'Pending').is_('ps_followup_date_ts', 'null').execute().count or 0
+            
+            fresh_leads_count = ps_fresh_count + walkin_fresh_count + event_fresh_count
+            
+            # Today's follow-ups count (using exact date matching like your SQL query)
+            today_str = datetime.now().strftime('%Y-%m-%d')
+            
+            # Use the same logic as data loading for accurate counts
+            followup_today_count = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).eq('final_status', 'Pending').eq('follow_up_date', today_str).execute().count or 0
+            
+            # Event count with range query AND final_status = 'Pending'
+            event_today_count = supabase.table('activity_leads').select('*', count='exact').eq('location', branch).eq('final_status', 'Pending').gte('ps_followup_date_ts', f'{today_str} 00:00:00').lt('ps_followup_date_ts', f'{today_str} 23:59:59').execute().count or 0
+            
+            # Walk-in count with range query AND status = 'Pending'
+            walkin_today_count = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('status', 'Pending').gte('next_followup_date', f'{today_str} 00:00:00').lt('next_followup_date', f'{today_str} 23:59:59').execute().count or 0
+            
+            followup_leads_count = followup_today_count + event_today_count + walkin_today_count
+            
+            # Cache the results
+            session[cache_key] = {
+                'fresh_leads_count': fresh_leads_count,
+                'followup_leads_count': followup_leads_count,
+                'timestamp': datetime.now()
+            }
         
     except Exception as e:
         print(f"Error calculating KPI counts: {str(e)}")
-        fresh_leads_count = walkin_leads_count = cre_assigned_leads_count = event_leads_count = 0
-        won_leads_count = lost_leads_count = followup_leads_count = 0
+        fresh_leads_count = followup_leads_count = 0
 
     # Initialize query - no backend filtering needed
     query = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch)
 
-    # OPTIMIZED: Database-level search function
-    def build_search_query(base_query, search_term, table_type='ps'):
-        """Build optimized search query at database level"""
-        if not search_term:
-            return base_query
+    # OPTIMIZED: Server-side filtering function
+    def apply_server_filters(query, table_type='ps'):
+        """Apply server-side filters to database query for better performance"""
+        if ps_name:
+            if table_type == 'ps':
+                query = query.eq('ps_name', ps_name)
+            elif table_type == 'walkin':
+                query = query.eq('ps_assigned', ps_name)
+            elif table_type == 'event':
+                query = query.eq('ps_name', ps_name)
         
-        # Create OR conditions for search across multiple columns
-        search_conditions = []
+        if final_status:
+            if table_type == 'ps':
+                query = query.eq('final_status', final_status)
+            elif table_type == 'walkin':
+                query = query.eq('status', final_status)
+            elif table_type == 'event':
+                query = query.eq('final_status', final_status)
         
-        # Define searchable fields based on table type
-        if table_type == 'ps':
-            searchable_fields = ['customer_name', 'customer_mobile_number', 'lead_uid', 'ps_name']
-        elif table_type == 'walkin':
-            searchable_fields = ['customer_name', 'mobile_number', 'uid', 'ps_assigned']
-        elif table_type == 'event':
-            searchable_fields = ['customer_name', 'customer_phone_number', 'activity_uid', 'ps_name']
-        else:
-            searchable_fields = ['customer_name', 'customer_mobile_number', 'uid']
+        if source:
+            if table_type == 'ps':
+                # For PS table, filter by source field
+                query = query.eq('source', source)
+            elif table_type == 'walkin':
+                # For walkin table, only include if source is 'Walk In' or no source filter
+                if source != 'Walk In':
+                    # Return empty result for non-walkin sources
+                    return query.limit(0)
+            elif table_type == 'event':
+                # For event table, only include if source is 'Event' or no source filter
+                if source != 'Event':
+                    # Return empty result for non-event sources
+                    return query.limit(0)
         
-        # Build search conditions for each field
-        for field in searchable_fields:
-            search_conditions.append(f"{field}.ilike.%{search_term}%")
+        # OPTIMIZED: Date filtering for ps_assigned_at column
+        if start_date and end_date:
+            if table_type == 'ps':
+                # Filter by ps_assigned_at timestamp for PS leads
+                query = query.gte('ps_assigned_at', f'{start_date} 00:00:00').lte('ps_assigned_at', f'{end_date} 23:59:59')
+            elif table_type == 'walkin':
+                # Filter by created_at for walk-in leads (since they don't have ps_assigned_at)
+                query = query.gte('created_at', f'{start_date} 00:00:00').lte('created_at', f'{end_date} 23:59:59')
+            elif table_type == 'event':
+                # Filter by created_at for event leads (since they don't have ps_assigned_at)
+                query = query.gte('created_at', f'{start_date} 00:00:00').lte('created_at', f'{end_date} 23:59:59')
         
-        if search_conditions:
-            return base_query.or_(','.join(search_conditions))
+        # OPTIMIZED: Server-side search filtering
+        if search:
+            search_lower = search.lower()
+            # Create OR conditions for search across multiple columns
+            search_conditions = []
+            
+            if table_type == 'ps':
+                search_conditions = [
+                    f"customer_name.ilike.%{search_lower}%",
+                    f"customer_mobile_number.ilike.%{search_lower}%",
+                    f"lead_uid.ilike.%{search_lower}%",
+                    f"ps_name.ilike.%{search_lower}%"
+                ]
+            elif table_type == 'walkin':
+                search_conditions = [
+                    f"customer_name.ilike.%{search_lower}%",
+                    f"mobile_number.ilike.%{search_lower}%",
+                    f"uid.ilike.%{search_lower}%",
+                    f"ps_assigned.ilike.%{search_lower}%"
+                ]
+            elif table_type == 'event':
+                search_conditions = [
+                    f"customer_name.ilike.%{search_lower}%",
+                    f"customer_phone_number.ilike.%{search_lower}%",
+                    f"activity_uid.ilike.%{search_lower}%",
+                    f"ps_name.ilike.%{search_lower}%"
+                ]
+            
+            if search_conditions:
+                query = query.or_(','.join(search_conditions))
         
-        return base_query
-
-    # Helper function for client-side search filtering
-    def filter_rows_by_search(rows, search_term):
-        """Filter rows by search term across all fields"""
-        if not search_term:
-            return rows
-        
-        search_lower = search_term.lower()
-        filtered_rows = []
-        
-        for row in rows:
-            # Convert row to string and search
-            row_text = ' '.join(str(value) for value in row.values()).lower()
-            if search_lower in row_text:
-                filtered_rows.append(row)
-        
-        return filtered_rows
+        return query
 
     # Apply section-specific filters with OPTIMIZED queries
     
-    if section == 'fresh_leads':
-        # Get PS fresh leads - ONLY those with NULL follow_up_date (no follow-up scheduled) AND final_status = 'Pending'
-        ps_query = supabase.table('ps_followup_master').select('lead_uid, customer_name, customer_mobile_number, final_status, ps_name, created_at, source, lead_category, ps_assigned_at').eq('ps_branch', branch).eq('final_status', 'Pending').is_('follow_up_date', 'null')
-        ps_rows = ps_query.execute().data or []
+    if section == 'fresh_leads' or section == 'fresh_leads_section':
+        # Get filter parameters
+        ps_name = request.args.get('ps_name', '')
+        source = request.args.get('source', '')
+        final_status = request.args.get('final_status', '')
+        date_filter = request.args.get('date_filter', '')
+        start_date = request.args.get('start_date', '')
+        end_date = request.args.get('end_date', '')
+        search = request.args.get('search', '')
         
-        # Get Walk-in fresh leads - ONLY those with NULL next_followup_date (no follow-up scheduled) AND status = 'Pending'
-        walkin_query = supabase.table('walkin_table').select('uid, customer_name, mobile_number, branch, ps_assigned, status, created_at, lead_category').eq('branch', branch).eq('status', 'Pending').is_('next_followup_date', 'null')
-        walkin_rows = walkin_query.execute().data or []
+        # Debug logging
+        print(f"DEBUG: Filter parameters - ps_name: {ps_name}, source: {source}, final_status: {final_status}, date_filter: {date_filter}, start_date: {start_date}, end_date: {end_date}")
         
-        # Get Event fresh leads - ONLY those with NULL ps_followup_date_ts (no follow-up scheduled) AND final_status = 'Pending'
-        event_query = supabase.table('activity_leads').select('activity_uid, customer_name, customer_phone_number, final_status, ps_name, created_at, lead_category').eq('location', branch).eq('final_status', 'Pending').is_('ps_followup_date_ts', 'null')
-        event_rows = event_query.execute().data or []
+        # Initialize empty lists for each table
+        ps_rows = []
+        walkin_rows = []
+        event_rows = []
         
-        # Format PS rows
-        ps_formatted = [
-            {
-                'uid': row.get('lead_uid', ''),
-                'customer_name': row.get('customer_name', ''),
-                'customer_mobile_number': row.get('customer_mobile_number', ''),
-                'final_status': row.get('final_status', ''),
-                'ps_name': row.get('ps_name', ''),
-                'created_at': row.get('created_at', ''),
-                'source': row.get('source', 'PS'),
-                'lead_category': row.get('lead_category') if row.get('lead_category') else 'Not Set',
-                'ps_assigned_at': row.get('ps_assigned_at', '')
-            }
-            for row in ps_rows
-        ]
+        # Apply different logic based on section
+        if section == 'fresh_leads_section':
+            # Fresh Leads Section Logic - Only show leads with NULL follow-up dates and Pending status
+            print(f"DEBUG: Using Fresh Leads Section logic")
+            
+            # Apply source-based filtering logic
+            if source == 'Walk In':
+                # Only query walkin_table for Walk In source
+                walkin_query = supabase.table('walkin_table').select('uid, customer_name, mobile_number, branch, ps_assigned, status, created_at, lead_category').eq('branch', branch).eq('status', 'Pending').is_('next_followup_date', 'null')
+                walkin_query = apply_server_filters(walkin_query, 'walkin')
+                walkin_rows = walkin_query.execute().data or []
+                ps_rows = []
+                event_rows = []
+            elif source == 'Event':
+                # Only query activity_leads for Event source
+                event_query = supabase.table('activity_leads').select('activity_uid, customer_name, customer_phone_number, final_status, ps_name, created_at, lead_category').eq('location', branch).eq('final_status', 'Pending').is_('ps_followup_date_ts', 'null')
+                event_query = apply_server_filters(event_query, 'event')
+                event_rows = event_query.execute().data or []
+                ps_rows = []
+                walkin_rows = []
+            else:
+                # Query all tables for other sources or no source filter
+                # PS fresh leads - ONLY those with NULL follow_up_date AND final_status = 'Pending'
+                ps_query = supabase.table('ps_followup_master').select('lead_uid, customer_name, customer_mobile_number, final_status, ps_name, created_at, source, lead_category, ps_assigned_at').eq('ps_branch', branch).eq('final_status', 'Pending').is_('follow_up_date', 'null')
+                ps_query = apply_server_filters(ps_query, 'ps')
+                ps_rows = ps_query.execute().data or []
+                
+                # Walk-in fresh leads - ONLY those with NULL next_followup_date AND status = 'Pending'
+                walkin_query = supabase.table('walkin_table').select('uid, customer_name, mobile_number, branch, ps_assigned, status, created_at, lead_category').eq('branch', branch).eq('status', 'Pending').is_('next_followup_date', 'null')
+                walkin_query = apply_server_filters(walkin_query, 'walkin')
+                walkin_rows = walkin_query.execute().data or []
+                
+                # Event fresh leads - ONLY those with NULL ps_followup_date_ts AND final_status = 'Pending'
+                event_query = supabase.table('activity_leads').select('activity_uid, customer_name, customer_phone_number, final_status, ps_name, created_at, lead_category').eq('location', branch).eq('final_status', 'Pending').is_('ps_followup_date_ts', 'null')
+                event_query = apply_server_filters(event_query, 'event')
+                event_rows = event_query.execute().data or []
+            
+        else:
+            # Regular All Leads Logic with improved source filtering
+            if source == 'Walk In':
+                # Only query walkin_table for Walk In source
+                print(f"DEBUG: Querying walkin_table for Walk In source")
+                walkin_query = supabase.table('walkin_table').select('uid, customer_name, mobile_number, branch, ps_assigned, status, created_at, lead_category').eq('branch', branch)
+                walkin_query = apply_server_filters(walkin_query, 'walkin')
+                walkin_rows = walkin_query.execute().data or []
+                ps_rows = []
+                event_rows = []
+                print(f"DEBUG: Found {len(walkin_rows)} walkin rows")
+            elif source == 'Event':
+                # Only query activity_leads for Event source
+                print(f"DEBUG: Querying activity_leads for Event source")
+                event_query = supabase.table('activity_leads').select('activity_uid, customer_name, customer_phone_number, final_status, ps_name, created_at, lead_category').eq('location', branch)
+                event_query = apply_server_filters(event_query, 'event')
+                event_rows = event_query.execute().data or []
+                ps_rows = []
+                walkin_rows = []
+                print(f"DEBUG: Found {len(event_rows)} event rows")
+            else:
+                # Query all tables for other sources or no source filter
+                ps_query = supabase.table('ps_followup_master').select('lead_uid, customer_name, customer_mobile_number, final_status, ps_name, created_at, source, lead_category, ps_assigned_at').eq('ps_branch', branch)
+                ps_query = apply_server_filters(ps_query, 'ps')
+                ps_rows = ps_query.execute().data or []
+                
+                walkin_query = supabase.table('walkin_table').select('uid, customer_name, mobile_number, branch, ps_assigned, status, created_at, lead_category').eq('branch', branch)
+                walkin_query = apply_server_filters(walkin_query, 'walkin')
+                walkin_rows = walkin_query.execute().data or []
+                
+                event_query = supabase.table('activity_leads').select('activity_uid, customer_name, customer_phone_number, final_status, ps_name, created_at, lead_category').eq('location', branch)
+                event_query = apply_server_filters(event_query, 'event')
+                event_rows = event_query.execute().data or []
         
-        # Format Walk-in rows
-        walkin_formatted = [
-            {
-                'uid': row.get('uid', ''),
-                'customer_name': row.get('customer_name', ''),
-                'customer_mobile_number': row.get('mobile_number', ''),
-                'final_status': row.get('status', ''),
-                'ps_name': row.get('ps_assigned', ''),
-                'created_at': row.get('created_at', ''),
-                'source': 'Walk In',
-                'lead_category': row.get('lead_category') if row.get('lead_category') else 'Not Set',
-                'ps_assigned_at': row.get('created_at', '')
-            }
-            for row in walkin_rows
-        ]
+        # OPTIMIZED: Format rows efficiently using list comprehensions
+        def format_ps_rows(rows):
+            return [
+                {
+                    'uid': row.get('lead_uid', ''),
+                    'customer_name': row.get('customer_name', ''),
+                    'customer_mobile_number': row.get('customer_mobile_number', ''),
+                    'final_status': row.get('final_status', ''),
+                    'ps_name': row.get('ps_name', ''),
+                    'created_at': row.get('created_at', ''),
+                    'source': row.get('source', 'PS'),
+                    'lead_category': row.get('lead_category') if row.get('lead_category') else 'Not Set',
+                    'ps_assigned_at': row.get('ps_assigned_at', '')
+                }
+                for row in rows
+            ]
         
-        # Format Event rows
-        event_formatted = [
-            {
-                'uid': row.get('activity_uid', ''),
-                'customer_name': row.get('customer_name', ''),
-                'customer_mobile_number': row.get('customer_phone_number', ''),
-                'final_status': row.get('final_status', ''),
-                'ps_name': row.get('ps_name', ''),
-                'created_at': row.get('created_at', ''),
-                'source': 'Event',
-                'lead_category': row.get('lead_category') if row.get('lead_category') else 'Not Set',
-                'ps_assigned_at': row.get('created_at', '')
-            }
-            for row in event_rows
-        ]
+        def format_walkin_rows(rows):
+            return [
+                {
+                    'uid': row.get('uid', ''),
+                    'customer_name': row.get('customer_name', ''),
+                    'customer_mobile_number': row.get('mobile_number', ''),
+                    'final_status': row.get('status', ''),
+                    'ps_name': row.get('ps_assigned', ''),
+                    'created_at': row.get('created_at', ''),
+                    'source': 'Walk In',
+                    'lead_category': row.get('lead_category') if row.get('lead_category') else 'Not Set',
+                    'ps_assigned_at': row.get('created_at', '')
+                }
+                for row in rows
+            ]
+        
+        def format_event_rows(rows):
+            return [
+                {
+                    'uid': row.get('activity_uid', ''),
+                    'customer_name': row.get('customer_name', ''),
+                    'customer_mobile_number': row.get('customer_phone_number', ''),
+                    'final_status': row.get('final_status', ''),
+                    'ps_name': row.get('ps_name', ''),
+                    'created_at': row.get('created_at', ''),
+                    'source': 'Event',
+                    'lead_category': row.get('lead_category') if row.get('lead_category') else 'Not Set',
+                    'ps_assigned_at': row.get('created_at', '')
+                }
+                for row in rows
+            ]
+        
+        # Format all rows efficiently
+        ps_formatted = format_ps_rows(ps_rows)
+        walkin_formatted = format_walkin_rows(walkin_rows)
+        event_formatted = format_event_rows(event_rows)
         
         # Combine all rows
         all_formatted_rows = ps_formatted + walkin_formatted + event_formatted
@@ -4595,6 +5170,7 @@ def api_branch_head_dashboard_data():
         
         # Note: All filtering (search, date, PS) will be handled client-side for better performance
         
+        # OPTIMIZED: Return response efficiently with better error handling
         try:
             response = {
                 'success': True,
@@ -4603,8 +5179,25 @@ def api_branch_head_dashboard_data():
                 'fresh_leads_count': fresh_leads_count,
                 'followup_leads_count': followup_leads_count
             }
+            
+            # Log audit event for successful data access
+            try:
+                auth_manager.log_audit_event(
+                    user_id=session.get('user_id'),
+                    user_type=session.get('user_type'),
+                    action='BRANCH_HEAD_DASHBOARD_DATA_ACCESS',
+                    resource='branch_head_dashboard_data',
+                    details={
+                        'section': section,
+                        'total_count': len(all_formatted_rows)
+                    }
+                )
+            except Exception as audit_error:
+                print(f"Audit logging error: {audit_error}")
+            
             return jsonify(response)
         except Exception as e:
+            print(f"Error formatting response: {str(e)}")
             return jsonify({
                 'success': False,
                 'error': str(e),
@@ -4767,21 +5360,37 @@ def api_branch_head_dashboard_data():
         return jsonify(response)
 
     elif section == 'followup_leads':
+        # Get filter parameters for followup_leads section
+        ps_name = request.args.get('ps_name', '')
+        search = request.args.get('search', '')
+        
+        # Debug logging
+        print(f"DEBUG: Followup filter parameters - ps_name: {ps_name}, search: {search}")
+        
         # Get today's follow-ups using proper date filtering (like your SQL query)
         today_str = datetime.now().strftime('%Y-%m-%d')
         
         # PS follow-ups for today (exact date match) AND final_status = 'Pending'
         ps_query = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Pending').eq('follow_up_date', today_str)
+        # Apply PS filter if specified
+        if ps_name:
+            ps_query = ps_query.eq('ps_name', ps_name)
         ps_today = ps_query.execute().data or []
         
         # Event follow-ups for today (exact date match) AND final_status = 'Pending'
         # Use date range queries for timestamp columns
         act_query = supabase.table('activity_leads').select('*').eq('location', branch).eq('final_status', 'Pending').gte('ps_followup_date_ts', f'{today_str} 00:00:00').lt('ps_followup_date_ts', f'{today_str} 23:59:59')
+        # Apply PS filter if specified
+        if ps_name:
+            act_query = act_query.eq('ps_name', ps_name)
         act_today_raw = act_query.execute().data or []
         
         # Walk-in follow-ups for today (exact date match) AND status = 'Pending'
         # Use date range queries for timestamp columns
         walkin_query = supabase.table('walkin_table').select('*').eq('branch', branch).eq('status', 'Pending').gte('next_followup_date', f'{today_str} 00:00:00').lt('next_followup_date', f'{today_str} 23:59:59')
+        # Apply PS filter if specified
+        if ps_name:
+            walkin_query = walkin_query.eq('ps_assigned', ps_name)
         walkin_today_raw = walkin_query.execute().data or []
         
         # Mark all as not missed and set source_type and phone
@@ -4810,9 +5419,6 @@ def api_branch_head_dashboard_data():
         # Debug: Print counts before and after search filter
         print(f"DEBUG: Before search filter - PS: {len(ps_today)}, Event: {len(act_today)}, Walkin: {len(walkin_today)}, Total: {len(all_rows)}")
         
-        # Note: All filtering is now handled client-side
-        print(f"DEBUG: Client-side filtering - Total: {len(all_rows)}")
-        
         # Format rows for frontend
         formatted_rows = [
             {
@@ -4827,6 +5433,19 @@ def api_branch_head_dashboard_data():
             }
             for row in all_rows
         ]
+        
+        # Apply search filter if provided
+        if search:
+            print(f"DEBUG: Applying search filter: {search}")
+            search_lower = search.lower()
+            formatted_rows = [
+                row for row in formatted_rows
+                if (search_lower in str(row.get('uid', '')).lower() or
+                    search_lower in str(row.get('customer_name', '')).lower() or
+                    search_lower in str(row.get('customer_mobile_number', '')).lower() or
+                    search_lower in str(row.get('ps_name', '')).lower())
+            ]
+            print(f"DEBUG: After search filter - Total: {len(formatted_rows)}")
         
         print(f"DEBUG: Final formatted rows count: {len(formatted_rows)}")
         
@@ -6684,48 +7303,58 @@ def api_export_branch_leads():
             # Export PS leads from ps_followup_master
             try:
                 leads_data = []
+                print(f"🔍 Exporting PS leads for branch: {branch}, date range: {date_from} to {date_to}")
+                
                 # Try different date formats
                 for start_format in format_date_for_query(date_from):
                     for end_format in format_date_for_query(date_to):
                         try:
-                            # Try to filter by branch first, then fallback to ps_branch
-                            query = supabase.table('ps_followup_master').select('*').eq('branch', branch).gte('created_at', start_format).lte('created_at', end_format)
+                            # PS table uses ps_branch, not branch
+                            # Use ps_assigned_at for PS leads filtering - ONLY export leads with ps_assigned_at timestamps
+                            query = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).not_.is_('ps_assigned_at', 'null').gte('ps_assigned_at', start_format).lte('ps_assigned_at', end_format)
                             result = query.execute()
                             if result.data:
                                 leads_data = result.data
+                                print(f"✅ Found {len(leads_data)} PS leads with ps_branch + ps_assigned_at filter")
                                 break
                             else:
-                                # Fallback to ps_branch if no results with branch
-                                query = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).gte('created_at', start_format).lte('created_at', end_format)
-                                result = query.execute()
-                                if result.data:
-                                    leads_data = result.data
-                                    break
+                                print(f"⚠️ No PS leads found with ps_assigned_at between {start_format} and {end_format}")
+                                continue
                         except Exception as e:
+                            print(f"❌ Error with date format {start_format} to {end_format}: {e}")
                             continue
                     if leads_data:
                         break
                 
-                # Format data for CSV
+                # Format data for CSV - only include leads with ps_assigned_at
+                print(f"📊 Formatting {len(leads_data)} PS leads for CSV export")
                 for lead in leads_data:
-                    csv_data.append({
-                        'Lead UID': lead.get('lead_uid', ''),
-                        'Customer Name': lead.get('customer_name', ''),
-                        'Mobile Number': lead.get('customer_mobile_number', ''),
-                        'Source': lead.get('source', ''),
-                        'Lead Category': lead.get('lead_category', 'Not Set'),
-                        'PS Name': lead.get('ps_name', ''),
-                        'CRE Name': lead.get('cre_name', ''),
-                        'Branch': lead.get('branch') or lead.get('ps_branch', ''),
-                        'Final Status': lead.get('final_status', ''),
-                        'Lead Status': lead.get('lead_status', ''),
-                        'Model Interested': lead.get('model_interested', ''),
-                        'Follow Up Date': lead.get('follow_up_date', ''),
-                        'Created At': lead.get('created_at', ''),
-                        'Updated At': lead.get('updated_at', '')
-                    })
+                    # Only include leads that have ps_assigned_at timestamp
+                    if lead.get('ps_assigned_at'):
+                        csv_data.append({
+                            'Lead UID': lead.get('lead_uid', ''),
+                            'Customer Name': lead.get('customer_name', ''),
+                            'Mobile Number': lead.get('customer_mobile_number', ''),
+                            'Source': lead.get('source', ''),
+                            'Lead Category': lead.get('lead_category', 'Not Set'),
+                            'PS Name': lead.get('ps_name', ''),
+                            'CRE Name': lead.get('cre_name', ''),
+                            'Branch': lead.get('branch') or lead.get('ps_branch', ''),
+                            'Final Status': lead.get('final_status', ''),
+                            'Lead Status': lead.get('lead_status', ''),
+                            'Model Interested': lead.get('model_interested', ''),
+                            'Follow Up Date': lead.get('follow_up_date', ''),
+                            'PS Assigned At': lead.get('ps_assigned_at', ''),
+                            'Created At': lead.get('created_at', ''),
+                            'Updated At': lead.get('updated_at', '')
+                        })
+                    else:
+                        print(f"⚠️ Skipping lead {lead.get('lead_uid', 'N/A')} - no ps_assigned_at timestamp")
+                print(f"✅ Successfully formatted {len(csv_data)} PS leads for export")
             except Exception as e:
-                print(f"Error fetching PS leads: {str(e)}")
+                print(f"❌ Error fetching PS leads: {str(e)}")
+                import traceback
+                traceback.print_exc()
                 return jsonify({'success': False, 'message': f'Error fetching PS leads: {str(e)}'}), 500
                 
         elif lead_type == 'Walkin':
@@ -6817,22 +7446,45 @@ def api_export_branch_leads():
         import csv
         import io
         
+        print(f"📊 Creating CSV with {len(csv_data)} rows")
+        
         output = io.StringIO()
         if csv_data:
-            fieldnames = csv_data[0].keys()
-            writer = csv.DictWriter(output, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(csv_data)
+            try:
+                fieldnames = csv_data[0].keys()
+                print(f"📋 CSV fieldnames: {list(fieldnames)}")
+                writer = csv.DictWriter(output, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(csv_data)
+                print("✅ CSV content created successfully")
+            except Exception as e:
+                print(f"❌ Error creating CSV: {e}")
+                import traceback
+                traceback.print_exc()
+                return jsonify({'success': False, 'message': f'Error creating CSV: {str(e)}'}), 500
+        else:
+            print("❌ No CSV data to export")
+            return jsonify({'success': False, 'message': 'No data found for the specified criteria'}), 404
         
         # Create response
         from flask import Response
-        response = Response(
-            output.getvalue(),
-            mimetype='text/csv',
-            headers={'Content-Disposition': f'attachment; filename={lead_type}_leads_{date_from}_to_{date_to}_{branch}.csv'}
-        )
-        
-        return response
+        try:
+            csv_content = output.getvalue()
+            print(f"📄 CSV content length: {len(csv_content)} characters")
+            
+            response = Response(
+                csv_content,
+                mimetype='text/csv',
+                headers={'Content-Disposition': f'attachment; filename={lead_type}_leads_{date_from}_to_{date_to}_{branch}.csv'}
+            )
+            
+            print("✅ Response created successfully")
+            return response
+        except Exception as e:
+            print(f"❌ Error creating response: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'message': f'Error creating response: {str(e)}'}), 500
         
     except Exception as e:
         return jsonify({'success': False, 'message': f'Export failed: {str(e)}'}), 500
@@ -7398,6 +8050,19 @@ def update_event_lead(activity_uid):
                 update_data.pop(f'ps_{next_call}_call_remark', None)
             if update_data:
                 supabase.table('activity_leads').update(update_data).eq('activity_uid', activity_uid).execute()
+                
+                # Track the PS call attempt in ps_call_attempt_history
+                if lead_status:
+                    call_was_recorded = bool(call_date and call_remark)
+                    track_ps_call_attempt(
+                        uid=lead['activity_uid'],
+                        ps_name=session.get('ps_name'),
+                        call_no=next_call,
+                        lead_status=lead_status,
+                        call_was_recorded=call_was_recorded,
+                        follow_up_date=ps_followup_date_ts if ps_followup_date_ts else None,
+                        remarks=call_remark if call_remark else None
+                    )
                 
                 # Sync to alltest_drive table if test_drive_done is set
                 if test_drive_done in ['Yes', 'No', True, False]:
@@ -8631,6 +9296,291 @@ def add_walkin_lead():
         ps_options_json=ps_options_json,
         default_branch=rec_branch
     )
+
+@app.route('/api/branch_analytics/ps_performance')
+def api_branch_analytics_ps_performance():
+    """API endpoint for Product Specialist Performance data"""
+    try:
+        # Get branch from session
+        branch = session.get('branch_head_branch')
+        if not branch:
+            return jsonify({'success': False, 'message': 'Branch not found in session'})
+        
+        # Get date filter parameters
+        date_from = request.args.get('date_from')
+        date_to = request.args.get('date_to')
+        
+        # If no date parameters provided, use MTD (Month to Date) as default
+        if not date_from or not date_to:
+            today = datetime.now()
+            date_from = today.replace(day=1).strftime('%Y-%m-%d')
+            date_to = today.strftime('%Y-%m-%d')
+        
+        # Get all PS from the branch
+        ps_query = supabase.table('ps_followup_master').select('ps_name').eq('ps_branch', branch).not_.is_('ps_name', 'null').execute()
+        ps_names = list(set([row['ps_name'] for row in ps_query.data if row['ps_name']]))
+        
+        result_data = []
+        
+        for ps_name in ps_names:
+            # Get leads assigned in the date range
+            assigned_query = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).eq('ps_name', ps_name).gte('ps_assigned_at', date_from).lte('ps_assigned_at', date_to).execute()
+            leads_assigned = assigned_query.count or 0
+            
+            # Get leads contacted at least once from fresh leads in the date range
+            contacted_query = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).eq('ps_name', ps_name).gte('ps_assigned_at', date_from).lte('ps_assigned_at', date_to).not_.is_('first_call_date', 'null').execute()
+            leads_contacted = contacted_query.count or 0
+            
+            # Calculate gap
+            gap = leads_assigned - leads_contacted
+            
+            result_data.append({
+                'ps_name': ps_name,
+                'leads_assigned': leads_assigned,
+                'leads_contacted': leads_contacted,
+                'gap': gap
+            })
+        
+        return jsonify({'success': True, 'data': result_data})
+        
+    except Exception as e:
+        print(f"Error in ps_performance API: {str(e)}")
+        return jsonify({'success': False, 'message': 'Error loading PS performance data'})
+
+@app.route('/api/branch_analytics/source_leads')
+def api_branch_analytics_source_leads():
+    """API endpoint for Source-wise Leads Analysis data"""
+    try:
+        # Get branch from session
+        branch = session.get('branch_head_branch')
+        if not branch:
+            return jsonify({'success': False, 'message': 'Branch not found in session'})
+        
+        # Get date filter parameters
+        date_from = request.args.get('date_from')
+        date_to = request.args.get('date_to')
+        
+        # If no date parameters provided, use MTD (Month to Date) as default
+        if not date_from or not date_to:
+            today = datetime.now()
+            date_from = today.replace(day=1).strftime('%Y-%m-%d')
+            date_to = today.strftime('%Y-%m-%d')
+        
+        # Get all PS from the branch
+        ps_query = supabase.table('ps_followup_master').select('ps_name').eq('ps_branch', branch).not_.is_('ps_name', 'null').execute()
+        ps_names = list(set([row['ps_name'] for row in ps_query.data if row['ps_name']]))
+        
+        result_data = []
+        all_sources = set()  # To track all unique sources
+        
+        for ps_name in ps_names:
+            # Get all leads for this PS in the date range
+            ps_leads_query = supabase.table('ps_followup_master').select('source, final_status').eq('ps_branch', branch).eq('ps_name', ps_name).gte('ps_assigned_at', date_from).lte('ps_assigned_at', date_to).execute()
+            
+            # Group by source
+            source_stats = {}
+            for lead in ps_leads_query.data:
+                source = lead.get('source', 'Unknown')
+                final_status = lead.get('final_status', 'Pending')
+                
+                if source not in source_stats:
+                    source_stats[source] = {'total_leads': 0, 'won_leads': 0}
+                
+                source_stats[source]['total_leads'] += 1
+                if final_status == 'Won':
+                    source_stats[source]['won_leads'] += 1
+                
+                all_sources.add(source)
+            
+            # Add to result data - one row per PS with aggregated data
+            total_leads = sum(stats['total_leads'] for stats in source_stats.values())
+            total_won_leads = sum(stats['won_leads'] for stats in source_stats.values())
+            
+            result_data.append({
+                'ps_name': ps_name,
+                'total_leads': total_leads,
+                'won_leads': total_won_leads,
+                'source_breakdown': source_stats
+            })
+        
+        # Convert all_sources to sorted list for consistent column order
+        all_sources_list = sorted(list(all_sources))
+        
+        return jsonify({
+            'success': True, 
+            'data': result_data,
+            'sources': all_sources_list
+        })
+        
+    except Exception as e:
+        print(f"Error in source_leads API: {str(e)}")
+        return jsonify({'success': False, 'message': 'Error loading source leads data'})
+
+@app.route('/api/branch_analytics/walkin_leads')
+def api_branch_analytics_walkin_leads():
+    """API endpoint for Walk-in Leads Summary data"""
+    try:
+        # Get branch from session
+        branch = session.get('branch_head_branch')
+        if not branch:
+            return jsonify({'success': False, 'message': 'Branch not found in session'})
+        
+        # Get date filter parameters
+        date_from = request.args.get('date_from')
+        date_to = request.args.get('date_to')
+        
+        # If no date parameters provided, use MTD (Month to Date) as default
+        if not date_from or not date_to:
+            today = datetime.now()
+            date_from = today.replace(day=1).strftime('%Y-%m-%d')
+            date_to = today.strftime('%Y-%m-%d')
+        
+        # Get all PS from the branch
+        ps_query = supabase.table('walkin_table').select('ps_assigned').eq('branch', branch).not_.is_('ps_assigned', 'null').execute()
+        ps_names = list(set([row['ps_assigned'] for row in ps_query.data if row['ps_assigned']]))
+        
+        result_data = []
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        
+        for ps_name in ps_names:
+            # Get total walk-in leads assigned to this PS in the date range
+            total_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('ps_assigned', ps_name).gte('created_at', date_from).lte('created_at', date_to).execute()
+            total_walkin_leads = total_query.count or 0
+            
+            # Get pending leads in the date range
+            pending_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('ps_assigned', ps_name).eq('status', 'Pending').gte('created_at', date_from).lte('created_at', date_to).execute()
+            pending_leads = pending_query.count or 0
+            
+            # Get lost leads in the date range
+            lost_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('ps_assigned', ps_name).eq('status', 'Lost').gte('created_at', date_from).lte('created_at', date_to).execute()
+            lost_leads = lost_query.count or 0
+            
+            # Get won leads in the date range
+            won_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('ps_assigned', ps_name).eq('status', 'Won').gte('created_at', date_from).lte('created_at', date_to).execute()
+            won_leads = won_query.count or 0
+            
+            # Get today's follow-ups (this remains the same as it's based on today's date)
+            today_followup_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('ps_assigned', ps_name).eq('next_followup_date', today_str).execute()
+            today_followups = today_followup_query.count or 0
+            
+            result_data.append({
+                'ps_name': ps_name,
+                'total_walkin_leads': total_walkin_leads,
+                'pending_leads': pending_leads,
+                'lost_leads': lost_leads,
+                'won_leads': won_leads,
+                'today_followups': today_followups
+            })
+        
+        return jsonify({'success': True, 'data': result_data})
+        
+    except Exception as e:
+        print(f"Error in walkin_leads API: {str(e)}")
+        return jsonify({'success': False, 'message': 'Error loading walkin leads data'})
+
+@app.route('/api/branch_sources')
+def api_branch_sources():
+    """Get unique source values for the current branch"""
+    try:
+        branch = session.get('branch_head_branch')
+        
+        # Get unique sources from ps_followup_master
+        ps_sources = supabase.table('ps_followup_master').select('source').eq('ps_branch', branch).not_.is_('source', 'null').execute().data or []
+        ps_source_values = list(set([row.get('source', '') for row in ps_sources if row.get('source', '')]))
+        
+        # Add Walk In and Event sources
+        all_sources = ['Walk In', 'Event'] + ps_source_values
+        
+        # Remove duplicates and sort
+        unique_sources = sorted(list(set(all_sources)))
+        
+        return jsonify({
+            'success': True,
+            'sources': unique_sources
+        })
+    except Exception as e:
+        print(f"Error getting branch sources: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'sources': ['Walk In', 'Event', 'PS', 'Meta', 'Google', 'Website', 'Referral', 'Other']
+        })
+
+@app.route('/api/branch_analytics/summary')
+def api_branch_analytics_summary():
+    """API endpoint for Branch Summary KPI data"""
+    try:
+        branch = session.get('branch_head_branch')
+        if not branch:
+            return jsonify({'success': False, 'message': 'Branch not found in session'})
+        
+        # Get date filter parameters
+        date_from = request.args.get('date_from')
+        date_to = request.args.get('date_to')
+        
+        # If no date parameters provided, use MTD (Month to Date) as default
+        if not date_from or not date_to:
+            today = datetime.now()
+            date_from = today.replace(day=1).strftime('%Y-%m-%d')
+            date_to = today.strftime('%Y-%m-%d')
+        
+        # Get total leads assigned from ps_followup_master
+        ps_total_query = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).gte('created_at', date_from).lte('created_at', date_to).execute()
+        ps_total_leads = ps_total_query.count or 0
+        
+        # Get total leads assigned from walkin_table
+        walkin_total_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).gte('created_at', date_from).lte('created_at', date_to).execute()
+        walkin_total_leads = walkin_total_query.count or 0
+        
+        # Total leads assigned (sum of both tables)
+        total_leads_assigned = ps_total_leads + walkin_total_leads
+        
+        # Get pending leads from ps_followup_master
+        ps_pending_query = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).eq('final_status', 'Pending').gte('created_at', date_from).lte('created_at', date_to).execute()
+        ps_pending_leads = ps_pending_query.count or 0
+        
+        # Get pending leads from walkin_table
+        walkin_pending_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('status', 'Pending').gte('created_at', date_from).lte('created_at', date_to).execute()
+        walkin_pending_leads = walkin_pending_query.count or 0
+        
+        # Total pending leads
+        total_pending_leads = ps_pending_leads + walkin_pending_leads
+        
+        # Get won leads from ps_followup_master
+        ps_won_query = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).eq('final_status', 'Won').gte('created_at', date_from).lte('created_at', date_to).execute()
+        ps_won_leads = ps_won_query.count or 0
+        
+        # Get won leads from walkin_table
+        walkin_won_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('status', 'Won').gte('created_at', date_from).lte('created_at', date_to).execute()
+        walkin_won_leads = walkin_won_query.count or 0
+        
+        # Total won leads
+        total_won_leads = ps_won_leads + walkin_won_leads
+        
+        # Get lost leads from ps_followup_master
+        ps_lost_query = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).eq('final_status', 'Lost').gte('created_at', date_from).lte('created_at', date_to).execute()
+        ps_lost_leads = ps_lost_query.count or 0
+        
+        # Get lost leads from walkin_table
+        walkin_lost_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('status', 'Lost').gte('created_at', date_from).lte('created_at', date_to).execute()
+        walkin_lost_leads = walkin_lost_query.count or 0
+        
+        # Total lost leads
+        total_lost_leads = ps_lost_leads + walkin_lost_leads
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'total_leads_assigned': total_leads_assigned,
+                'total_pending_leads': total_pending_leads,
+                'total_won_leads': total_won_leads,
+                'total_lost_leads': total_lost_leads
+            }
+        })
+        
+    except Exception as e:
+        print(f"Error in branch summary API: {str(e)}")
+        return jsonify({'success': False, 'message': 'Error loading branch summary data'})
 
 if __name__ == '__main__':
     # socketio.run(app, debug=True)

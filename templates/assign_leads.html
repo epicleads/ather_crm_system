@@ -438,21 +438,30 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-md-6">
-          <label for="source" class="form-label" style="font-weight: 600; color: var(--accent-dark);">
-            Source <span class="text-danger">*</span>
-          </label>
-          <select class="form-select" id="source" name="source" required 
-                  style="border-radius: 10px; border: 1.5px solid var(--border);">
-            <option value="">Select Source</option>
-            <option value="Knowlarity">Knowlarity</option>
-            <option value="Google(Knowlarity)">Google(Knowlarity)</option>
-            <option value="Meta(Knowlarity)">Meta(Knowlarity)</option>
-            <option value="Google(Web)">Google(Web)</option>
-          </select>
-        </div>
+                 <div class="col-md-6">
+           <label for="source" class="form-label" style="font-weight: 600; color: var(--accent-dark);">
+             Source <span class="text-danger">*</span>
+           </label>
+           <select class="form-select" id="source" name="source" required 
+                   style="border-radius: 10px; border: 1.5px solid var(--border);" onchange="updateSubsource()">
+             <option value="">Select Source</option>
+             <option value="META">META</option>
+             <option value="GOOGLE">GOOGLE</option>
+             <option value="BTL">BTL</option>
+             <option value="OEM">OEM</option>
+           </select>
+         </div>
+         <div class="col-md-6">
+           <label for="subsource" class="form-label" style="font-weight: 600; color: var(--accent-dark);">
+             Subsource <span class="text-danger">*</span>
+           </label>
+           <select class="form-select" id="subsource" name="subsource" required 
+                   style="border-radius: 10px; border: 1.5px solid var(--border);">
+             <option value="">Select Source First</option>
+           </select>
+         </div>
         <div class="col-12 text-end">
-          <button type="submit" class="btn btn-success" style="font-weight: 600; border-radius: 10px; padding: 10px 24px;">
+          <button type="submit" class="btn btn-success" style="font-weight: 600; border-radius: 10px; padding: 10px 24px;" onclick="return checkDuplicateLead(event)">
             <i class="fas fa-plus-circle me-2"></i>Add Lead
           </button>
         </div>
@@ -507,6 +516,33 @@
   </div>
 
   <div id="tooltip" class="tooltip"></div>
+</div>
+
+<!-- Duplicate Lead Alert Modal -->
+<div class="modal fade" id="duplicateLeadModal" tabindex="-1" aria-labelledby="duplicateLeadModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="duplicateLeadModalLabel">
+          <i class="fas fa-exclamation-triangle text-warning"></i> Duplicate Lead Detected
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="duplicateLeadDetails">
+          <!-- Duplicate lead details will be populated here -->
+        </div>
+        <div class="alert alert-info mt-3">
+          <i class="fas fa-info-circle"></i>
+          <strong>Note:</strong> After clicking "Add as New Source", you will be redirected to the Admin Dashboard → Manage Leads → Duplicate Leads section to view and manage the duplicate lead.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-warning" onclick="proceedWithDuplicate()">Add as New Source</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="container mt-4">
@@ -570,6 +606,12 @@
       const submitBtn = this.querySelector('button[type="submit"]');
       const originalText = submitBtn.innerHTML;
       
+      // Debug form data
+      console.log('🔍 Form submission debug:');
+      for (let [key, value] of formData.entries()) {
+        console.log(`  - ${key}: ${value}`);
+      }
+      
       // Disable button and show loading
       submitBtn.disabled = true;
       submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Adding...';
@@ -580,6 +622,7 @@
       })
       .then(response => response.json())
       .then(data => {
+        console.log('📡 Server response:', data);
         if (data.success) {
           alert(`✅ Lead added successfully!\nUID: ${data.uid}`);
           this.reset(); // Reset form
@@ -588,7 +631,7 @@
         }
       })
       .catch(error => {
-        console.error('Error:', error);
+        console.error('❌ Error:', error);
         alert('❌ Network error. Please try again.');
       })
       .finally(() => {
@@ -990,5 +1033,145 @@
       renderLeadsTable(allLeads, currentPage);
     }
   });
+
+
+  // Source to Subsource mapping
+  const sourceSubsourceMap = {
+    'GOOGLE': ['Google Know'],
+    'META': ['Meta Know'],
+    'BTL': ['BTL Know'],
+    'OEM': ['Web', 'Tele', 'Affiliate Bikewale', 'Affiliate Bikedekho', 'Affiliate 91 Wheels']
+  };
+
+  function updateSubsource() {
+    const sourceSelect = document.getElementById('source');
+    const subsourceSelect = document.getElementById('subsource');
+    const selectedSource = sourceSelect.value;
+    
+    // Clear current options
+    subsourceSelect.innerHTML = '<option value="">Select Subsource</option>';
+    
+    if (selectedSource && sourceSubsourceMap[selectedSource]) {
+      sourceSubsourceMap[selectedSource].forEach(subsource => {
+        const option = document.createElement('option');
+        option.value = subsource;
+        option.textContent = subsource;
+        subsourceSelect.appendChild(option);
+      });
+    }
+  }
+
+  function normalizePhoneNumber(phone) {
+    // Remove all non-digit characters
+    return phone.replace(/\D/g, '');
+  }
+
+  async function checkDuplicateLead(event) {
+    event.preventDefault();
+    
+    const phoneNumber = document.getElementById('customer_mobile_number').value;
+    const source = document.getElementById('source').value;
+    const subsource = document.getElementById('subsource').value;
+    const assignedCre = document.getElementById('assigned_cre').value;
+    
+    console.log('🔍 checkDuplicateLead debug:');
+    console.log(`  - Phone: ${phoneNumber}`);
+    console.log(`  - Source: ${source}`);
+    console.log(`  - Subsource: ${subsource}`);
+    console.log(`  - Assigned CRE: ${assignedCre}`);
+    
+    if (!phoneNumber || !source || !subsource) {
+      console.log('❌ Missing required fields, letting form validation handle it');
+      // If required fields are missing, let the form validation handle it
+      return true;
+    }
+    
+    const normalizedPhone = normalizePhoneNumber(phoneNumber);
+    
+    try {
+      const response = await fetch('/check_duplicate_lead', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          phone_number: normalizedPhone,
+          source: source,
+          subsource: subsource
+        })
+      });
+      
+      const result = await response.json();
+      console.log('🔍 Duplicate check response:', result);
+      
+      if (result.is_duplicate) {
+        // Show duplicate lead modal
+        const modal = new bootstrap.Modal(document.getElementById('duplicateLeadModal'));
+        const detailsDiv = document.getElementById('duplicateLeadDetails');
+        
+        let detailsHtml = `
+          <div class="alert alert-warning">
+            <strong>Phone Number:</strong> ${phoneNumber}<br>
+            <strong>Source:</strong> ${source}<br>
+            <strong>Subsource:</strong> ${subsource}
+          </div>
+          <div class="alert alert-info">
+            <strong>Existing Lead Details:</strong><br>
+            <strong>UID:</strong> ${result.existing_lead.uid}<br>
+            <strong>Customer Name:</strong> ${result.existing_lead.customer_name}<br>
+            <strong>Assigned CRE:</strong> ${result.existing_lead.cre_name || 'Unassigned'}<br>
+            <strong>Status:</strong> ${result.existing_lead.lead_status || 'N/A'}
+          </div>
+        `;
+        
+        if (result.existing_sources && result.existing_sources.length > 0) {
+          detailsHtml += `
+            <div class="alert alert-secondary">
+              <strong>Existing Sources:</strong><br>
+              ${result.existing_sources.map(s => `${s.source} - ${s.subsource}`).join('<br>')}
+            </div>
+          `;
+        }
+        
+        detailsDiv.innerHTML = detailsHtml;
+        modal.show();
+        return false;
+      } else {
+        // No duplicate found, proceed with form submission
+        document.getElementById('addLeadForm').submit();
+        return true;
+      }
+    } catch (error) {
+      console.error('Error checking duplicate lead:', error);
+      // If there's an error, proceed with form submission
+      return true;
+    }
+  }
+
+  function proceedWithDuplicate() {
+    console.log('🔍 proceedWithDuplicate called');
+    
+    // Add a hidden field to indicate this is a duplicate with new source
+    const form = document.getElementById('addLeadForm');
+    const hiddenField = document.createElement('input');
+    hiddenField.type = 'hidden';
+    hiddenField.name = 'is_duplicate_new_source';
+    hiddenField.value = 'true';
+    form.appendChild(hiddenField);
+    
+    console.log('✅ Added is_duplicate_new_source field to form');
+    
+    // Show success message about redirect
+    alert('✅ Lead will be added as a new source. You will be redirected to Admin Dashboard → Manage Leads → Duplicate Leads section to view and manage the duplicate lead.');
+    
+    // Close modal and trigger the form submission manually
+    const modal = bootstrap.Modal.getInstance(document.getElementById('duplicateLeadModal'));
+    modal.hide();
+    
+    console.log('🔍 Triggering form submission...');
+    // Trigger the form submission event manually
+    const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+    form.dispatchEvent(submitEvent);
+  }
 </script>
 {% endblock %}

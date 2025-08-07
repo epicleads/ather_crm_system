@@ -128,6 +128,7 @@
                     <option value="Know">Know</option>
                     <option value="Whatsapp">Whatsapp</option>
                     <option value="Tele">Tele</option>
+                    <option value="OEM">OEM</option>
                 </select>
             </div>
         </div>
@@ -864,6 +865,28 @@ document.addEventListener('DOMContentLoaded', function() {
             submitBtn.disabled = false;
         }, 10000);
     });
+
+    // Toggle follow-up date requirement based on final status
+    const finalStatus = document.getElementById('final_status');
+    const followupDate = document.getElementById('follow_up_date');
+    
+    function toggleFollowUpRequired() {
+        if (finalStatus && followupDate) {
+            if (finalStatus.value === 'Won' || finalStatus.value === 'Lost') {
+                followupDate.required = false;
+                followupDate.disabled = true;
+            } else {
+                followupDate.required = true;
+                followupDate.disabled = false;
+            }
+        }
+    }
+    
+    if (finalStatus) {
+        finalStatus.addEventListener('change', toggleFollowUpRequired);
+        // Initial check
+        toggleFollowUpRequired();
+    }
 });
 </script>
 {% endblock %}
