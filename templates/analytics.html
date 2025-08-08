@@ -1474,10 +1474,10 @@
         new Chart(sourceCtx, {
             type: 'bar',
             data: {
-                labels: {{ analytics.source_labels | tojsonfilter | safe }},
+                labels: {{ analytics.source_labels | tojson | safe }},
                 datasets: [{
                     label: 'Leads',
-                    data: {{ analytics.source_data | tojsonfilter | safe }},
+                    data: {{ analytics.source_data | tojson | safe }},
                     backgroundColor: [
                         '#FF385C', '#00A699', '#FFB400', '#007A87',
                         '#8B5CF6', '#FF6B35', '#20C997', '#6C757D'
@@ -1523,10 +1523,10 @@
         new Chart(trendCtx, {
             type: 'line',
             data: {
-                labels: {{ analytics.trend_labels | tojsonfilter | safe }},
+                labels: {{ analytics.trend_labels | tojson | safe }},
                 datasets: [{
                     label: 'Daily Leads',
-                    data: {{ analytics.trend_data | tojsonfilter | safe }},
+                    data: {{ analytics.trend_data | tojson | safe }},
                     borderColor: '#FF385C',
                     backgroundColor: 'rgba(255, 56, 92, 0.1)',
                     tension: 0.4,
