@@ -2414,31 +2414,57 @@ def add_lead_with_cre():
     - Source is always 'Google(Web)', UID uses 'G' as the source character.
     """
     try:
-        customer_name = request.form.get('customer_name', '').strip()
-        customer_mobile_number = request.form.get('customer_mobile_number', '').strip()
-        source = request.form.get('source', 'GOOGLE').strip()  # Get from form, default to GOOGLE
-        subsource = request.form.get('subsource', '').strip()
+        # Check if this is an AJAX request
+        is_ajax = request.headers.get('Content-Type') == 'application/json'
+        
+        if is_ajax:
+            # Handle JSON request
+            data = request.get_json()
+            customer_name = data.get('customer_name', '').strip()
+            customer_mobile_number = data.get('customer_mobile_number', '').strip()
+            source = data.get('source', 'GOOGLE').strip()
+            subsource = data.get('subsource', '').strip()
+            assigned_cre_id = data.get('assigned_cre')
+        else:
+            # Handle form request
+            customer_name = request.form.get('customer_name', '').strip()
+            customer_mobile_number = request.form.get('customer_mobile_number', '').strip()
+            source = request.form.get('source', 'GOOGLE').strip()
+            subsource = request.form.get('subsource', '').strip()
+            assigned_cre_id = request.form.get('assigned_cre')
+        
         assigned = "Yes"
         date_now = datetime.now().strftime('%Y-%m-%d')
 
         # Validate required fields
         if not customer_name or not customer_mobile_number or not source or not subsource:
-            return jsonify({
-                'success': False,
-                'message': 'Customer name, mobile number, source, and subsource are required'
-            })
+            if is_ajax:
+                return jsonify({
+                    'success': False,
+                    'message': 'Customer name, mobile number, source, and subsource are required'
+                })
+            else:
+                flash('Customer name, mobile number, source, and subsource are required', 'error')
+                return redirect('/assign_leads')
 
         # Normalize phone number to last 10 digits
         mobile_digits = ''.join(filter(str.isdigit, customer_mobile_number))[-10:]
         
         if len(mobile_digits) != 10:
-            return jsonify({
-                'success': False,
-                'message': 'Invalid mobile number. Please provide a 10-digit number.'
-            })
+            if is_ajax:
+                return jsonify({
+                    'success': False,
+                    'message': 'Invalid mobile number. Please provide a 10-digit number.'
+                })
+            else:
+                flash('Invalid mobile number. Please provide a 10-digit number.', 'error')
+                return redirect('/assign_leads')
 
         # Check if this is a duplicate with new source from form
-        is_duplicate_new_source = request.form.get('is_duplicate_new_source', '').strip() == 'true'
+        if is_ajax:
+            is_duplicate_new_source = data.get('is_duplicate_new_source', '').strip() == 'true'
+        else:
+            is_duplicate_new_source = request.form.get('is_duplicate_new_source', '').strip() == 'true'
         
         # Check for duplicate by phone number and source-subsource combination
         existing_leads = supabase.table('lead_master').select('*').eq('customer_mobile_number', mobile_digits).execute()
@@ -2453,11 +2479,15 @@ def add_lead_with_cre():
                 original_lead = existing_leads.data[0]
                 # Check if this exact source-subsource combination already exists
                 if original_lead.get('source') == source and original_lead.get('sub_source') == subsource:
-                    return jsonify({
-                        'success': False,
-                        'message': f'Lead with this phone number and source-subsource combination already exists. UID: {original_lead["uid"]}',
-                        'uid': original_lead["uid"]
-                    })
+                    if is_ajax:
+                        return jsonify({
+                            'success': False,
+                            'message': f'Lead with this phone number and source-subsource combination already exists. UID: {original_lead["uid"]}',
+                            'uid': original_lead["uid"]
+                        })
+                    else:
+                        flash(f'Lead with this phone number and source-subsource combination already exists. UID: {original_lead["uid"]}', 'error')
+                        return redirect('/assign_leads')
                 else:
                     # Phone exists but with different source/subsource - this is a duplicate with new source
                     is_duplicate_new_source = True
@@ -2477,11 +2507,15 @@ def add_lead_with_cre():
                         break
                 
                 if exact_match:
-                    return jsonify({
-                        'success': False,
-                        'message': f'Lead with this phone number and source-subsource combination already exists in duplicates. UID: {duplicate_lead["uid"]}',
-                        'uid': duplicate_lead["uid"]
-                    })
+                    if is_ajax:
+                        return jsonify({
+                            'success': False,
+                            'message': f'Lead with this phone number and source-subsource combination already exists in duplicates. UID: {duplicate_lead["uid"]}',
+                            'uid': duplicate_lead["uid"]
+                        })
+                    else:
+                        flash(f'Lead with this phone number and source-subsource combination already exists in duplicates. UID: {duplicate_lead["uid"]}', 'error')
+                        return redirect('/assign_leads')
                 else:
                     # Phone exists in duplicates but with different source/subsource
                     is_duplicate_new_source = True
@@ -2508,7 +2542,10 @@ def add_lead_with_cre():
             uid = generate_uid(uid_source, mobile_digits, sequence)
 
         # Get assigned CRE ID from form
-        assigned_cre_id = request.form.get('assigned_cre')
+        if is_ajax:
+            assigned_cre_id = data.get('assigned_cre')
+        else:
+            assigned_cre_id = request.form.get('assigned_cre')
         print(f"🔍 Raw assigned_cre_id from form: '{assigned_cre_id}' (type: {type(assigned_cre_id)})")
         
         cre_name = None
@@ -2588,10 +2625,18 @@ def add_lead_with_cre():
                 result = supabase.table('duplicate_leads').insert(duplicate_data).execute()
                 if result.data:
                     print("Duplicate record created successfully")
-                    return jsonify({'success': True, 'message': 'Lead added to duplicates with new source', 'uid': uid})
+                    if is_ajax:
+                        return jsonify({'success': True, 'message': 'Lead added to duplicates with new source', 'uid': uid})
+                    else:
+                        flash('Lead added to duplicates with new source', 'success')
+                        return redirect('/assign_leads')
                 else:
                     print("Failed to create duplicate record")
-                    return jsonify({'success': False, 'message': 'Failed to add duplicate lead'})
+                    if is_ajax:
+                        return jsonify({'success': False, 'message': 'Failed to add duplicate lead'})
+                    else:
+                        flash('Failed to add duplicate lead', 'error')
+                        return redirect('/assign_leads')
             elif duplicate_leads.data:
                 # Add to existing duplicate record
                 duplicate_record = duplicate_leads.data[0]
@@ -2614,14 +2659,30 @@ def add_lead_with_cre():
                     }
                     result = supabase.table('duplicate_leads').update(update_data).eq('id', duplicate_record['id']).execute()
                     if result.data:
-                        return jsonify({'success': True, 'message': 'Lead added to existing duplicate record', 'uid': uid})
+                        if is_ajax:
+                            return jsonify({'success': True, 'message': 'Lead added to existing duplicate record', 'uid': uid})
+                        else:
+                            flash('Lead added to existing duplicate record', 'success')
+                            return redirect('/assign_leads')
                     else:
-                        return jsonify({'success': False, 'message': 'Failed to update duplicate record'})
+                        if is_ajax:
+                            return jsonify({'success': False, 'message': 'Failed to update duplicate record'})
+                        else:
+                            flash('Failed to update duplicate record', 'error')
+                            return redirect('/assign_leads')
                 else:
-                    return jsonify({'success': False, 'message': 'Duplicate record is full (max 10 sources reached)'})
+                    if is_ajax:
+                        return jsonify({'success': False, 'message': 'Duplicate record is full (max 10 sources reached)'})
+                    else:
+                        flash('Duplicate record is full (max 10 sources reached)', 'error')
+                        return redirect('/assign_leads')
             else:
                 # Phone exists in duplicate_leads but not in lead_master - this shouldn't happen
-                return jsonify({'success': False, 'message': 'Error: Original lead not found for duplicate creation'})
+                if is_ajax:
+                    return jsonify({'success': False, 'message': 'Error: Original lead not found for duplicate creation'})
+                else:
+                    flash('Error: Original lead not found for duplicate creation', 'error')
+                    return redirect('/assign_leads')
         else:
             # Insert as new lead
             print("=== FRESH LEAD INSERTION ===")
@@ -2629,16 +2690,28 @@ def add_lead_with_cre():
             result = supabase.table('lead_master').insert(lead_data).execute()
             if result.data:
                 print("Fresh lead inserted successfully")
-                return jsonify({'success': True, 'message': 'Lead added successfully', 'uid': uid})
+                if is_ajax:
+                    return jsonify({'success': True, 'message': 'Lead added successfully', 'uid': uid})
+                else:
+                    flash('Lead added successfully', 'success')
+                    return redirect('/assign_leads')
             else:
                 print("Failed to insert fresh lead")
-                return jsonify({'success': False, 'message': 'Failed to add lead'})
+                if is_ajax:
+                    return jsonify({'success': False, 'message': 'Failed to add lead'})
+                else:
+                    flash('Failed to add lead', 'error')
+                    return redirect('/assign_leads')
 
     except Exception as e:
         print(f"Error adding lead with CRE: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({'success': False, 'message': f'Error adding lead: {str(e)}'})
+        if is_ajax:
+            return jsonify({'success': False, 'message': f'Error adding lead: {str(e)}'})
+        else:
+            flash(f'Error adding lead: {str(e)}', 'error')
+            return redirect('/assign_leads')
 
 @app.route('/cre_dashboard')
 @require_cre
