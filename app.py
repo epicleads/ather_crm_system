@@ -3253,6 +3253,7 @@ def ps_dashboard():
         attended_leads = []
         won_leads = []
         lost_leads = []
+        event_leads = []  # Separate list for event leads
 
         # Define statuses that should be excluded from Today's Follow-up and Pending Leads
         excluded_statuses = ['Lost to Codealer', 'Lost to Competition', 'Dropped', 'Booked', 'Retailed']
@@ -3366,7 +3367,7 @@ def ps_dashboard():
 
         t3 = time.time()
         # Fetch event leads for this PS
-        event_leads = safe_get_data('activity_leads', {'ps_name': ps_name})
+        fetched_event_leads = safe_get_data('activity_leads', {'ps_name': ps_name})
         
         # Fetch walk-in leads for this PS
         print(f"[DEBUG] PS Dashboard - Fetching walk-in leads for PS: {ps_name}")
@@ -3380,8 +3381,8 @@ def ps_dashboard():
 
 
         # --- Process Event Leads ---
-        print(f"[DEBUG] Processing {len(event_leads)} event leads")
-        for lead in event_leads:
+        print(f"[DEBUG] Processing {len(fetched_event_leads)} event leads")
+        for lead in fetched_event_leads:
             lead_dict = dict(lead)  # Make a copy to avoid mutating the original
             lead_dict['lead_uid'] = lead.get('activity_uid') or lead.get('uid')
             lead_dict['customer_mobile_number'] = lead.get('customer_phone_number')  # For template compatibility
@@ -3393,36 +3394,35 @@ def ps_dashboard():
             
             print(f"[DEBUG] Event lead: {lead_dict['lead_uid']} | final_status: {final_status} | lead_status: {lead_status} | ps_first_call_date: {ps_first_call_date}")
 
-            # Categorize event leads based on final_status
+            # Always add event leads to event_leads list first
+            if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
+                lead_dict['lead_category'] = 'Not Set'
+            event_leads.append(lead_dict)
+            print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to event_leads list")
+            
+            # Also categorize event leads for other tabs based on final_status
             if final_status == 'Won':
                 won_leads.append(lead_dict)
-                print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to won_leads")
+                print(f"[DEBUG] Event lead {lead_dict['lead_uid']} also added to won_leads")
             elif final_status == 'Lost':
                 lost_leads.append(lead_dict)
-                print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to lost_leads")
-
+                print(f"[DEBUG] Event lead {lead_dict['lead_uid']} also added to lost_leads")
             elif final_status == 'Pending':
                 # Check if event lead has been called (has ps_first_call_date)
                 if ps_first_call_date:
                     # Event lead has been called, goes to pending_leads
                     print(f"[DEBUG] Event lead with final_status == 'Pending' and ps_first_call_date: {lead_dict['lead_uid']} | ps_first_call_date: {ps_first_call_date} | lead_status: {lead_status}")
                     if not lead_status or lead_status not in excluded_statuses:
-                        # Set default lead_category if missing
-                        if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
-                            lead_dict['lead_category'] = 'Not Set'
                         pending_leads.append(lead_dict)
-                        print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to pending_leads (Pending status with ps_first_call_date)")
+                        print(f"[DEBUG] Event lead {lead_dict['lead_uid']} also added to pending_leads (Pending status with ps_first_call_date)")
                     else:
                         print(f"[DEBUG] Event lead {lead_dict['lead_uid']} excluded from pending_leads due to lead_status: {lead_status}")
                 else:
                     # Event lead hasn't been called yet, goes to fresh_leads
                     print(f"[DEBUG] Event lead with final_status == 'Pending' but no ps_first_call_date: {lead_dict['lead_uid']} | lead_status: {lead_status}")
                     if not lead_status or lead_status not in excluded_statuses:
-                        # Set default lead_category if missing
-                        if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
-                            lead_dict['lead_category'] = 'Not Set'
                         fresh_leads.append(lead_dict)
-                        print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to fresh_leads (Pending status without ps_first_call_date)")
+                        print(f"[DEBUG] Event lead {lead_dict['lead_uid']} also added to fresh_leads (Pending status without ps_first_call_date)")
                     else:
                         print(f"[DEBUG] Event lead {lead_dict['lead_uid']} excluded from fresh_leads due to lead_status: {lead_status}")
             elif not final_status:  # Include leads with no final_status
@@ -3430,22 +3430,16 @@ def ps_dashboard():
                     # Event lead has been called, goes to pending_leads
                     print(f"[DEBUG] Event lead with no final_status but has ps_first_call_date: {lead_dict['lead_uid']} | ps_first_call_date: {ps_first_call_date} | lead_status: {lead_status}")
                     if not lead_status or lead_status not in excluded_statuses:
-                        # Set default lead_category if missing
-                        if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
-                            lead_dict['lead_category'] = 'Not Set'
                         pending_leads.append(lead_dict)
-                        print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to pending_leads (no final_status with ps_first_call_date)")
+                        print(f"[DEBUG] Event lead {lead_dict['lead_uid']} also added to pending_leads (no final_status with ps_first_call_date)")
                     else:
                         print(f"[DEBUG] Event lead {lead_dict['lead_uid']} excluded from pending_leads due to lead_status: {lead_status}")
                 else:
                     # Event lead hasn't been called yet, goes to fresh_leads
                     print(f"[DEBUG] Event lead with no final_status and no ps_first_call_date: {lead_dict['lead_uid']} | lead_status: {lead_status}")
                     if not lead_status or lead_status not in excluded_statuses:
-                        # Set default lead_category if missing
-                        if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
-                            lead_dict['lead_category'] = 'Not Set'
                         fresh_leads.append(lead_dict)
-                        print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to fresh_leads (no final_status without ps_first_call_date)")
+                        print(f"[DEBUG] Event lead {lead_dict['lead_uid']} also added to fresh_leads (no final_status without ps_first_call_date)")
                     else:
                         print(f"[DEBUG] Event lead {lead_dict['lead_uid']} excluded from fresh_leads due to lead_status: {lead_status}")
 
@@ -3614,11 +3608,12 @@ def ps_dashboard():
                                status=status)  # <-- Add status here
 
         print(f"[PERF] ps_dashboard: render_template took {time.time() - t6:.3f} seconds")
-        print(f"[DEBUG] FINAL COUNTS - Fresh: {len(fresh_leads)}, Pending: {len(pending_leads)}, Attended: {len(attended_leads)}, Won: {len(won_leads)}, Lost: {len(lost_leads)}")
+        print(f"[DEBUG] FINAL COUNTS - Fresh: {len(fresh_leads)}, Pending: {len(pending_leads)}, Attended: {len(attended_leads)}, Won: {len(won_leads)}, Lost: {len(lost_leads)}, Event: {len(event_leads)}")
         print(f"[DEBUG] Fresh leads being sent to template: {[lead.get('lead_uid') for lead in fresh_leads]}")
         print(f"[DEBUG] Pending leads being sent to template: {[lead.get('lead_uid') for lead in pending_leads]}")
         print(f"[DEBUG] Won leads being sent to template: {[lead.get('lead_uid') for lead in won_leads]}")
         print(f"[DEBUG] Lost leads being sent to template: {[lead.get('lead_uid') for lead in lost_leads]}")
+        print(f"[DEBUG] Event leads being sent to template: {[lead.get('lead_uid') for lead in event_leads]}")
         print(f"[DEBUG] Walk-in leads count: {len(walkin_leads) if walkin_leads else 0}")
         print(f"[DEBUG] Today's followups count: {len(todays_followups)}")
         print(f"[PERF] ps_dashboard TOTAL took {time.time() - start_time:.3f} seconds")
@@ -3903,7 +3898,7 @@ def update_ps_lead(uid):
                 # Test Drive Done is now required
                 if not test_drive_done:
                     flash('Test Drive Done field is required', 'error')
-                    return redirect(url_for('update_event_lead', activity_uid=activity_uid, return_tab=return_tab))
+                    return redirect(url_for('update_ps_lead', uid=uid, return_tab=return_tab))
                 update_data['test_drive_done'] = test_drive_done
                 if request.form.get('follow_up_date'):
                     update_data['follow_up_date'] = follow_up_date
@@ -3980,12 +3975,14 @@ def update_ps_lead(uid):
                     return redirect(redirect_url)
                 except Exception as e:
                     flash(f'Error updating lead: {str(e)}', 'error')
-            return render_template('update_ps_lead.html',
-                                   lead=ps_data,
-                                   next_call=next_call,
-                                   completed_calls=completed_calls,
-                                   today=date.today(),
-                                   cre_call_summary=cre_call_summary)
+            else:
+                return render_template('update_ps_lead.html',
+                                       lead=ps_data,
+                                       next_call=next_call,
+                                       completed_calls=completed_calls,
+                                       today=date.today(),
+                                       cre_call_summary=cre_call_summary)
+        else:
             flash('Lead not found', 'error')
             redirect_url = url_for('ps_dashboard', tab=return_tab)
             if status_filter:
@@ -8061,12 +8058,22 @@ def cre_analysis_data():
 @require_ps
 def update_event_lead(activity_uid):
     return_tab = request.args.get('return_tab', 'fresh-leads')
+    print(f'[DEBUG] update_event_lead called with activity_uid: {activity_uid}')
+    print(f'[DEBUG] return_tab: {return_tab}')
+    print(f'[DEBUG] request.method: {request.method}')
+    
     try:
         # Fetch the event lead by activity_uid
+        print(f'[DEBUG] Attempting to fetch event lead with activity_uid: {activity_uid}')
         result = supabase.table('activity_leads').select('*').eq('activity_uid', activity_uid).execute()
+        print(f'[DEBUG] Supabase query result: {result}')
+        print(f'[DEBUG] Result data: {result.data}')
+        
         if not result.data:
+            print(f'[DEBUG] No event lead found for activity_uid: {activity_uid}')
             flash('Event lead not found', 'error')
             return redirect(url_for('ps_dashboard', tab=return_tab))
+        
         lead = result.data[0]
         print('[DEBUG] Lead data (PS):', lead)
         # Determine next call and completed calls for PS follow-ups
@@ -8129,11 +8136,7 @@ def update_event_lead(activity_uid):
             # Test Drive Done is now required
             if not test_drive_done:
                 flash('Test Drive Done field is required', 'error')
-                redirect_url = url_for('update_ps_lead', uid=uid, return_tab=return_tab)
-                if status_filter:
-                    redirect_url += f'&status_filter={status_filter}'
-                if category_filter:
-                    redirect_url += f'&category_filter={category_filter}'
+                redirect_url = url_for('update_event_lead', activity_uid=activity_uid, return_tab=return_tab)
                 return redirect(redirect_url)
             update_data['test_drive_done'] = test_drive_done
             if customer_location:
@@ -8183,6 +8186,12 @@ def update_event_lead(activity_uid):
                 return redirect(url_for('ps_dashboard', tab=return_tab))
             else:
                 flash('No changes to update', 'info')
+        print(f'[DEBUG] About to render template with lead data: {lead}')
+        print(f'[DEBUG] next_call: {next_call}')
+        print(f'[DEBUG] completed_calls: {completed_calls}')
+        print(f'[DEBUG] ps_call_history: {ps_call_history}')
+        print(f'[DEBUG] cre_call_history: {cre_call_history}')
+        
         return render_template('update_event_lead.html', 
                              lead=lead, 
                              next_call=next_call, 
@@ -8191,6 +8200,10 @@ def update_event_lead(activity_uid):
                              cre_call_history=cre_call_history,
                              today=date.today())
     except Exception as e:
+        print(f'[DEBUG] Exception in update_event_lead: {str(e)}')
+        print(f'[DEBUG] Exception type: {type(e)}')
+        import traceback
+        print(f'[DEBUG] Full traceback: {traceback.format_exc()}')
         flash(f'Error updating event lead: {str(e)}', 'error')
         return redirect(url_for('ps_dashboard'))
 
@@ -8608,6 +8621,34 @@ def manage_branch_head():
 def get_all_branches():
     # Replace with a DB fetch if you have a branches table
     return ['KOMPALLY', 'SOMAJIGUDA', 'ATTAPUR', 'MALAKPET', 'TOLICHOWKI', 'VANASTHALIPURAM']
+
+def get_active_ps_users(branch):
+    """Get active PS users for a specific branch"""
+    try:
+        print(f"Getting active PS users for branch: '{branch}'")
+        
+        # First, let's see what branches exist in ps_users table
+        all_branches = supabase.table('ps_users').select('branch').execute()
+        available_branches = list(set([row['branch'] for row in all_branches.data if row['branch']]))
+        print(f"Available branches in ps_users: {available_branches}")
+        
+        # Try exact match first
+        ps_query = supabase.table('ps_users').select('name').eq('branch', branch).eq('is_active', True).execute()
+        active_ps = [row['name'] for row in ps_query.data if row['name']]
+        
+        # If no results, try case-insensitive search
+        if not active_ps:
+            print(f"No exact match found for branch '{branch}', trying case-insensitive search")
+            # Get all PS users and filter by case-insensitive branch match
+            all_ps = supabase.table('ps_users').select('name, branch, is_active').execute()
+            active_ps = [row['name'] for row in all_ps.data if row['name'] and row.get('is_active') and row.get('branch', '').lower() == branch.lower()]
+        
+        print(f"Active PS users for branch '{branch}': {active_ps}")
+        
+        return active_ps
+    except Exception as e:
+        print(f"Error getting active PS users for branch {branch}: {str(e)}")
+        return []
 
 @app.route('/add_branch_head', methods=['POST'])
 def add_branch_head():
@@ -9410,6 +9451,7 @@ def api_branch_analytics_ps_performance():
     try:
         # Get branch from session
         branch = session.get('branch_head_branch')
+        print(f"PS Performance API - Session branch: '{branch}'")
         if not branch:
             return jsonify({'success': False, 'message': 'Branch not found in session'})
         
@@ -9417,25 +9459,30 @@ def api_branch_analytics_ps_performance():
         date_from = request.args.get('date_from')
         date_to = request.args.get('date_to')
         
-        # If no date parameters provided, use MTD (Month to Date) as default
+        # Require both date parameters
         if not date_from or not date_to:
-            today = datetime.now()
-            date_from = today.replace(day=1).strftime('%Y-%m-%d')
-            date_to = today.strftime('%Y-%m-%d')
+            return jsonify({'success': False, 'message': 'Both date_from and date_to parameters are required'})
         
-        # Get all PS from the branch
-        ps_query = supabase.table('ps_followup_master').select('ps_name').eq('ps_branch', branch).not_.is_('ps_name', 'null').execute()
-        ps_names = list(set([row['ps_name'] for row in ps_query.data if row['ps_name']]))
+        # Get active PS users from the branch
+        ps_names = get_active_ps_users(branch)
+        print(f"PS Performance API - Branch: '{branch}', Active PS users: {ps_names}")
+        
+        # If no active PS users found, fallback to getting all PS users from ps_followup_master
+        if not ps_names:
+            print(f"No active PS users found for branch '{branch}', falling back to all PS users")
+            ps_query = supabase.table('ps_followup_master').select('ps_name').eq('ps_branch', branch).not_.is_('ps_name', 'null').execute()
+            ps_names = list(set([row['ps_name'] for row in ps_query.data if row['ps_name']]))
+            print(f"Fallback PS users: {ps_names}")
         
         result_data = []
         
         for ps_name in ps_names:
-            # Get leads assigned in the date range
+            # Get leads assigned in the date range based on ps_assigned_at
             assigned_query = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).eq('ps_name', ps_name).gte('ps_assigned_at', date_from).lte('ps_assigned_at', date_to).execute()
             leads_assigned = assigned_query.count or 0
             
-            # Get leads contacted at least once from fresh leads in the date range
-            contacted_query = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).eq('ps_name', ps_name).gte('ps_assigned_at', date_from).lte('ps_assigned_at', date_to).not_.is_('first_call_date', 'null').execute()
+            # Get leads contacted (lead_status is not null) in the date range
+            contacted_query = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).eq('ps_name', ps_name).gte('ps_assigned_at', date_from).lte('ps_assigned_at', date_to).not_.is_('lead_status', 'null').execute()
             leads_contacted = contacted_query.count or 0
             
             # Calculate gap
@@ -9467,15 +9514,12 @@ def api_branch_analytics_source_leads():
         date_from = request.args.get('date_from')
         date_to = request.args.get('date_to')
         
-        # If no date parameters provided, use MTD (Month to Date) as default
+        # Require both date parameters
         if not date_from or not date_to:
-            today = datetime.now()
-            date_from = today.replace(day=1).strftime('%Y-%m-%d')
-            date_to = today.strftime('%Y-%m-%d')
+            return jsonify({'success': False, 'message': 'Both date_from and date_to parameters are required'})
         
-        # Get all PS from the branch
-        ps_query = supabase.table('ps_followup_master').select('ps_name').eq('ps_branch', branch).not_.is_('ps_name', 'null').execute()
-        ps_names = list(set([row['ps_name'] for row in ps_query.data if row['ps_name']]))
+        # Get active PS users from the branch
+        ps_names = get_active_ps_users(branch)
         
         result_data = []
         all_sources = set()  # To track all unique sources
@@ -9536,15 +9580,12 @@ def api_branch_analytics_walkin_leads():
         date_from = request.args.get('date_from')
         date_to = request.args.get('date_to')
         
-        # If no date parameters provided, use MTD (Month to Date) as default
+        # Require both date parameters
         if not date_from or not date_to:
-            today = datetime.now()
-            date_from = today.replace(day=1).strftime('%Y-%m-%d')
-            date_to = today.strftime('%Y-%m-%d')
+            return jsonify({'success': False, 'message': 'Both date_from and date_to parameters are required'})
         
-        # Get all PS from the branch
-        ps_query = supabase.table('walkin_table').select('ps_assigned').eq('branch', branch).not_.is_('ps_assigned', 'null').execute()
-        ps_names = list(set([row['ps_assigned'] for row in ps_query.data if row['ps_assigned']]))
+        # Get active PS users from the branch
+        ps_names = get_active_ps_users(branch)
         
         result_data = []
         today_str = datetime.now().strftime('%Y-%m-%d')
@@ -10101,6 +10142,35 @@ def fix_timestamps():
     fix_missing_timestamps()
     flash('Timestamps fixed successfully', 'success')
     return redirect(url_for('admin_dashboard'))
+
+@app.route('/debug_ps_users')
+@require_admin
+def debug_ps_users():
+    """Debug route to check PS users data"""
+    try:
+        # Get all PS users
+        all_ps = supabase.table('ps_users').select('*').execute()
+        
+        # Get branch from session
+        branch = session.get('branch_head_branch', 'No branch in session')
+        
+        # Get PS users for this branch
+        branch_ps = supabase.table('ps_users').select('*').eq('branch', branch).execute()
+        
+        # Get active PS users for this branch
+        active_ps = supabase.table('ps_users').select('*').eq('branch', branch).eq('is_active', True).execute()
+        
+        debug_info = {
+            'session_branch': branch,
+            'all_ps_users': all_ps.data,
+            'branch_ps_users': branch_ps.data,
+            'active_ps_users': active_ps.data,
+            'all_branches': list(set([ps['branch'] for ps in all_ps.data if ps.get('branch')]))
+        }
+        
+        return jsonify(debug_info)
+    except Exception as e:
+        return jsonify({'error': str(e)})
 
 if __name__ == '__main__':
     # socketio.run(app, debug=True)

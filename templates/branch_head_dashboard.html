@@ -435,23 +435,15 @@
                 </div>
                 <div class="card-body">
                     <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <label for="analyticsFilterType" class="form-label fw-semibold">Filter Type:</label>
-                            <select id="analyticsFilterType" class="form-select">
-                                <option value="mtd">MTD (Month to Date) - Default</option>
-                                <option value="previous_month">Previous Month</option>
-                                <option value="date_range">Date Range</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4 mb-3" id="dateRangeContainer" style="display: none;">
+                        <div class="col-md-3 mb-3">
                             <label for="analyticsDateFrom" class="form-label fw-semibold">From Date:</label>
                             <input type="date" id="analyticsDateFrom" class="form-control">
                         </div>
-                        <div class="col-md-4 mb-3" id="dateRangeContainer2" style="display: none;">
+                        <div class="col-md-3 mb-3">
                             <label for="analyticsDateTo" class="form-label fw-semibold">To Date:</label>
                             <input type="date" id="analyticsDateTo" class="form-control">
                         </div>
-                        <div class="col-md-12">
+                        <div class="col-md-6 d-flex align-items-end">
                             <button id="applyAnalyticsFilter" class="btn btn-primary me-2">
                                 <i class="fas fa-search me-1"></i>Apply Filter
                             </button>
@@ -467,7 +459,7 @@
             <div class="card mb-4">
                 <div class="card-header">
                     <h5 class="mb-0">
-                        <i class="fas fa-users me-2"></i>Product Specialist Performance (Month to Date)
+                        <i class="fas fa-users me-2"></i>Product Specialist Performance
                     </h5>
                 </div>
                 <div class="card-body">
@@ -476,8 +468,8 @@
                             <thead class="thead-dark">
                                 <tr>
                                     <th>Product Specialist</th>
-                                    <th>Leads Assigned</th>
-                                    <th>Leads Contacted</th>
+                                    <th>Leads Assigned (ps_assigned_at)</th>
+                                    <th>Leads Contacted (lead_status not null)</th>
                                     <th>Gap (Assigned - Contacted)</th>
                                 </tr>
                             </thead>
@@ -1482,38 +1474,19 @@ function loadWalkinLeadsData() {
 
     // Analytics Filter Functions
     function getAnalyticsFilterParams() {
-        const filterType = document.getElementById('analyticsFilterType').value;
         const dateFrom = document.getElementById('analyticsDateFrom').value;
         const dateTo = document.getElementById('analyticsDateTo').value;
         
         let params = {};
         
-        switch(filterType) {
-            case 'mtd':
-                // Month to Date - current month from 1st to today
-                const today = new Date();
-                const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-                params.date_from = monthStart.toISOString().split('T')[0];
-                params.date_to = today.toISOString().split('T')[0];
-                break;
-            case 'previous_month':
-                // Previous month
-                const currentDate = new Date();
-                const prevMonthStart = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
-                const prevMonthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), 0);
-                params.date_from = prevMonthStart.toISOString().split('T')[0];
-                params.date_to = prevMonthEnd.toISOString().split('T')[0];
-                break;
-            case 'date_range':
-                // Custom date range
+        // Always use date range - require both dates
                 if (!dateFrom || !dateTo) {
-                    alert('Please select both From and To dates for custom date range.');
+            alert('Please select both From and To dates for the date range.');
                     return null;
                 }
+        
                 params.date_from = dateFrom;
                 params.date_to = dateTo;
-                break;
-        }
         
         return params;
     }
@@ -1692,20 +1665,12 @@ function loadWalkinLeadsData() {
 
     // Analytics Filter Event Listeners
     document.addEventListener('DOMContentLoaded', function() {
-        // Filter type change event
-        document.getElementById('analyticsFilterType').addEventListener('change', function() {
-            const filterType = this.value;
-            const dateRangeContainer = document.getElementById('dateRangeContainer');
-            const dateRangeContainer2 = document.getElementById('dateRangeContainer2');
-            
-            if (filterType === 'date_range') {
-                dateRangeContainer.style.display = 'block';
-                dateRangeContainer2.style.display = 'block';
-            } else {
-                dateRangeContainer.style.display = 'none';
-                dateRangeContainer2.style.display = 'none';
-            }
-        });
+        // Set default dates (current month)
+        const today = new Date();
+        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        
+        document.getElementById('analyticsDateFrom').value = monthStart.toISOString().split('T')[0];
+        document.getElementById('analyticsDateTo').value = today.toISOString().split('T')[0];
         
         // Apply filter button
         document.getElementById('applyAnalyticsFilter').addEventListener('click', function() {
@@ -1714,12 +1679,13 @@ function loadWalkinLeadsData() {
         
         // Reset filter button
         document.getElementById('resetAnalyticsFilter').addEventListener('click', function() {
-            document.getElementById('analyticsFilterType').value = 'mtd';
-            document.getElementById('analyticsDateFrom').value = '';
-            document.getElementById('analyticsDateTo').value = '';
-            document.getElementById('dateRangeContainer').style.display = 'none';
-            document.getElementById('dateRangeContainer2').style.display = 'none';
-            loadAnalyticsDataWithFilter(); // Load with default MTD filter
+            // Reset to current month
+            const today = new Date();
+            const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+            
+            document.getElementById('analyticsDateFrom').value = monthStart.toISOString().split('T')[0];
+            document.getElementById('analyticsDateTo').value = today.toISOString().split('T')[0];
+            loadAnalyticsDataWithFilter(); // Load with default current month filter
         });
     });
 
