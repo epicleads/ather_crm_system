@@ -24,6 +24,7 @@ from security_verification import run_security_verification
 import time
 import gc
 from flask_socketio import SocketIO, emit
+from flask_cors import CORS
 import math
 # from redis import Redis  # REMOVE this line for local development
 
@@ -52,7 +53,36 @@ from werkzeug.security import generate_password_hash, check_password_hash
 load_dotenv()
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
+
+# Session cookie settings for cross-site usage with Next.js
+_is_dev = os.environ.get("FLASK_ENV", "").lower() == "development" or os.environ.get("ENV", "").lower() == "development"
+_frontend_origin = os.environ.get("NEXT_PUBLIC_FRONTEND_ORIGIN") or ("http://localhost:3000" if _is_dev else None)
+_allowed_origins = [o for o in [
+    "http://localhost:3000" if _is_dev else None,
+    "https://localhost:3000" if _is_dev else None,
+    _frontend_origin,
+] if o]
+app.config.update(
+    SESSION_COOKIE_SAMESITE=("Lax" if _is_dev else "None"),
+    SESSION_COOKIE_SECURE=(False if _is_dev else True),
+)
+
+# Enable CORS for API routes to be consumed by Next.js frontend
+CORS(
+    app,
+    resources={
+        r"/api/*": {"origins": _allowed_origins},
+        r"/unified_login": {"origins": _allowed_origins},
+        r"/unified_login_json": {"origins": _allowed_origins},
+        r"/delete_duplicate_lead": {"origins": _allowed_origins},
+    },
+    supports_credentials=True,
+)
+
+socketio = SocketIO(
+    app,
+    cors_allowed_origins=_allowed_origins,
+)
 
 # Reduce Flask log noise
 import logging
@@ -106,6 +136,22 @@ if not SUPABASE_KEY:
 
 app.secret_key = SECRET_KEY
 app.permanent_session_lifetime = timedelta(hours=24)
+
+# Development convenience: allow JSON login payloads in unified_login
+@app.before_request
+def ensure_json_form_parity():
+    if request.method == 'POST' and request.is_json and request.content_type and 'application/json' in request.content_type:
+        try:
+            data = request.get_json(silent=True) or {}
+            # Merge minimal fields used by existing form handlers
+            for key in ('username', 'password', 'user_type'):
+                if key in data and key not in request.form:
+                    # Werkzeug's request.form is immutable, but downstream code reads request.form.get.
+                    # Attach to request.values by injecting into request.environ for compatibility.
+                    request.values = request.values.copy()
+                    request.values[key] = data.get(key, '')
+        except Exception:
+            pass
 
 # Initialize Supabase client
 try:
@@ -728,6 +774,232 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/api/session', methods=['GET'])
+def api_session_info():
+    try:
+        user_type = session.get('user_type')
+        if not user_type:
+            return jsonify({"authenticated": False}), 401
+        response = {
+            "authenticated": True,
+            "user_type": user_type,
+            "username": session.get('username') or session.get('user_name'),
+            "cre_name": session.get('cre_name'),
+            "ps_name": session.get('ps_name'),
+            "branch": session.get('branch') or session.get('branch_head_branch') or session.get('rec_branch'),
+        }
+        return jsonify(response)
+    except Exception as e:
+        return jsonify({"authenticated": False, "error": str(e)}), 500
+
+
+@app.route('/unified_login_json', methods=['POST'])
+@limiter.limit("100000 per minute")
+def unified_login_json() -> Response:
+    try:
+        payload = request.get_json(silent=True) or {}
+        username = str(payload.get('username', '')).strip()
+        password = str(payload.get('password', '')).strip()
+        user_type = str(payload.get('user_type', '')).strip().lower()
+        valid_user_types = ['admin', 'cre', 'ps', 'branch_head', 'rec']
+        if user_type not in valid_user_types or not username or not password:
+            return jsonify({"success": False, "message": "Invalid credentials or user type"}), 400
+
+        if user_type == 'branch_head':
+            bh = supabase.table('Branch Head').select('*').eq('Username', username).execute().data
+            if not bh:
+                return jsonify({"success": False, "message": "Invalid credentials"}), 401
+            bh = bh[0]
+            if not bh['Is Active'] or bh['Password'] != password:
+                return jsonify({"success": False, "message": "Invalid credentials"}), 401
+            session['branch_head_id'] = bh['id']
+            session['branch_head_name'] = bh['Name']
+            session['branch_head_branch'] = bh['Branch']
+            session['user_type'] = 'branch_head'
+            session['username'] = username
+            return jsonify({"success": True, "redirect": "/branch_head_dashboard"})
+
+        if user_type == 'rec':
+            rec_user = supabase.table('rec_users').select('*').eq('username', username).execute().data
+            if not rec_user:
+                return jsonify({"success": False, "message": "Invalid credentials"}), 401
+            rec_user = rec_user[0]
+            if not rec_user.get('is_active', True) or not check_password_hash(rec_user['password_hash'], password):
+                return jsonify({"success": False, "message": "Invalid credentials"}), 401
+            session.clear()
+            session['rec_user_id'] = rec_user['id']
+            session['rec_branch'] = rec_user['branch']
+            session['rec_name'] = rec_user.get('name', username)
+            session['user_type'] = 'rec'
+            session['username'] = username
+            return jsonify({"success": True, "redirect": "/add_walkin_lead"})
+
+        success, message, user_data = auth_manager.authenticate_user(username, password, user_type)
+        if not success:
+            return jsonify({"success": False, "message": message or "Invalid credentials"}), 401
+        session_id = auth_manager.create_session(user_data['id'], user_type, user_data)
+        if not session_id:
+            return jsonify({"success": False, "message": "Could not create session"}), 500
+        if user_type == 'admin':
+            return jsonify({"success": True, "redirect": "/admin_dashboard"})
+        if user_type == 'cre':
+            return jsonify({"success": True, "redirect": "/cre_dashboard"})
+        if user_type == 'ps':
+            return jsonify({"success": True, "redirect": "/ps_dashboard"})
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@app.route('/api/change_password', methods=['POST'])
+@require_auth()
+def api_change_password():
+    try:
+        payload = request.get_json(silent=True) or {}
+        current_password = str(payload.get('current_password', '')).strip()
+        new_password = str(payload.get('new_password', '')).strip()
+        confirm_password = str(payload.get('confirm_password', '')).strip()
+        if not all([current_password, new_password, confirm_password]):
+            return jsonify({'success': False, 'message': 'All fields are required'}), 400
+        if new_password != confirm_password:
+            return jsonify({'success': False, 'message': 'New passwords do not match'}), 400
+        user_id = session.get('user_id')
+        user_type = session.get('user_type')
+        if not user_id or not user_type:
+            return jsonify({'success': False, 'message': 'Session information not found'}), 400
+        success, message = auth_manager.change_password(user_id, user_type, current_password, new_password)
+        if success:
+            return jsonify({'success': True, 'message': 'Password changed successfully'})
+        return jsonify({'success': False, 'message': message or 'Failed to change password'}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/lead/<uid>', methods=['GET', 'POST'])
+@require_cre
+def api_lead(uid: str):
+    try:
+        # Fetch lead
+        result = supabase.table('lead_master').select('*').eq('uid', uid).execute()
+        if not result.data:
+            return jsonify({'success': False, 'message': 'Lead not found'}), 404
+        lead = result.data[0]
+        # Authorization: ensure assigned to current CRE
+        if lead.get('cre_name') != session.get('cre_name'):
+            return jsonify({'success': False, 'message': 'Forbidden'}), 403
+        if request.method == 'GET':
+            return jsonify({'success': True, 'lead': lead})
+
+        # POST: update fields
+        payload = request.get_json(silent=True) or {}
+        update = {}
+        allowed_fields = [
+            'customer_name', 'source', 'lead_category', 'model_interested', 'branch', 'lead_status',
+            'follow_up_date', 'final_status', 'ps_name', 'call_date', 'call_remark'
+        ]
+        for k in allowed_fields:
+            if k in payload and payload[k] is not None:
+                update[k] = payload[k]
+        # Final status timestamps
+        if 'final_status' in update:
+            fs = (update['final_status'] or '').strip().lower()
+            if fs == 'won':
+                update['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            elif fs == 'lost':
+                update['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        # Track call attempt if provided
+        lead_status = payload.get('lead_status')
+        call_date = payload.get('call_date')
+        call_remark = payload.get('call_remark')
+        if lead_status:
+            try:
+                next_call, _completed_calls = get_next_call_info(lead)
+                call_was_recorded = bool(call_date and call_remark)
+                track_cre_call_attempt(
+                    uid=uid,
+                    cre_name=session.get('cre_name'),
+                    call_no=next_call,
+                    lead_status=lead_status,
+                    call_was_recorded=call_was_recorded,
+                    follow_up_date=payload.get('follow_up_date'),
+                    remarks=call_remark
+                )
+                if call_date and call_remark and next_call:
+                    update[f'{next_call}_call_date'] = call_date
+                    update[f'{next_call}_remark'] = f"{lead_status}, {call_remark}"
+            except Exception:
+                pass
+        # PS assignment side-effects
+        if update.get('ps_name') and update.get('ps_name') != lead.get('ps_name'):
+            update['assigned'] = 'Yes'
+            update['ps_assigned_at'] = datetime.now().isoformat()
+            ps_users = safe_get_data('ps_users')
+            ps_user = next((ps for ps in ps_users if ps.get('name') == update['ps_name']), None)
+            if ps_user:
+                updated_lead_data = {**lead, **update}
+                create_or_update_ps_followup(updated_lead_data, update['ps_name'], ps_user.get('branch'))
+        if update:
+            supabase.table('lead_master').update(update).eq('uid', uid).execute()
+            return jsonify({'success': True, 'updated_fields': list(update.keys())})
+        return jsonify({'success': True, 'updated_fields': []})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/ps_lead/<uid>', methods=['GET', 'POST'])
+@require_ps
+def api_ps_lead(uid: str):
+    try:
+        # Fetch lead for PS: can exist in ps_followup_master or others; base on lead_master by uid
+        result = supabase.table('lead_master').select('*').eq('uid', uid).execute()
+        if not result.data:
+            return jsonify({'success': False, 'message': 'Lead not found'}), 404
+        lead = result.data[0]
+        # Authorization is lighter for PS; assume visibility by assignment in ps_followup_master
+        if request.method == 'GET':
+            return jsonify({'success': True, 'lead': lead})
+        payload = request.get_json(silent=True) or {}
+        update = {}
+        allowed = ['lead_status', 'follow_up_date', 'final_status', 'call_date', 'call_remark']
+        for k in allowed:
+            if k in payload and payload[k] is not None:
+                update[k] = payload[k]
+        if 'final_status' in update:
+            fs = (update['final_status'] or '').strip().lower()
+            if fs == 'won':
+                update['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            elif fs == 'lost':
+                update['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        # Track PS call attempt
+        lead_status = payload.get('lead_status')
+        call_date = payload.get('call_date')
+        call_remark = payload.get('call_remark')
+        if lead_status:
+            try:
+                next_call, _completed_calls = get_next_call_info(lead)
+                call_was_recorded = bool(call_date and call_remark)
+                track_ps_call_attempt(
+                    uid=uid,
+                    ps_name=session.get('ps_name'),
+                    call_no=next_call,
+                    lead_status=lead_status,
+                    call_was_recorded=call_was_recorded,
+                    follow_up_date=payload.get('follow_up_date'),
+                    remarks=call_remark
+                )
+                if call_date and call_remark and next_call:
+                    update[f'{next_call}_call_date'] = call_date
+                    update[f'{next_call}_remark'] = f"{lead_status}, {call_remark}"
+            except Exception:
+                pass
+        if update:
+            supabase.table('lead_master').update(update).eq('uid', uid).execute()
+            return jsonify({'success': True, 'updated_fields': list(update.keys())})
+        return jsonify({'success': True, 'updated_fields': []})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @app.route('/unified_login', methods=['POST'])
 @limiter.limit("100000 per minute")
 def unified_login() -> Response:
@@ -1188,6 +1460,39 @@ def admin_dashboard():
                            unassigned_leads=unassigned_leads)
 
 
+@app.route('/api/admin_dashboard_summary')
+@require_admin
+def api_admin_dashboard_summary():
+    try:
+        try:
+            cre_count = get_accurate_count('cre_users')
+            ps_count = get_accurate_count('ps_users')
+            leads_count = get_accurate_count('lead_master')
+            unassigned_leads = get_accurate_count('lead_master', {'assigned': 'No'})
+        except Exception:
+            cre_count = ps_count = leads_count = unassigned_leads = 0
+
+        user_id = session.get('user_id')
+        user_type = session.get('user_type')
+        if user_id and user_type:
+            auth_manager.log_audit_event(
+                user_id=user_id,
+                user_type=user_type,
+                action='DASHBOARD_ACCESS',
+                resource='api_admin_dashboard_summary'
+            )
+
+        return jsonify({
+            'success': True,
+            'cre_count': cre_count,
+            'ps_count': ps_count,
+            'leads_count': leads_count,
+            'unassigned_leads': unassigned_leads,
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @app.route('/upload_data', methods=['GET', 'POST'])
 @require_admin
 def upload_data():
@@ -1504,6 +1809,51 @@ def add_cre():
     return render_template('add_cre.html')
 
 
+@app.route('/api/add_cre', methods=['POST'])
+@require_admin
+def api_add_cre():
+    try:
+        payload = request.get_json(silent=True) or {}
+        name = str(payload.get('name', '')).strip()
+        username = str(payload.get('username', '')).strip()
+        password = str(payload.get('password', '')).strip()
+        phone = str(payload.get('phone', '')).strip()
+        email = str(payload.get('email', '')).strip()
+
+        if not all([name, username, password, phone, email]):
+            return jsonify({'success': False, 'message': 'All fields are required'}), 400
+        if not auth_manager.validate_password_strength(password):
+            return jsonify({'success': False, 'message': 'Weak password'}), 400
+        existing = supabase.table('cre_users').select('username').eq('username', username).execute()
+        if existing.data:
+            return jsonify({'success': False, 'message': 'Username already exists'}), 409
+        password_hash, salt = auth_manager.hash_password(password)
+        cre_data = {
+            'name': name,
+            'username': username,
+            'password': password,
+            'password_hash': password_hash,
+            'salt': salt,
+            'phone': phone,
+            'email': email,
+            'is_active': True,
+            'role': 'cre',
+            'failed_login_attempts': 0,
+        }
+        result = supabase.table('cre_users').insert(cre_data).execute()
+        auth_manager.log_audit_event(
+            user_id=session.get('user_id'),
+            user_type=session.get('user_type'),
+            action='CRE_CREATED',
+            resource='cre_users',
+            resource_id=str(result.data[0]['id']) if result.data else None,
+            details={'cre_name': name, 'username': username},
+        )
+        return jsonify({'success': True, 'id': (result.data[0]['id'] if result.data else None)})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @app.route('/add_ps', methods=['GET', 'POST'])
 @require_admin
 def add_ps():
@@ -1573,6 +1923,117 @@ def add_ps():
     return render_template('add_ps.html', branches=branches)
 
 
+@app.route('/api/add_ps', methods=['POST'])
+@require_admin
+def api_add_ps():
+    try:
+        branches = ['SOMAJIGUDA', 'ATTAPUR', 'BEGUMPET', 'KOMPALLY', 'MALAKPET', 'SRINAGAR COLONY', 'TOLICHOWKI', 'VANASTHALIPURAM']
+        payload = request.get_json(silent=True) or {}
+        name = str(payload.get('name', '')).strip()
+        username = str(payload.get('username', '')).strip()
+        password = str(payload.get('password', '')).strip()
+        phone = str(payload.get('phone', '')).strip()
+        email = str(payload.get('email', '')).strip()
+        branch = str(payload.get('branch', '')).strip()
+        if not all([name, username, password, phone, email, branch]):
+            return jsonify({'success': False, 'message': 'All fields are required'}), 400
+        if branch not in branches:
+            return jsonify({'success': False, 'message': 'Invalid branch'}), 400
+        if not auth_manager.validate_password_strength(password):
+            return jsonify({'success': False, 'message': 'Weak password'}), 400
+        existing = supabase.table('ps_users').select('username').eq('username', username).execute()
+        if existing.data:
+            return jsonify({'success': False, 'message': 'Username already exists'}), 409
+        password_hash, salt = auth_manager.hash_password(password)
+        ps_data = {
+            'name': name,
+            'username': username,
+            'password': password,
+            'password_hash': password_hash,
+            'salt': salt,
+            'phone': phone,
+            'email': email,
+            'branch': branch,
+            'is_active': True,
+            'role': 'ps',
+            'failed_login_attempts': 0,
+        }
+        result = supabase.table('ps_users').insert(ps_data).execute()
+        auth_manager.log_audit_event(
+            user_id=session.get('user_id'),
+            user_type=session.get('user_type'),
+            action='PS_CREATED',
+            resource='ps_users',
+            resource_id=str(result.data[0]['id']) if result.data else None,
+            details={'ps_name': name, 'username': username, 'branch': branch},
+        )
+        return jsonify({'success': True, 'id': (result.data[0]['id'] if result.data else None)})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/upload_data', methods=['POST'])
+@require_admin
+def api_upload_data():
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'message': 'No file uploaded'}), 400
+        file = request.files['file']
+        source = request.form.get('source', '').strip()
+        if not source:
+            return jsonify({'success': False, 'message': 'Please select a data source'}), 400
+        if file.filename == '':
+            return jsonify({'success': False, 'message': 'No file selected'}), 400
+        if not (file and file.filename and allowed_file(file.filename)):
+            return jsonify({'success': False, 'message': 'Invalid file format'}), 400
+        filename = secure_filename(str(file.filename))
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+        try:
+            file_size = os.path.getsize(filepath)
+            if file_size > 50 * 1024 * 1024:
+                os.remove(filepath)
+                return jsonify({'success': False, 'message': 'File too large (max 50MB)'}), 400
+            if filename.lower().endswith('.csv'):
+                data = read_csv_file(filepath)
+            else:
+                data = read_excel_file(filepath)
+            if not data:
+                os.remove(filepath)
+                return jsonify({'success': False, 'message': 'No valid data found in file'}), 400
+            result = supabase.table('lead_master').select('uid').execute()
+            current_count = len(result.data) if result.data else 0
+            leads_to_insert = []
+            success_count = 0
+            for index, row in enumerate(data):
+                try:
+                    uid = row.get('uid') or f"UID{current_count + index + 1:06d}"
+                    row['uid'] = uid
+                    row['source'] = row.get('source') or source
+                    leads_to_insert.append(row)
+                except Exception:
+                    continue
+            if leads_to_insert:
+                supabase.table('lead_master').insert(leads_to_insert).execute()
+                success_count = len(leads_to_insert)
+            os.remove(filepath)
+            auth_manager.log_audit_event(
+                user_id=session.get('user_id'),
+                user_type=session.get('user_type'),
+                action='DATA_UPLOADED',
+                details={'records_uploaded': success_count, 'source': source},
+            )
+            return jsonify({'success': True, 'uploaded': success_count})
+        finally:
+            if os.path.exists(filepath):
+                try:
+                    os.remove(filepath)
+                except Exception:
+                    pass
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @app.route('/manage_cre')
 @require_admin
 def manage_cre():
@@ -1584,6 +2045,16 @@ def manage_cre():
         return render_template('manage_cre.html', cre_users=[])
 
 
+@app.route('/api/cre_users')
+@require_admin
+def api_cre_users():
+    try:
+        cre_users = safe_get_data('cre_users')
+        return jsonify({"success": True, "cre_users": cre_users})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e), "cre_users": []}), 500
+
+
 @app.route('/manage_ps')
 @require_admin
 def manage_ps():
@@ -1593,6 +2064,16 @@ def manage_ps():
     except Exception as e:
         flash(f'Error loading PS users: {str(e)}', 'error')
         return render_template('manage_ps.html', ps_users=[])
+
+
+@app.route('/api/ps_users')
+@require_admin
+def api_ps_users():
+    try:
+        ps_users = safe_get_data('ps_users')
+        return jsonify({"success": True, "ps_users": ps_users})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e), "ps_users": []}), 500
 
 
 @app.route('/toggle_ps_status/<int:ps_id>', methods=['POST'])
@@ -1727,6 +2208,154 @@ def manage_leads():
     except Exception as e:
         flash(f'Error loading leads: {str(e)}', 'error')
         return render_template('manage_leads.html', cres=[], selected_cre=None, leads=[], sources=[], selected_source=None, qualification='all', date_filter='all', start_date=None, end_date=None, page=1, total_pages=1, total_leads=0, final_status='')
+
+
+@app.route('/api/leads_admin')
+@require_admin
+def api_leads_admin():
+    try:
+        cres = safe_get_data('cre_users')
+        cre_id = request.args.get('cre_id')
+        source = request.args.get('source')
+        qualification = request.args.get('qualification', 'all')
+        date_filter = request.args.get('date_filter', 'all')
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        final_status = request.args.get('final_status', '')
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 50))
+        search_uid = request.args.get('search_uid', '').strip()
+
+        selected_cre = None
+        leads = []
+        sources = []
+        total_leads = 0
+        total_pages = 1
+
+        if cre_id:
+            selected_cre = next((cre for cre in cres if str(cre.get('id')) == str(cre_id)), None)
+            filters = {'cre_name': selected_cre['name']} if selected_cre else {}
+            if source:
+                filters['source'] = source
+            leads = safe_get_data('lead_master', filters)
+            if search_uid:
+                leads = [lead for lead in leads if search_uid.lower() in str(lead.get('uid', '')).lower()]
+            if qualification == 'qualified':
+                leads = [lead for lead in leads if lead.get('first_call_date')]
+            elif qualification == 'unqualified':
+                leads = [lead for lead in leads if not lead.get('first_call_date')]
+            if final_status:
+                leads = [lead for lead in leads if (lead.get('final_status') or '') == final_status]
+            if date_filter == 'today':
+                today_str = datetime.now().strftime('%Y-%m-%d')
+                leads = [lead for lead in leads if lead.get('cre_assigned_at') and str(lead.get('cre_assigned_at')).startswith(today_str)]
+            elif date_filter == 'range' and start_date and end_date:
+                def in_range(ld):
+                    dt = ld.get('cre_assigned_at')
+                    if not dt:
+                        return False
+                    try:
+                        dt_val = dt[:10]
+                        return start_date <= dt_val <= end_date
+                    except Exception:
+                        return False
+                leads = [lead for lead in leads if in_range(lead)]
+            sources = sorted(list(set(lead.get('source', 'Unknown') for lead in leads)))
+            total_leads = len(leads)
+            total_pages = (total_leads + per_page - 1) // per_page
+            start_idx = (page - 1) * per_page
+            end_idx = start_idx + per_page
+            leads = leads[start_idx:end_idx]
+        else:
+            if search_uid:
+                all_leads = safe_get_data('lead_master')
+                leads = [lead for lead in all_leads if search_uid.lower() in str(lead.get('uid', '')).lower()]
+                sources = sorted(list(set(lead.get('source', 'Unknown') for lead in leads)))
+                total_leads = len(leads)
+                total_pages = 1
+                page = 1
+        def format_cre_tat(tat):
+            try:
+                tat = float(tat)
+            except (TypeError, ValueError):
+                return 'N/A'
+            if tat < 60:
+                return f"{int(tat)}s"
+            elif tat < 3600:
+                m = int(tat // 60)
+                s = int(tat % 60)
+                return f"{m}m {s}s"
+            elif tat < 86400:
+                h = int(tat // 3600)
+                m = int((tat % 3600) // 60)
+                s = int(tat % 60)
+                return f"{h}h {m}m {s}s"
+            else:
+                d = int(tat // 86400)
+                h = int((tat % 86400) // 3600)
+                return f"{d} Days {h}h"
+        for lead in leads:
+            lead['cre_tat_display'] = format_cre_tat(lead.get('tat'))
+        return jsonify({
+            'success': True,
+            'cres': cres,
+            'selected_cre': selected_cre,
+            'leads': leads,
+            'sources': sources,
+            'selected_source': source,
+            'qualification': qualification,
+            'date_filter': date_filter,
+            'start_date': start_date,
+            'end_date': end_date,
+            'page': page,
+            'total_pages': total_pages,
+            'total_leads': total_leads,
+            'final_status': final_status,
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/delete_leads', methods=['POST'])
+@require_admin
+def api_delete_leads():
+    """JSON-friendly alias for delete_leads"""
+    try:
+        data = request.get_json(silent=True) or {}
+        delete_type = data.get('delete_type')
+        if delete_type == 'single':
+            uid = data.get('uid')
+            if not uid:
+                return jsonify({'success': False, 'message': 'No UID provided'})
+            supabase.table('ps_followup_master').delete().eq('lead_uid', uid).execute()
+            supabase.table('lead_master').delete().eq('uid', uid).execute()
+            auth_manager.log_audit_event(
+                user_id=session.get('user_id'),
+                user_type=session.get('user_type'),
+                action='LEAD_DELETED',
+                resource='lead_master',
+                resource_id=uid,
+                details={'delete_type': 'single'}
+            )
+            return jsonify({'success': True, 'message': 'Lead deleted successfully'})
+        elif delete_type == 'bulk':
+            uids = data.get('uids') or []
+            if not uids:
+                return jsonify({'success': False, 'message': 'No leads selected'})
+            for uid in uids:
+                supabase.table('ps_followup_master').delete().eq('lead_uid', uid).execute()
+                supabase.table('lead_master').delete().eq('uid', uid).execute()
+            auth_manager.log_audit_event(
+                user_id=session.get('user_id'),
+                user_type=session.get('user_type'),
+                action='LEADS_DELETED_BULK',
+                resource='lead_master',
+                resource_id=','.join(uids)
+            )
+            return jsonify({'success': True, 'message': f'{len(uids)} leads deleted successfully'})
+        return jsonify({'success': False, 'message': 'Invalid delete type'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error deleting leads: {str(e)}'})
 
 
 @app.route('/delete_leads', methods=['POST'])
@@ -4781,6 +5410,70 @@ def analytics():
             'all_leads_count': 0
         }
         return render_template('analytics.html', analytics=empty_analytics)
+
+
+@app.route('/api/analytics')
+@require_auth(['admin'])
+def api_analytics():
+    """JSON version of analytics endpoint"""
+    try:
+        with app.test_request_context():
+            # Reuse logic by calling analytics() and extracting computed object is complex due to render_template.
+            # Instead, recompute a minimal subset suitable for Next.js.
+            period = request.args.get('period', '30')
+            start_date_str = request.args.get('start_date')
+            end_date_str = request.args.get('end_date')
+            today = datetime.now().date()
+            start_date = None
+            end_date = None
+            if start_date_str and end_date_str:
+                try:
+                    start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                    end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+                except Exception:
+                    start_date = None
+                    end_date = None
+            elif period != 'all':
+                days = int(period) if period.isdigit() else 30
+                start_date = today - timedelta(days=days)
+                end_date = today
+
+            all_leads = safe_get_data('lead_master')
+            leads = []
+            for lead in all_leads:
+                lead_date_str = lead.get('created_at') or lead.get('date')
+                if not lead_date_str:
+                    leads.append(lead)
+                    continue
+                try:
+                    if 'T' in lead_date_str:
+                        lead_date = datetime.fromisoformat(lead_date_str.replace('Z', '+00:00')).date()
+                    else:
+                        lead_date = datetime.strptime(lead_date_str, '%Y-%m-%d').date()
+                except (ValueError, TypeError):
+                    leads.append(lead)
+                    continue
+                if start_date and end_date:
+                    if start_date <= lead_date <= end_date:
+                        leads.append(lead)
+                elif start_date:
+                    if lead_date >= start_date:
+                        leads.append(lead)
+                else:
+                    leads.append(lead)
+
+            total_leads = len(leads)
+            won_leads = len([l for l in leads if (l.get('final_status') or '').strip().lower() == 'won'])
+            conversion_rate = round((won_leads / total_leads * 100) if total_leads > 0 else 0, 1)
+
+            return jsonify({
+                'success': True,
+                'total_leads': total_leads,
+                'won_leads': won_leads,
+                'conversion_rate': conversion_rate,
+            })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 
 @app.route('/branch_head_dashboard')
