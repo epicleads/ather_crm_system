@@ -148,8 +148,11 @@
                 </div>
                 <div class="col-md-6">
                     <div class="mb-3">
-                        <label for="follow_up_date" class="form-label">Follow-up Date</label>
+                        <label for="follow_up_date" class="form-label">Follow-up Date <span id="follow_up_required" class="text-danger" style="display: none;">*</span></label>
                         <input type="datetime-local" class="form-control" id="follow_up_date" name="follow_up_date">
+                        <div id="follow_up_help" class="form-text" style="display: none;">
+                            <i class="fas fa-info-circle text-info"></i> Follow-up date is required when status is Pending
+                        </div>
                     </div>
                 </div>
             </div>
@@ -395,6 +398,38 @@ document.addEventListener('DOMContentLoaded', function() {
     const today = new Date().toISOString().slice(0, 16);
     const followUpDate = document.getElementById('follow_up_date');
     if (followUpDate) followUpDate.min = today;
+
+    // Add event listener for final_status change to show/hide follow-up date requirement
+    const finalStatusSelect = document.getElementById('final_status');
+    const followUpRequiredSpan = document.getElementById('follow_up_required');
+    const followUpHelpText = document.getElementById('follow_up_help');
+
+    function toggleFollowUpRequired() {
+        const selectedFinalStatus = finalStatusSelect.value;
+        if (selectedFinalStatus === 'Pending') {
+            followUpRequiredSpan.style.display = 'inline-block';
+            followUpHelpText.style.display = 'block';
+            // Add required attribute to the input field
+            if (followUpDate) {
+                followUpDate.setAttribute('required', 'required');
+            }
+        } else {
+            followUpRequiredSpan.style.display = 'none';
+            followUpHelpText.style.display = 'none';
+            // Remove the required attribute
+            if (followUpDate) {
+                followUpDate.removeAttribute('required');
+            }
+        }
+    }
+
+    // Add event listener for final_status change
+    if (finalStatusSelect) {
+        finalStatusSelect.addEventListener('change', toggleFollowUpRequired);
+        // Initial check
+        toggleFollowUpRequired();
+    }
 });
 </script>
 {% endblock %} 
+
