@@ -411,7 +411,7 @@
       </h5>
     </div>
     <div class="card-body p-4">
-      <form id="addLeadForm" class="row g-3">
+      <form id="addLeadForm" method="POST" action="/add_lead_with_cre" class="row g-3">
         <div class="col-md-6">
           <label for="customer_name" class="form-label" style="font-weight: 600; color: var(--accent-dark);">
             Customer Name <span class="text-danger">*</span>
@@ -598,47 +598,11 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
-    // Handle Add Lead Form Submission
+    // Add form submission handler for debugging
     document.getElementById('addLeadForm').addEventListener('submit', function(e) {
-      e.preventDefault();
-      
-      const formData = new FormData(this);
-      const submitBtn = this.querySelector('button[type="submit"]');
-      const originalText = submitBtn.innerHTML;
-      
-      // Debug form data
-      console.log('🔍 Form submission debug:');
-      for (let [key, value] of formData.entries()) {
-        console.log(`  - ${key}: ${value}`);
-      }
-      
-      // Disable button and show loading
-      submitBtn.disabled = true;
-      submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Adding...';
-      
-      fetch('/add_lead_with_cre', {
-        method: 'POST',
-        body: formData
-      })
-      .then(response => response.json())
-      .then(data => {
-        console.log('📡 Server response:', data);
-        if (data.success) {
-          alert(`✅ Lead added successfully!\nUID: ${data.uid}`);
-          this.reset(); // Reset form
-        } else {
-          alert(`❌ Failed to add lead: ${data.message}`);
-        }
-      })
-      .catch(error => {
-        console.error('❌ Error:', error);
-        alert('❌ Network error. Please try again.');
-      })
-      .finally(() => {
-        // Re-enable button
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = originalText;
-      });
+      console.log('🔍 Form submission triggered');
+      console.log('Form data:', new FormData(this));
+      // Don't prevent default - let the form submit normally
     });
 
     // Helper: get all CREs
@@ -1138,13 +1102,17 @@
         return false;
       } else {
         // No duplicate found, proceed with form submission
+        console.log('✅ No duplicate found, submitting form...');
+        // Submit the form programmatically
         document.getElementById('addLeadForm').submit();
-        return true;
+        return false; // Prevent the default button action since we're submitting programmatically
       }
     } catch (error) {
       console.error('Error checking duplicate lead:', error);
       // If there's an error, proceed with form submission
-      return true;
+      console.log('✅ Error occurred, submitting form anyway...');
+      document.getElementById('addLeadForm').submit();
+      return false;
     }
   }
 
@@ -1164,14 +1132,13 @@
     // Show success message about redirect
     alert('✅ Lead will be added as a new source. You will be redirected to Admin Dashboard → Manage Leads → Duplicate Leads section to view and manage the duplicate lead.');
     
-    // Close modal and trigger the form submission manually
+    // Close modal and submit the form
     const modal = bootstrap.Modal.getInstance(document.getElementById('duplicateLeadModal'));
     modal.hide();
     
-    console.log('🔍 Triggering form submission...');
-    // Trigger the form submission event manually
-    const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
-    form.dispatchEvent(submitEvent);
+    console.log('🔍 Submitting form with duplicate flag...');
+    // Submit the form
+    form.submit();
   }
 </script>
 {% endblock %}
