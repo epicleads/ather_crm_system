@@ -532,7 +532,7 @@ def create_or_update_ps_followup(lead_data, ps_name, ps_branch):
             'lead_category': lead_data.get('lead_category'),
             'model_interested': lead_data.get('model_interested'),
             'final_status': 'Pending',
-            'ps_assigned_at': lead_data.get('ps_assigned_at'),
+            'ps_assigned_at': datetime.now().isoformat(),  # Always set when PS is assigned
             'created_at': lead_data.get('created_at') or datetime.now().isoformat(),
             'first_call_date': None  # Ensure fresh leads start without first_call_date
         }
@@ -720,6 +720,52 @@ def filter_leads_by_date(leads, filter_type, date_field='created_at'):
             filtered_leads.append(lead)
 
     return filtered_leads
+
+
+def fix_missing_timestamps():
+    """
+    Fix missing timestamps for existing leads that have final_status but missing won_timestamp or lost_timestamp
+    """
+    try:
+        # Fix lead_master table
+        # Get leads with final_status = 'Won' but no won_timestamp
+        won_leads = supabase.table('lead_master').select('uid, final_status, won_timestamp, lost_timestamp, updated_at').eq('final_status', 'Won').is_('won_timestamp', 'null').execute()
+        
+        for lead in won_leads.data:
+            supabase.table('lead_master').update({
+                'won_timestamp': lead.get('updated_at') or datetime.now().isoformat()
+            }).eq('uid', lead['uid']).execute()
+        
+        # Get leads with final_status = 'Lost' but no lost_timestamp
+        lost_leads = supabase.table('lead_master').select('uid, final_status, won_timestamp, lost_timestamp, updated_at').eq('final_status', 'Lost').is_('lost_timestamp', 'null').execute()
+        
+        for lead in lost_leads.data:
+            supabase.table('lead_master').update({
+                'lost_timestamp': lead.get('updated_at') or datetime.now().isoformat()
+            }).eq('uid', lead['uid']).execute()
+        
+        # Fix ps_followup_master table
+        # Get PS leads with final_status = 'Won' but no won_timestamp
+        ps_won_leads = supabase.table('ps_followup_master').select('lead_uid, final_status, won_timestamp, lost_timestamp, updated_at').eq('final_status', 'Won').is_('won_timestamp', 'null').execute()
+        
+        for lead in ps_won_leads.data:
+            supabase.table('ps_followup_master').update({
+                'won_timestamp': lead.get('updated_at') or datetime.now().isoformat()
+            }).eq('lead_uid', lead['lead_uid']).execute()
+        
+        # Get PS leads with final_status = 'Lost' but no lost_timestamp
+        ps_lost_leads = supabase.table('ps_followup_master').select('lead_uid, final_status, won_timestamp, lost_timestamp, updated_at').eq('final_status', 'Lost').is_('lost_timestamp', 'null').execute()
+        
+        for lead in ps_lost_leads.data:
+            supabase.table('ps_followup_master').update({
+                'lost_timestamp': lead.get('updated_at') or datetime.now().isoformat()
+            }).eq('lead_uid', lead['lead_uid']).execute()
+        
+        print(f"Fixed {len(won_leads.data)} won leads, {len(lost_leads.data)} lost leads in lead_master")
+        print(f"Fixed {len(ps_won_leads.data)} won leads, {len(ps_lost_leads.data)} lost leads in ps_followup_master")
+        
+    except Exception as e:
+        print(f"Error fixing timestamps: {str(e)}")
 
 
 @app.route('/')
@@ -2228,6 +2274,11 @@ def add_lead():
             flash('Please fill all required fields', 'error')
             return render_template('add_lead.html', branches=branches, ps_users=ps_users)
         
+        # Validate follow_up_date is required when final_status is Pending
+        if final_status == 'Pending' and not follow_up_date:
+            flash('Follow-up date is required when final status is Pending', 'error')
+            return render_template('add_lead.html', branches=branches, ps_users=ps_users)
+        
         # Normalize phone number
         normalized_phone = ''.join(filter(str.isdigit, customer_mobile_number))
         
@@ -2303,6 +2354,8 @@ def add_lead():
             'final_status': final_status,
             'follow_up_date': follow_up_date if follow_up_date else None,
             'assigned': 'Yes' if cre_name else 'No',  # Set to Yes if CRE is adding the lead
+            'cre_assigned_at': datetime.now().isoformat() if cre_name else None,
+            'ps_assigned_at': datetime.now().isoformat() if ps_name else None,
             'created_at': datetime.now().isoformat(),
             'updated_at': datetime.now().isoformat(),
             'first_remark': remark,
@@ -2587,8 +2640,10 @@ def add_lead_with_cre():
             'lead_status': 'Pending',
             'lead_category': None,  # Keep as null for assign leads page
             'cre_assigned_at': datetime.now().isoformat() if cre_name else None,
+            'ps_assigned_at': None,  # Will be set when PS is assigned
             'created_at': datetime.now().isoformat(),
-            'updated_at': datetime.now().isoformat()
+            'updated_at': datetime.now().isoformat(),
+            'ps_assigned_at': None  # Added this line to ensure ps_assigned_at is set
         }
         print('=== DEBUG INFO ===')
         print('Form data:', dict(request.form))
@@ -10038,6 +10093,14 @@ def api_bulk_transfer_ps_leads():
     except Exception as e:
         print(f"Error in api_bulk_transfer_ps_leads: {str(e)}")
         return jsonify({'success': False, 'message': 'Error transferring leads'})
+
+@app.route('/fix_timestamps', methods=['POST'])
+@require_admin
+def fix_timestamps():
+    """Admin route to fix missing timestamps"""
+    fix_missing_timestamps()
+    flash('Timestamps fixed successfully', 'success')
+    return redirect(url_for('admin_dashboard'))
 
 if __name__ == '__main__':
     # socketio.run(app, debug=True)
