@@ -30,7 +30,6 @@ jobs:
           META_PAGE_ACCESS_TOKEN: ${{ secrets.META_PAGE_ACCESS_TOKEN }}
           PAGE_ID: ${{ secrets.PAGE_ID }}
         run: python metatosupabase.py
-
   # run-salesforce-script: (ENTIRE JOB COMMENTED OUT)
   #   runs-on: ubuntu-latest
   #   steps:
