@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+
+{% block title %}Performance Metrics - Raam Ather CRM{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <i class="fas fa-tachometer-alt"></i> Performance Metrics Dashboard
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <!-- Cache Statistics -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card bg-info text-white">
+                                <div class="card-body">
+                                    <h5 class="card-title">Cache Statistics</h5>
+                                    <p class="card-text">
+                                        <strong>Cache Size:</strong> {{ cache_stats.cache_size }} items<br>
+                                        <strong>Cache Keys:</strong> {{ cache_stats.cache_keys|length }} active
+                                    </p>
+                                    <button class="btn btn-light btn-sm" onclick="clearCache()">
+                                        <i class="fas fa-trash"></i> Clear Cache
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card bg-success text-white">
+                                <div class="card-body">
+                                    <h5 class="card-title">Database Statistics</h5>
+                                    <p class="card-text">
+                                        <strong>Lead Master:</strong> {{ db_metrics.lead_master_count }} records<br>
+                                        <strong>Duplicate Leads:</strong> {{ db_metrics.duplicate_leads_count }} records<br>
+                                        <strong>Last 24h:</strong> {{ db_metrics.leads_last_24h }} new leads
+                                    </p>
+                                    <button class="btn btn-light btn-sm" onclick="applyOptimizations()">
+                                        <i class="fas fa-database"></i> Apply Optimizations
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Performance Actions -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5>Performance Actions</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-3">
+                                            <button class="btn btn-primary btn-block" onclick="testOptimizedLeadCreation()">
+                                                <i class="fas fa-rocket"></i> Test Optimized Lead Creation
+                                            </button>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <button class="btn btn-warning btn-block" onclick="testDuplicateChecking()">
+                                                <i class="fas fa-search"></i> Test Duplicate Checking
+                                            </button>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <button class="btn btn-info btn-block" onclick="testDashboardLoading()">
+                                                <i class="fas fa-chart-line"></i> Test Dashboard Loading
+                                            </button>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <button class="btn btn-secondary btn-block" onclick="refreshMetrics()">
+                                                <i class="fas fa-sync"></i> Refresh Metrics
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Performance Results -->
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5>Performance Test Results</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div id="performance-results">
+                                        <p class="text-muted">Click the buttons above to run performance tests...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function clearCache() {
+    fetch('/api/clear_cache', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Cache cleared successfully!');
+            location.reload();
+        } else {
+            alert('Error clearing cache: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error clearing cache');
+    });
+}
+
+function applyOptimizations() {
+    fetch('/api/apply_database_optimizations', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Database optimizations applied successfully!');
+        } else {
+            alert('Error applying optimizations: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error applying optimizations');
+    });
+}
+
+function testOptimizedLeadCreation() {
+    const resultsDiv = document.getElementById('performance-results');
+    resultsDiv.innerHTML = '<p class="text-info">Testing optimized lead creation...</p>';
+    
+    // Simulate a test lead creation
+    const testData = {
+        customer_name: 'Test Customer',
+        customer_mobile_number: '9876543210',
+        source: 'TEST',
+        subsource: 'Performance Test',
+        lead_status: 'Warm',
+        lead_category: 'Test',
+        model_interested: 'Test Model',
+        branch: 'SOMAJIGUDA',
+        final_status: 'Pending',
+        follow_up_date: '2024-12-08',
+        remark: 'Performance test lead'
+    };
+    
+    const startTime = performance.now();
+    
+    fetch('/add_lead_optimized', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(testData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        const endTime = performance.now();
+        const duration = (endTime - startTime) / 1000;
+        
+        if (data.success) {
+            resultsDiv.innerHTML = `
+                <div class="alert alert-success">
+                    <h6>✅ Optimized Lead Creation Test - SUCCESS</h6>
+                    <p><strong>Execution Time:</strong> ${data.execution_time}</p>
+                    <p><strong>Total Time:</strong> ${duration.toFixed(3)}s</p>
+                    <p><strong>UID:</strong> ${data.uid}</p>
+                    <p><strong>Message:</strong> ${data.message}</p>
+                </div>
+            `;
+        } else {
+            resultsDiv.innerHTML = `
+                <div class="alert alert-warning">
+                    <h6>⚠️ Optimized Lead Creation Test - RESULT</h6>
+                    <p><strong>Execution Time:</strong> ${data.execution_time}</p>
+                    <p><strong>Total Time:</strong> ${duration.toFixed(3)}s</p>
+                    <p><strong>Message:</strong> ${data.message}</p>
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        const endTime = performance.now();
+        const duration = (endTime - startTime) / 1000;
+        
+        resultsDiv.innerHTML = `
+            <div class="alert alert-danger">
+                <h6>❌ Optimized Lead Creation Test - ERROR</h6>
+                <p><strong>Total Time:</strong> ${duration.toFixed(3)}s</p>
+                <p><strong>Error:</strong> ${error.message}</p>
+            </div>
+        `;
+    });
+}
+
+function testDuplicateChecking() {
+    const resultsDiv = document.getElementById('performance-results');
+    resultsDiv.innerHTML = '<p class="text-info">Testing duplicate checking performance...</p>';
+    
+    const startTime = performance.now();
+    
+    // Test with a known phone number
+    fetch('/check_duplicate_lead', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            customer_mobile_number: '9876543210',
+            source: 'TEST',
+            subsource: 'Performance Test'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        const endTime = performance.now();
+        const duration = (endTime - startTime) / 1000;
+        
+        resultsDiv.innerHTML = `
+            <div class="alert alert-info">
+                <h6>🔍 Duplicate Checking Test - COMPLETED</h6>
+                <p><strong>Execution Time:</strong> ${duration.toFixed(3)}s</p>
+                <p><strong>Result:</strong> ${data.is_duplicate ? 'Duplicate Found' : 'No Duplicate'}</p>
+                <p><strong>Message:</strong> ${data.message || 'Check completed'}</p>
+            </div>
+        `;
+    })
+    .catch(error => {
+        const endTime = performance.now();
+        const duration = (endTime - startTime) / 1000;
+        
+        resultsDiv.innerHTML = `
+            <div class="alert alert-danger">
+                <h6>❌ Duplicate Checking Test - ERROR</h6>
+                <p><strong>Execution Time:</strong> ${duration.toFixed(3)}s</p>
+                <p><strong>Error:</strong> ${error.message}</p>
+            </div>
+        `;
+    });
+}
+
+function testDashboardLoading() {
+    const resultsDiv = document.getElementById('performance-results');
+    resultsDiv.innerHTML = '<p class="text-info">Testing dashboard loading performance...</p>';
+    
+    const startTime = performance.now();
+    
+    fetch('/cre_dashboard_leads')
+    .then(response => response.text())
+    .then(data => {
+        const endTime = performance.now();
+        const duration = (endTime - startTime) / 1000;
+        
+        resultsDiv.innerHTML = `
+            <div class="alert alert-info">
+                <h6>📊 Dashboard Loading Test - COMPLETED</h6>
+                <p><strong>Execution Time:</strong> ${duration.toFixed(3)}s</p>
+                <p><strong>Response Size:</strong> ${(data.length / 1024).toFixed(2)} KB</p>
+                <p><strong>Status:</strong> Dashboard loaded successfully</p>
+            </div>
+        `;
+    })
+    .catch(error => {
+        const endTime = performance.now();
+        const duration = (endTime - startTime) / 1000;
+        
+        resultsDiv.innerHTML = `
+            <div class="alert alert-danger">
+                <h6>❌ Dashboard Loading Test - ERROR</h6>
+                <p><strong>Execution Time:</strong> ${duration.toFixed(3)}s</p>
+                <p><strong>Error:</strong> ${error.message}</p>
+            </div>
+        `;
+    });
+}
+
+function refreshMetrics() {
+    location.reload();
+}
+</script>
+{% endblock %}
