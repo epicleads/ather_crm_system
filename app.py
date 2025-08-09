@@ -2456,6 +2456,110 @@ def add_lead():
             return render_template('add_lead.html', branches=branches, ps_users=ps_users)
     return render_template('add_lead.html', branches=branches, ps_users=ps_users)
 
+# Add import for optimized operations
+from optimized_lead_operations import create_optimized_operations
+
+@app.route('/add_lead_optimized', methods=['POST'])
+@require_cre
+def add_lead_optimized():
+    """
+    Optimized lead creation endpoint with improved performance
+    """
+    try:
+        from datetime import datetime
+        
+        # Get form data
+        customer_name = request.form.get('customer_name', '').strip()
+        customer_mobile_number = request.form.get('customer_mobile_number', '').strip()
+        source = request.form.get('source', '').strip()
+        subsource = request.form.get('subsource', '').strip()
+        lead_status = request.form.get('lead_status', '').strip()
+        lead_category = request.form.get('lead_category', '').strip()
+        model_interested = request.form.get('model_interested', '').strip()
+        branch = request.form.get('branch', '').strip()
+        ps_name = request.form.get('ps_name', '').strip()
+        final_status = request.form.get('final_status', 'Pending').strip()
+        follow_up_date = request.form.get('follow_up_date', '').strip()
+        remark = request.form.get('remark', '').strip()
+        date_now = datetime.now().strftime('%Y-%m-%d')
+        
+        # Validation
+        if not customer_name or not customer_mobile_number or not source or not subsource:
+            return jsonify({
+                'success': False,
+                'message': 'Please fill all required fields'
+            })
+        
+        # Validate follow_up_date is required when final_status is Pending
+        if final_status == 'Pending' and not follow_up_date:
+            return jsonify({
+                'success': False,
+                'message': 'Follow-up date is required when final status is Pending'
+            })
+        
+        # Normalize phone number
+        normalized_phone = ''.join(filter(str.isdigit, customer_mobile_number))
+        
+        # CRE name from session
+        cre_name = session.get('cre_name')
+        
+        # Prepare lead data
+        lead_data = {
+            'date': date_now,
+            'customer_name': customer_name,
+            'customer_mobile_number': normalized_phone,
+            'source': source,
+            'sub_source': subsource,
+            'lead_status': lead_status,
+            'lead_category': lead_category,
+            'model_interested': model_interested,
+            'branch': branch,
+            'ps_name': ps_name if ps_name else None,
+            'final_status': final_status,
+            'follow_up_date': follow_up_date if follow_up_date else None,
+            'assigned': 'Yes' if cre_name else 'No',
+            'cre_assigned_at': datetime.now().isoformat() if cre_name else None,
+            'ps_assigned_at': datetime.now().isoformat() if ps_name else None,
+            'created_at': datetime.now().isoformat(),
+            'updated_at': datetime.now().isoformat(),
+            'first_remark': remark,
+            'cre_name': cre_name,
+            'first_call_date': date_now
+        }
+        
+        # Get PS branch if PS is assigned
+        ps_branch = None
+        if ps_name:
+            ps_users = safe_get_data('ps_users')
+            ps_user = next((ps for ps in ps_users if ps['name'] == ps_name), None)
+            if ps_user:
+                ps_branch = ps_user['branch']
+        
+        # Use optimized operations
+        optimized_ops = create_optimized_operations(supabase)
+        result = optimized_ops.create_lead_optimized(lead_data, cre_name, ps_name, ps_branch)
+        
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'message': result['message'],
+                'uid': result['uid'],
+                'execution_time': f"{result['execution_time']:.3f}s"
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': result['message'],
+                'execution_time': f"{result['execution_time']:.3f}s"
+            })
+            
+    except Exception as e:
+        print(f"Error in optimized lead creation: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Error creating lead: {str(e)}'
+        })
+
 @app.route('/add_lead_with_cre', methods=['POST'])
 @require_admin  # <-- Change to @require_cre if you want CREs to use it, or create a custom decorator for both
 def add_lead_with_cre():
