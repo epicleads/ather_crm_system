@@ -1,6 +1,6 @@
 import requests
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -40,19 +40,90 @@ class KnowlarityAPI:
         self.base_url = base_url
         self.channel = channel
 
+    def test_api_connection(self):
+        """Test API connection with minimal parameters"""
+        url = f"{self.base_url}/{self.channel}/v1/account/calllog"
+        
+        # Test with just limit parameter
+        params = {'limit': 5}
+        
+        try:
+            resp = requests.get(url, headers=self.headers, params=params)
+            print(f"🧪 Test API Status: {resp.status_code}")
+            
+            if resp.status_code == 200:
+                result = resp.json()
+                print(f"📊 Test Result: {result.get('meta', {})}")
+                return True
+            else:
+                print(f"❌ Test Failed: {resp.text}")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Test Exception: {e}")
+            return False
+
     def get_call_logs(self, start_date, end_date, limit=500):
         url = f"{self.base_url}/{self.channel}/v1/account/calllog"
-        headers = self.headers.copy()
-        headers.update({
+        
+        # FIXED: Put date parameters in query params, not headers
+        params = {
             'start_time': f"{start_date} 00:00:00+05:30",
-            'end_time': f"{end_date} 23:59:59+05:30"
-        })
+            'end_time': f"{end_date} 23:59:59+05:30",
+            'limit': limit
+        }
+        
+        print(f"🔍 API Request Details:")
+        print(f"URL: {url}")
+        print(f"Params: {params}")
+        print(f"Headers: {self.headers}")
+        
         try:
-            resp = requests.get(url, headers=headers, params={'limit': limit})
-            return resp.json() if resp.status_code == 200 else {}
+            resp = requests.get(url, headers=self.headers, params=params)
+            print(f"📡 Response Status: {resp.status_code}")
+            
+            if resp.status_code == 200:
+                json_response = resp.json()
+                print(f"📊 Total records found: {json_response.get('meta', {}).get('total_count', 0)}")
+                return json_response
+            else:
+                print(f"❌ API Error: {resp.status_code}")
+                print(f"Response: {resp.text}")
+                
+                # Try POST method as fallback
+                print("🔄 Trying POST method as fallback...")
+                return self.get_call_logs_post(start_date, end_date, limit)
+                
         except Exception as e:
-            print("❌ Request failed:", e)
-        return {}
+            print(f"❌ Request failed: {e}")
+            return {}
+
+    def get_call_logs_post(self, start_date, end_date, limit=500):
+        """Fallback POST method"""
+        url = f"{self.base_url}/{self.channel}/v1/account/calllog"
+        
+        # Try POST method with JSON body
+        payload = {
+            'start_time': f"{start_date} 00:00:00+05:30",
+            'end_time': f"{end_date} 23:59:59+05:30",
+            'limit': limit
+        }
+        
+        try:
+            resp = requests.post(url, headers=self.headers, json=payload)
+            print(f"📡 POST Response Status: {resp.status_code}")
+            
+            if resp.status_code == 200:
+                json_response = resp.json()
+                print(f"📊 POST Total records found: {json_response.get('meta', {}).get('total_count', 0)}")
+                return json_response
+            else:
+                print(f"❌ POST Error: {resp.status_code} - {resp.text}")
+                return {}
+                
+        except Exception as e:
+            print(f"❌ POST Request failed: {e}")
+            return {}
 
     def extract_records(self, response):
         return response.get('objects', []) if isinstance(response, dict) else []
@@ -198,10 +269,28 @@ def is_duplicate_source(existing_record, new_source, new_sub_source):
     return False
 
 def main():
+    # Validate credentials first
+    if not KNOW_SR_KEY or not KNOW_X_API_KEY:
+        print("❌ Missing API credentials in environment variables")
+        print(f"KNOW_SR_KEY: {'✅' if KNOW_SR_KEY else '❌'}")
+        print(f"KNOW_X_API_KEY: {'✅' if KNOW_X_API_KEY else '❌'}")
+        print(f"SUPABASE_URL: {'✅' if SUPABASE_URL else '❌'}")
+        print(f"SUPABASE_KEY: {'✅' if SUPABASE_KEY else '❌'}")
+        return
+    
+    print(f"🔑 API Credentials loaded successfully")
+    
     client = KnowlarityAPI(KNOW_SR_KEY, KNOW_X_API_KEY)
     
+    # Test connection first
+    print("🧪 Testing API connection...")
+    if not client.test_api_connection():
+        print("❌ API connection test failed - check your credentials and network")
+        return
+    
+    print("✅ API connection successful!")
+    
     # Get past 24 hours
-    from datetime import timedelta
     now = datetime.now()
     yesterday = now - timedelta(hours=24)
     
