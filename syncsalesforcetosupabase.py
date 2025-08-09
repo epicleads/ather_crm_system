@@ -8,7 +8,7 @@ import pandas as pd
 from typing import Dict, List, Optional, Tuple, Any
 import re
 
-# --- Load environment variables ---
+# --- Load environment variables -----
 load_dotenv()
 
 SF_USERNAME = os.getenv('SF_USERNAME')
