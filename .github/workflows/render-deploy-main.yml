@@ -1,0 +1,16 @@
+# Main Branch Only - Render Deploy
+# Uday3 branch uses render-deploy-uday3.yml instead
+name: Deploy to Render - Main Branch Only
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  render-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render Deploy Hook - Main Branch
+        run: |
+          curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}
