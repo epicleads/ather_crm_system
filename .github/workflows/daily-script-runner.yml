@@ -10,6 +10,32 @@ on:
       - Uday3  # Only run on Uday3 branch
 
 jobs:
+  run-knowlarity-script:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run knowlaritytosupabase.py
+        env:
+          # Main branch variables (COMMENTED OUT for testing)
+          # SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          # SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          
+          # Branch-specific variables for Uday3 testing
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL_UDAY3 }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_UDAY3 }}
+          
+          KNOW_SR_KEY: ${{ secrets.KNOW_SR_KEY }}
+          KNOW_X_API_KEY: ${{ secrets.KNOW_X_API_KEY }}
+        run: python knowlaritytosupabase.py
+
   run-meta-script:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
@@ -22,13 +48,6 @@ jobs:
           python-version: '3.11'
       - name: Install dependencies
         run: pip install -r requirements.txt
-      # - name: Run knowlaritytosupabase.py (COMMENTED OUT)
-      #   env:
-      #     SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      #     SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_URL }}
-      #     KNOW_SR_KEY: ${{ secrets.KNOW_SR_KEY }}
-      #     KNOW_X_API_KEY: ${{ secrets.KNOW_X_API_KEY }}
-      #   run: python knowlaritytosupabase.py
       - name: Run metatosupabase.py
         env:
           # Main branch variables (COMMENTED OUT for testing)
