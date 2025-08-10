@@ -317,7 +317,6 @@ class EnhancedAutoAssignTrigger:
                 'attempt': 1,   # First attempt
                 'status': 'Pending',  # Initial status
                 'cre_name': cre_name,
-                'cre_id': cre_id,
                 'created_at': get_ist_timestamp().isoformat(),
                 'update_ts': get_ist_timestamp().isoformat()
             }
@@ -329,9 +328,10 @@ class EnhancedAutoAssignTrigger:
             
             # Update the lead_master table to mark as assigned
             supabase.table('lead_master').update({
-                'assigned': True,
+                'assigned': 'Yes',
                 'cre_name': cre_name,
-                'assigned': True,
+                'cre_assigned_at': get_ist_timestamp().isoformat(),
+                'lead_status': 'Pending',
                 'updated_at': get_ist_timestamp().isoformat()
             }).eq('uid', lead_uid).execute()
             
@@ -1108,7 +1108,18 @@ class RenderAutoAssignWorker:
             # Execute batch updates (reduce API calls)
             for uid, update_data in batch_updates:
                 try:
+                    # Update lead_master table
                     supabase.table('lead_master').update(update_data).eq('uid', uid).execute()
+                    
+                    # Log to auto_assign_history table
+                    self._log_auto_assignment_optimized(
+                        lead_uid=uid,
+                        source=source,
+                        cre_id=selected_cre['id'],
+                        cre_name=update_data['cre_name'],
+                        assignment_method='round_robin_optimized'
+                    )
+                    
                     assigned_count += 1
                     if os.getenv('LOG_LEVEL') == 'DEBUG':
                         self.logger.debug(f"🤖 Auto-assigned lead {uid} to {update_data['cre_name']}")
@@ -1123,6 +1134,44 @@ class RenderAutoAssignWorker:
         except Exception as e:
             self.logger.error(f"❌ Error processing source {source}: {e}")
             return 0
+    
+    def _log_auto_assignment_optimized(self, lead_uid, source, cre_id, cre_name, assignment_method='round_robin_optimized'):
+        """
+        Log auto-assignment to history table with billing optimizations.
+        
+        Args:
+            lead_uid (str): The lead UID
+            source (str): The source name
+            cre_id (int): The CRE ID
+            cre_name (str): The CRE name
+            assignment_method (str): The assignment method used
+        """
+        try:
+            # Get current auto_assign_count for the CRE
+            cre_result = supabase.table('cre_users').select('auto_assign_count').eq('id', cre_id).execute()
+            current_count = cre_result.data[0].get('auto_assign_count', 0) if cre_result.data else 0
+            
+            # Insert into auto_assign_history
+            history_data = {
+                'lead_uid': lead_uid,
+                'source': source,
+                'assigned_cre_id': cre_id,
+                'assigned_cre_name': cre_name,
+                'cre_total_leads_before': current_count,
+                'cre_total_leads_after': current_count + 1,
+                'assignment_method': assignment_method,
+                'created_at': datetime.now().isoformat()
+            }
+            
+            supabase.table('auto_assign_history').insert(history_data).execute()
+            
+            # Update the CRE's auto_assign_count
+            supabase.table('cre_users').update({'auto_assign_count': current_count + 1}).eq('id', cre_id).execute()
+            
+            self.logger.info(f"✅ Logged auto-assignment: {lead_uid} -> {cre_name} ({assignment_method})")
+            
+        except Exception as e:
+            self.logger.error(f"❌ Error logging auto-assignment: {e}")
     
     def run_continuous(self):
         """
