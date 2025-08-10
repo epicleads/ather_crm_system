@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Check for unassigned leads and test auto assign"""
+"""Check for unassigned leads and test auto assign - UDAY3 Branch Testing"""
 
+# Import with UDAY3 branch configuration
 from auto_assign_system import supabase
 
 # Check for unassigned leads

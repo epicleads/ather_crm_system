@@ -8,7 +8,7 @@ from typing import List, Dict, Set, Optional, Tuple
 # Environment setup
 load_dotenv()
 
-# Auto-detect environment and use appropriate database credentials
+# UDAY3 Branch Testing - Prioritize UDAY3 variables
 SUPA_URL = os.getenv('SUPABASE_URL_UDAY3') or os.getenv('SUPABASE_URL')
 SUPA_KEY = os.getenv('SUPABASE_ANON_KEY_UDAY3') or os.getenv('SUPABASE_ANON_KEY')
 
@@ -16,9 +16,9 @@ PAGE_TOKEN, PAGE_ID = [os.getenv(k) for k in ["META_PAGE_ACCESS_TOKEN", "PAGE_ID
 
 # Log which environment we're using
 if os.getenv('SUPABASE_URL_UDAY3'):
-    print("🔧 Using Uday3 database credentials")
+    print("🔧 UDAY3 BRANCH: Using Uday3 database credentials")
 else:
-    print("🔧 Using main database credentials")
+    print("🔧 FALLBACK: Using main database credentials")
 
 if not all([PAGE_TOKEN, PAGE_ID, SUPA_URL, SUPA_KEY]):
     raise SystemExit("❌ Check .env – missing values!")

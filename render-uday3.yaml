@@ -7,11 +7,11 @@ services:
     envVars:
       - key: FLASK_ENV
         value: production
-      - key: SUPABASE_URL
+      - key: SUPABASE_URL_UDAY3
         sync: false
-      - key: SUPABASE_ANON_KEY
+      - key: SUPABASE_ANON_KEY_UDAY3
         sync: false
-      - key: SUPABASE_KEY
+      - key: SUPABASE_KEY_UDAY3
         sync: false
     healthCheckPath: /
     autoDeploy: true
@@ -23,9 +23,9 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: python auto_assign_system.py render
     envVars:
-      - key: SUPABASE_URL
+      - key: SUPABASE_URL_UDAY3
         sync: false
-      - key: SUPABASE_ANON_KEY
+      - key: SUPABASE_ANON_KEY_UDAY3
         sync: false
       - key: LOG_LEVEL
         value: INFO
