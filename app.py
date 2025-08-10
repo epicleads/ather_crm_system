@@ -3614,6 +3614,162 @@ def cre_dashboard():
         return_sub_tab=sub_tab  # Pass sub_tab parameter to template
     )
 
+@app.route('/cre_analytics')
+@require_cre
+def cre_analytics():
+    """CRE Analytics Dashboard - Shows performance metrics for the current CRE"""
+    try:
+        cre_name = session.get('cre_name')
+        if not cre_name:
+            flash('Please log in as a CRE user', 'error')
+            return redirect(url_for('cre_login'))
+        
+        # Get current date for default date range
+        today = datetime.now().date()
+        start_date = today - timedelta(days=30)  # Default to last 30 days
+        end_date = today
+        
+        # Get analytics data
+        analytics_data = get_cre_analytics_data(cre_name, start_date, end_date)
+        
+        return render_template('cre_analytics.html', analytics=analytics_data)
+        
+    except Exception as e:
+        print(f"Error in cre_analytics: {e}")
+        flash('Error loading analytics data', 'error')
+        return redirect(url_for('cre_dashboard'))
+
+@app.route('/cre_analytics_data')
+@require_cre
+def cre_analytics_data():
+    """API endpoint to get CRE analytics data with date filtering"""
+    try:
+        cre_name = session.get('cre_name')
+        if not cre_name:
+            return jsonify({'success': False, 'error': 'Not authenticated as CRE'})
+        
+        # Get date parameters
+        from_date_str = request.args.get('from_date')
+        to_date_str = request.args.get('to_date')
+        
+        # Parse dates
+        if from_date_str:
+            from_date = datetime.strptime(from_date_str, '%Y-%m-%d').date()
+        else:
+            from_date = datetime.now().date() - timedelta(days=30)
+            
+        if to_date_str:
+            to_date = datetime.strptime(to_date_str, '%Y-%m-%d').date()
+        else:
+            to_date = datetime.now().date()
+        
+        # Get analytics data
+        analytics_data = get_cre_analytics_data(cre_name, from_date, to_date)
+        
+        return jsonify({
+            'success': True,
+            'cre_overall_stats': analytics_data['overall_stats'],
+            'top_5_leaderboard': analytics_data['top_5_leaderboard'],
+            'cre_platform_conversion': analytics_data['platform_conversion'],
+            'cre_platform_conversion_live': analytics_data['platform_conversion_live']
+        })
+        
+    except Exception as e:
+        print(f"Error in cre_analytics_data: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+def get_cre_analytics_data(cre_name, start_date, end_date):
+    """Helper function to get CRE analytics data"""
+    try:
+        # Convert dates to datetime for database queries
+        start_datetime = datetime.combine(start_date, datetime.min.time())
+        end_datetime = datetime.combine(end_date, datetime.max.time())
+        
+        # Get leads for the CRE in the date range
+        leads_result = supabase.table('lead_master').select('*').eq('cre_name', cre_name).gte('created_at', start_datetime.isoformat()).lte('created_at', end_datetime.isoformat()).execute()
+        leads = leads_result.data or []
+        
+        # Calculate overall stats
+        won_leads = [lead for lead in leads if lead.get('final_status') == 'Won']
+        lost_leads = [lead for lead in leads if lead.get('final_status') == 'Lost']
+        pending_leads = [lead for lead in leads if lead.get('final_status') not in ['Won', 'Lost']]
+        
+        overall_stats = {
+            'won': len(won_leads),
+            'lost': len(lost_leads),
+            'pending': len(pending_leads),
+            'total': len(leads)
+        }
+        
+        # Get top 5 CRE leaderboard (all CREs, not just current one)
+        all_cre_stats = {}
+        all_cres_result = supabase.table('lead_master').select('cre_name, final_status').gte('created_at', start_datetime.isoformat()).lte('created_at', end_datetime.isoformat()).execute()
+        all_cres_data = all_cres_result.data or []
+        
+        for lead in all_cres_data:
+            cre_name_lead = lead.get('cre_name')
+            if cre_name_lead:
+                if cre_name_lead not in all_cre_stats:
+                    all_cre_stats[cre_name_lead] = {'won': 0, 'lost': 0, 'total': 0}
+                all_cre_stats[cre_name_lead]['total'] += 1
+                if lead.get('final_status') == 'Won':
+                    all_cre_stats[cre_name_lead]['won'] += 1
+                elif lead.get('final_status') == 'Lost':
+                    all_cre_stats[cre_name_lead]['lost'] += 1
+        
+        # Sort by won leads and take top 5
+        top_5_leaderboard = sorted(all_cre_stats.items(), key=lambda x: x[1]['won'], reverse=True)[:5]
+        
+        # Get platform conversion data
+        platform_conversion = {}
+        platform_conversion_live = {}
+        
+        # Group leads by source/platform
+        for lead in leads:
+            source = lead.get('source', 'Unknown')
+            if source not in platform_conversion:
+                platform_conversion[source] = {'won': 0, 'lost': 0, 'total': 0}
+                platform_conversion_live[source] = {'won': 0, 'lost': 0, 'total': 0}
+            
+            platform_conversion[source]['total'] += 1
+            if lead.get('final_status') == 'Won':
+                platform_conversion[source]['won'] += 1
+            elif lead.get('final_status') == 'Lost':
+                platform_conversion[source]['lost'] += 1
+            
+            # Live data (always current, not date-filtered)
+            platform_conversion_live[source]['total'] += 1
+            if lead.get('final_status') == 'Won':
+                platform_conversion_live[source]['won'] += 1
+            elif lead.get('final_status') == 'Lost':
+                platform_conversion_live[source]['lost'] += 1
+        
+        return {
+            'current_cre': cre_name,
+            'overall_stats': overall_stats,
+            'top_5_leaderboard': top_5_leaderboard,
+            'platform_conversion': platform_conversion,
+            'platform_conversion_live': platform_conversion_live,
+            'date_range': {
+                'start': start_date.strftime('%Y-%m-%d'),
+                'end': end_date.strftime('%Y-%m-%d')
+            }
+        }
+        
+    except Exception as e:
+        print(f"Error in get_cre_analytics_data: {e}")
+        return {
+            'current_cre': cre_name,
+            'overall_stats': {'won': 0, 'lost': 0, 'pending': 0, 'total': 0},
+            'top_5_leaderboard': [],
+            'platform_conversion': {},
+            'platform_conversion_live': {},
+            'date_range': {
+                'start': start_date.strftime('%Y-%m-%d'),
+                'end': end_date.strftime('%Y-%m-%d')
+            }
+        }
+
 @app.route('/update_lead/<uid>', methods=['GET', 'POST'])
 @require_cre
 def update_lead(uid):
@@ -7532,227 +7688,7 @@ def source_analysis_data():
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
-@app.route('/cre_call_attempt_history_json/<uid>')
-@require_auth(['cre', 'admin'])
-def cre_call_attempt_history_json(uid):
-    """Return call attempt history for a lead as JSON (for CRE dashboard modal)"""
-    try:
-        # Get all call attempt history for this lead
-        history_result = supabase.table('cre_call_attempt_history').select('uid,call_no,attempt,status,cre_name,update_ts').eq('uid', uid).execute()
-        history = history_result.data if history_result.data else []
-        # Define the order of call numbers
-        call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
-        # Sort the history: first by call_no in ascending order, then by attempt in ascending order
-        def sort_key(item):
-            call_no = item.get('call_no', '')
-            attempt = item.get('attempt', 0)
-            # Get the index of call_no in the predefined order, default to end if not found
-            call_index = call_order.index(call_no) if call_no in call_order else len(call_order)
-            return (call_index, attempt)
-        sorted_history = sorted(history, key=sort_key)
-        return jsonify({'success': True, 'history': sorted_history})
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e), 'history': []})
 
-
-@app.route('/ps_call_attempt_history_json/<uid>')
-@require_auth(['ps', 'admin'])
-def ps_call_attempt_history_json(uid):
-    """Return PS call attempt history for a lead as JSON (for PS dashboard modal)"""
-    try:
-        # Get all PS call attempt history for this lead
-        history_result = supabase.table('ps_call_attempt_history').select('uid,call_no,attempt,status,ps_name,created_at').eq('uid', uid).execute()
-        history = history_result.data if history_result.data else []
-        # Define the order of call numbers
-        call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
-        # Sort the history: first by call_no in ascending order, then by attempt in ascending order
-        def sort_key(item):
-            call_no = item.get('call_no', '')
-            attempt = item.get('attempt', 0)
-            # Get the index of call_no in the predefined order, default to end if not found
-            call_index = call_order.index(call_no) if call_no in call_order else len(call_order)
-            return (call_index, attempt)
-        sorted_history = sorted(history, key=sort_key)
-        return jsonify({'success': True, 'history': sorted_history})
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e), 'history': []})
-
-
-@app.route('/view_ps_call_attempt_history/<uid>')
-@require_admin
-def view_ps_call_attempt_history(uid):
-    """View PS call attempt history for a specific lead (Admin only)"""
-    try:
-        # Get lead data
-        lead_result = supabase.table('lead_master').select('*').eq('uid', uid).execute()
-        if not lead_result.data:
-            flash('Lead not found', 'error')
-            return redirect(url_for('admin_dashboard'))
-        
-        lead_data = lead_result.data[0]
-        
-        # Get PS call attempt history
-        history_result = supabase.table('ps_call_attempt_history').select('*').eq('uid', uid).order('created_at', desc=True).execute()
-        call_history = history_result.data if history_result.data else []
-        
-        # Add total_attempts
-        total_attempts = len(call_history)
-        
-        # Log access
-        auth_manager.log_audit_event(
-            user_id=session.get('user_id'),
-            user_type=session.get('user_type'),
-            action='PS_CALL_HISTORY_ACCESS',
-            resource='ps_call_attempt_history',
-            resource_id=uid,
-            details={'lead_uid': uid, 'history_count': len(call_history)}
-        )
-        
-        return render_template('ps_call_attempt_history.html', 
-                               lead=lead_data, 
-                               call_history=call_history,
-                               total_attempts=total_attempts)
-        
-    except Exception as e:
-        flash(f'Error loading PS call history: {str(e)}', 'error')
-        return redirect(url_for('admin_dashboard'))
-
-
-@app.route('/get_unassigned_leads_by_source')
-@require_admin
-def get_unassigned_leads_by_source():
-    source = request.args.get('source')
-    if not source:
-        return jsonify({'success': False, 'message': 'Source is required'}), 400
-    try:
-        leads = safe_get_data('lead_master', {'assigned': 'No', 'source': source})
-        return jsonify({'success': True, 'leads': leads})
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)}), 500
-
-@app.route('/lead_journey/<uid>')
-@require_admin
-def lead_journey(uid):
-    """Return the complete journey of a lead as JSON for analysis and visualization."""
-    try:
-        # Fetch lead info
-        lead_result = supabase.table('lead_master').select('*').eq('uid', uid).execute()
-        if not lead_result.data:
-            return jsonify({'success': False, 'message': 'Lead not found'}), 404
-        lead = lead_result.data[0]
-
-        # Fetch CRE call attempts (all attempts, all calls)
-        cre_calls_result = supabase.table('cre_call_attempt_history').select('*').eq('uid', uid).order('created_at', desc=False).execute()
-        cre_calls = cre_calls_result.data if cre_calls_result.data else []
-
-        # Fetch PS call attempts (all attempts, all calls)
-        ps_calls_result = supabase.table('ps_call_attempt_history').select('*').eq('uid', uid).order('created_at', desc=False).execute()
-        ps_calls = ps_calls_result.data if ps_calls_result.data else []
-
-        # Fetch PS followup (if any)
-        ps_followup_result = supabase.table('ps_followup_master').select('*').eq('lead_uid', uid).execute()
-        ps_followup = ps_followup_result.data[0] if ps_followup_result.data else None
-
-        # Assignment history (CRE, PS)
-        assignment_history = []
-        if lead.get('cre_name'):
-            assignment_history.append({
-                'role': 'CRE',
-                'name': lead.get('cre_name'),
-                'assigned_at': lead.get('cre_assigned_at')
-            })
-        if lead.get('ps_name'):
-            assignment_history.append({
-                'role': 'PS',
-                'name': lead.get('ps_name'),
-                'assigned_at': lead.get('ps_assigned_at')
-            })
-
-        # Status timeline (CRE and PS status changes)
-        status_timeline = []
-        # From lead_master: initial, final, and call statuses
-        for call in ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']:
-            call_date = lead.get(f'{call}_call_date')
-            call_remark = lead.get(f'{call}_remark')
-            if call_date or call_remark:
-                status_timeline.append({
-                    'by': 'CRE',
-                    'call_no': call,
-                    'date': call_date,
-                    'remark': call_remark
-                })
-        # From PS followup: call dates/remarks
-        if ps_followup:
-            for call in ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']:
-                call_date = ps_followup.get(f'{call}_call_date')
-                call_remark = ps_followup.get(f'{call}_call_remark')
-                if call_date or call_remark:
-                    status_timeline.append({
-                        'by': 'PS',
-                        'call_no': call,
-                        'date': call_date,
-                        'remark': call_remark
-                    })
-        # Final status
-        if lead.get('final_status'):
-            status_timeline.append({
-                'by': 'System',
-                'status': lead.get('final_status'),
-                'date': lead.get('won_timestamp') or lead.get('lost_timestamp')
-            })
-
-        # Conversation log (all remarks, CRE and PS, with timestamps)
-        conversation_log = []
-        # CRE call attempts
-        for call in cre_calls:
-            conversation_log.append({
-                'by': 'CRE',
-                'name': call.get('cre_name'),
-                'call_no': call.get('call_no'),
-                'attempt': call.get('attempt'),
-                'status': call.get('status'),
-                'remark': call.get('remarks'),
-                'follow_up_date': call.get('follow_up_date'),
-                'timestamp': call.get('update_ts') or call.get('created_at')
-            })
-        # PS call attempts
-        for call in ps_calls:
-            conversation_log.append({
-                'by': 'PS',
-                'name': call.get('ps_name'),
-                'call_no': call.get('call_no'),
-                'attempt': call.get('attempt'),
-                'status': call.get('status'),
-                'remark': call.get('remarks'),
-                'follow_up_date': call.get('follow_up_date'),
-                'timestamp': call.get('created_at')
-            })
-        # Sort conversation log by timestamp
-        conversation_log = [c for c in conversation_log if c['timestamp']]  # Remove None timestamps
-        conversation_log.sort(key=lambda x: x['timestamp'])
-
-        # Final outcome
-        outcome = {
-            'final_status': lead.get('final_status'),
-            'timestamp': lead.get('won_timestamp') or lead.get('lost_timestamp'),
-            'reason': lead.get('lost_reason') if lead.get('final_status') == 'Lost' else None
-        }
-
-        # Compose response
-        journey = {
-            'lead': lead,
-            'assignment_history': assignment_history,
-            'status_timeline': status_timeline,
-            'cre_calls': cre_calls,
-            'ps_calls': ps_calls,
-            'ps_followup': ps_followup,
-            'conversation_log': conversation_log,
-            'outcome': outcome
-        }
-        return jsonify({'success': True, 'journey': journey})
-    except Exception as e:
-        print(f"Error in lead_journey: {e}")
-        return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/lead_journey_report/<uid>')
 @require_admin
@@ -8311,196 +8247,6 @@ def api_export_branch_leads():
         
     except Exception as e:
         return jsonify({'success': False, 'message': f'Export failed: {str(e)}'}), 500
-
-def get_ps_feedback_analysis(ps_attempts, call_no_order, start_date, end_date):
-    ps_df = pd.DataFrame(ps_attempts)
-    ps_statuses = []
-    ps_filtered = {call_no: {} for call_no in call_no_order}
-    if not ps_df.empty:
-        ps_df['updated_at'] = pd.to_datetime(ps_df['updated_at'], errors='coerce')
-        # --- Fix: Localize filter dates if needed ---
-        if start_date is not None and end_date is not None:
-            if pd.api.types.is_datetime64tz_dtype(ps_df['updated_at']):
-                if start_date.tzinfo is None:
-                    start_date = start_date.tz_localize('UTC')
-                if end_date.tzinfo is None:
-                    end_date = end_date.tz_localize('UTC')
-            ps_df = ps_df[(ps_df['updated_at'] >= start_date) & (ps_df['updated_at'] <= end_date)]
-        ps_df['status'] = ps_df['status'].fillna('').astype(str).str.strip()
-        ps_statuses = sorted(ps_df['status'].unique())
-        grouped = ps_df.groupby(['call_no', 'status']).size().reset_index(name='count')
-        for call_no in call_no_order:
-            call_data = grouped[grouped['call_no'] == call_no]
-            ps_filtered[call_no] = {status: 0 for status in ps_statuses}
-            for _, row in call_data.iterrows():
-                ps_filtered[call_no][row['status']] = int(row['count'])
-    return ps_filtered, ps_statuses
-
-@app.route('/get_cre_list')
-@require_admin
-def get_cre_list():
-    cres = safe_get_data('cre_users', select_fields='name')
-    cre_list = [{'name': cre.get('name')} for cre in cres if cre.get('name')]
-    return jsonify({'success': True, 'cre_list': cre_list})
-
-@app.route('/cre_analysis_data')
-@require_admin
-def cre_analysis_data():
-    # Return a mock response or implement your actual logic here
-    return jsonify({'success': True, 'data': {}})
-
-@app.route('/update_event_lead/<activity_uid>', methods=['GET', 'POST'])
-@require_ps
-def update_event_lead(activity_uid):
-    return_tab = request.args.get('return_tab', 'fresh-leads')
-    print(f'[DEBUG] update_event_lead called with activity_uid: {activity_uid}')
-    print(f'[DEBUG] return_tab: {return_tab}')
-    print(f'[DEBUG] request.method: {request.method}')
-    
-    try:
-        # Fetch the event lead by activity_uid
-        print(f'[DEBUG] Attempting to fetch event lead with activity_uid: {activity_uid}')
-        result = supabase.table('activity_leads').select('*').eq('activity_uid', activity_uid).execute()
-        print(f'[DEBUG] Supabase query result: {result}')
-        print(f'[DEBUG] Result data: {result.data}')
-        
-        if not result.data:
-            print(f'[DEBUG] No event lead found for activity_uid: {activity_uid}')
-            flash('Event lead not found', 'error')
-            return redirect(url_for('ps_dashboard', tab=return_tab))
-        
-        lead = result.data[0]
-        print('[DEBUG] Lead data (PS):', lead)
-        # Determine next call and completed calls for PS follow-ups
-        call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
-        completed_calls = []
-        next_call = 'first'
-        for call_num in call_order:
-            call_date_key = f'ps_{call_num}_call_date'
-            if lead.get(call_date_key):
-                completed_calls.append(call_num)
-            else:
-                next_call = call_num
-                break
-        
-        # Build PS call history
-        ps_call_history = []
-        for call_num in call_order:
-            call_date = lead.get(f'ps_{call_num}_call_date')
-            call_remark = lead.get(f'ps_{call_num}_call_remark')
-            if call_date or call_remark:
-                ps_call_history.append({
-                    'call': call_num,
-                    'date': call_date,
-                    'remark': call_remark
-                })
-        
-        # Build CRE call history
-        cre_call_history = []
-        for call_num in call_order:
-            call_date = lead.get(f'cre_{call_num}_call_date')
-            call_remark = lead.get(f'cre_{call_num}_call_remark')
-            if call_date or call_remark:
-                cre_call_history.append({
-                    'call': call_num,
-                    'date': call_date,
-                    'remark': call_remark
-                })
-        print('[DEBUG] PS call history:', ps_call_history)
-        print('[DEBUG] CRE call history:', cre_call_history)
-        
-        if request.method == 'POST':
-            update_data = {}
-            customer_name = request.form.get('customer_name', '').strip()
-            lead_category = request.form.get('lead_category', '').strip()
-            interested_model = request.form.get('interested_model', '').strip()
-            test_drive_done = request.form.get('test_drive_done', '').strip()
-            customer_location = request.form.get('customer_location', '').strip()
-            ps_followup_date_ts = request.form.get('ps_followup_date_ts', '').strip()
-            lead_status = request.form.get('lead_status', '').strip()
-            final_status = request.form.get('final_status', '').strip()
-            call_date = request.form.get('call_date', '').strip()
-            call_remark = request.form.get('call_remark', '').strip()
-            # Update editable fields
-            if customer_name:
-                update_data['customer_name'] = customer_name
-            if lead_category:
-                update_data['lead_category'] = lead_category
-            if interested_model:
-                update_data['interested_model'] = interested_model
-            # Test Drive Done is now required
-            if not test_drive_done:
-                flash('Test Drive Done field is required', 'error')
-                redirect_url = url_for('update_event_lead', activity_uid=activity_uid, return_tab=return_tab)
-                return redirect(redirect_url)
-            update_data['test_drive_done'] = test_drive_done
-            if customer_location:
-                update_data['customer_location'] = customer_location
-            if ps_followup_date_ts:
-                update_data['ps_followup_date_ts'] = ps_followup_date_ts
-            if lead_status:
-                update_data['lead_status'] = lead_status
-            if final_status:
-                update_data['final_status'] = final_status
-            # Handle PS call date/remark for the next call
-            skip_statuses = ["Call not Connected", "RNR", "Call me Back", "Busy on another Call"]
-            if lead_status not in skip_statuses:
-                if call_date:
-                    update_data[f'ps_{next_call}_call_date'] = call_date
-                if call_remark:
-                    update_data[f'ps_{next_call}_call_remark'] = call_remark
-            # Always remove these keys if status is in skip list, even if present
-            if lead_status in skip_statuses:
-                update_data.pop(f'ps_{next_call}_call_date', None)
-                update_data.pop(f'ps_{next_call}_call_remark', None)
-            if update_data:
-                supabase.table('activity_leads').update(update_data).eq('activity_uid', activity_uid).execute()
-                
-                # Track the PS call attempt in ps_call_attempt_history
-                if lead_status:
-                    call_was_recorded = bool(call_date and call_remark)
-                    track_ps_call_attempt(
-                        uid=lead['activity_uid'],
-                        ps_name=session.get('ps_name'),
-                        call_no=next_call,
-                        lead_status=lead_status,
-                        call_was_recorded=call_was_recorded,
-                        follow_up_date=ps_followup_date_ts if ps_followup_date_ts else None,
-                        remarks=call_remark if call_remark else None
-                    )
-                
-                # Sync to alltest_drive table if test_drive_done is set
-                if test_drive_done in ['Yes', 'No', True, False]:
-                    # Get the updated activity lead data for syncing
-                    updated_activity_result = supabase.table('activity_leads').select('*').eq('activity_uid', activity_uid).execute()
-                    if updated_activity_result.data:
-                        updated_activity_data = updated_activity_result.data[0]
-                        sync_test_drive_to_alltest_drive('activity_leads', activity_uid, updated_activity_data)
-                
-                flash('Event lead updated successfully', 'success')
-                return redirect(url_for('ps_dashboard', tab=return_tab))
-            else:
-                flash('No changes to update', 'info')
-        print(f'[DEBUG] About to render template with lead data: {lead}')
-        print(f'[DEBUG] next_call: {next_call}')
-        print(f'[DEBUG] completed_calls: {completed_calls}')
-        print(f'[DEBUG] ps_call_history: {ps_call_history}')
-        print(f'[DEBUG] cre_call_history: {cre_call_history}')
-        
-        return render_template('update_event_lead.html', 
-                             lead=lead, 
-                             next_call=next_call, 
-                             completed_calls=completed_calls, 
-                             ps_call_history=ps_call_history,
-                             cre_call_history=cre_call_history,
-                             today=date.today())
-    except Exception as e:
-        print(f'[DEBUG] Exception in update_event_lead: {str(e)}')
-        print(f'[DEBUG] Exception type: {type(e)}')
-        import traceback
-        print(f'[DEBUG] Full traceback: {traceback.format_exc()}')
-        flash(f'Error updating event lead: {str(e)}', 'error')
-        return redirect(url_for('ps_dashboard'))
 
 @app.route('/update_event_lead_cre/<activity_uid>', methods=['GET', 'POST'])
 @require_cre
@@ -9921,432 +9667,7 @@ def api_branch_analytics_walkin_leads():
         print(f"Error in walkin_leads API: {str(e)}")
         return jsonify({'success': False, 'message': 'Error loading walkin leads data'})
 
-@app.route('/api/branch_sources')
-def api_branch_sources():
-    """Get unique source values for the current branch"""
-    try:
-        branch = session.get('branch_head_branch')
-        
-        # Get unique sources from ps_followup_master
-        ps_sources = supabase.table('ps_followup_master').select('source').eq('ps_branch', branch).not_.is_('source', 'null').execute().data or []
-        ps_source_values = list(set([row.get('source', '') for row in ps_sources if row.get('source', '')]))
-        
-        # Add Walk In and Event sources
-        all_sources = ['Walk In', 'Event'] + ps_source_values
-        
-        # Remove duplicates and sort
-        unique_sources = sorted(list(set(all_sources)))
-        
-        return jsonify({
-            'success': True,
-            'sources': unique_sources
-        })
-    except Exception as e:
-        print(f"Error getting branch sources: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'sources': ['Walk In', 'Event', 'PS', 'Meta', 'Google', 'Website', 'Referral', 'Other']
-        })
 
-@app.route('/api/branch_analytics/summary')
-def api_branch_analytics_summary():
-    """API endpoint for Branch Summary KPI data"""
-    try:
-        branch = session.get('branch_head_branch')
-        if not branch:
-            return jsonify({'success': False, 'message': 'Branch not found in session'})
-        
-        # Get date filter parameters
-        date_from = request.args.get('date_from')
-        date_to = request.args.get('date_to')
-        
-        # If no date parameters provided, use MTD (Month to Date) as default
-        if not date_from or not date_to:
-            today = datetime.now()
-            date_from = today.replace(day=1).strftime('%Y-%m-%d')
-            date_to = today.strftime('%Y-%m-%d')
-        
-        # Get total leads assigned from ps_followup_master
-        ps_total_query = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).gte('created_at', date_from).lte('created_at', date_to).execute()
-        ps_total_leads = ps_total_query.count or 0
-        
-        # Get total leads assigned from walkin_table
-        walkin_total_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).gte('created_at', date_from).lte('created_at', date_to).execute()
-        walkin_total_leads = walkin_total_query.count or 0
-        
-        # Total leads assigned (sum of both tables)
-        total_leads_assigned = ps_total_leads + walkin_total_leads
-        
-        # Get pending leads from ps_followup_master
-        ps_pending_query = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).eq('final_status', 'Pending').gte('created_at', date_from).lte('created_at', date_to).execute()
-        ps_pending_leads = ps_pending_query.count or 0
-        
-        # Get pending leads from walkin_table
-        walkin_pending_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('status', 'Pending').gte('created_at', date_from).lte('created_at', date_to).execute()
-        walkin_pending_leads = walkin_pending_query.count or 0
-        
-        # Total pending leads
-        total_pending_leads = ps_pending_leads + walkin_pending_leads
-        
-        # Get won leads from ps_followup_master
-        ps_won_query = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).eq('final_status', 'Won').gte('created_at', date_from).lte('created_at', date_to).execute()
-        ps_won_leads = ps_won_query.count or 0
-        
-        # Get won leads from walkin_table
-        walkin_won_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('status', 'Won').gte('created_at', date_from).lte('created_at', date_to).execute()
-        walkin_won_leads = walkin_won_query.count or 0
-        
-        # Total won leads
-        total_won_leads = ps_won_leads + walkin_won_leads
-        
-        # Get lost leads from ps_followup_master
-        ps_lost_query = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).eq('final_status', 'Lost').gte('created_at', date_from).lte('created_at', date_to).execute()
-        ps_lost_leads = ps_lost_query.count or 0
-        
-        # Get lost leads from walkin_table
-        walkin_lost_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('status', 'Lost').gte('created_at', date_from).lte('created_at', date_to).execute()
-        walkin_lost_leads = walkin_lost_query.count or 0
-        
-        # Total lost leads
-        total_lost_leads = ps_lost_leads + walkin_lost_leads
-        
-        return jsonify({
-            'success': True,
-            'data': {
-                'total_leads_assigned': total_leads_assigned,
-                'total_pending_leads': total_pending_leads,
-                'total_won_leads': total_won_leads,
-                'total_lost_leads': total_lost_leads
-            }
-        })
-        
-    except Exception as e:
-        print(f"Error in branch summary API: {str(e)}")
-        return jsonify({'success': False, 'message': 'Error loading branch summary data'})
-
-@app.route('/lead_transfer')
-@require_admin
-def lead_transfer():
-    """Lead Transfer Dashboard for Admin"""
-    try:
-        # Get all branches
-        branches = get_all_branches()
-        
-        return render_template('lead_transfer.html', branches=branches)
-    except Exception as e:
-        print(f"Error in lead_transfer: {str(e)}")
-        return render_template('lead_transfer.html', branches=[])
-
-@app.route('/api/cre_pending_leads')
-@require_admin
-def api_cre_pending_leads():
-    """API to get pending leads summary for CRE transfer from lead_master only"""
-    try:
-        # Get all pending leads from lead_master grouped by CRE only
-        lead_result = supabase.table('lead_master').select('cre_name').eq('final_status', 'Pending').execute()
-        lead_pending_leads = lead_result.data if lead_result.data else []
-        
-        # Group leads by CRE and count them from lead_master only
-        cre_summary = {}
-        
-        # Count from lead_master only
-        for lead in lead_pending_leads:
-            cre_name = lead.get('cre_name', 'Unassigned')
-            if cre_name not in cre_summary:
-                cre_summary[cre_name] = 0
-            cre_summary[cre_name] += 1
-        
-        # Format the data for display (exclude Unassigned leads)
-        formatted_summary = []
-        for cre_name, count in cre_summary.items():
-            # Skip unassigned leads
-            if cre_name and cre_name != 'Unassigned' and cre_name != 'null':
-                formatted_summary.append({
-                    'cre_name': cre_name,
-                    'pending_count': count
-                })
-        
-        return jsonify({'success': True, 'data': formatted_summary})
-    except Exception as e:
-        print(f"Error in api_cre_pending_leads: {str(e)}")
-        return jsonify({'success': False, 'message': 'Error fetching pending leads'})
-
-@app.route('/api/ps_pending_leads')
-@require_admin
-def api_ps_pending_leads():
-    """API to get pending leads summary for PS transfer from multiple tables"""
-    try:
-        # Get branch filter from request
-        branch_filter = request.args.get('branch', '')
-        
-        # Build query for ps_followup_master
-        ps_followup_query = supabase.table('ps_followup_master').select('ps_name, ps_branch').eq('final_status', 'Pending')
-        if branch_filter:
-            ps_followup_query = ps_followup_query.eq('ps_branch', branch_filter)
-        
-        ps_followup_result = ps_followup_query.execute()
-        ps_followup_leads = ps_followup_result.data if ps_followup_result.data else []
-        
-        # Get pending leads from walkin_table where status is 'Pending' (if table exists)
-        walkin_leads = []
-        try:
-            walkin_query = supabase.table('walkin_table').select('ps_assigned, branch').eq('status', 'Pending')
-            if branch_filter:
-                walkin_query = walkin_query.eq('branch', branch_filter)
-            walkin_result = walkin_query.execute()
-            walkin_leads = walkin_result.data if walkin_result.data else []
-        except Exception as e:
-            print(f"Warning: walkin_table not found or error: {str(e)}")
-            walkin_leads = []
-        
-        # Get pending leads from activity_leads where final_status is 'Pending' (if table exists)
-        activity_leads = []
-        try:
-            activity_query = supabase.table('activity_leads').select('ps_name, location').eq('final_status', 'Pending')
-            if branch_filter:
-                activity_query = activity_query.eq('location', branch_filter)
-            activity_result = activity_query.execute()
-            activity_leads = activity_result.data if activity_result.data else []
-        except Exception as e:
-            print(f"Warning: activity_leads table not found or error: {str(e)}")
-            activity_leads = []
-        
-        # Group leads by PS and count them from all tables
-        ps_summary = {}
-        
-        # Count from ps_followup_master
-        for lead in ps_followup_leads:
-            ps_name = lead.get('ps_name', 'Unassigned')
-            ps_branch = lead.get('ps_branch', '')
-            key = f"{ps_name}|{ps_branch}"
-            if key not in ps_summary:
-                ps_summary[key] = {
-                    'ps_name': ps_name,
-                    'ps_branch': ps_branch,
-                    'ps_followup_count': 0,
-                    'walkin_count': 0,
-                    'activity_count': 0,
-                    'total_count': 0
-                }
-            ps_summary[key]['ps_followup_count'] += 1
-            ps_summary[key]['total_count'] += 1
-        
-        # Count from walkin_table
-        for lead in walkin_leads:
-            ps_name = lead.get('ps_assigned', 'Unassigned')  # Changed from ps_name to ps_assigned
-            ps_branch = lead.get('branch', '')
-            key = f"{ps_name}|{ps_branch}"
-            if key not in ps_summary:
-                ps_summary[key] = {
-                    'ps_name': ps_name,
-                    'ps_branch': ps_branch,
-                    'ps_followup_count': 0,
-                    'walkin_count': 0,
-                    'activity_count': 0,
-                    'total_count': 0
-                }
-            ps_summary[key]['walkin_count'] += 1
-            ps_summary[key]['total_count'] += 1
-        
-        # Count from activity_leads
-        for lead in activity_leads:
-            ps_name = lead.get('ps_name', 'Unassigned')
-            ps_branch = lead.get('location', '')  # location is branch in activity_leads
-            key = f"{ps_name}|{ps_branch}"
-            if key not in ps_summary:
-                ps_summary[key] = {
-                    'ps_name': ps_name,
-                    'ps_branch': ps_branch,
-                    'ps_followup_count': 0,
-                    'walkin_count': 0,
-                    'activity_count': 0,
-                    'total_count': 0
-                }
-            ps_summary[key]['activity_count'] += 1
-            ps_summary[key]['total_count'] += 1
-        
-        # Format the data for display (exclude Unassigned leads)
-        formatted_summary = []
-        for key, summary in ps_summary.items():
-            # Skip unassigned leads
-            if summary['ps_name'] and summary['ps_name'] != 'Unassigned' and summary['ps_name'] != 'null':
-                formatted_summary.append(summary)
-        
-        return jsonify({'success': True, 'data': formatted_summary})
-    except Exception as e:
-        print(f"Error in api_ps_pending_leads: {str(e)}")
-        return jsonify({'success': False, 'message': 'Error fetching pending leads'})
-
-@app.route('/api/transfer_cre_lead', methods=['POST'])
-@require_admin
-def api_transfer_cre_lead():
-    """API to transfer CRE lead to another CRE"""
-    try:
-        data = request.get_json()
-        lead_uid = data.get('lead_uid')
-        new_cre_name = data.get('new_cre_name')
-        
-        if not lead_uid or not new_cre_name:
-            return jsonify({'success': False, 'message': 'Missing required parameters'})
-        
-        # Verify the CRE exists and is active, and get the name
-        cre_result = supabase.table('cre_users').select('name, username').eq('username', new_cre_name).eq('is_active', True).execute()
-        if not cre_result.data:
-            return jsonify({'success': False, 'message': 'CRE not found or inactive'})
-        
-        # Get the target CRE's name (not username)
-        target_cre_name = cre_result.data[0].get('name')
-        
-        # Update the lead in lead_master
-        lead_result = supabase.table('lead_master').update({'cre_name': target_cre_name}).eq('uid', lead_uid).execute()
-        
-        # Update the lead in ps_followup_master if it exists there
-        ps_followup_result = supabase.table('ps_followup_master').update({'cre_name': target_cre_name}).eq('lead_uid', lead_uid).execute()
-        
-        if lead_result.data or ps_followup_result.data:
-            return jsonify({'success': True, 'message': 'Lead transferred successfully'})
-        else:
-            return jsonify({'success': False, 'message': 'Lead not found or transfer failed'})
-            
-    except Exception as e:
-        print(f"Error in api_transfer_cre_lead: {str(e)}")
-        return jsonify({'success': False, 'message': 'Error transferring lead'})
-
-@app.route('/api/bulk_transfer_cre_leads', methods=['POST'])
-@require_admin
-def api_bulk_transfer_cre_leads():
-    """API to bulk transfer all pending leads from one CRE to another"""
-    try:
-        data = request.get_json()
-        from_cre_name = data.get('from_cre_name')
-        to_cre_name = data.get('to_cre_name')
-        
-        if not from_cre_name or not to_cre_name:
-            return jsonify({'success': False, 'message': 'Missing required parameters'})
-        
-        if from_cre_name == to_cre_name:
-            return jsonify({'success': False, 'message': 'Cannot transfer to the same CRE'})
-        
-        # Verify the target CRE exists and is active, and get the name
-        cre_result = supabase.table('cre_users').select('name, username').eq('username', to_cre_name).eq('is_active', True).execute()
-        if not cre_result.data:
-            return jsonify({'success': False, 'message': 'Target CRE not found or inactive'})
-        
-        # Get the target CRE's name (not username)
-        target_cre_name = cre_result.data[0].get('name')
-        
-        # Update all pending leads from the source CRE to the target CRE in lead_master
-        lead_result = supabase.table('lead_master').update({'cre_name': target_cre_name}).eq('cre_name', from_cre_name).eq('final_status', 'Pending').execute()
-        
-        # Update all pending leads from the source CRE to the target CRE in ps_followup_master
-        ps_followup_result = supabase.table('ps_followup_master').update({'cre_name': target_cre_name}).eq('cre_name', from_cre_name).eq('final_status', 'Pending').execute()
-        
-        # Count transferred leads from lead_master only (for display purposes)
-        lead_count = len(lead_result.data) if lead_result.data else 0
-        
-        if lead_count > 0:
-            return jsonify({
-                'success': True, 
-                'message': f'Pending Lead Transfer Successful - {lead_count} leads transferred from {from_cre_name} to {to_cre_name}'
-            })
-        else:
-            return jsonify({'success': False, 'message': 'No leads found to transfer'})
-            
-    except Exception as e:
-        print(f"Error in api_bulk_transfer_cre_leads: {str(e)}")
-        return jsonify({'success': False, 'message': 'Error transferring leads'})
-
-@app.route('/api/transfer_options')
-@require_admin
-def api_transfer_options():
-    """API to get transfer options (CRE and PS lists)"""
-    try:
-        # Get all CREs for transfer options - CRE doesn't have branch
-        cre_result = supabase.table('cre_users').select('id, name, username, email, phone, is_active').eq('is_active', True).execute()
-        cre_options = cre_result.data if cre_result.data else []
-        
-        # Get all PS for transfer options - PS has branch
-        ps_result = supabase.table('ps_users').select('id, name, username, email, phone, branch, is_active').eq('is_active', True).execute()
-        ps_options = ps_result.data if ps_result.data else []
-        
-        # Sanitize the data to ensure no problematic characters
-        for cre in cre_options:
-            if isinstance(cre.get('name'), str):
-                cre['name'] = cre['name'].strip()
-            if isinstance(cre.get('username'), str):
-                cre['username'] = cre['username'].strip()
-                
-        for ps in ps_options:
-            if isinstance(ps.get('name'), str):
-                ps['name'] = ps['name'].strip()
-            if isinstance(ps.get('username'), str):
-                ps['username'] = ps['username'].strip()
-            if isinstance(ps.get('branch'), str):
-                ps['branch'] = ps['branch'].strip()
-        
-        return jsonify({
-            'success': True,
-            'cre_options': cre_options,
-            'ps_options': ps_options
-        })
-    except Exception as e:
-        print(f"Error in api_transfer_options: {str(e)}")
-        return jsonify({'success': False, 'message': 'Error fetching transfer options'})
-
-@app.route('/api/branches')
-@require_admin
-def api_branches():
-    """API to get all available branches"""
-    try:
-        # Get unique branches from ps_users table
-        ps_result = supabase.table('ps_users').select('branch').eq('is_active', True).execute()
-        branches = []
-        if ps_result.data:
-            branches = list(set([ps.get('branch', '').strip() for ps in ps_result.data if ps.get('branch', '').strip()]))
-            branches.sort()  # Sort alphabetically
-        
-        return jsonify({
-            'success': True,
-            'branches': branches
-        })
-    except Exception as e:
-        print(f"Error in api_branches: {str(e)}")
-        return jsonify({'success': False, 'message': 'Error fetching branches'})
-
-@app.route('/api/transfer_ps_lead', methods=['POST'])
-@require_admin
-def api_transfer_ps_lead():
-    """API to transfer PS lead to another PS"""
-    try:
-        data = request.get_json()
-        lead_uid = data.get('lead_uid')
-        new_ps_name = data.get('new_ps_name')
-        
-        if not lead_uid or not new_ps_name:
-            return jsonify({'success': False, 'message': 'Missing required parameters'})
-        
-        # Get the new PS details with branch information
-        ps_result = supabase.table('ps_users').select('name, username, branch').eq('name', new_ps_name).eq('is_active', True).execute()
-        if not ps_result.data:
-            return jsonify({'success': False, 'message': 'PS not found or inactive'})
-        
-        new_ps = ps_result.data[0]
-        
-        # Update the lead in ps_followup_master
-        result = supabase.table('ps_followup_master').update({
-            'ps_name': new_ps_name,
-            'ps_branch': new_ps.get('branch', '')
-        }).eq('lead_uid', lead_uid).execute()
-        
-        if result.data:
-            return jsonify({'success': True, 'message': 'Lead transferred successfully'})
-        else:
-            return jsonify({'success': False, 'message': 'Lead not found or transfer failed'})
-            
-    except Exception as e:
-        print(f"Error in api_transfer_ps_lead: {str(e)}")
-        return jsonify({'success': False, 'message': 'Error transferring lead'})
 
 @app.route('/api/bulk_transfer_ps_leads', methods=['POST'])
 @require_admin
