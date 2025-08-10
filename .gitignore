@@ -204,3 +204,7 @@ temp/
 
 # Database schema files (auto-generated or sensitive)
 enhanced_auto_assign_schema.sql
+
+# Test and debug files
+debug_cre_assignment.py
+test_route.py

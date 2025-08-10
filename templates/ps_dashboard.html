@@ -177,7 +177,11 @@
                             <tr class="fresh-lead-row" data-created="{{ (lead.ps_assigned_at[:10] if lead.ps_assigned_at else lead.created_at[:10] if lead.created_at else '') }}"
                                 data-search="{{ ((lead.lead_uid or '') + ' ' + (lead.customer_name or '') + ' ' + (lead.customer_mobile_number or '') + ' ' + (lead.source or '') + ' ' + (lead.cre_name or ''))|lower }}">
                                 <td>
-                                    {% if lead.is_walkin %}
+                                    {% if lead.activity_uid %}
+                                        <a href="{{ url_for('update_event_lead', activity_uid=lead.activity_uid, return_tab='fresh-leads') }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-edit"></i> Update
+                                        </a>
+                                    {% elif lead.is_walkin %}
                                         <a href="{{ url_for('update_walkin_lead', walkin_id=lead.walkin_id) }}" class="btn btn-sm btn-outline-primary">
                                             <i class="fas fa-edit"></i> Update
                                         </a>

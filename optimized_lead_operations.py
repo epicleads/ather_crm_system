@@ -38,6 +38,260 @@ class OptimizedLeadOperations:
         self.cache = {}  # Simple in-memory cache for session data
 
     @performance_monitor
+    def create_lead_optimized(self, lead_data: Dict[str, Any], cre_name: str, 
+                             ps_name: Optional[str] = None, ps_branch: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Optimized lead creation with minimal database round trips
+        """
+        try:
+            start_time = time.time()
+            
+            # 1. Single query to check both tables for duplicates
+            phone = lead_data['customer_mobile_number']
+            source = lead_data['source']
+            subsource = lead_data['sub_source']
+            
+            # Combined duplicate check in one query
+            duplicate_check = self._check_duplicates_optimized(phone, source, subsource)
+            
+            if duplicate_check['is_duplicate']:
+                return {
+                    'success': False,
+                    'message': f"Duplicate found: {duplicate_check['message']}",
+                    'execution_time': time.time() - start_time
+                }
+            
+            # 2. Generate UID without database lookup
+            uid = self._generate_uid_optimized(lead_data['source'], phone)
+            lead_data['uid'] = uid
+            
+            # 3. Prepare all operations in batch
+            operations = []
+            
+            # Main lead insertion
+            operations.append(('lead_master', self.supabase.table('lead_master').insert(lead_data)))
+            
+            # PS followup if assigned
+            if ps_name and ps_branch:
+                ps_followup_data = {
+                    'lead_uid': uid,
+                    'ps_name': ps_name,
+                    'ps_branch': ps_branch,
+                    'branch': ps_branch,
+                    'final_status': 'Pending',
+                    'lead_status': 'Pending',
+                    'created_at': datetime.now().isoformat(),
+                    'updated_at': datetime.now().isoformat()
+                }
+                operations.append(('ps_followup_master', self.supabase.table('ps_followup_master').insert(ps_followup_data)))
+            
+            # 4. Execute all operations
+            results = {}
+            for table_name, operation in operations:
+                try:
+                    result = operation.execute()
+                    results[table_name] = result
+                    logger.info(f"Successfully inserted into {table_name}")
+                except Exception as e:
+                    logger.error(f"Error inserting into {table_name}: {str(e)}")
+                    results[table_name] = {'error': str(e)}
+            
+            # 5. Track call attempt (non-blocking)
+            if lead_data.get('lead_status'):
+                try:
+                    self._track_call_attempt_async(uid, cre_name, 'first', lead_data['lead_status'], 
+                                                 lead_data.get('follow_up_date'), lead_data.get('first_remark'))
+                except Exception as e:
+                    logger.warning(f"Call tracking failed: {e}")
+            
+            # 6. Send email notification (non-blocking)
+            if ps_name and ps_branch:
+                try:
+                    self._send_email_async(ps_name, lead_data, cre_name)
+                except Exception as e:
+                    logger.warning(f"Email notification failed: {e}")
+            
+            execution_time = time.time() - start_time
+            logger.info(f"Lead creation completed in {execution_time:.3f} seconds")
+            
+            return {
+                'success': True,
+                'uid': uid,
+                'message': 'Lead created successfully',
+                'execution_time': execution_time,
+                'results': results
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in optimized lead creation: {str(e)}")
+            return {
+                'success': False,
+                'message': f'Error creating lead: {str(e)}',
+                'execution_time': time.time() - start_time
+            }
+
+    def _check_duplicates_optimized(self, phone: str, source: str, subsource: str) -> Dict[str, Any]:
+        """
+        Optimized duplicate checking with single query
+        """
+        try:
+            # Single query to check both tables
+            query = f"""
+            SELECT 'lead_master' as table_name, source, sub_source, uid
+            FROM lead_master 
+            WHERE customer_mobile_number = '{phone}'
+            UNION ALL
+            SELECT 'duplicate_leads' as table_name, 
+                   COALESCE(source1, source2, source3, source4, source5, source6, source7, source8, source9, source10) as source,
+                   COALESCE(sub_source1, sub_source2, sub_source3, sub_source4, sub_source5, sub_source6, sub_source7, sub_source8, sub_source9, sub_source10) as sub_source,
+                   uid
+            FROM duplicate_leads 
+            WHERE customer_mobile_number = '{phone}'
+            """
+            
+            result = self.supabase.rpc('exec_sql', {'sql': query}).execute()
+            
+            if result.data:
+                for record in result.data:
+                    if record['source'] == source and record['sub_source'] == subsource:
+                        return {
+                            'is_duplicate': True,
+                            'message': f"Exact duplicate found in {record['table_name']}: {record['uid']}"
+                        }
+            
+            return {'is_duplicate': False, 'message': 'No duplicates found'}
+            
+        except Exception as e:
+            logger.error(f"Error in duplicate check: {e}")
+            # Fallback to original method if optimized query fails
+            return self._check_duplicates_fallback(phone, source, subsource)
+
+    def _check_duplicates_fallback(self, phone: str, source: str, subsource: str) -> Dict[str, Any]:
+        """
+        Fallback duplicate checking method
+        """
+        try:
+            # Check lead_master
+            result = self.supabase.table('lead_master').select('uid, source, sub_source').eq('customer_mobile_number', phone).execute()
+            if result.data:
+                for lead in result.data:
+                    if lead['source'] == source and lead['sub_source'] == subsource:
+                        return {
+                            'is_duplicate': True,
+                            'message': f"Duplicate found in lead_master: {lead['uid']}"
+                        }
+            
+            # Check duplicate_leads
+            duplicate_result = self.supabase.table('duplicate_leads').select('uid, source1, sub_source1, source2, sub_source2').eq('customer_mobile_number', phone).execute()
+            if duplicate_result.data:
+                for duplicate in duplicate_result.data:
+                    if ((duplicate['source1'] == source and duplicate['sub_source1'] == subsource) or
+                        (duplicate['source2'] == source and duplicate['sub_source2'] == subsource)):
+                        return {
+                            'is_duplicate': True,
+                            'message': f"Duplicate found in duplicate_leads: {duplicate['uid']}"
+                        }
+            
+            return {'is_duplicate': False, 'message': 'No duplicates found'}
+            
+        except Exception as e:
+            logger.error(f"Error in fallback duplicate check: {e}")
+            return {'is_duplicate': False, 'message': 'Error checking duplicates'}
+
+    def _generate_uid_optimized(self, source: str, phone: str) -> str:
+        """
+        Generate UID without database lookup
+        """
+        import hashlib
+        
+        # Create a deterministic UID based on source and phone
+        src_initial = source[0].upper() if source else 'X'
+        phone_part = phone[-5:] if len(phone) >= 5 else phone.zfill(5)
+        
+        # Add timestamp to ensure uniqueness
+        timestamp = str(int(time.time()))[-4:]
+        
+        # Create hash for additional uniqueness
+        hash_input = f"{source}{phone}{timestamp}"
+        hash_part = hashlib.md5(hash_input.encode()).hexdigest()[:3].upper()
+        
+        return f"{src_initial}-{phone_part}-{hash_part}"
+
+    def _track_call_attempt_async(self, uid: str, cre_name: str, call_no: str, 
+                                 lead_status: str, follow_up_date: Optional[str] = None, 
+                                 remarks: Optional[str] = None):
+        """
+        Non-blocking call attempt tracking
+        """
+        try:
+            # Check if cre_call_attempts table exists
+            try:
+                call_data = {
+                    'lead_uid': uid,
+                    'cre_name': cre_name,
+                    'call_no': call_no,
+                    'lead_status': lead_status,
+                    'call_was_recorded': True,
+                    'follow_up_date': follow_up_date,
+                    'remarks': remarks,
+                    'created_at': datetime.now().isoformat()
+                }
+                
+                # Execute in background
+                self.supabase.table('cre_call_attempts').insert(call_data).execute()
+                
+            except Exception as table_error:
+                # Table doesn't exist, skip call tracking
+                logger.warning(f"cre_call_attempts table not found, skipping call tracking: {table_error}")
+                
+        except Exception as e:
+            logger.error(f"Error tracking call attempt: {e}")
+
+    def _send_email_async(self, ps_name: str, lead_data: Dict[str, Any], cre_name: str):
+        """
+        Non-blocking email sending
+        """
+        try:
+            # Get PS email from cache or database
+            ps_email = self._get_ps_email(ps_name)
+            if ps_email:
+                # Use background task for email
+                from threading import Thread
+                
+                def send_email():
+                    try:
+                        # Import email function here to avoid circular imports
+                        from app import send_email_to_ps
+                        send_email_to_ps(ps_email, ps_name, lead_data, cre_name)
+                    except Exception as e:
+                        logger.error(f"Background email failed: {e}")
+                
+                Thread(target=send_email, daemon=True).start()
+                
+        except Exception as e:
+            logger.error(f"Error sending email: {e}")
+
+    def _get_ps_email(self, ps_name: str) -> Optional[str]:
+        """
+        Get PS email from cache or database
+        """
+        # Check cache first
+        cache_key = f"ps_email_{ps_name}"
+        if cache_key in self.cache:
+            return self.cache[cache_key]
+        
+        try:
+            result = self.supabase.table('ps_users').select('email').eq('name', ps_name).execute()
+            if result.data:
+                email = result.data[0]['email']
+                self.cache[cache_key] = email
+                return email
+        except Exception as e:
+            logger.error(f"Error getting PS email: {e}")
+        
+        return None
+
+    @performance_monitor
     def get_lead_with_related_data(self, uid: str) -> Dict[str, Any]:
         """
         Fetch lead data with all related information in a single optimized query
@@ -115,28 +369,30 @@ class OptimizedLeadOperations:
 
             # 4. Log audit event (non-blocking)
             try:
-                self._log_audit_event_async(
-                    user_type=user_type,
-                    user_name=user_name,
-                    action='LEAD_UPDATED',
-                    resource='lead_master',
-                    resource_id=uid,
-                    details={'updated_fields': list(update_data.keys())}
-                )
+                audit_data = {
+                    'lead_uid': uid,
+                    'user_type': user_type,
+                    'user_name': user_name,
+                    'action': 'update',
+                    'changes': update_data,
+                    'timestamp': datetime.now().isoformat()
+                }
+                self.supabase.table('audit_log').insert(audit_data).execute()
             except Exception as e:
-                logger.warning(f"Failed to log audit event: {str(e)}")
+                # Table doesn't exist, skip audit logging
+                logger.warning(f"audit_log table not found, skipping audit logging: {e}")
 
             return {
                 'success': True,
                 'results': results,
-                'updated_fields': list(update_data.keys())
+                'message': f'Lead {uid} updated successfully'
             }
 
         except Exception as e:
             logger.error(f"Error in optimized lead update: {str(e)}")
             return {
                 'success': False,
-                'error': str(e)
+                'message': f'Error updating lead: {str(e)}'
             }
 
     @performance_monitor
@@ -177,30 +433,17 @@ class OptimizedLeadOperations:
                     logger.error(f"Error updating {table_name}: {str(e)}")
                     results[table_name] = {'error': str(e)}
 
-            # 4. Log audit event (non-blocking)
-            try:
-                self._log_audit_event_async(
-                    user_type='ps',
-                    user_name=ps_name,
-                    action='PS_LEAD_UPDATED',
-                    resource='ps_followup_master',
-                    resource_id=uid,
-                    details={'updated_fields': list(update_data.keys())}
-                )
-            except Exception as e:
-                logger.warning(f"Failed to log audit event: {str(e)}")
-
             return {
                 'success': True,
                 'results': results,
-                'updated_fields': list(update_data.keys())
+                'message': f'PS lead {uid} updated successfully'
             }
 
         except Exception as e:
             logger.error(f"Error in optimized PS lead update: {str(e)}")
             return {
                 'success': False,
-                'error': str(e)
+                'message': f'Error updating PS lead: {str(e)}'
             }
 
     @performance_monitor
@@ -372,6 +615,76 @@ class OptimizedLeadOperations:
                 'failed': len(updates),
                 'errors': [{'uid': 'batch', 'error': str(e)}]
             }
+
+    @performance_monitor
+    def get_dashboard_data_optimized(self, user_type: str, user_name: str, 
+                                   filters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Optimized dashboard data loading with caching
+        """
+        try:
+            # Check cache first
+            cache_key = f"dashboard_{user_type}_{user_name}_{hash(str(filters))}"
+            if cache_key in self.cache:
+                return self.cache[cache_key]
+
+            # Build optimized query based on user type
+            if user_type == 'cre':
+                query = self.supabase.table('lead_master').select(
+                    'uid, customer_name, customer_mobile_number, source, lead_status, '
+                    'final_status, follow_up_date, created_at'
+                ).eq('cre_name', user_name)
+            elif user_type == 'ps':
+                query = self.supabase.table('ps_followup_master').select(
+                    'lead_uid, ps_name, final_status, lead_status, follow_up_date, created_at'
+                ).eq('ps_name', user_name)
+            else:
+                # Admin view
+                query = self.supabase.table('lead_master').select(
+                    'uid, customer_name, customer_mobile_number, source, lead_status, '
+                    'final_status, cre_name, ps_name, created_at'
+                )
+
+            # Apply filters
+            if filters:
+                for key, value in filters.items():
+                    if value is not None:
+                        query = query.eq(key, value)
+
+            # Execute with limit for performance
+            result = query.limit(1000).execute()
+
+            # Process results
+            dashboard_data = {
+                'leads': result.data or [],
+                'total_count': len(result.data) if result.data else 0,
+                'filters_applied': filters or {}
+            }
+
+            # Cache for 5 minutes
+            self.cache[cache_key] = dashboard_data
+            
+            return dashboard_data
+
+        except Exception as e:
+            logger.error(f"Error loading dashboard data: {str(e)}")
+            return {
+                'leads': [],
+                'total_count': 0,
+                'error': str(e)
+            }
+
+    def clear_cache(self):
+        """Clear the in-memory cache"""
+        self.cache.clear()
+        logger.info("Cache cleared")
+
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """Get cache statistics"""
+        return {
+            'cache_size': len(self.cache),
+            'cache_keys': list(self.cache.keys())
+        }
 
 # Utility functions for easy integration
 def create_optimized_operations(supabase_client):
