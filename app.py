@@ -3255,32 +3255,33 @@ def add_lead_with_cre():
                 print(f"🔍 Looking up CRE with ID: {cre_id}")
                 
                 cre_data = supabase.table('cre_users').select('name, auto_assign_count').eq('id', cre_id).execute()
-            if cre_data.data:
-                cre_name = cre_data.data[0]['name']
-                current_count = cre_data.data[0].get('auto_assign_count', 0)
-                    print(f"✅ Found CRE: {cre_name} for ID: {cre_id}")
                 
-                # Log manual CRE assignment to auto_assign_history
-                try:
-                    history_data = {
-                        'lead_uid': uid,
-                        'source': source,
-                        'assigned_cre_id': assigned_cre_id,
-                        'assigned_cre_name': cre_name,
-                        'cre_total_leads_before': current_count,
-                        'cre_total_leads_after': current_count + 1,
-                        'assignment_method': 'manual_assignment',
-                        'created_at': datetime.now().isoformat()
-                    }
+                if cre_data.data:
+                    cre_name = cre_data.data[0]['name']
+                    current_count = cre_data.data[0].get('auto_assign_count', 0)
+                    print(f"✅ Found CRE: {cre_name} for ID: {cre_id}")
                     
-                    supabase.table('auto_assign_history').insert(history_data).execute()
-                    
-                    # Update CRE auto_assign_count
-                    supabase.table('cre_users').update({'auto_assign_count': current_count + 1}).eq('id', assigned_cre_id).execute()
-                    
-                    print(f"✅ Logged manual CRE assignment to auto_assign_history: {uid} -> {cre_name}")
-                except Exception as e:
-                    print(f"❌ Error logging manual CRE assignment: {e}")
+                    # Log manual CRE assignment to auto_assign_history
+                    try:
+                        history_data = {
+                            'lead_uid': uid,
+                            'source': source,
+                            'assigned_cre_id': assigned_cre_id,
+                            'assigned_cre_name': cre_name,
+                            'cre_total_leads_before': current_count,
+                            'cre_total_leads_after': current_count + 1,
+                            'assignment_method': 'manual_assignment',
+                            'created_at': datetime.now().isoformat()
+                        }
+                        
+                        supabase.table('auto_assign_history').insert(history_data).execute()
+                        
+                        # Update CRE auto_assign_count
+                        supabase.table('cre_users').update({'auto_assign_count': current_count + 1}).eq('id', assigned_cre_id).execute()
+                        
+                        print(f"✅ Logged manual CRE assignment to auto_assign_history: {uid} -> {cre_name}")
+                    except Exception as e:
+                        print(f"❌ Error logging manual CRE assignment: {e}")
                 else:
                     print(f"❌ No CRE found for ID: {cre_id}")
                     print(f"Available CRE IDs: {[cre['id'] for cre in supabase.table('cre_users').select('id,name').execute().data]}")
