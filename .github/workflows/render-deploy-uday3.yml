@@ -1,0 +1,16 @@
+name: Deploy to Render - UDAY3 Branch
+
+on:
+  push:
+    branches:
+      - UDAY3
+
+jobs:
+  render-deploy-uday3:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render Deploy Hook - UDAY3
+        run: |
+          curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_UDAY3 }}
+        env:
+          RENDER_DEPLOY_HOOK_UDAY3: ${{ secrets.RENDER_DEPLOY_HOOK_UDAY3 }} 

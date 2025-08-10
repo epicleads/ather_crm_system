@@ -1,4 +1,4 @@
-name: Auto-Assign Trigger
+name: Auto-Assign Trigger - UDAY3 Branch Testing
 on:
   schedule:
     - cron: '0 */1 * * *'  # Every hour at minute 0
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:  # Manual trigger
   push:
     branches:
-      - main  # Also run when code is pushed
+      - UDAY3  # Changed from main to UDAY3 for testing
 
 jobs:
   auto-assign-trigger:
@@ -28,8 +28,9 @@ jobs:
         
       - name: Run Enhanced Auto-Assign Trigger
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          # UDAY3 Branch Testing - Prioritize UDAY3 variables
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL_UDAY3 }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_UDAY3 }}
           LOG_LEVEL: INFO
           GITHUB_ACTIONS: "true"
           CHECK_INTERVAL: "60"
