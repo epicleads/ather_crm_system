@@ -1,14 +1,14 @@
-# Daily Script Runner - UDAY3 Branch Testing Configuration
+# Daily Script Runner - Uday3 Branch Testing Configuration
 # This workflow uses branch-specific environment variables for isolated testing
 # Main branch variables are commented out to prevent conflicts
-name: Daily Script Runner - UDAY3 Branch
+name: Daily Script Runner - Uday3 Branch
 on:
   schedule:
     - cron: '*/5 * * * *'  # Every 5 minutes - For Meta script only
   workflow_dispatch:
   push:
     branches:
-      - UDAY3  # Only run on UDAY3 branch
+      - Uday3  # Only run on Uday3 branch
 
 jobs:
   run-meta-script:

@@ -1,4 +1,4 @@
-name: Auto-Assign Trigger - UDAY3 Branch Testing
+name: Auto-Assign Trigger - Uday3 Branch Testing
 on:
   schedule:
     - cron: '0 */1 * * *'  # Every hour at minute 0
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:  # Manual trigger
   push:
     branches:
-      - UDAY3  # Changed from main to UDAY3 for testing
+      - Uday3  # Changed from main to Uday3 for testing
 
 jobs:
   auto-assign-trigger:

@@ -1,9 +1,9 @@
-name: Deploy to Render - UDAY3 Branch
+name: Deploy to Render - Uday3 Branch
 
 on:
   push:
     branches:
-      - UDAY3
+      - Uday3
 
 jobs:
   render-deploy-uday3:
