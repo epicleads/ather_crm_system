@@ -1,0 +1,59 @@
+# Main Branch Global Scheduler
+# This workflow runs on a global schedule for the main branch
+# Uday3 branch has its own separate workflows
+name: Main Branch Global Scheduler
+on:
+  schedule:
+    - cron: '*/5 * * * *'  # Every 5 minutes - For Meta script
+    - cron: '0 */1 * * *'  # Every hour at minute 0 - For Auto-assign
+    - cron: '15 */1 * * *'  # Every hour at minute 15 - For Auto-assign
+    - cron: '30 */1 * * *'  # Every hour at minute 30 - For Auto-assign
+    - cron: '45 */1 * * *'  # Every hour at minute 45 - For Auto-assign
+  workflow_dispatch:
+  push:
+    branches:
+      - main  # Only run on main branch
+
+jobs:
+  run-meta-script-main:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run metatosupabase.py - Main Branch
+        env:
+          # Main branch variables
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          META_PAGE_ACCESS_TOKEN: ${{ secrets.META_PAGE_ACCESS_TOKEN }}
+          PAGE_ID: ${{ secrets.PAGE_ID }}
+        run: python metatosupabase.py
+
+  run-auto-assign-main:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run Auto-Assign - Main Branch
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          LOG_LEVEL: INFO
+          GITHUB_ACTIONS: "true"
+          CHECK_INTERVAL: "60"
+          MAX_LEADS_PER_BATCH: "50"
+        run: python auto_assign_system.py worker 

@@ -1,10 +1,9 @@
-# Daily Script Runner - Uday3 Branch Testing Configuration
-# This workflow uses branch-specific environment variables for isolated testing
+# Uday3 Branch Script Runner - No Global Schedule
+# This workflow only runs on Uday3 branch pushes and manual triggers
 # Main branch variables are commented out to prevent conflicts
-name: Daily Script Runner - Uday3 Branch
+name: Uday3 Branch Script Runner
 on:
-  schedule:
-    - cron: '*/5 * * * *'  # Every 5 minutes - For Meta script only
+  # Removed global cron schedule - only run on Uday3 branch
   workflow_dispatch:
   push:
     branches:
@@ -36,7 +35,7 @@ jobs:
           # SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           # SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           
-          # Branch-specific variables for UDAY3 testing
+          # Branch-specific variables for Uday3 testing
           SUPABASE_URL: ${{ secrets.SUPABASE_URL_UDAY3 }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_UDAY3 }}
           
@@ -61,7 +60,7 @@ jobs:
           # SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           # SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           
-          # Branch-specific variables for UDAY3 testing
+          # Branch-specific variables for Uday3 testing
           SUPABASE_URL: ${{ secrets.SUPABASE_URL_UDAY3 }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_UDAY3 }}
           
