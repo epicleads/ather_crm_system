@@ -1868,21 +1868,21 @@ document.addEventListener('DOMContentLoaded', function() {
             fetch(`/cre_call_attempt_history_json/${uid}`)
                 .then(response => response.json())
                 .then(data => {
-                    if (data.success && data.history.length > 0) {
+                    if (data.success && data.data.length > 0) {
                         // Count RNR calls
-                        const rnrCount = data.history.filter(row => row.status && row.status.trim().toUpperCase() === 'RNR').length;
-                        const busyCount = data.history.filter(row => row.status && row.status.trim().toLowerCase() === 'busy on another call').length;
-                        const callMeBackCount = data.history.filter(row => row.status && row.status.trim().toLowerCase() === 'call me back').length;
-                        const callNotConnectedCount = data.history.filter(row => row.status && row.status.trim().toLowerCase() === 'call not connected').length;
+                        const rnrCount = data.data.filter(row => row.status && row.status.trim().toUpperCase() === 'RNR').length;
+                        const busyCount = data.data.filter(row => row.status && row.status.trim().toLowerCase() === 'busy on another call').length;
+                        const callMeBackCount = data.data.filter(row => row.status && row.status.trim().toLowerCase() === 'call me back').length;
+                        const callNotConnectedCount = data.data.filter(row => row.status && row.status.trim().toLowerCase() === 'call not connected').length;
                         const excludedStatuses = ['rnr', 'busy on another call', 'call me back', 'call not connected'];
-                        const connectedCallsCount = data.history.filter(row =>
+                        const connectedCallsCount = data.data.filter(row =>
                              row.status && !excludedStatuses.includes(row.status.trim().toLowerCase())
                         ).length;
                         document.getElementById('callHistoryTotal').innerHTML = 
-                            `<strong>Total Calls Made:</strong> ${data.history.length} &nbsp; | &nbsp; <strong>RNR Calls:</strong> ${rnrCount} &nbsp; | &nbsp; <strong>Busy on another Call:</strong> ${busyCount} &nbsp; | &nbsp; <strong>Call me Back:</strong> ${callMeBackCount} &nbsp; | &nbsp; <strong>Call not Connected:</strong> ${callNotConnectedCount} &nbsp; | &nbsp; <strong>Connected Calls:</strong> ${connectedCallsCount}`;
-                        let table = `<div class='table-responsive'><table class='table table-bordered table-striped'><thead><tr><th>UID</th><th>Call No</th><th>Attempt</th><th>Status</th><th>CRE Name</th><th>Update TS</th></tr></thead><tbody>`;
-                        data.history.forEach(row => {
-                            table += `<tr><td>${row.uid}</td><td>${row.call_no}</td><td>${row.attempt}</td><td>${row.status}</td><td>${row.cre_name}</td><td>${row.update_ts ? row.update_ts.replace('T', ' ').slice(0, 19) : ''}</td></tr>`;
+                            `<strong>Total Calls Made:</strong> ${data.data.length} &nbsp; | &nbsp; <strong>RNR Calls:</strong> ${rnrCount} &nbsp; | &nbsp; <strong>Busy on another Call:</strong> ${busyCount} &nbsp; | &nbsp; <strong>Call me Back:</strong> ${callMeBackCount} &nbsp; | &nbsp; <strong>Call not Connected:</strong> ${callNotConnectedCount} &nbsp; | &nbsp; <strong>Connected Calls:</strong> ${connectedCallsCount}`;
+                        let table = `<div class='table-responsive'><table class='table table-bordered table-striped'><thead><tr><th>ID</th><th>Call No</th><th>Attempt</th><th>Status</th><th>Final Status</th><th>Follow Up Date</th><th>Update TS</th></tr></thead><tbody>`;
+                        data.data.forEach(row => {
+                            table += `<tr><td>${row.id || ''}</td><td>${row.call_no || ''}</td><td>${row.attempt || ''}</td><td>${row.status || ''}</td><td>${row.final_status || ''}</td><td>${row.follow_up_date || ''}</td><td>${row.update_ts ? row.update_ts.replace('T', ' ').slice(0, 19) : ''}</td></tr>`;
                         });
                         table += '</tbody></table></div>';
                         callHistoryTableContainer.innerHTML = table;

@@ -643,11 +643,12 @@
           <table class="table table-bordered table-hover" id="psCallHistoryTable">
             <thead class="table-light">
               <tr>
-                <th>UID</th>
+                <th>ID</th>
                 <th>CALL NO</th>
                 <th>ATTEMPT</th>
                 <th>STATUS</th>
-                <th>PS NAME</th>
+                <th>FINAL STATUS</th>
+                <th>FOLLOW UP DATE</th>
                 <th>UPDATE TS</th>
               </tr>
             </thead>
@@ -1427,20 +1428,20 @@ document.addEventListener('DOMContentLoaded', function() {
     function fetchPSCallHistory(uid) {
         // Clear previous data
         const modal = new bootstrap.Modal(document.getElementById('psCallHistoryModal'));
-        document.querySelector('#psCallHistoryTable tbody').innerHTML = '<tr><td colspan="6" class="text-center">Loading...</td></tr>';
+        document.querySelector('#psCallHistoryTable tbody').innerHTML = '<tr><td colspan="7" class="text-center">Loading...</td></tr>';
         document.getElementById('psCallHistoryStats').innerHTML = '';
         modal.show();
         fetch(`/ps_call_attempt_history_json/${uid}`)
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    renderPSCallHistoryTable(data.history, uid);
+                    renderPSCallHistoryTable(data.data, uid);
                 } else {
-                    document.querySelector('#psCallHistoryTable tbody').innerHTML = '<tr><td colspan="6" class="text-danger">Failed to load call history</td></tr>';
+                    document.querySelector('#psCallHistoryTable tbody').innerHTML = '<tr><td colspan="7" class="text-danger">Failed to load call history</td></tr>';
                 }
             })
             .catch(() => {
-                document.querySelector('#psCallHistoryTable tbody').innerHTML = '<tr><td colspan="6" class="text-danger">Error loading call history</td></tr>';
+                document.querySelector('#psCallHistoryTable tbody').innerHTML = '<tr><td colspan="7" class="text-danger">Error loading call history</td></tr>';
             });
     }
 
@@ -1480,11 +1481,12 @@ document.addEventListener('DOMContentLoaded', function() {
         history.forEach(attempt => {
             const row = document.createElement('tr');
             row.innerHTML = `
-                <td>${attempt.uid || ''}</td>
+                <td>${attempt.id || ''}</td>
                 <td>${attempt.call_no || ''}</td>
                 <td>${attempt.attempt || ''}</td>
                 <td>${attempt.status || ''}</td>
-                <td>${attempt.ps_name || ''}</td>
+                <td>${attempt.final_status || ''}</td>
+                <td>${attempt.follow_up_date || ''}</td>
                 <td>${attempt.updated_at ? (attempt.updated_at.split('T')[0] + (attempt.updated_at.includes('T') ? '<br>' + attempt.updated_at.split('T')[1].slice(0,8) : '')) : ''}</td>
             `;
             tbody.appendChild(row);
