@@ -8560,7 +8560,6 @@ def update_walkin_lead(walkin_id):
             update_data = {
                 'status': status,
                 'lead_category': lead_category,
-                'lead_status': lead_status,
                 'model_interested': model_interested,
                 'test_drive_done': test_drive_done,
                 'followup_no': followup_no,
@@ -12564,7 +12563,7 @@ def admin_duplicate_leads():
     offset = (page - 1) * page_size
 
     # Build Supabase query with filters
-    query = supabase.table('duplicate_leads').select('*')
+    query = supabase.table('duplicate_leads').select('*').order('updated_at', desc=True)
     if search_uid:
         query = query.ilike('uid', f'%{search_uid}%')
     if search_name:
@@ -13156,7 +13155,7 @@ def api_hot_duplicate_leads():
     from datetime import datetime, date
     try:
         # Fetch all duplicate leads (limit to 200 for performance)
-        result = supabase.table('duplicate_leads').select('*').limit(200).execute()
+        result = supabase.table('duplicate_leads').select('*').order('updated_at', desc=True).limit(200).execute()
         duplicate_leads = result.data or []
         hot_leads = []
         for lead in duplicate_leads:
@@ -13575,9 +13574,8 @@ def add_walkin_lead():
         data = {
             'customer_name': request.form['customer_name'],
             'mobile_number': request.form['mobile_number'],
-            'customer_location': request.form.get('customer_location'),
             'model_interested': request.form['model_interested'],
-            'occupation': request.form.get('occupation'),
+            'lead_category': request.form.get('lead_category', 'Not Set'),
             'branch': request.form['branch'],
             'ps_assigned': request.form['ps_assigned'],
             'status': 'Pending',
@@ -14575,6 +14573,135 @@ def debug_ps_users():
         return jsonify(debug_info)
     except Exception as e:
         return jsonify({'error': str(e)})
+
+@app.route('/get_cre_list')
+@require_auth(['admin'])
+def get_cre_list():
+    """API endpoint to get list of all CREs"""
+    try:
+        # Get all CRE users
+        cre_result = supabase.table('cre_users').select('name').execute()
+        
+        if cre_result.data:
+            cre_list = [{'name': cre['name']} for cre in cre_result.data if cre.get('name')]
+            return jsonify({
+                'success': True,
+                'cre_list': cre_list
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'cre_list': []
+            })
+            
+    except Exception as e:
+        print(f"Error in get_cre_list: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error fetching CRE list: {str(e)}'
+        })
+
+@app.route('/cre_analysis_data')
+@require_auth(['admin'])
+def cre_analysis_data():
+    """API endpoint to get CRE performance analysis data"""
+    try:
+        # Get query parameters
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
+        cre_name = request.args.get('cre_name')
+        
+        # Parse dates if provided
+        start_date = None
+        end_date = None
+        if start_date_str and end_date_str:
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            except Exception:
+                pass
+        
+        # Get all leads
+        all_leads = safe_get_data('lead_master')
+        
+        # Filter leads by date if needed
+        filtered_leads = []
+        for lead in all_leads:
+            if start_date and end_date:
+                lead_date_str = lead.get('created_at') or lead.get('date')
+                if lead_date_str:
+                    try:
+                        if 'T' in lead_date_str:
+                            lead_date = datetime.fromisoformat(lead_date_str.replace('Z', '+00:00')).date()
+                        else:
+                            lead_date = datetime.strptime(lead_date_str, '%Y-%m-%d').date()
+                        if start_date <= lead_date <= end_date:
+                            filtered_leads.append(lead)
+                    except (ValueError, TypeError):
+                        continue
+                else:
+                    filtered_leads.append(lead)
+            else:
+                filtered_leads.append(lead)
+        
+        leads = filtered_leads
+        
+        # Filter by CRE if specified
+        if cre_name and cre_name != 'All CREs':
+            leads = [lead for lead in leads if lead.get('cre_name') == cre_name]
+        
+        # Get all CREs for the table
+        all_cres = safe_get_data('cre_users')
+        cre_names = [cre['name'] for cre in all_cres if cre.get('name')]
+        
+        # Initialize CRE performance data
+        cre_performance = {}
+        for cre in cre_names:
+            cre_performance[cre] = {
+                'calls_allocated': 0,
+                'calls_attempted': 0,
+                'calls_connected': 0,
+                'hot': 0,
+                'warm': 0,
+                'cold': 0,
+                'call_back': 0,
+                'rnr': 0,
+                'call_disconnected': 0,
+                'lost_to_codealer': 0,
+                'lost_to_competition': 0
+            }
+        
+
+        
+        # Format data for frontend
+        cre_data = []
+        for cre_name, data in cre_performance.items():
+            cre_data.append({
+                'cre_name': cre_name,
+                'calls_allocated': data['calls_allocated'],
+                'calls_attempted': data['calls_attempted'],
+                'calls_connected': data['calls_connected'],
+                'hot': data['hot'],
+                'warm': data['warm'],
+                'cold': data['cold'],
+                'call_back': data['call_back'],
+                'rnr': data['rnr'],
+                'call_disconnected': data['call_disconnected'],
+                'lost_to_codealer': data['lost_to_codealer'],
+                'lost_to_competition': data['lost_to_competition']
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': cre_data
+        })
+        
+    except Exception as e:
+        print(f"Error in cre_analysis_data: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error fetching CRE analysis data: {str(e)}'
+        })
 
 if __name__ == '__main__':
     # socketio.run(app, debug=True)

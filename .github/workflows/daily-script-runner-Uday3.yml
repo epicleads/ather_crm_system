@@ -1,9 +1,11 @@
-# Uday3 Branch Script Runner - No Global Schedule
-# This workflow only runs on Uday3 branch pushes and manual triggers
+# Uday3 Branch Script Runner - Every 10 Minutes
+# This workflow runs every 10 minutes on Uday3 branch and manual triggers
 # Main branch variables are commented out to prevent conflicts
-name: Uday3 Branch Script Runner
+name: Uday3 Branch Script Runner - Every 10 Minutes
 on:
-  # Removed global cron schedule - only run on Uday3 branch
+  # Run every 10 minutes on Uday3 branch
+  schedule:
+    - cron: '*/10 * * * *'  # Every 10 minutes
   workflow_dispatch:
   push:
     branches:
