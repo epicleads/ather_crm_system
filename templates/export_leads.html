@@ -17,6 +17,60 @@
     </div>
 </div>
 
+<!-- Lead Master Export Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-info">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-database"></i> Download Lead Master Data</h5>
+            </div>
+            <div class="card-body">
+                <div class="row align-items-end">
+                    <div class="col-md-3">
+                        <label for="lmDateFilter" class="form-label">Date Filter</label>
+                        <select class="form-select" id="lmDateFilter" onchange="onLmDateFilterChange(this)">
+                            <option value="all">All Time</option>
+                            <option value="today">Today</option>
+                            <option value="yesterday">Yesterday</option>
+                            <option value="this_week">This Week</option>
+                            <option value="this_month">This Month</option>
+                            <option value="last_month">Last Month</option>
+                            <option value="range">Date Range</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-none" id="lmDateRangeInputs">
+                        <label for="lmStartDate" class="form-label">Start Date</label>
+                        <input type="date" class="form-control" id="lmStartDate">
+                    </div>
+                    <div class="col-md-3 d-none" id="lmDateRangeInputs2">
+                        <label for="lmEndDate" class="form-label">End Date</label>
+                        <input type="date" class="form-control" id="lmEndDate">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="lmFormat" class="form-label">Format</label>
+                        <select class="form-select" id="lmFormat">
+                            <option value="excel">Excel (.xlsx)</option>
+                            <option value="csv">CSV (.csv)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-1">
+                        <button class="btn btn-info w-100" onclick="downloadLeadMaster()">
+                            <i class="fas fa-download"></i> Download
+                        </button>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="alert alert-info mb-0">
+                            <small><i class="fas fa-info-circle me-1"></i>This will download all leads from the lead_master table with the specified date filter. The data includes UID, customer details, source, CRE/PS information, call history (1st-7th calls), and other lead attributes.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Date Range Filter Section -->
 <div class="row mb-4">
     <div class="col-12">
@@ -1014,10 +1068,76 @@ function showAlert(type, message) {
     }, 5000);
 }
 
+// Lead Master Download Functions
+function onLmDateFilterChange(sel) {
+    const rangeDiv = document.getElementById('lmDateRangeInputs');
+    const rangeDiv2 = document.getElementById('lmDateRangeInputs2');
+    
+    if (sel.value === 'range') {
+        rangeDiv.classList.remove('d-none');
+        rangeDiv2.classList.remove('d-none');
+    } else {
+        rangeDiv.classList.add('d-none');
+        rangeDiv2.classList.add('d-none');
+    }
+}
+
+function downloadLeadMaster() {
+    const dateFilter = document.getElementById('lmDateFilter').value;
+    const format = document.getElementById('lmFormat').value;
+    const startDate = document.getElementById('lmStartDate').value;
+    const endDate = document.getElementById('lmEndDate').value;
+    
+    // Validate date range if selected
+    if (dateFilter === 'range') {
+        if (!startDate || !endDate) {
+            showAlert('warning', 'Please select both start and end dates for date range filter');
+            return;
+        }
+        if (new Date(startDate) > new Date(endDate)) {
+            showAlert('warning', 'Start date cannot be after end date');
+            return;
+        }
+    }
+    
+    // Build download URL
+    const params = new URLSearchParams();
+    params.set('format', format);
+    params.set('date_filter', dateFilter);
+    
+    if (dateFilter === 'range') {
+        params.set('start_date', startDate);
+        params.set('end_date', endDate);
+    }
+    
+    const downloadUrl = '/download_lead_master?' + params.toString();
+    
+    // Show loading state
+    const downloadBtn = event.target;
+    const originalText = downloadBtn.innerHTML;
+    downloadBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Downloading...';
+    downloadBtn.disabled = true;
+    
+    // Open download in new tab
+    window.open(downloadUrl, '_blank');
+    
+    // Reset button after a delay
+    setTimeout(() => {
+        downloadBtn.innerHTML = originalText;
+        downloadBtn.disabled = false;
+    }, 2000);
+    
+    showAlert('success', 'Download started! Check your downloads folder.');
+}
+
 // Set default date to today
 document.addEventListener('DOMContentLoaded', function() {
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('endDate').value = today;
+    
+    // Set default dates for lead master date range
+    document.getElementById('lmStartDate').value = today;
+    document.getElementById('lmEndDate').value = today;
 });
 </script>
 {% endblock %}
