@@ -5607,15 +5607,20 @@ def api_branch_head_dashboard_data():
         today_str = datetime.now().strftime('%Y-%m-%d')
         
         # PS follow-ups for today (exact date match) AND final_status = 'Pending'
-        ps_query = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Pending').eq('follow_up_date', today_str)
+        print(f"DEBUG: Today's date for PS query: {today_str}")
+        ps_query = supabase.table('ps_followup_master').select('*, created_at, ps_assigned_at').eq('ps_branch', branch).eq('final_status', 'Pending').eq('follow_up_date', today_str)
         # Apply PS filter if specified
         if ps_name:
             ps_query = ps_query.eq('ps_name', ps_name)
         ps_today = ps_query.execute().data or []
+        print(f"DEBUG: PS query result count: {len(ps_today)}")
+        if ps_today:
+            print(f"DEBUG: Sample PS data: {ps_today[0]}")
+            print(f"DEBUG: Sample PS follow_up_date: {ps_today[0].get('follow_up_date')}")
         
         # Event follow-ups for today (exact date match) AND final_status = 'Pending'
         # Use date range queries for timestamp columns
-        act_query = supabase.table('activity_leads').select('*').eq('location', branch).eq('final_status', 'Pending').gte('ps_followup_date_ts', f'{today_str} 00:00:00').lt('ps_followup_date_ts', f'{today_str} 23:59:59')
+        act_query = supabase.table('activity_leads').select('*, created_at').eq('location', branch).eq('final_status', 'Pending').gte('ps_followup_date_ts', f'{today_str} 00:00:00').lt('ps_followup_date_ts', f'{today_str} 23:59:59')
         # Apply PS filter if specified
         if ps_name:
             act_query = act_query.eq('ps_name', ps_name)
@@ -5623,11 +5628,16 @@ def api_branch_head_dashboard_data():
         
         # Walk-in follow-ups for today (exact date match) AND status = 'Pending'
         # Use date range queries for timestamp columns
-        walkin_query = supabase.table('walkin_table').select('*').eq('branch', branch).eq('status', 'Pending').gte('next_followup_date', f'{today_str} 00:00:00').lt('next_followup_date', f'{today_str} 23:59:59')
+        print(f"DEBUG: Today's date for walk-in query: {today_str}")
+        walkin_query = supabase.table('walkin_table').select('*, created_at').eq('branch', branch).eq('status', 'Pending').gte('next_followup_date', f'{today_str} 00:00:00').lt('next_followup_date', f'{today_str} 23:59:59')
         # Apply PS filter if specified
         if ps_name:
             walkin_query = walkin_query.eq('ps_assigned', ps_name)
         walkin_today_raw = walkin_query.execute().data or []
+        print(f"DEBUG: Walk-in query result count: {len(walkin_today_raw)}")
+        if walkin_today_raw:
+            print(f"DEBUG: Sample walk-in data: {walkin_today_raw[0]}")
+            print(f"DEBUG: Sample walk-in next_followup_date: {walkin_today_raw[0].get('next_followup_date')}")
         
         # Mark all as not missed and set source_type and phone
         ps_today = [{**row, 'missed': False, 'lead_status': row.get('lead_status', '')} for row in ps_today]
@@ -5655,20 +5665,54 @@ def api_branch_head_dashboard_data():
         # Debug: Print counts before and after search filter
         print(f"DEBUG: Before search filter - PS: {len(ps_today)}, Event: {len(act_today)}, Walkin: {len(walkin_today)}, Total: {len(all_rows)}")
         
-        # Format rows for frontend
-        formatted_rows = [
-            {
-                'uid': row.get('lead_uid', row.get('activity_uid', row.get('uid', ''))),
-                'customer_name': row.get('customer_name', ''),
-                'customer_mobile_number': row.get('customer_mobile_number', row.get('customer_phone_number', row.get('mobile_number', ''))),
-                'source': row.get('source', row.get('source_type', 'PS Followup')),  # Use source from ps_followup_master, fallback to source_type
-                'lead_category': row.get('lead_category') if row.get('lead_category') else 'Not Set',
-                'lead_status': row.get('lead_status', ''),
-                'ps_name': row.get('ps_name', row.get('ps_assigned', '')),
-                'follow_up_date': row.get('follow_up_date', row.get('ps_followup_date_ts', row.get('next_followup_date', '')))
-            }
-            for row in all_rows
-        ]
+        # Format rows for frontend with proper column mapping
+        formatted_rows = []
+        for row in all_rows:
+            # Determine source type for proper column mapping
+            source_type = row.get('source_type', '')
+            
+            if source_type == 'Walk-in':
+                # For walk-in leads, use created_at, ignore ps_assigned_at
+                formatted_rows.append({
+                    'uid': row.get('uid', ''),
+                    'customer_name': row.get('customer_name', ''),
+                    'customer_mobile_number': row.get('mobile_number', ''),
+                    'source': 'Walk-in',
+                    'lead_category': row.get('lead_category') if row.get('lead_category') else 'Not Set',
+                    'lead_status': row.get('lead_status', ''),
+                    'ps_name': row.get('ps_assigned', ''),
+                    'follow_up_date': row.get('next_followup_date', ''),
+                    'created_at': row.get('created_at', ''),
+                    'ps_assigned_at': 'N/A'  # Walk-in leads don't have ps_assigned_at
+                })
+            elif source_type == 'Event':
+                # For event leads, use created_at, ignore ps_assigned_at
+                formatted_rows.append({
+                    'uid': row.get('activity_uid', ''),
+                    'customer_name': row.get('customer_name', ''),
+                    'customer_mobile_number': row.get('customer_phone_number', ''),
+                    'source': 'Event',
+                    'lead_category': row.get('lead_category') if row.get('lead_category') else 'Not Set',
+                    'lead_status': row.get('lead_status', ''),
+                    'ps_name': row.get('ps_name', ''),
+                    'follow_up_date': row.get('ps_followup_date_ts', ''),
+                    'created_at': row.get('created_at', ''),
+                    'ps_assigned_at': 'N/A'  # Event leads don't have ps_assigned_at
+                })
+            else:
+                # For PS leads, use ps_assigned_at, ignore created_at
+                formatted_rows.append({
+                    'uid': row.get('lead_uid', ''),
+                    'customer_name': row.get('customer_name', ''),
+                    'customer_mobile_number': row.get('customer_mobile_number', ''),
+                    'source': row.get('source', 'PS Followup'),
+                    'lead_category': row.get('lead_category') if row.get('lead_category') else 'Not Set',
+                    'lead_status': row.get('lead_status', ''),
+                    'ps_name': row.get('ps_name', ''),
+                    'follow_up_date': row.get('follow_up_date', ''),
+                    'created_at': 'N/A',  # PS leads don't have created_at from this table
+                    'ps_assigned_at': row.get('ps_assigned_at', '')
+                })
         
         # Apply search filter if provided
         if search:
@@ -5998,23 +6042,23 @@ def api_lead_call_history(uid):
         uid_norm = (uid or '').strip()
 
         # Get CRE call attempt history
-        cre_history_result = supabase.table('cre_call_attempt_history').select('uid,call_no,attempt,status,cre_name,update_ts,remarks,follow_up_date').eq('uid', uid_norm).execute()
+        cre_history_result = supabase.table('cre_call_attempt_history').select('uid,call_no,attempt,status,cre_name,remarks,follow_up_date').eq('uid', uid_norm).execute()
         cre_history = cre_history_result.data if cre_history_result.data else []
 
         # Get PS call attempt history
-        ps_history_result = supabase.table('ps_call_attempt_history').select('uid,call_no,attempt,status,ps_name,updated_at,remarks,follow_up_date').eq('uid', uid_norm).execute()
+        ps_history_result = supabase.table('ps_call_attempt_history').select('uid,call_no,attempt,status,ps_name,remarks,follow_up_date').eq('uid', uid_norm).execute()
         ps_history = ps_history_result.data if ps_history_result.data else []
 
         # Fallback: if still empty, try case-insensitive match (helps with accidental casing/formatting issues)
         if not cre_history:
             try:
-                like_res = supabase.table('cre_call_attempt_history').select('uid,call_no,attempt,status,cre_name,update_ts,remarks,follow_up_date').ilike('uid', f"%{uid_norm}%").execute()
+                like_res = supabase.table('cre_call_attempt_history').select('uid,call_no,attempt,status,cre_name,remarks,follow_up_date').ilike('uid', f"%{uid_norm}%").execute()
                 cre_history = like_res.data if like_res.data else []
             except Exception:
                 pass
         if not ps_history:
             try:
-                like_res = supabase.table('ps_call_attempt_history').select('uid,call_no,attempt,status,ps_name,updated_at,remarks,follow_up_date').ilike('uid', f"%{uid_norm}%").execute()
+                like_res = supabase.table('ps_call_attempt_history').select('uid,call_no,attempt,status,ps_name,remarks,follow_up_date').ilike('uid', f"%{uid_norm}%").execute()
                 ps_history = like_res.data if like_res.data else []
             except Exception:
                 pass
@@ -6046,7 +6090,7 @@ def api_lead_call_history(uid):
                 'status': call.get('status', ''),
                 'name': call.get('cre_name', ''),
                 'role': 'CRE',
-                'timestamp': call.get('update_ts', ''),
+                'timestamp': call.get('follow_up_date', ''),  # Use follow_up_date as timestamp
                 'remarks': call.get('remarks', ''),
                 'follow_up_date': call.get('follow_up_date', '')
             })
@@ -6060,7 +6104,7 @@ def api_lead_call_history(uid):
                 'status': call.get('status', ''),
                 'name': call.get('ps_name', ''),
                 'role': 'PS',
-                'timestamp': call.get('updated_at', ''),
+                'timestamp': call.get('follow_up_date', ''),  # Use follow_up_date as timestamp
                 'remarks': call.get('remarks', ''),
                 'follow_up_date': call.get('follow_up_date', '')
             })
@@ -10493,7 +10537,7 @@ def api_ps_followup_summary():
         # OPTIMIZED: Single query for ps_followup_master with better column selection
         try:
             ps_followup_result = supabase.table('ps_followup_master').select(
-                'lead_uid, ps_name, follow_up_date, final_status, source, lead_status, '
+                'lead_uid, ps_name, follow_up_date, final_status, source, lead_status, ps_assigned_at, '
                 'first_call_remark, first_call_date, '
                 'second_call_remark, second_call_date, '
                 'third_call_remark, third_call_date, '
@@ -10708,7 +10752,7 @@ def api_ps_followup_leads():
             # Fetch from ps_followup_master
             try:
                 ps_followup_result = supabase.table('ps_followup_master').select(
-                    'lead_uid, ps_name, follow_up_date, final_status, source, customer_name, customer_mobile_number, '
+                    'lead_uid, ps_name, follow_up_date, final_status, source, customer_name, customer_mobile_number, ps_assigned_at, '
                     'first_call_remark, first_call_date, '
                     'second_call_remark, second_call_date, '
                     'third_call_remark, third_call_date, '
@@ -10787,6 +10831,7 @@ def api_ps_followup_leads():
                                 'mobile_number': lead.get('customer_mobile_number'),
                                 'status': lead.get('final_status'),
                                 'source': lead.get('source'),
+                                'ps_assigned_at': lead.get('ps_assigned_at'),
                                 'follow_up_date': lead.get('follow_up_date'),
                                 'last_remark': last_remark or ''
                             })
@@ -10797,7 +10842,7 @@ def api_ps_followup_leads():
             # Fetch from walkin_table
             try:
                 walkin_result = supabase.table('walkin_table').select(
-                    'uid, ps_assigned, status, branch, next_followup_date, customer_name, mobile_number, '
+                    'uid, ps_assigned, status, branch, next_followup_date, customer_name, mobile_number, created_at, '
                     'first_call_remark, first_call_date, '
                     'second_call_remark, second_call_date, '
                     'third_call_remark, third_call_date, '
@@ -10872,6 +10917,7 @@ def api_ps_followup_leads():
                                 'mobile_number': lead.get('mobile_number'),
                                 'status': lead.get('status'),
                                 'source': 'Walk In',
+                                'created_at': lead.get('created_at'),
                                 'follow_up_date': lead.get('next_followup_date'),
                                 'last_remark': last_remark or ''
                             })

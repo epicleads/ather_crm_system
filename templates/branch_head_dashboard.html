@@ -836,23 +836,59 @@
     /* PS Follow-up Summary Table specific styling */
     #psFollowupTable {
         font-size: 0.85rem;
+        width: 100%;
+        table-layout: auto;
     }
     
     #psFollowupTable th {
         padding: 0.5rem 0.25rem;
         font-size: 0.8rem;
         vertical-align: middle;
+        white-space: nowrap;
+        min-width: auto;
     }
     
     #psFollowupTable td {
         padding: 0.5rem 0.25rem;
         font-size: 0.8rem;
         vertical-align: middle;
+        white-space: nowrap;
     }
     
     #psFollowupTable .badge {
         font-size: 0.7rem;
         padding: 0.25rem 0.5rem;
+    }
+    
+    /* Enhanced table responsiveness for desktop */
+    #psFollowupTable .table-responsive {
+        overflow-x: auto;
+        max-width: 100%;
+    }
+    
+    /* Inline leads table styling */
+    #psFollowupTable .ps-inline-details .table {
+        font-size: 0.8rem;
+        margin: 0;
+    }
+    
+    #psFollowupTable .ps-inline-details .table th,
+    #psFollowupTable .ps-inline-details .table td {
+        padding: 0.4rem 0.3rem;
+        font-size: 0.75rem;
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+    
+    /* Ensure proper column widths for the new columns */
+    #psFollowupTable .ps-inline-details .table th:nth-child(6),
+    #psFollowupTable .ps-inline-details .table td:nth-child(6) {
+        min-width: 120px; /* PS Assigned At */
+    }
+    
+    #psFollowupTable .ps-inline-details .table th:nth-child(7),
+    #psFollowupTable .ps-inline-details .table td:nth-child(7) {
+        min-width: 120px; /* Created At */
     }
     
     /* Sub-column header styling */
@@ -861,7 +897,135 @@
         padding: 0.25rem 0.1rem;
         border-left: 1px solid #dee2e6;
         border-right: 1px solid #dee2e6;
+        white-space: nowrap;
+        min-width: 80px;
     }
+    
+    /* Main PS followup table responsiveness */
+    #psFollowupTable {
+        min-width: max-content;
+        width: 100%;
+    }
+    
+    #psFollowupTable .table-responsive {
+        overflow-x: auto;
+        overflow-y: visible;
+    }
+    
+    /* Ensure the table container can handle horizontal scroll */
+    .card-body .table-responsive {
+        max-width: 100%;
+        overflow-x: auto;
+    }
+    
+    /* Enhanced styling for the new timestamp columns */
+    #psFollowupTable .ps-inline-details .table td:nth-child(6),
+    #psFollowupTable .ps-inline-details .table td:nth-child(7) {
+        font-family: 'Courier New', monospace;
+        font-size: 0.7rem;
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        text-align: center;
+    }
+    
+    /* Source column styling */
+    #psFollowupTable .ps-inline-details .table td:nth-child(5) {
+        text-align: center;
+    }
+    
+    /* Ensure proper spacing for all columns */
+    #psFollowupTable .ps-inline-details .table th,
+    #psFollowupTable .ps-inline-details .table td {
+        border: 1px solid #dee2e6;
+    }
+    
+    /* Responsive breakpoints for better desktop experience */
+    @media (min-width: 1200px) {
+        #psFollowupTable .ps-inline-details .table {
+            font-size: 0.85rem;
+        }
+        
+        #psFollowupTable .ps-inline-details .table th,
+        #psFollowupTable .ps-inline-details .table td {
+            padding: 0.5rem 0.4rem;
+        }
+    }
+    
+    /* Additional responsive design for better desktop experience */
+    @media (min-width: 1400px) {
+        #psFollowupTable .ps-inline-details .table {
+            font-size: 0.9rem;
+        }
+        
+        #psFollowupTable .ps-inline-details .table th,
+        #psFollowupTable .ps-inline-details .table td {
+            padding: 0.6rem 0.5rem;
+        }
+        
+        /* Ensure proper column spacing on large screens */
+        #psFollowupTable .ps-inline-details .table th:nth-child(6),
+        #psFollowupTable .ps-inline-details .table td:nth-child(6),
+        #psFollowupTable .ps-inline-details .table th:nth-child(7),
+        #psFollowupTable .ps-inline-details .table td:nth-child(7) {
+            min-width: 140px;
+        }
+    }
+    
+    /* Ensure horizontal scroll works properly on all screen sizes */
+    #psFollowupTable .table-responsive {
+        scrollbar-width: thin;
+        scrollbar-color: #6c757d #f8f9fa;
+    }
+    
+    #psFollowupTable .table-responsive::-webkit-scrollbar {
+        height: 8px;
+    }
+    
+    #psFollowupTable .table-responsive::-webkit-scrollbar-track {
+        background: #f8f9fa;
+        border-radius: 4px;
+    }
+    
+    #psFollowupTable .table-responsive::-webkit-scrollbar-thumb {
+        background: #6c757d;
+        border-radius: 4px;
+    }
+    
+            #psFollowupTable .table-responsive::-webkit-scrollbar-thumb:hover {
+            background: #495057;
+        }
+        
+        /* Timestamp column styling for better readability */
+        #followupLeadsTable th:nth-child(8),
+        #followupLeadsTable th:nth-child(9) {
+            min-width: 140px;
+            white-space: nowrap;
+        }
+        
+        #followupLeadsTable td:nth-child(8),
+        #followupLeadsTable td:nth-child(9) {
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            text-align: center;
+            white-space: nowrap;
+        }
+        
+        /* Responsive adjustments for timestamp columns */
+        @media (max-width: 1400px) {
+            #followupLeadsTable th:nth-child(8),
+            #followupLeadsTable th:nth-child(9) {
+                min-width: 120px;
+                font-size: 0.8rem;
+            }
+            
+            #followupLeadsTable td:nth-child(8),
+            #followupLeadsTable td:nth-child(9) {
+                font-size: 0.75rem;
+                padding: 0.25rem 0.5rem;
+            }
+        }
     
     /* Follow-up level headers */
     #psFollowupTable th[colspan="2"] {
@@ -1491,12 +1655,14 @@
                                     <th class="py-2">Lead Category</th>
                                     <th class="py-2">Lead Status</th>
                                     <th class="py-2">PS Name</th>
+                                    <th class="py-2">Created At</th>
+                                    <th class="py-2">PS Assigned At</th>
                                     <th class="py-2">Follow-up Date</th>
                                     <th class="py-2">Call History</th>
                                 </tr>
                             </thead>
                             <tbody id="followupLeadsTableBody">
-                                <tr><td colspan="9" class="text-center py-2">
+                                <tr><td colspan="11" class="text-center py-2">
                                     <i class="fas fa-spinner fa-spin me-2"></i>Loading today's follow-ups...
                                 </td></tr>
                             </tbody>
@@ -1639,7 +1805,7 @@ const sectionConfig = {
             dateFromId: 'followupLeadsDateFrom',
             dateToId: 'followupLeadsDateTo',
             searchId: 'followupLeadsSearchInput',
-            columns: ['uid', 'customer_name', 'customer_mobile_number', 'source', 'lead_category', 'lead_status', 'ps_name', 'follow_up_date', 'call_history']
+            columns: ['uid', 'customer_name', 'customer_mobile_number', 'source', 'lead_category', 'lead_status', 'ps_name', 'created_at', 'ps_assigned_at', 'follow_up_date', 'call_history']
         }
     };
 
@@ -1766,14 +1932,30 @@ const sectionConfig = {
                                 callHistoryBtn.innerHTML = '<i class="fas fa-phone-alt me-1"></i>View History';
                                 callHistoryBtn.onclick = () => showCallHistory(row.uid);
                                 td.appendChild(callHistoryBtn);
+                            } else if (column === 'created_at' || column === 'ps_assigned_at') {
+                                // Format timestamp columns with +5:30 offset and dd/mm/yyyy hh:mm AM/PM format
+                                const value = row[column] || '';
+                                if (value && value !== 'N/A') {
+                                    td.textContent = formatTimestampWithOffset(value);
+                                } else {
+                                    td.textContent = 'N/A';
+                                }
+                            } else if (column === 'follow_up_date') {
+                                // Format follow-up date as dd/mm/yyyy (no time offset)
+                                const value = row[column] || '';
+                                if (value) {
+                                    td.textContent = formatDate(value);
+                                } else {
+                                    td.textContent = 'N/A';
+                                }
                             } else {
-                            const value = row[column] || '';
-                            
-                            // Special handling for lead_category column
-                            if (column === 'lead_category' && value === 'Not Set') {
-                                td.innerHTML = '<span class="lead-category-not-set">Not Set</span>';
-                            } else {
-                                td.textContent = value;
+                                const value = row[column] || '';
+                                
+                                // Special handling for lead_category column
+                                if (column === 'lead_category' && value === 'Not Set') {
+                                    td.innerHTML = '<span class="lead-category-not-set">Not Set</span>';
+                                } else {
+                                    td.textContent = value;
                                 }
                             }
                             
@@ -2528,6 +2710,9 @@ function loadPSFollowupSummaryData() {
                 
                 // Add click event listeners to all clickable cells
                 addClickEventListeners();
+                
+                // Ensure table responsiveness
+                ensureTableResponsiveness();
             } else {
                 tbody.innerHTML = '<tr><td colspan="15" class="text-center">No data available</td></tr>';
             }
@@ -2589,6 +2774,8 @@ function toggleInlineLeadDetails(psName, level, source, anchorRow) {
                             <th style="width: 120px;">Phone</th>
                             <th style="width: 90px;">Status</th>
                             <th style="width: 90px;">Source</th>
+                            <th style="width: 140px;">PS Assigned At</th>
+                            <th style="width: 140px;">Created At</th>
                             <th style="width: 160px;">Follow-up Date</th>
                             <th style="width: 120px;">History</th>
                         </tr>
@@ -2602,13 +2789,13 @@ function toggleInlineLeadDetails(psName, level, source, anchorRow) {
     anchorRow.parentNode.insertBefore(detailsRow, anchorRow.nextSibling);
 
     const tbody = detailsCell.querySelector('#inlineLeadsBody');
-    tbody.innerHTML = `<tr><td colspan="7" class="text-center"><i class=\"fas fa-spinner fa-spin\"></i> Loading...</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="text-center"><i class=\"fas fa-spinner fa-spin\"></i> Loading...</td></tr>`;
 
     fetch(`/api/ps_followup_leads?ps_name=${encodeURIComponent(psName)}&level=${level}&source=${source}`)
         .then(r => r.json())
         .then(data => {
             if (!(data.success && data.leads && data.leads.length)) {
-                tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted">No leads found.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="9" class="text-center text-muted">No leads found.</td></tr>`;
                 return;
             }
             tbody.innerHTML = '';
@@ -2620,7 +2807,9 @@ function toggleInlineLeadDetails(psName, level, source, anchorRow) {
                     <td>${(lead.customer_name||'').toString()}</td>
                     <td>${lead.mobile_number || lead.customer_phone_number || 'N/A'}</td>
                     <td><span class="badge bg-${(lead.status||lead.final_status)==='Pending' ? 'warning' : (lead.status||lead.final_status)==='Won' ? 'success' : 'danger'}">${lead.status || lead.final_status || 'N/A'}</span></td>
-                    <td><span class="badge bg-info">${source === 'cre' ? 'CRE' : 'Walk-in'}</span></td>
+                    <td><span class="badge bg-info">${source === 'cre' ? (lead.source || 'CRE') : 'Walk-in'}</span></td>
+                    <td>${source === 'cre' ? formatDate(lead.ps_assigned_at) : 'N/A'}</td>
+                    <td>${source === 'walkin' ? formatDate(lead.created_at) : 'N/A'}</td>
                     <td>${lead.follow_up_date || lead.next_followup_date || 'N/A'}</td>
                     <td>
                         <button class="btn btn-sm btn-outline-primary" data-uid="${uid}" onclick="toggleCallHistoryInline(this)">View history</button>
@@ -2632,7 +2821,7 @@ function toggleInlineLeadDetails(psName, level, source, anchorRow) {
                 const historyRow = document.createElement('tr');
                 historyRow.className = 'lead-history-row d-none';
                 const historyCell = document.createElement('td');
-                historyCell.setAttribute('colspan', '7');
+                historyCell.setAttribute('colspan', '9');
                 historyCell.innerHTML = `<div class="p-2 small text-muted">History will appear here...</div>`;
                 historyRow.appendChild(historyCell);
                 tbody.appendChild(historyRow);
@@ -2640,8 +2829,69 @@ function toggleInlineLeadDetails(psName, level, source, anchorRow) {
         })
         .catch(err => {
             console.error('Inline leads load error:', err);
-            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">Error loading leads</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="9" class="text-center text-danger">Error loading leads</td></tr>`;
         });
+}
+
+// Helper function to format dates consistently
+function formatDate(dateString) {
+    if (!dateString) return 'N/A';
+    try {
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return 'N/A';
+        return date.toLocaleDateString('en-IN', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+    } catch (e) {
+        return 'N/A';
+    }
+}
+
+function formatTimestampWithOffset(dateString) {
+    if (!dateString) return 'N/A';
+    try {
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return 'N/A';
+        
+        // Add +5:30 hours offset (IST timezone)
+        const istOffset = 5.5 * 60 * 60 * 1000; // 5.5 hours in milliseconds
+        const istDate = new Date(date.getTime() + istOffset);
+        
+        // Format as dd/mm/yyyy hh:mm AM/PM
+        const day = String(istDate.getUTCDate()).padStart(2, '0');
+        const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+        const year = istDate.getUTCFullYear();
+        
+        let hours = istDate.getUTCHours();
+        const minutes = String(istDate.getUTCMinutes()).padStart(2, '0');
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12;
+        hours = hours ? hours : 12; // the hour '0' should be '12'
+        hours = String(hours).padStart(2, '0');
+        
+        return `${day}/${month}/${year} ${hours}:${minutes} ${ampm}`;
+    } catch (e) {
+        return 'N/A';
+    }
+}
+
+// Function to ensure table responsiveness
+function ensureTableResponsiveness() {
+    const psFollowupTable = document.getElementById('psFollowupTable');
+    if (psFollowupTable) {
+        const tableContainer = psFollowupTable.closest('.table-responsive');
+        if (tableContainer) {
+            // Ensure horizontal scroll is enabled
+            tableContainer.style.overflowX = 'auto';
+            tableContainer.style.maxWidth = '100%';
+            
+            // Add custom scrollbar styling
+            tableContainer.style.scrollbarWidth = 'thin';
+            tableContainer.style.scrollbarColor = '#6c757d #f8f9fa';
+        }
+    }
 }
 
 // Toggle inline call history for a single lead
@@ -2673,8 +2923,8 @@ function toggleCallHistoryInline(btn) {
                     <td>${(h.call_no||'').toString().toUpperCase()}</td>
                     <td>${h.attempt ?? ''}</td>
                     <td>${h.status || ''}</td>
-                    <td>${h.follow_up_date || ''}</td>
-                    <td>${h.timestamp || ''}</td>
+                    <td>${h.follow_up_date ? formatDate(h.follow_up_date) : ''}</td>
+                    <td>${h.timestamp ? formatDate(h.timestamp) : ''}</td>
                     <td>${h.remarks ? `<small>${h.remarks}</small>` : ''}</td>
                 </tr>
             `).join('');
@@ -3065,6 +3315,18 @@ function toggleCallHistoryInline(btn) {
             loadAnalyticsDataWithFilter();
         }, 100); // Small delay to ensure DOM is ready
         
+        // Ensure table responsiveness after a short delay
+        setTimeout(() => {
+            ensureTableResponsiveness();
+        }, 500);
+        
+        // Add window resize listener for table responsiveness
+        window.addEventListener('resize', function() {
+            setTimeout(() => {
+                ensureTableResponsiveness();
+            }, 100);
+        });
+        
         // Debug: Check if tab elements exist
         console.log('Checking tab elements...');
         console.log('Analytics tab:', document.getElementById('analytics'));
@@ -3335,24 +3597,16 @@ function showCallHistory(uid) {
                 data.history.forEach(call => {
                     const tr = document.createElement('tr');
                     
-                    // Format timestamp
+                    // Format timestamp with +5:30 offset and dd/mm/yyyy hh:mm AM/PM format
                     let timestamp = '';
                     if (call.timestamp) {
-                        if (call.timestamp.includes('T')) {
-                            timestamp = call.timestamp.replace('T', ' ').slice(0, 19);
-                        } else {
-                            timestamp = call.timestamp;
-                        }
+                        timestamp = formatTimestampWithOffset(call.timestamp);
                     }
                     
                     // Format follow-up date
                     let followUpDate = '';
                     if (call.follow_up_date) {
-                        if (call.follow_up_date.includes('T')) {
-                            followUpDate = call.follow_up_date.split('T')[0];
-                        } else {
-                            followUpDate = call.follow_up_date;
-                        }
+                        followUpDate = formatDate(call.follow_up_date);
                     }
                     
                     tr.innerHTML = `
