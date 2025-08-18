@@ -4275,6 +4275,34 @@ def update_lead_optimized(uid):
                 except Exception as e:
                     print(f"Error tracking call attempt: {e}")
 
+                # Also mirror the record into ps_call_attempt_history for unified analytics
+                try:
+                    ps_name_for_log = None
+                    try:
+                        psq = supabase.table('ps_followup_master').select('ps_name').eq('lead_uid', uid).limit(1).execute()
+                        if psq.data:
+                            ps_name_for_log = psq.data[0].get('ps_name')
+                    except Exception:
+                        ps_name_for_log = None
+                    if not ps_name_for_log:
+                        try:
+                            lm = supabase.table('lead_master').select('ps_name').eq('uid', uid).limit(1).execute()
+                            if lm.data:
+                                ps_name_for_log = lm.data[0].get('ps_name')
+                        except Exception:
+                            ps_name_for_log = None
+                    track_ps_call_attempt(
+                        uid=uid,
+                        ps_name=ps_name_for_log,
+                        call_no=next_call,
+                        lead_status=lead_status,
+                        call_was_recorded=call_was_recorded,
+                        follow_up_date=follow_up_date if follow_up_date else None,
+                        remarks=call_remark if call_remark else None
+                    )
+                except Exception as e:
+                    print(f"Error mirroring into ps_call_attempt_history: {e}")
+
             # Use optimized update operation
             if update_data:
                 result = optimized_ops.update_lead_optimized(
@@ -5579,15 +5607,20 @@ def api_branch_head_dashboard_data():
         today_str = datetime.now().strftime('%Y-%m-%d')
         
         # PS follow-ups for today (exact date match) AND final_status = 'Pending'
-        ps_query = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Pending').eq('follow_up_date', today_str)
+        print(f"DEBUG: Today's date for PS query: {today_str}")
+        ps_query = supabase.table('ps_followup_master').select('*, created_at, ps_assigned_at').eq('ps_branch', branch).eq('final_status', 'Pending').eq('follow_up_date', today_str)
         # Apply PS filter if specified
         if ps_name:
             ps_query = ps_query.eq('ps_name', ps_name)
         ps_today = ps_query.execute().data or []
+        print(f"DEBUG: PS query result count: {len(ps_today)}")
+        if ps_today:
+            print(f"DEBUG: Sample PS data: {ps_today[0]}")
+            print(f"DEBUG: Sample PS follow_up_date: {ps_today[0].get('follow_up_date')}")
         
         # Event follow-ups for today (exact date match) AND final_status = 'Pending'
         # Use date range queries for timestamp columns
-        act_query = supabase.table('activity_leads').select('*').eq('location', branch).eq('final_status', 'Pending').gte('ps_followup_date_ts', f'{today_str} 00:00:00').lt('ps_followup_date_ts', f'{today_str} 23:59:59')
+        act_query = supabase.table('activity_leads').select('*, created_at').eq('location', branch).eq('final_status', 'Pending').gte('ps_followup_date_ts', f'{today_str} 00:00:00').lt('ps_followup_date_ts', f'{today_str} 23:59:59')
         # Apply PS filter if specified
         if ps_name:
             act_query = act_query.eq('ps_name', ps_name)
@@ -5595,11 +5628,16 @@ def api_branch_head_dashboard_data():
         
         # Walk-in follow-ups for today (exact date match) AND status = 'Pending'
         # Use date range queries for timestamp columns
-        walkin_query = supabase.table('walkin_table').select('*').eq('branch', branch).eq('status', 'Pending').gte('next_followup_date', f'{today_str} 00:00:00').lt('next_followup_date', f'{today_str} 23:59:59')
+        print(f"DEBUG: Today's date for walk-in query: {today_str}")
+        walkin_query = supabase.table('walkin_table').select('*, created_at').eq('branch', branch).eq('status', 'Pending').gte('next_followup_date', f'{today_str} 00:00:00').lt('next_followup_date', f'{today_str} 23:59:59')
         # Apply PS filter if specified
         if ps_name:
             walkin_query = walkin_query.eq('ps_assigned', ps_name)
         walkin_today_raw = walkin_query.execute().data or []
+        print(f"DEBUG: Walk-in query result count: {len(walkin_today_raw)}")
+        if walkin_today_raw:
+            print(f"DEBUG: Sample walk-in data: {walkin_today_raw[0]}")
+            print(f"DEBUG: Sample walk-in next_followup_date: {walkin_today_raw[0].get('next_followup_date')}")
         
         # Mark all as not missed and set source_type and phone
         ps_today = [{**row, 'missed': False, 'lead_status': row.get('lead_status', '')} for row in ps_today]
@@ -5627,20 +5665,54 @@ def api_branch_head_dashboard_data():
         # Debug: Print counts before and after search filter
         print(f"DEBUG: Before search filter - PS: {len(ps_today)}, Event: {len(act_today)}, Walkin: {len(walkin_today)}, Total: {len(all_rows)}")
         
-        # Format rows for frontend
-        formatted_rows = [
-            {
-                'uid': row.get('lead_uid', row.get('activity_uid', row.get('uid', ''))),
-                'customer_name': row.get('customer_name', ''),
-                'customer_mobile_number': row.get('customer_mobile_number', row.get('customer_phone_number', row.get('mobile_number', ''))),
-                'source': row.get('source', row.get('source_type', 'PS Followup')),  # Use source from ps_followup_master, fallback to source_type
-                'lead_category': row.get('lead_category') if row.get('lead_category') else 'Not Set',
-                'lead_status': row.get('lead_status', ''),
-                'ps_name': row.get('ps_name', row.get('ps_assigned', '')),
-                'follow_up_date': row.get('follow_up_date', row.get('ps_followup_date_ts', row.get('next_followup_date', '')))
-            }
-            for row in all_rows
-        ]
+        # Format rows for frontend with proper column mapping
+        formatted_rows = []
+        for row in all_rows:
+            # Determine source type for proper column mapping
+            source_type = row.get('source_type', '')
+            
+            if source_type == 'Walk-in':
+                # For walk-in leads, use created_at, ignore ps_assigned_at
+                formatted_rows.append({
+                    'uid': row.get('uid', ''),
+                    'customer_name': row.get('customer_name', ''),
+                    'customer_mobile_number': row.get('mobile_number', ''),
+                    'source': 'Walk-in',
+                    'lead_category': row.get('lead_category') if row.get('lead_category') else 'Not Set',
+                    'lead_status': row.get('lead_status', ''),
+                    'ps_name': row.get('ps_assigned', ''),
+                    'follow_up_date': row.get('next_followup_date', ''),
+                    'created_at': row.get('created_at', ''),
+                    'ps_assigned_at': 'N/A'  # Walk-in leads don't have ps_assigned_at
+                })
+            elif source_type == 'Event':
+                # For event leads, use created_at, ignore ps_assigned_at
+                formatted_rows.append({
+                    'uid': row.get('activity_uid', ''),
+                    'customer_name': row.get('customer_name', ''),
+                    'customer_mobile_number': row.get('customer_phone_number', ''),
+                    'source': 'Event',
+                    'lead_category': row.get('lead_category') if row.get('lead_category') else 'Not Set',
+                    'lead_status': row.get('lead_status', ''),
+                    'ps_name': row.get('ps_name', ''),
+                    'follow_up_date': row.get('ps_followup_date_ts', ''),
+                    'created_at': row.get('created_at', ''),
+                    'ps_assigned_at': 'N/A'  # Event leads don't have ps_assigned_at
+                })
+            else:
+                # For PS leads, use ps_assigned_at, ignore created_at
+                formatted_rows.append({
+                    'uid': row.get('lead_uid', ''),
+                    'customer_name': row.get('customer_name', ''),
+                    'customer_mobile_number': row.get('customer_mobile_number', ''),
+                    'source': row.get('source', 'PS Followup'),
+                    'lead_category': row.get('lead_category') if row.get('lead_category') else 'Not Set',
+                    'lead_status': row.get('lead_status', ''),
+                    'ps_name': row.get('ps_name', ''),
+                    'follow_up_date': row.get('follow_up_date', ''),
+                    'created_at': 'N/A',  # PS leads don't have created_at from this table
+                    'ps_assigned_at': row.get('ps_assigned_at', '')
+                })
         
         # Apply search filter if provided
         if search:
@@ -5961,6 +6033,117 @@ def api_branch_head_dashboard_data():
         'lost_leads_count': lost_leads_count
     }
     return jsonify(response)
+
+@app.route('/api/lead_call_history/<uid>')
+def api_lead_call_history(uid):
+    """Get call attempt history for a specific lead (both CRE and PS)"""
+    try:
+        # Normalize UID (trim stray spaces)
+        uid_norm = (uid or '').strip()
+
+        # Get CRE call attempt history
+        cre_history_result = supabase.table('cre_call_attempt_history').select('uid,call_no,attempt,status,cre_name,remarks,follow_up_date').eq('uid', uid_norm).execute()
+        cre_history = cre_history_result.data if cre_history_result.data else []
+
+        # Get PS call attempt history
+        ps_history_result = supabase.table('ps_call_attempt_history').select('uid,call_no,attempt,status,ps_name,remarks,follow_up_date').eq('uid', uid_norm).execute()
+        ps_history = ps_history_result.data if ps_history_result.data else []
+
+        # Fallback: if still empty, try case-insensitive match (helps with accidental casing/formatting issues)
+        if not cre_history:
+            try:
+                like_res = supabase.table('cre_call_attempt_history').select('uid,call_no,attempt,status,cre_name,remarks,follow_up_date').ilike('uid', f"%{uid_norm}%").execute()
+                cre_history = like_res.data if like_res.data else []
+            except Exception:
+                pass
+        if not ps_history:
+            try:
+                like_res = supabase.table('ps_call_attempt_history').select('uid,call_no,attempt,status,ps_name,remarks,follow_up_date').ilike('uid', f"%{uid_norm}%").execute()
+                ps_history = like_res.data if like_res.data else []
+            except Exception:
+                pass
+
+        # Define the order of call numbers
+        call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
+
+        # Sort the history: first by call_no in ascending order, then by attempt in ascending order
+        def sort_key(item):
+            call_no = item.get('call_no', '')
+            attempt = item.get('attempt', 0)
+            # Get the index of call_no in the predefined order, default to end if not found
+            call_index = call_order.index(call_no) if call_no in call_order else len(call_order)
+            return (call_index, attempt)
+
+        # Sort both histories
+        cre_history_sorted = sorted(cre_history, key=sort_key)
+        ps_history_sorted = sorted(ps_history, key=sort_key)
+
+        # Combine and format the history
+        combined_history = []
+
+        # Add CRE calls with role identifier
+        for call in cre_history_sorted:
+            combined_history.append({
+                'uid': call.get('uid', ''),
+                'call_no': call.get('call_no', ''),
+                'attempt': call.get('attempt', ''),
+                'status': call.get('status', ''),
+                'name': call.get('cre_name', ''),
+                'role': 'CRE',
+                'timestamp': call.get('follow_up_date', ''),  # Use follow_up_date as timestamp
+                'remarks': call.get('remarks', ''),
+                'follow_up_date': call.get('follow_up_date', '')
+            })
+
+        # Add PS calls with role identifier
+        for call in ps_history_sorted:
+            combined_history.append({
+                'uid': call.get('uid', ''),
+                'call_no': call.get('call_no', ''),
+                'attempt': call.get('attempt', ''),
+                'status': call.get('status', ''),
+                'name': call.get('ps_name', ''),
+                'role': 'PS',
+                'timestamp': call.get('follow_up_date', ''),  # Use follow_up_date as timestamp
+                'remarks': call.get('remarks', ''),
+                'follow_up_date': call.get('follow_up_date', '')
+            })
+
+        # Sort combined history by timestamp
+        combined_history.sort(key=lambda x: (x.get('timestamp') or ''), reverse=True)
+
+        # Calculate summary statistics
+        total_calls = len(combined_history)
+        rnr_calls = len([call for call in combined_history if call.get('status', '').upper() == 'RNR'])
+        busy_calls = len([call for call in combined_history if call.get('status', '').lower() == 'busy on another call'])
+        call_me_back = len([call for call in combined_history if call.get('status', '').lower() == 'call me back'])
+        call_not_connected = len([call for call in combined_history if call.get('status', '').lower() == 'call not connected'])
+
+        # Connected calls (excluding the above statuses)
+        excluded_statuses = ['rnr', 'busy on another call', 'call me back', 'call not connected']
+        connected_calls = len([call for call in combined_history
+                             if call.get('status') and
+                             not any(excluded in call.get('status', '').lower() for excluded in excluded_statuses)])
+
+        return jsonify({
+            'success': True,
+            'history': combined_history,
+            'counts': {
+                'ps': len(ps_history),
+                'cre': len(cre_history)
+            },
+            'summary': {
+                'total_calls': total_calls,
+                'rnr_calls': rnr_calls,
+                'busy_calls': busy_calls,
+                'call_me_back': call_me_back,
+                'call_not_connected': call_not_connected,
+                'connected_calls': connected_calls
+            }
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e), 'history': []})
 
 @app.route('/branch_performance/<branch_name>')
 @require_admin
@@ -9741,11 +9924,10 @@ def add_walkin_lead():
 
 @app.route('/api/branch_analytics/ps_performance')
 def api_branch_analytics_ps_performance():
-    """API endpoint for Product Specialist Performance data"""
+    """API endpoint for Product Specialist Performance data - OPTIMIZED"""
     try:
         # Get branch from session
         branch = session.get('branch_head_branch')
-        print(f"PS Performance API - Session branch: '{branch}'")
         if not branch:
             return jsonify({'success': False, 'message': 'Branch not found in session'})
         
@@ -9757,36 +9939,37 @@ def api_branch_analytics_ps_performance():
         if not date_from or not date_to:
             return jsonify({'success': False, 'message': 'Both date_from and date_to parameters are required'})
         
-        # Get active PS users from the branch
-        ps_names = get_active_ps_users(branch)
-        print(f"PS Performance API - Branch: '{branch}', Active PS users: {ps_names}")
+        # OPTIMIZATION: Single query to get all PS performance data at once
+        # Use a more efficient query with proper aggregation
+        performance_query = supabase.table('ps_followup_master').select(
+            'ps_name, ps_assigned_at, lead_status'
+        ).eq('ps_branch', branch).gte('ps_assigned_at', date_from).lte('ps_assigned_at', date_to).execute()
         
-        # If no active PS users found, fallback to getting all PS users from ps_followup_master
-        if not ps_names:
-            print(f"No active PS users found for branch '{branch}', falling back to all PS users")
-            ps_query = supabase.table('ps_followup_master').select('ps_name').eq('ps_branch', branch).not_.is_('ps_name', 'null').execute()
-            ps_names = list(set([row['ps_name'] for row in ps_query.data if row['ps_name']]))
-            print(f"Fallback PS users: {ps_names}")
+        if not performance_query.data:
+            return jsonify({'success': True, 'data': []})
         
+        # Process data in Python (much faster than multiple DB queries)
+        ps_performance = {}
+        for lead in performance_query.data:
+            ps_name = lead.get('ps_name')
+            if not ps_name:
+                continue
+                
+            if ps_name not in ps_performance:
+                ps_performance[ps_name] = {'leads_assigned': 0, 'leads_contacted': 0}
+            
+            ps_performance[ps_name]['leads_assigned'] += 1
+            if lead.get('lead_status'):
+                ps_performance[ps_name]['leads_contacted'] += 1
+        
+        # Format result
         result_data = []
-        
-        for ps_name in ps_names:
-            # Get leads assigned in the date range based on ps_assigned_at
-            assigned_query = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).eq('ps_name', ps_name).gte('ps_assigned_at', date_from).lte('ps_assigned_at', date_to).execute()
-            leads_assigned = assigned_query.count or 0
-            
-            # Get leads contacted (lead_status is not null) in the date range
-            contacted_query = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).eq('ps_name', ps_name).gte('ps_assigned_at', date_from).lte('ps_assigned_at', date_to).not_.is_('lead_status', 'null').execute()
-            leads_contacted = contacted_query.count or 0
-            
-            # Calculate gap
-            gap = leads_assigned - leads_contacted
-            
+        for ps_name, stats in ps_performance.items():
             result_data.append({
                 'ps_name': ps_name,
-                'leads_assigned': leads_assigned,
-                'leads_contacted': leads_contacted,
-                'gap': gap
+                'leads_assigned': stats['leads_assigned'],
+                'leads_contacted': stats['leads_contacted'],
+                'gap': stats['leads_assigned'] - stats['leads_contacted']
             })
         
         return jsonify({'success': True, 'data': result_data})
@@ -9797,7 +9980,7 @@ def api_branch_analytics_ps_performance():
 
 @app.route('/api/branch_analytics/source_leads')
 def api_branch_analytics_source_leads():
-    """API endpoint for Source-wise Leads Analysis data"""
+    """API endpoint for Source-wise Leads Analysis data - OPTIMIZED"""
     try:
         # Get branch from session
         branch = session.get('branch_head_branch')
@@ -9812,40 +9995,52 @@ def api_branch_analytics_source_leads():
         if not date_from or not date_to:
             return jsonify({'success': False, 'message': 'Both date_from and date_to parameters are required'})
         
-        # Get active PS users from the branch
-        ps_names = get_active_ps_users(branch)
+        # OPTIMIZATION: Single query to get all leads data at once
+        # Select only necessary columns and filter at database level
+        leads_query = supabase.table('ps_followup_master').select(
+            'ps_name, source, final_status'
+        ).eq('ps_branch', branch).gte('ps_assigned_at', date_from).lte('ps_assigned_at', date_to).execute()
         
+        if not leads_query.data:
+            return jsonify({'success': True, 'data': [], 'sources': []})
+        
+        # Process data in Python (much faster than multiple DB queries)
+        ps_data = {}
+        all_sources = set()
+        
+        for lead in leads_query.data:
+            ps_name = lead.get('ps_name')
+            source = lead.get('source', 'Unknown')
+            final_status = lead.get('final_status', 'Pending')
+            
+            if not ps_name:
+                continue
+                
+            if ps_name not in ps_data:
+                ps_data[ps_name] = {'total_leads': 0, 'won_leads': 0, 'sources': {}}
+            
+            ps_data[ps_name]['total_leads'] += 1
+            if final_status == 'Won':
+                ps_data[ps_name]['won_leads'] += 1
+            
+            # Track source breakdown
+            if source not in ps_data[ps_name]['sources']:
+                ps_data[ps_name]['sources'][source] = {'total_leads': 0, 'won_leads': 0}
+            
+            ps_data[ps_name]['sources'][source]['total_leads'] += 1
+            if final_status == 'Won':
+                ps_data[ps_name]['sources'][source]['won_leads'] += 1
+            
+            all_sources.add(source)
+        
+        # Format result data
         result_data = []
-        all_sources = set()  # To track all unique sources
-        
-        for ps_name in ps_names:
-            # Get all leads for this PS in the date range
-            ps_leads_query = supabase.table('ps_followup_master').select('source, final_status').eq('ps_branch', branch).eq('ps_name', ps_name).gte('ps_assigned_at', date_from).lte('ps_assigned_at', date_to).execute()
-            
-            # Group by source
-            source_stats = {}
-            for lead in ps_leads_query.data:
-                source = lead.get('source', 'Unknown')
-                final_status = lead.get('final_status', 'Pending')
-                
-                if source not in source_stats:
-                    source_stats[source] = {'total_leads': 0, 'won_leads': 0}
-                
-                source_stats[source]['total_leads'] += 1
-                if final_status == 'Won':
-                    source_stats[source]['won_leads'] += 1
-                
-                all_sources.add(source)
-            
-            # Add to result data - one row per PS with aggregated data
-            total_leads = sum(stats['total_leads'] for stats in source_stats.values())
-            total_won_leads = sum(stats['won_leads'] for stats in source_stats.values())
-            
+        for ps_name, stats in ps_data.items():
             result_data.append({
                 'ps_name': ps_name,
-                'total_leads': total_leads,
-                'won_leads': total_won_leads,
-                'source_breakdown': source_stats
+                'total_leads': stats['total_leads'],
+                'won_leads': stats['won_leads'],
+                'source_breakdown': stats['sources']
             })
         
         # Convert all_sources to sorted list for consistent column order
@@ -9863,7 +10058,7 @@ def api_branch_analytics_source_leads():
 
 @app.route('/api/branch_analytics/walkin_leads')
 def api_branch_analytics_walkin_leads():
-    """API endpoint for Walk-in Leads Summary data"""
+    """API endpoint for Walk-in Leads Summary data - OPTIMIZED"""
     try:
         # Get branch from session
         branch = session.get('branch_head_branch')
@@ -9878,40 +10073,61 @@ def api_branch_analytics_walkin_leads():
         if not date_from or not date_to:
             return jsonify({'success': False, 'message': 'Both date_from and date_to parameters are required'})
         
-        # Get active PS users from the branch
-        ps_names = get_active_ps_users(branch)
-        
-        result_data = []
         today_str = datetime.now().strftime('%Y-%m-%d')
         
-        for ps_name in ps_names:
-            # Get total walk-in leads assigned to this PS in the date range
-            total_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('ps_assigned', ps_name).gte('created_at', date_from).lte('created_at', date_to).execute()
-            total_walkin_leads = total_query.count or 0
+        # OPTIMIZATION: Single query to get all walk-in leads data at once
+        # Select only necessary columns and filter at database level
+        walkin_query = supabase.table('walkin_table').select(
+            'ps_assigned, status, next_followup_date'
+        ).eq('branch', branch).gte('created_at', date_from).lte('created_at', date_to).execute()
+        
+        if not walkin_query.data:
+            return jsonify({'success': True, 'data': []})
+        
+        # Process data in Python (much faster than multiple DB queries)
+        ps_data = {}
+        
+        for lead in walkin_query.data:
+            ps_name = lead.get('ps_assigned')
+            status = lead.get('status', 'Pending')
+            next_followup_date = lead.get('next_followup_date')
             
-            # Get pending leads in the date range
-            pending_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('ps_assigned', ps_name).eq('status', 'Pending').gte('created_at', date_from).lte('created_at', date_to).execute()
-            pending_leads = pending_query.count or 0
+            if not ps_name:
+                continue
+                
+            if ps_name not in ps_data:
+                ps_data[ps_name] = {
+                    'total_walkin_leads': 0,
+                    'pending_leads': 0,
+                    'lost_leads': 0,
+                    'won_leads': 0,
+                    'today_followups': 0
+                }
             
-            # Get lost leads in the date range
-            lost_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('ps_assigned', ps_name).eq('status', 'Lost').gte('created_at', date_from).lte('created_at', date_to).execute()
-            lost_leads = lost_query.count or 0
+            ps_data[ps_name]['total_walkin_leads'] += 1
             
-            # Get won leads in the date range
-            won_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('ps_assigned', ps_name).eq('status', 'Won').gte('created_at', date_from).lte('created_at', date_to).execute()
-            won_leads = won_query.count or 0
+            # Count by status
+            if status == 'Pending':
+                ps_data[ps_name]['pending_leads'] += 1
+            elif status == 'Lost':
+                ps_data[ps_name]['lost_leads'] += 1
+            elif status == 'Won':
+                ps_data[ps_name]['won_leads'] += 1
             
-            # Get today's follow-ups (this remains the same as it's based on today's date)
-            today_followup_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('ps_assigned', ps_name).eq('next_followup_date', today_str).execute()
-            today_followups = today_followup_query.count or 0
-            
+            # Count today's follow-ups
+            if next_followup_date == today_str:
+                ps_data[ps_name]['today_followups'] += 1
+        
+        # Format result data
+        result_data = []
+        for ps_name, stats in ps_data.items():
             result_data.append({
                 'ps_name': ps_name,
-                'total_walkin_leads': total_walkin_leads,
-                'pending_leads': pending_leads,
-                'lost_leads': lost_leads,
-                'won_leads': won_leads,
-                'today_followups': today_followups
+                'total_walkin_leads': stats['total_walkin_leads'],
+                'pending_leads': stats['pending_leads'],
+                'lost_leads': stats['lost_leads'],
+                'won_leads': stats['won_leads'],
+                'today_followups': stats['today_followups']
             })
         
         return jsonify({'success': True, 'data': result_data})
@@ -9948,9 +10164,250 @@ def api_branch_sources():
             'sources': ['Walk In', 'Event', 'PS', 'Meta', 'Google', 'Website', 'Referral', 'Other']
         })
 
+@app.route('/api/branch_analytics/all')
+def api_branch_analytics_all():
+    """OPTIMIZED: Single endpoint to get all analytics data at once - reduces API calls"""
+    start_time = time.time()
+    print(f"[DEBUG] /api/branch_analytics/all called at {datetime.now()}")
+    
+    try:
+        branch = session.get('branch_head_branch')
+        print(f"[DEBUG] Branch from session: {branch}")
+        if not branch:
+            print("[DEBUG] No branch found in session")
+            return jsonify({'success': False, 'message': 'Branch not found in session'})
+        
+        # Get date filter parameters
+        date_from = request.args.get('date_from')
+        date_to = request.args.get('date_to')
+        print(f"[DEBUG] Date filter: {date_from} to {date_to}")
+        
+        # If no date parameters provided, use MTD (Month to Date) as default
+        if not date_from or not date_to:
+            today = datetime.now()
+            date_from = today.replace(day=1).strftime('%Y-%m-%d')
+            date_to = today.strftime('%Y-%m-%d')
+            print(f"[DEBUG] Using default dates: {date_from} to {date_to}")
+        
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        print(f"[DEBUG] Today's date: {today_str}")
+        
+        # OPTIMIZATION: Single query for each table with all necessary data
+        # This reduces database round trips significantly
+        
+        print("[DEBUG] Starting database queries...")
+        query_start = time.time()
+        
+        # Get PS performance data
+        print("[DEBUG] Querying ps_followup_master for performance data...")
+        ps_performance_query = supabase.table('ps_followup_master').select(
+            'ps_name, ps_assigned_at, lead_status'
+        ).eq('ps_branch', branch).gte('ps_assigned_at', date_from).lte('ps_assigned_at', date_to).execute()
+        print(f"[DEBUG] PS performance query completed in {time.time() - query_start:.3f}s, got {len(ps_performance_query.data or [])} records")
+        
+        # Get source leads data
+        print("[DEBUG] Querying ps_followup_master for source leads data...")
+        source_leads_query = supabase.table('ps_followup_master').select(
+            'ps_name, source, final_status'
+        ).eq('ps_branch', branch).gte('ps_assigned_at', date_from).lte('ps_assigned_at', date_to).execute()
+        print(f"[DEBUG] Source leads query completed in {time.time() - query_start:.3f}s, got {len(source_leads_query.data or [])} records")
+        
+        # Get walkin leads data
+        print("[DEBUG] Querying walkin_table for walkin leads data...")
+        walkin_leads_query = supabase.table('walkin_table').select(
+            'ps_assigned, status, next_followup_date'
+        ).eq('branch', branch).gte('created_at', date_from).lte('created_at', date_to).execute()
+        print(f"[DEBUG] Walkin leads query completed in {time.time() - query_start:.3f}s, got {len(walkin_leads_query.data or [])} records")
+        
+        # Get summary data
+        print("[DEBUG] Querying for summary data...")
+        ps_summary_query = supabase.table('ps_followup_master').select(
+            'final_status'
+        ).eq('ps_branch', branch).gte('created_at', date_from).lte('created_at', date_to).execute()
+        print(f"[DEBUG] PS summary query completed in {time.time() - query_start:.3f}s, got {len(ps_summary_query.data or [])} records")
+        
+        walkin_summary_query = supabase.table('walkin_table').select(
+            'status'
+        ).eq('branch', branch).gte('created_at', date_from).lte('created_at', date_to).execute()
+        print(f"[DEBUG] Walkin summary query completed in {time.time() - query_start:.3f}s, got {len(walkin_summary_query.data or [])} records")
+        
+        total_query_time = time.time() - query_start
+        print(f"[DEBUG] All database queries completed in {total_query_time:.3f}s")
+        
+        # Process PS Performance data
+        print("[DEBUG] Processing PS performance data...")
+        process_start = time.time()
+        ps_performance = {}
+        if ps_performance_query.data:
+            for lead in ps_performance_query.data:
+                ps_name = lead.get('ps_name')
+                if not ps_name:
+                    continue
+                    
+                if ps_name not in ps_performance:
+                    ps_performance[ps_name] = {'leads_assigned': 0, 'leads_contacted': 0}
+                
+                ps_performance[ps_name]['leads_assigned'] += 1
+                if lead.get('lead_status'):
+                    ps_performance[ps_name]['leads_contacted'] += 1
+        
+        # Process Source Leads data
+        print("[DEBUG] Processing source leads data...")
+        source_data = {}
+        all_sources = set()
+        if source_leads_query.data:
+            for lead in source_leads_query.data:
+                ps_name = lead.get('ps_name')
+                source = lead.get('source', 'Unknown')
+                final_status = lead.get('final_status', 'Pending')
+                
+                if not ps_name:
+                    continue
+                    
+                if ps_name not in source_data:
+                    source_data[ps_name] = {'total_leads': 0, 'won_leads': 0, 'sources': {}}
+                
+                source_data[ps_name]['total_leads'] += 1
+                if final_status == 'Won':
+                    source_data[ps_name]['won_leads'] += 1
+                
+                if source not in source_data[ps_name]['sources']:
+                    source_data[ps_name]['sources'][source] = {'total_leads': 0, 'won_leads': 0}
+                
+                source_data[ps_name]['sources'][source]['total_leads'] += 1
+                if final_status == 'Won':
+                    source_data[ps_name]['sources'][source]['won_leads'] += 1
+                
+                all_sources.add(source)
+        
+        # Process Walkin Leads data
+        print("[DEBUG] Processing walkin leads data...")
+        walkin_data = {}
+        if walkin_leads_query.data:
+            for lead in walkin_leads_query.data:
+                ps_name = lead.get('ps_assigned')
+                status = lead.get('status', 'Pending')
+                next_followup_date = lead.get('next_followup_date')
+                
+                if not ps_name:
+                    continue
+                    
+                if ps_name not in walkin_data:
+                    walkin_data[ps_name] = {
+                        'total_walkin_leads': 0,
+                        'pending_leads': 0,
+                        'lost_leads': 0,
+                        'won_leads': 0,
+                        'today_followups': 0
+                    }
+                
+                walkin_data[ps_name]['total_walkin_leads'] += 1
+                
+                if status == 'Pending':
+                    walkin_data[ps_name]['pending_leads'] += 1
+                elif status == 'Lost':
+                    walkin_data[ps_name]['lost_leads'] += 1
+                elif status == 'Won':
+                    walkin_data[ps_name]['won_leads'] += 1
+                
+                if next_followup_date == today_str:
+                    walkin_data[ps_name]['today_followups'] += 1
+        
+        # Process Summary data
+        print("[DEBUG] Processing summary data...")
+        ps_total = ps_pending = ps_won = ps_lost = 0
+        if ps_summary_query.data:
+            for row in ps_summary_query.data:
+                ps_total += 1
+                status = row.get('final_status', 'Pending')
+                if status == 'Pending':
+                    ps_pending += 1
+                elif status == 'Won':
+                    ps_won += 1
+                elif status == 'Lost':
+                    ps_lost += 1
+        
+        walkin_total = walkin_pending = walkin_won = walkin_lost = 0
+        if walkin_summary_query.data:
+            for row in walkin_summary_query.data:
+                walkin_total += 1
+                status = row.get('status', 'Pending')
+                if status == 'Pending':
+                    walkin_pending += 1
+                elif status == 'Won':
+                    walkin_won += 1
+                elif status == 'Lost':
+                    walkin_lost += 1
+        
+        process_time = time.time() - process_start
+        print(f"[DEBUG] Data processing completed in {process_time:.3f}s")
+        
+        # Format all data
+        print("[DEBUG] Formatting result data...")
+        format_start = time.time()
+        ps_performance_result = []
+        for ps_name, stats in ps_performance.items():
+            ps_performance_result.append({
+                'ps_name': ps_name,
+                'leads_assigned': stats['leads_assigned'],
+                'leads_contacted': stats['leads_contacted'],
+                'gap': stats['leads_assigned'] - stats['leads_contacted']
+            })
+        
+        source_leads_result = []
+        for ps_name, stats in source_data.items():
+            source_leads_result.append({
+                'ps_name': ps_name,
+                'total_leads': stats['total_leads'],
+                'won_leads': stats['won_leads'],
+                'source_breakdown': stats['sources']
+            })
+        
+        walkin_leads_result = []
+        for ps_name, stats in walkin_data.items():
+            walkin_leads_result.append({
+                'ps_name': ps_name,
+                'total_walkin_leads': stats['total_walkin_leads'],
+                'pending_leads': stats['pending_leads'],
+                'lost_leads': stats['lost_leads'],
+                'won_leads': stats['won_leads'],
+                'today_followups': stats['today_followups']
+            })
+        
+        summary_result = {
+            'total_leads_assigned': ps_total + walkin_total,
+            'total_pending_leads': ps_pending + walkin_pending,
+            'total_won_leads': ps_won + walkin_won,
+            'total_lost_leads': ps_lost + walkin_lost
+        }
+        
+        format_time = time.time() - format_start
+        print(f"[DEBUG] Data formatting completed in {format_time:.3f}s")
+        
+        total_time = time.time() - start_time
+        print(f"[DEBUG] Total API response time: {total_time:.3f}s")
+        print(f"[DEBUG] Breakdown: Queries={total_query_time:.3f}s, Processing={process_time:.3f}s, Formatting={format_time:.3f}s")
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'ps_performance': ps_performance_result,
+                'source_leads': source_leads_result,
+                'walkin_leads': walkin_leads_result,
+                'summary': summary_result,
+                'sources': sorted(list(all_sources))
+            }
+        })
+        
+    except Exception as e:
+        total_time = time.time() - start_time
+        print(f"[DEBUG] Error in combined analytics API after {total_time:.3f}s: {str(e)}")
+        print(f"[DEBUG] Full error traceback:", exc_info=True)
+        return jsonify({'success': False, 'message': f'Error loading analytics data: {str(e)}'})
+
 @app.route('/api/branch_analytics/summary')
 def api_branch_analytics_summary():
-    """API endpoint for Branch Summary KPI data"""
+    """API endpoint for Branch Summary KPI data - OPTIMIZED"""
     try:
         branch = session.get('branch_head_branch')
         if not branch:
@@ -9966,49 +10423,58 @@ def api_branch_analytics_summary():
             date_from = today.replace(day=1).strftime('%Y-%m-%d')
             date_to = today.strftime('%Y-%m-%d')
         
-        # Get total leads assigned from ps_followup_master
-        ps_total_query = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).gte('created_at', date_from).lte('created_at', date_to).execute()
-        ps_total_leads = ps_total_query.count or 0
+        # OPTIMIZATION: Use count queries with proper filtering instead of fetching all data
+        # These are much faster as they only return counts, not actual data
         
-        # Get total leads assigned from walkin_table
-        walkin_total_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).gte('created_at', date_from).lte('created_at', date_to).execute()
-        walkin_total_leads = walkin_total_query.count or 0
+        # Get counts from ps_followup_master
+        ps_stats = supabase.table('ps_followup_master').select(
+            'final_status', count='exact'
+        ).eq('ps_branch', branch).gte('created_at', date_from).lte('created_at', date_to).execute()
         
-        # Total leads assigned (sum of both tables)
-        total_leads_assigned = ps_total_leads + walkin_total_leads
+        # Get counts from walkin_table  
+        walkin_stats = supabase.table('walkin_table').select(
+            'status', count='exact'
+        ).eq('branch', branch).gte('created_at', date_from).lte('created_at', date_to).execute()
         
-        # Get pending leads from ps_followup_master
-        ps_pending_query = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).eq('final_status', 'Pending').gte('created_at', date_from).lte('created_at', date_to).execute()
-        ps_pending_leads = ps_pending_query.count or 0
+        # Process ps_followup_master data
+        ps_total = 0
+        ps_pending = 0
+        ps_won = 0
+        ps_lost = 0
         
-        # Get pending leads from walkin_table
-        walkin_pending_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('status', 'Pending').gte('created_at', date_from).lte('created_at', date_to).execute()
-        walkin_pending_leads = walkin_pending_query.count or 0
+        if ps_stats.data:
+            for row in ps_stats.data:
+                ps_total += 1
+                status = row.get('final_status', 'Pending')
+                if status == 'Pending':
+                    ps_pending += 1
+                elif status == 'Won':
+                    ps_won += 1
+                elif status == 'Lost':
+                    ps_lost += 1
         
-        # Total pending leads
-        total_pending_leads = ps_pending_leads + walkin_pending_leads
+        # Process walkin_table data
+        walkin_total = 0
+        walkin_pending = 0
+        walkin_won = 0
+        walkin_lost = 0
         
-        # Get won leads from ps_followup_master
-        ps_won_query = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).eq('final_status', 'Won').gte('created_at', date_from).lte('created_at', date_to).execute()
-        ps_won_leads = ps_won_query.count or 0
+        if walkin_stats.data:
+            for row in walkin_stats.data:
+                walkin_total += 1
+                status = row.get('status', 'Pending')
+                if status == 'Pending':
+                    walkin_pending += 1
+                elif status == 'Won':
+                    walkin_won += 1
+                elif status == 'Lost':
+                    walkin_lost += 1
         
-        # Get won leads from walkin_table
-        walkin_won_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('status', 'Won').gte('created_at', date_from).lte('created_at', date_to).execute()
-        walkin_won_leads = walkin_won_query.count or 0
-        
-        # Total won leads
-        total_won_leads = ps_won_leads + walkin_won_leads
-        
-        # Get lost leads from ps_followup_master
-        ps_lost_query = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).eq('final_status', 'Lost').gte('created_at', date_from).lte('created_at', date_to).execute()
-        ps_lost_leads = ps_lost_query.count or 0
-        
-        # Get lost leads from walkin_table
-        walkin_lost_query = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('status', 'Lost').gte('created_at', date_from).lte('created_at', date_to).execute()
-        walkin_lost_leads = walkin_lost_query.count or 0
-        
-        # Total lost leads
-        total_lost_leads = ps_lost_leads + walkin_lost_leads
+        # Calculate totals
+        total_leads_assigned = ps_total + walkin_total
+        total_pending_leads = ps_pending + walkin_pending
+        total_won_leads = ps_won + walkin_won
+        total_lost_leads = ps_lost + walkin_lost
         
         return jsonify({
             'success': True,
@@ -10036,6 +10502,436 @@ def lead_transfer():
     except Exception as e:
         print(f"Error in lead_transfer: {str(e)}")
         return render_template('lead_transfer.html', branches=[])
+
+@app.route('/api/ps_followup_summary')
+def api_ps_followup_summary():
+    """API to get PS Follow-up Summary for branch head dashboard with sub-columns for each table"""
+    try:
+        # Get branch from session
+        branch = session.get('branch_head_branch')
+        if not branch:
+            return jsonify({'success': False, 'message': 'Branch not found in session'})
+        
+        # Get current date
+        today = datetime.now().strftime('%Y-%m-%d')
+        
+        # Get all PS users for this branch
+        ps_users_result = supabase.table('ps_users').select('name').eq('branch', branch).eq('is_active', True).execute()
+        ps_users = [ps['name'] for ps in (ps_users_result.data or [])]
+        
+        ps_summary = {}
+        
+        # Initialize summary for each PS with sub-columns (removed activity/events and pending leads)
+        for ps_name in ps_users:
+            ps_summary[ps_name] = {
+                'ps_name': ps_name,
+                'F1': {'ps_followup': 0, 'walkin': 0, 'total': 0},
+                'F2': {'ps_followup': 0, 'walkin': 0, 'total': 0},
+                'F3': {'ps_followup': 0, 'walkin': 0, 'total': 0},
+                'F4': {'ps_followup': 0, 'walkin': 0, 'total': 0},
+                'F5': {'ps_followup': 0, 'walkin': 0, 'total': 0},
+                'F6': {'ps_followup': 0, 'walkin': 0, 'total': 0},
+                'F7': {'ps_followup': 0, 'walkin': 0, 'total': 0}
+            }
+        
+        # OPTIMIZED: Single query for ps_followup_master with better column selection
+        try:
+            ps_followup_result = supabase.table('ps_followup_master').select(
+                'lead_uid, ps_name, follow_up_date, final_status, source, lead_status, ps_assigned_at, '
+                'first_call_remark, first_call_date, '
+                'second_call_remark, second_call_date, '
+                'third_call_remark, third_call_date, '
+                'fourth_call_remark, fourth_call_date, '
+                'fifth_call_remark, fifth_call_date, '
+                'sixth_call_remark, sixth_call_date, '
+                'seventh_call_remark, seventh_call_date'
+            ).eq('ps_branch', branch).eq('follow_up_date', today).eq('final_status', 'Pending').execute()
+            
+            if ps_followup_result.data:
+                for lead in ps_followup_result.data:
+                    ps_name = lead.get('ps_name')
+                    if ps_name not in ps_summary:
+                        continue
+                    
+                    # Helper function to check if remark is valid (not null, not empty, not 'na'/'n/a')
+                    def is_valid_remark(remark):
+                        if not remark:
+                            return False
+                        remark_clean = str(remark).strip()
+                        if remark_clean == '':
+                            return False
+                        if remark_clean.lower() in ['na', 'n/a']:
+                            return False
+                        return True
+                    
+                    # F1: first remark present, first date still empty
+                    if (not lead.get('first_call_date') and 
+                        is_valid_remark(lead.get('lead_status')) and 
+                        is_valid_remark(lead.get('first_call_remark'))):
+                        ps_summary[ps_name]['F1']['ps_followup'] += 1
+                        ps_summary[ps_name]['F1']['total'] += 1
+                    
+                    # F2: first done (with remark), second still pending (date & remark empty)
+                    elif (lead.get('first_call_date') and 
+                          is_valid_remark(lead.get('first_call_remark')) and
+                          not lead.get('second_call_date') and
+                          not is_valid_remark(lead.get('second_call_remark'))):
+                        ps_summary[ps_name]['F2']['ps_followup'] += 1
+                        ps_summary[ps_name]['F2']['total'] += 1
+                    
+                    # F3: second done (with remark), third pending
+                    elif (lead.get('second_call_date') and 
+                          is_valid_remark(lead.get('second_call_remark')) and
+                          not lead.get('third_call_date') and
+                          not is_valid_remark(lead.get('third_call_remark'))):
+                        ps_summary[ps_name]['F3']['ps_followup'] += 1
+                        ps_summary[ps_name]['F3']['total'] += 1
+                    
+                    # F4: third done, fourth pending
+                    elif (lead.get('third_call_date') and 
+                          is_valid_remark(lead.get('third_call_remark')) and
+                          not lead.get('fourth_call_date') and
+                          not is_valid_remark(lead.get('fourth_call_remark'))):
+                        ps_summary[ps_name]['F4']['ps_followup'] += 1
+                        ps_summary[ps_name]['F4']['total'] += 1
+                    
+                    # F5: fourth done, fifth pending
+                    elif (lead.get('fourth_call_date') and 
+                          is_valid_remark(lead.get('fourth_call_remark')) and
+                          not lead.get('fifth_call_date') and
+                          not is_valid_remark(lead.get('fifth_call_remark'))):
+                        ps_summary[ps_name]['F5']['ps_followup'] += 1
+                        ps_summary[ps_name]['F5']['total'] += 1
+                    
+                    # F6: fifth done, sixth pending
+                    elif (lead.get('fifth_call_date') and 
+                          is_valid_remark(lead.get('fifth_call_remark')) and
+                          not lead.get('sixth_call_date') and
+                          not is_valid_remark(lead.get('sixth_call_remark'))):
+                        ps_summary[ps_name]['F6']['ps_followup'] += 1
+                        ps_summary[ps_name]['F6']['total'] += 1
+                    
+                    # F7: sixth done, seventh pending
+                    elif (lead.get('sixth_call_date') and 
+                          is_valid_remark(lead.get('sixth_call_remark')) and
+                          not lead.get('seventh_call_date') and
+                          not is_valid_remark(lead.get('seventh_call_remark'))):
+                        ps_summary[ps_name]['F7']['ps_followup'] += 1
+                        ps_summary[ps_name]['F7']['total'] += 1
+        except Exception as e:
+            print(f"Warning: Error fetching ps_followup_master data: {str(e)}")
+        
+        # OPTIMIZED: Single query for walkin_table with better column selection
+        try:
+            walkin_result = supabase.table('walkin_table').select(
+                'uid, ps_assigned, status, branch, next_followup_date, '
+                'first_call_remark, first_call_date, '
+                'second_call_remark, second_call_date, '
+                'third_call_remark, third_call_date, '
+                'fourth_call_remark, fourth_call_date, '
+                'fifth_call_remark, fifth_call_date, '
+                'sixth_call_remark, sixth_call_date, '
+                'seventh_call_remark, seventh_call_date'
+            ).eq('branch', branch).eq('status', 'Pending').execute()
+            
+            if walkin_result.data:
+                for lead in walkin_result.data:
+                    ps_name = lead.get('ps_assigned')
+                    if ps_name not in ps_summary:
+                        continue
+                    
+                    # Helper function to check if remark is valid (not null, not empty, not 'na'/'n/a')
+                    def is_valid_remark(remark):
+                        if not remark:
+                            return False
+                        remark_clean = str(remark).strip()
+                        if remark_clean == '':
+                            return False
+                        if remark_clean.lower() in ['na', 'n/a']:
+                            return False
+                        return True
+                    
+                    # F1: next_followup_date IS NULL AND status = 'Pending'
+                    if (not lead.get('next_followup_date') and (lead.get('status') == 'Pending')):
+                        ps_summary[ps_name]['F1']['walkin'] += 1
+                        ps_summary[ps_name]['F1']['total'] += 1
+                    
+                    # F2: first done (with remark), second still pending (date & remark empty)
+                    elif (lead.get('first_call_date') and 
+                          is_valid_remark(lead.get('first_call_remark')) and
+                          not lead.get('second_call_date') and
+                          not is_valid_remark(lead.get('second_call_remark'))):
+                        ps_summary[ps_name]['F2']['walkin'] += 1
+                        ps_summary[ps_name]['F2']['total'] += 1
+                    
+                    # F3: second done (with remark), third pending
+                    elif (lead.get('second_call_date') and 
+                          is_valid_remark(lead.get('second_call_remark')) and
+                          not lead.get('third_call_date') and
+                          not is_valid_remark(lead.get('third_call_remark'))):
+                        ps_summary[ps_name]['F3']['walkin'] += 1
+                        ps_summary[ps_name]['F3']['total'] += 1
+                    
+                    # F4: third done, fourth pending
+                    elif (lead.get('third_call_date') and 
+                          is_valid_remark(lead.get('third_call_remark')) and
+                          not lead.get('fourth_call_date') and
+                          not is_valid_remark(lead.get('fourth_call_remark'))):
+                        ps_summary[ps_name]['F4']['walkin'] += 1
+                        ps_summary[ps_name]['F4']['total'] += 1
+                    
+                    # F5: fourth done, fifth pending
+                    elif (lead.get('fourth_call_date') and 
+                          is_valid_remark(lead.get('fourth_call_remark')) and
+                          not lead.get('fifth_call_date') and
+                          not is_valid_remark(lead.get('fifth_call_remark'))):
+                        ps_summary[ps_name]['F5']['walkin'] += 1
+                        ps_summary[ps_name]['F5']['total'] += 1
+                    
+                    # F6: fifth done, sixth pending
+                    elif (lead.get('fifth_call_date') and 
+                          is_valid_remark(lead.get('fifth_call_remark')) and
+                          not lead.get('sixth_call_date') and
+                          not is_valid_remark(lead.get('sixth_call_remark'))):
+                        ps_summary[ps_name]['F6']['walkin'] += 1
+                        ps_summary[ps_name]['F6']['total'] += 1
+                    
+                    # F7: sixth done, seventh pending
+                    elif (lead.get('sixth_call_date') and 
+                          is_valid_remark(lead.get('sixth_call_remark')) and
+                          not lead.get('seventh_call_date') and
+                          not is_valid_remark(lead.get('seventh_call_remark'))):
+                        ps_summary[ps_name]['F7']['walkin'] += 1
+                        ps_summary[ps_name]['F7']['total'] += 1
+        except Exception as e:
+            print(f"Warning: Error fetching walkin_table data: {str(e)}")
+        
+
+        
+        # Format the data for display with sub-columns
+        formatted_summary = []
+        for ps_name, summary in ps_summary.items():
+            formatted_summary.append({
+                'ps_name': ps_name,
+                'F1': summary['F1'],
+                'F2': summary['F2'],
+                'F3': summary['F3'],
+                'F4': summary['F4'],
+                'F5': summary['F5'],
+                'F6': summary['F6'],
+                'F7': summary['F7']
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': formatted_summary
+        })
+        
+    except Exception as e:
+        print(f"Error in api_ps_followup_summary: {str(e)}")
+        return jsonify({'success': False, 'message': f'Error fetching PS follow-up summary: {str(e)}'})
+
+@app.route('/api/ps_followup_leads')
+def api_ps_followup_leads():
+    """API to get lead details for PS Follow-up Summary table clicks"""
+    try:
+        # Get parameters
+        ps_name = request.args.get('ps_name')
+        level = request.args.get('level')  # F1, F2, F3, etc.
+        source = request.args.get('source')  # 'cre' or 'walkin'
+        branch = session.get('branch_head_branch')
+        
+        if not all([ps_name, level, source, branch]):
+            return jsonify({'success': False, 'message': 'Missing required parameters'})
+        
+        # Get current date
+        today = datetime.now().strftime('%Y-%m-%d')
+        leads = []
+        
+        if source == 'cre':
+            # Fetch from ps_followup_master
+            try:
+                ps_followup_result = supabase.table('ps_followup_master').select(
+                    'lead_uid, ps_name, follow_up_date, final_status, source, customer_name, customer_mobile_number, ps_assigned_at, '
+                    'first_call_remark, first_call_date, '
+                    'second_call_remark, second_call_date, '
+                    'third_call_remark, third_call_date, '
+                    'fourth_call_remark, fourth_call_date, '
+                    'fifth_call_remark, fifth_call_date, '
+                    'sixth_call_remark, sixth_call_date, '
+                    'seventh_call_remark, seventh_call_date'
+                ).eq('ps_branch', branch).eq('ps_name', ps_name).eq('follow_up_date', today).eq('final_status', 'Pending').execute()
+                
+                if ps_followup_result.data:
+                    for lead in ps_followup_result.data:
+                        # Determine follow-up level exactly per spec using the same logic as summary
+                        last_remark = None
+                        level_num = int(level.replace('F', ''))
+                        
+                        # Helper function to check if remark is valid (not null, not empty, not 'na'/'n/a')
+                        def is_valid_remark(remark):
+                            if not remark:
+                                return False
+                            remark_clean = str(remark).strip()
+                            if remark_clean == '':
+                                return False
+                            if remark_clean.lower() in ['na', 'n/a']:
+                                return False
+                            return True
+                        
+                        def matches(lvl: int) -> bool:
+                            if lvl == 1:
+                                return (not lead.get('first_call_date') and 
+                                       is_valid_remark(lead.get('lead_status')) and 
+                                       is_valid_remark(lead.get('first_call_remark')))
+                            if lvl == 2:
+                                return (lead.get('first_call_date') and 
+                                       is_valid_remark(lead.get('first_call_remark')) and
+                                       not lead.get('second_call_date') and
+                                       not is_valid_remark(lead.get('second_call_remark')))
+                            if lvl == 3:
+                                return (lead.get('second_call_date') and 
+                                       is_valid_remark(lead.get('second_call_remark')) and
+                                       not lead.get('third_call_date') and
+                                       not is_valid_remark(lead.get('third_call_remark')))
+                            if lvl == 4:
+                                return (lead.get('third_call_date') and 
+                                       is_valid_remark(lead.get('third_call_remark')) and
+                                       not lead.get('fourth_call_date') and
+                                       not is_valid_remark(lead.get('fourth_call_remark')))
+                            if lvl == 5:
+                                return (lead.get('fourth_call_date') and 
+                                       is_valid_remark(lead.get('fourth_call_remark')) and
+                                       not lead.get('fifth_call_date') and
+                                       not is_valid_remark(lead.get('fifth_call_remark')))
+                            if lvl == 6:
+                                return (lead.get('fifth_call_date') and 
+                                       is_valid_remark(lead.get('fifth_call_remark')) and
+                                       not lead.get('sixth_call_date') and
+                                       not is_valid_remark(lead.get('sixth_call_remark')))
+                            if lvl == 7:
+                                return (lead.get('sixth_call_date') and 
+                                       is_valid_remark(lead.get('sixth_call_remark')) and
+                                       not lead.get('seventh_call_date') and
+                                       not is_valid_remark(lead.get('seventh_call_remark')))
+                            return False
+
+                        if matches(level_num):
+                            # pick the latest known remark
+                            for key in [
+                                'seventh_call_remark','sixth_call_remark','fifth_call_remark',
+                                'fourth_call_remark','third_call_remark','second_call_remark','first_call_remark'
+                            ]:
+                                if lead.get(key):
+                                    last_remark = lead.get(key)
+                                    break
+                            leads.append({
+                                'uid': lead.get('lead_uid'),
+                                'customer_name': lead.get('customer_name'),
+                                'mobile_number': lead.get('customer_mobile_number'),
+                                'status': lead.get('final_status'),
+                                'source': lead.get('source'),
+                                'ps_assigned_at': lead.get('ps_assigned_at'),
+                                'follow_up_date': lead.get('follow_up_date'),
+                                'last_remark': last_remark or ''
+                            })
+            except Exception as e:
+                print(f"Warning: Error fetching ps_followup_master data: {str(e)}")
+        
+        elif source == 'walkin':
+            # Fetch from walkin_table
+            try:
+                walkin_result = supabase.table('walkin_table').select(
+                    'uid, ps_assigned, status, branch, next_followup_date, customer_name, mobile_number, created_at, '
+                    'first_call_remark, first_call_date, '
+                    'second_call_remark, second_call_date, '
+                    'third_call_remark, third_call_date, '
+                    'fourth_call_remark, fourth_call_date, '
+                    'fifth_call_remark, fifth_call_date, '
+                    'sixth_call_remark, sixth_call_date, '
+                    'seventh_call_remark, seventh_call_date'
+                ).eq('branch', branch).eq('ps_assigned', ps_name).eq('status', 'Pending').execute()
+                
+                if walkin_result.data:
+                    for lead in walkin_result.data:
+                        level_num = int(level.replace('F', ''))
+                        
+                        # Helper function to check if remark is valid (not null, not empty, not 'na'/'n/a')
+                        def is_valid_remark(remark):
+                            if not remark:
+                                return False
+                            remark_clean = str(remark).strip()
+                            if remark_clean == '':
+                                return False
+                            if remark_clean.lower() in ['na', 'n/a']:
+                                return False
+                            return True
+                        
+                        def matches(lvl: int) -> bool:
+                            if lvl == 1:
+                                return (not lead.get('next_followup_date') and lead.get('status') == 'Pending')
+                            if lvl == 2:
+                                return (lead.get('first_call_date') and 
+                                       is_valid_remark(lead.get('first_call_remark')) and
+                                       not lead.get('second_call_date') and
+                                       not is_valid_remark(lead.get('second_call_remark')))
+                            if lvl == 3:
+                                return (lead.get('second_call_date') and 
+                                       is_valid_remark(lead.get('second_call_remark')) and
+                                       not lead.get('third_call_date') and
+                                       not is_valid_remark(lead.get('third_call_remark')))
+                            if lvl == 4:
+                                return (lead.get('third_call_date') and 
+                                       is_valid_remark(lead.get('third_call_remark')) and
+                                       not lead.get('fourth_call_date') and
+                                       not is_valid_remark(lead.get('fourth_call_remark')))
+                            if lvl == 5:
+                                return (lead.get('fourth_call_date') and 
+                                       is_valid_remark(lead.get('fourth_call_remark')) and
+                                       not lead.get('fifth_call_date') and
+                                       not is_valid_remark(lead.get('fifth_call_remark')))
+                            if lvl == 6:
+                                return (lead.get('fifth_call_date') and 
+                                       is_valid_remark(lead.get('fifth_call_remark')) and
+                                       not lead.get('sixth_call_date') and
+                                       not is_valid_remark(lead.get('sixth_call_remark')))
+                            if lvl == 7:
+                                return (lead.get('sixth_call_date') and 
+                                       is_valid_remark(lead.get('sixth_call_remark')) and
+                                       not lead.get('seventh_call_date') and
+                                       not is_valid_remark(lead.get('seventh_call_remark')))
+                            return False
+
+                        if matches(level_num):
+                            last_remark = None
+                            for key in [
+                                'seventh_call_remark','sixth_call_remark','fifth_call_remark',
+                                'fourth_call_remark','third_call_remark','second_call_remark','first_call_remark'
+                            ]:
+                                if lead.get(key):
+                                    last_remark = lead.get(key)
+                                    break
+                            leads.append({
+                                'uid': lead.get('uid'),
+                                'customer_name': lead.get('customer_name'),
+                                'mobile_number': lead.get('mobile_number'),
+                                'status': lead.get('status'),
+                                'source': 'Walk In',
+                                'created_at': lead.get('created_at'),
+                                'follow_up_date': lead.get('next_followup_date'),
+                                'last_remark': last_remark or ''
+                            })
+            except Exception as e:
+                print(f"Warning: Error fetching walkin_table data: {str(e)}")
+        
+        return jsonify({
+            'success': True,
+            'leads': leads
+        })
+        
+    except Exception as e:
+        print(f"Error in api_ps_followup_leads: {str(e)}")
+        return jsonify({'success': False, 'message': f'Error fetching lead details: {str(e)}'})
 
 @app.route('/api/cre_pending_leads')
 @require_admin

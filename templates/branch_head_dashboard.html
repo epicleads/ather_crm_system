@@ -1,40 +1,117 @@
-
 {% extends "base.html" %}
 {% block title %}Branch Head Dashboard - Ather CRM{% endblock %}
 
 {% block head %}
 <style>
-    /* Override container constraints for full width layout */
-    .container-main {
+    /* Centered full-width layout with proper spacing */
+    .container-main, .container, .container-fluid {
         max-width: 100% !important;
-        margin: 0 !important;
-        padding: 1rem !important;
+        width: 100% !important;
+        margin: 0 auto !important;
+        padding: 0 2rem !important;
         border-radius: 0 !important;
         box-shadow: none !important;
         border: none !important;
     }
     
-    /* Ensure full width for all content */
+    /* Main content area with proper centering */
     .w-100 {
         width: 100% !important;
         max-width: 100% !important;
+        margin: 0 auto !important;
+        padding: 0 2rem !important;
+        overflow-x: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
     }
     
-    /* Improve table responsiveness for full width */
-    .table-responsive {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
+    /* Tab content with proper centering */
+    .tab-content, .tab-pane {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 auto !important;
+        padding: 0 1rem !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
     }
+    
+    /* Card containers with proper centering */
+    .card {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 auto 1rem auto !important;
+        border-radius: 12px !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .card-body {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 1.5rem !important;
+        overflow-x: hidden !important;
+    }
+    
+    /* Table container with proper centering and full width */
+    .table-responsive {
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow-x: visible !important;
+        margin: 0 auto !important;
+        padding: 0 !important;
+        border: none !important;
+        display: flex !important;
+        justify-content: center !important;
+    }
+    
+    /* Tables with proper centering and column sizing */
+    .table {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 100% !important;
+        table-layout: auto !important;
+        margin: 0 auto !important;
+        border-collapse: collapse !important;
+    }
+    
+    /* Table header and cells with better spacing */
+    .table thead th,
+    .table tbody td {
+        width: auto !important;
+        min-width: auto !important;
+        max-width: none !important;
+        white-space: nowrap !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        padding: 0.75rem 0.75rem !important;
+        border: 1px solid #dee2e6 !important;
+        text-align: center !important;
+    }
+    
+    /* Optimized column widths for better fit */
+    .table th:nth-child(1), .table td:nth-child(1) { min-width: 120px; }  /* UID */
+    .table th:nth-child(2), .table td:nth-child(2) { min-width: 150px; }  /* Customer Name */
+    .table th:nth-child(3), .table td:nth-child(3) { min-width: 130px; }  /* Phone No. */
+    .table th:nth-child(4), .table td:nth-child(4) { min-width: 120px; }  /* Final Status/Source */
+    .table th:nth-child(5), .table td:nth-child(5) { min-width: 140px; }  /* PS Name */
+    .table th:nth-child(6), .table td:nth-child(6) { min-width: 120px; }  /* Source/Lead Category */
+    .table th:nth-child(7), .table td:nth-child(7) { min-width: 120px; }  /* Lead Category/Lead Status */
+    .table th:nth-child(8), .table td:nth-child(8) { min-width: 140px; }  /* PS Assigned At/Follow-up Date */
+    .table th:nth-child(9), .table td:nth-child(9) { min-width: 140px; }  /* Created At */
+    .table th:nth-child(10), .table td:nth-child(10) { min-width: 120px; } /* Call History */
     
     /* Better spacing for full width layout */
     .row {
-        margin-left: 0;
-        margin-right: 0;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        width: 100% !important;
     }
     
     .col, .col-md-3, .col-md-4, .col-md-2, .col-auto {
-        padding-left: 0.5rem;
-        padding-right: 0.5rem;
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
     }
     
     /* KPI cards better spacing for full width */
@@ -45,10 +122,11 @@
     /* Tab navigation full width */
     .nav-tabs {
         border-bottom: 2px solid #e9ecef;
-        width: 100%;
+        width: 100% !important;
         background: #f8f9fa;
         border-radius: 8px 8px 0 0;
         padding: 0.5rem 0.5rem 0;
+        margin: 0 !important;
     }
     
     .nav-tabs .nav-link {
@@ -80,6 +158,7 @@
         border: 1px solid var(--airbnb-gray-200);
         border-radius: var(--airbnb-border-radius);
         margin-bottom: 1.5rem;
+        width: 100% !important;
     }
     
     /* KPI cards enhanced for full width */
@@ -93,6 +172,7 @@
         display: flex;
         flex-direction: column;
         justify-content: center;
+        width: 100% !important;
     }
     
     /* Loading spinner styling */
@@ -178,12 +258,81 @@
         border-color: var(--airbnb-gray-300);
     }
     
-    /* Table enhancements for full width */
+    /* Clean table styling with full width */
     .table {
         margin-bottom: 0;
         border-radius: 8px;
         overflow: hidden;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        border-collapse: collapse !important;
+    }
+    
+    /* Table header styling */
+    .table thead th {
+        background: linear-gradient(135deg, #495057 0%, #343a40 100%);
+        color: white;
+        border: none;
+        font-weight: 600;
+        padding: 1rem 0.75rem;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        letter-spacing: 0.5px;
+        text-align: center;
+    }
+    
+    /* Table body styling */
+    .table tbody tr {
+        transition: all 0.2s ease;
+    }
+    
+    .table tbody tr:hover {
+        background-color: rgba(0, 123, 255, 0.05);
+        transform: scale(1.001);
+    }
+    
+    .table tbody td {
+        padding: 0.75rem;
+        vertical-align: middle;
+        border-color: #e9ecef;
+        text-align: center;
+    }
+    
+    /* Table-sm specific styling */
+    .table.table-sm {
+        font-size: 0.875rem;
+    }
+    
+    .table.table-sm th, .table.table-sm td {
+        padding: 0.5rem 0.75rem;
+    }
+    
+    /* Additional table width optimizations */
+    .card-body {
+        padding: 1rem !important;
+        overflow-x: hidden !important;
+    }
+    
+    /* Ensure no horizontal scroll on main container */
+    .w-100 {
+        overflow-x: hidden !important;
+    }
+    
+    /* Table container optimizations */
+    .table-responsive {
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+    }
+    
+    /* Remove any potential horizontal margins */
+    .row {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+    }
+    
+    .col, .col-md-3, .col-md-4, .col-md-2, .col-auto {
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
     }
     
     .table thead th {
@@ -195,6 +344,7 @@
         text-transform: uppercase;
         font-size: 0.85rem;
         letter-spacing: 0.5px;
+        text-align: center;
     }
     
     .table tbody tr {
@@ -210,18 +360,7 @@
         padding: 0.75rem;
         vertical-align: middle;
         border-color: #e9ecef;
-    }
-    
-    .table th {
-        background-color: var(--airbnb-gray-100);
-        border-top: none;
-        font-weight: 600;
-        color: var(--airbnb-gray-700);
-    }
-    
-    .table td {
-        vertical-align: middle;
-        border-top: 1px solid var(--airbnb-gray-200);
+        text-align: center;
     }
     
     /* Filter section styling */
@@ -286,6 +425,657 @@
             max-height: 700px;
         }
     }
+    
+    /* CRITICAL: Force tables to use full width and show all columns */
+    .table-responsive {
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow-x: visible !important;
+        margin: 0 auto !important;
+        padding: 0 !important;
+    }
+    
+    .table-responsive > .table {
+        width: 100% !important;
+        min-width: 100% !important;
+        max-width: 100% !important;
+        table-layout: auto !important;
+        margin: 0 auto !important;
+    }
+    
+    /* Ensure all table cells are visible */
+    .table th, .table td {
+        white-space: nowrap !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        min-width: auto !important;
+        max-width: none !important;
+    }
+    
+    /* Specific column widths for optimal desktop layout */
+    .table th:nth-child(1), .table td:nth-child(1) { min-width: 120px; }  /* UID */
+    .table th:nth-child(2), .table td:nth-child(2) { min-width: 150px; }  /* Customer Name */
+    .table th:nth-child(3), .table td:nth-child(3) { min-width: 130px; }  /* Phone No. */
+    .table th:nth-child(4), .table td:nth-child(4) { min-width: 120px; }  /* Final Status/Source */
+    .table th:nth-child(5), .table td:nth-child(5) { min-width: 140px; }  /* PS Name */
+    .table th:nth-child(6), .table td:nth-child(6) { min-width: 120px; }  /* Source/Lead Category */
+    .table th:nth-child(7), .table td:nth-child(7) { min-width: 120px; }  /* Lead Category/Lead Status */
+    .table th:nth-child(8), .table td:nth-child(8) { min-width: 140px; }  /* PS Assigned At/Follow-up Date */
+    .table th:nth-child(9), .table td:nth-child(9) { min-width: 140px; }  /* Created At */
+    .table th:nth-child(10), .table td:nth-child(10) { min-width: 120px; } /* Call History */
+    
+    /* Call Attempt History Modal specific fixes */
+    #callAttemptHistoryModal .modal-dialog {
+        max-width: 95vw !important;
+        width: 95vw !important;
+        margin: 1rem auto !important;
+    }
+    
+    #callAttemptHistoryModal .modal-content {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    
+    #callAttemptHistoryModal .table-responsive {
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow-x: visible !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    
+    #callAttemptHistoryModal .table {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 100% !important;
+        table-layout: auto !important;
+        margin: 0 !important;
+    }
+    
+    #callAttemptHistoryModal .table th,
+    #callAttemptHistoryModal .table td {
+        white-space: nowrap !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        padding: 0.5rem 0.75rem !important;
+        border: 1px solid #dee2e6 !important;
+        text-align: center !important;
+        min-width: auto !important;
+        max-width: none !important;
+    }
+    
+    /* Modal table column widths for better visibility */
+    #callAttemptHistoryModal .table th:nth-child(1), #callAttemptHistoryModal .table td:nth-child(1) { min-width: 120px; }  /* UID */
+    #callAttemptHistoryModal .table th:nth-child(2), #callAttemptHistoryModal .table td:nth-child(2) { min-width: 100px; }  /* Call No */
+    #callAttemptHistoryModal .table th:nth-child(3), #callAttemptHistoryModal .table td:nth-child(3) { min-width: 80px; }   /* Attempt */
+    #callAttemptHistoryModal .table th:nth-child(4), #callAttemptHistoryModal .table td:nth-child(4) { min-width: 140px; } /* Status */
+    #callAttemptHistoryModal .table th:nth-child(5), #callAttemptHistoryModal .table td:nth-child(5) { min-width: 80px; }   /* Role */
+    #callAttemptHistoryModal .table th:nth-child(6), #callAttemptHistoryModal .table td:nth-child(6) { min-width: 150px; } /* Name */
+    #callAttemptHistoryModal .table th:nth-child(7), #callAttemptHistoryModal .table td:nth-child(7) { min-width: 160px; } /* Timestamp */
+    #callAttemptHistoryModal .table th:nth-child(8), #callAttemptHistoryModal .table td:nth-child(8) { min-width: 120px; } /* Remarks */
+    #callAttemptHistoryModal .table td:nth-child(9) { min-width: 120px; } /* Follow-up Date */
+    
+    /* Enhanced status column visibility and styling */
+    #callAttemptHistoryModal .table td:nth-child(4) {
+        color: #333 !important;
+        font-weight: 600 !important;
+        background-color: #f8f9fa !important;
+        border: 1px solid #dee2e6 !important;
+        padding: 0.75rem !important;
+        text-align: center !important;
+        border-radius: 6px !important;
+    }
+    
+    /* Status-specific colors for better visibility */
+    #callAttemptHistoryModal .table td:nth-child(4)[data-status*="disconnected"] {
+        color: #721c24 !important;
+        background-color: #f8d7da !important;
+        border-color: #f5c6cb !important;
+    }
+    
+    #callAttemptHistoryModal .table td:nth-child(4)[data-status*="connected"] {
+        color: #155724 !important;
+        background-color: #d4edda !important;
+        border-color: #c3e6cb !important;
+    }
+    
+    #callAttemptHistoryModal .table td:nth-child(4)[data-status*="rnr"] {
+        color: #856404 !important;
+        background-color: #fff3cd !important;
+        border-color: #ffeaa7 !important;
+    }
+    
+    #callAttemptHistoryModal .table td:nth-child(4)[data-status*="busy"] {
+        color: #721c24 !important;
+        background-color: #f8d7da !important;
+        border-color: #f5c6cb !important;
+    }
+    
+    #callAttemptHistoryModal .table td:nth-child(4)[data-status*="interested"] {
+        color: #155724 !important;
+        background-color: #d4edda !important;
+        border-color: #c3e6cb !important;
+    }
+    
+    #callAttemptHistoryModal .table td:nth-child(4)[data-status*="not interested"] {
+        color: #721c24 !important;
+        background-color: #f8d7da !important;
+        border-color: #f5c6cb !important;
+    }
+    
+    /* Additional status cell styling for better visibility */
+    #callAttemptHistoryModal .status-cell {
+        font-size: 0.9rem !important;
+        letter-spacing: 0.5px !important;
+        text-transform: uppercase !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    #callAttemptHistoryModal .status-cell:hover {
+        transform: scale(1.02) !important;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15) !important;
+    }
+    
+    /* Specific styling for common statuses */
+    #callAttemptHistoryModal .status-cell[data-status*="disconnected"] {
+        color: #721c24 !important;
+        background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%) !important;
+        border: 2px solid #f5c6cb !important;
+    }
+    
+    #callAttemptHistoryModal .status-cell[data-status*="connected"] {
+        color: #155724 !important;
+        background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%) !important;
+        border: 2px solid #c3e6cb !important;
+    }
+    
+    #callAttemptHistoryModal .status-cell[data-status*="interested"] {
+        color: #155724 !important;
+        background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%) !important;
+        border: 2px solid #c3e6cb !important;
+    }
+    
+    /* Additional modal optimizations */
+    #callAttemptHistoryModal .modal-body {
+        padding: 1.5rem !important;
+        overflow-x: auto !important;
+    }
+    
+    #callAttemptHistoryModal .table-responsive {
+        overflow-x: auto !important;
+        max-width: 100% !important;
+    }
+    
+    /* Ensure modal table doesn't get cut off */
+    #callAttemptHistoryModal .table {
+        min-width: max-content !important;
+        width: max-content !important;
+    }
+    
+    /* Modal body scroll optimization */
+    #callAttemptHistoryModal .modal-body {
+        max-height: 70vh !important;
+        overflow-y: auto !important;
+    }
+    
+    /* Modal table container optimization */
+    #callAttemptHistoryModal .table-responsive {
+        max-height: 60vh !important;
+        overflow-y: auto !important;
+    }
+    
+    /* Ensure all modal content is visible */
+    #callAttemptHistoryModal {
+        z-index: 9999 !important;
+    }
+    
+    #callAttemptHistoryModal .modal-dialog {
+        max-height: 90vh !important;
+        margin: 2rem auto !important;
+    }
+    
+    /* Modern, clean UI enhancements */
+    .card {
+        border: 1px solid #e9ecef !important;
+        border-radius: 12px !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .card:hover {
+        box-shadow: 0 4px 16px rgba(0,0,0,0.12) !important;
+        transform: translateY(-2px) !important;
+    }
+    
+    .card-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
+        border-bottom: 1px solid #dee2e6 !important;
+        border-radius: 12px 12px 0 0 !important;
+        font-weight: 600 !important;
+        color: #495057 !important;
+    }
+    
+    /* Enhanced filter section */
+    .filter-section {
+        background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%) !important;
+        border: 1px solid #e9ecef !important;
+        border-radius: 12px !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
+    }
+    
+    /* Modern button styling */
+    .btn {
+        border-radius: 8px !important;
+        font-weight: 500 !important;
+        transition: all 0.3s ease !important;
+        border: none !important;
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+        box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3) !important;
+    }
+    
+    .btn-primary:hover {
+        background: linear-gradient(135deg, #0056b3 0%, #004085 100%) !important;
+        transform: translateY(-1px) !important;
+        box-shadow: 0 4px 8px rgba(0, 123, 255, 0.4) !important;
+    }
+    
+    /* Enhanced search inputs */
+    .form-control, .form-select {
+        border-radius: 8px !important;
+        border: 2px solid #e9ecef !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .form-control:focus, .form-select:focus {
+        border-color: #007bff !important;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.15) !important;
+    }
+    
+    /* Final optimization: ensure main content uses full desktop width with centering */
+    body, html {
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow-x: hidden !important;
+    }
+    
+    /* Override any Bootstrap container constraints with centering */
+    .container, .container-fluid, .container-lg, .container-xl, .container-xxl {
+        max-width: 100% !important;
+        width: 100% !important;
+        margin: 0 auto !important;
+        padding: 0 2rem !important;
+    }
+    
+    /* Ensure tab content uses full width with centering */
+    .tab-content > .tab-pane {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 auto !important;
+        padding: 0 1rem !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+    }
+    
+    /* Additional centering for better layout */
+    .nav-tabs {
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        width: 100% !important;
+    }
+    
+    .filter-section {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        width: 100% !important;
+    }
+    
+    .input-group, .form-select, .btn-group {
+        margin: 0 auto !important;
+        display: flex !important;
+        justify-content: center !important;
+    }
+    
+    /* KPI cards centering */
+    .kpi-card {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        text-align: center !important;
+    }
+    
+    /* Dashboard header centering */
+    .dashboard-header {
+        text-align: center !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+    }
+    
+    /* CRITICAL: Ensure JavaScript can access DOM elements */
+    .tab-pane {
+        display: none !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+    
+    .tab-pane.active {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+    
+    .tab-pane.show {
+        display: block !important;
+    }
+    
+    .tab-pane.fade {
+        transition: opacity 0.15s linear !important;
+    }
+    
+    .tab-pane.fade.show {
+        opacity: 1 !important;
+    }
+    
+    /* Bootstrap tab functionality fix */
+    .tab-content > .tab-pane {
+        display: none !important;
+    }
+    
+    .tab-content > .active {
+        display: block !important;
+    }
+    
+    /* Ensure tab navigation works */
+    .nav-tabs .nav-link {
+        cursor: pointer !important;
+        user-select: none !important;
+    }
+    
+    .nav-tabs .nav-link.active {
+        background-color: #007bff !important;
+        color: white !important;
+        border-color: #007bff !important;
+    }
+    
+    /* Fix for table loading issues */
+    .table-responsive {
+        min-height: 200px !important;
+        position: relative !important;
+    }
+    
+    .table-responsive:empty::after {
+        content: "Loading..." !important;
+        position: absolute !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        color: #6c757d !important;
+        font-style: italic !important;
+    }
+    
+    /* Ensure form elements are accessible */
+    .form-control, .form-select, .btn {
+        position: relative !important;
+        z-index: 1 !important;
+    }
+    
+    /* Additional table width optimizations */
+    .card-body {
+        padding: 1rem;
+        overflow-x: hidden;
+    }
+    
+    /* PS Follow-up Summary Table specific styling */
+    #psFollowupTable {
+        font-size: 0.85rem;
+        width: 100%;
+        table-layout: auto;
+    }
+    
+    #psFollowupTable th {
+        padding: 0.5rem 0.25rem;
+        font-size: 0.8rem;
+        vertical-align: middle;
+        white-space: nowrap;
+        min-width: auto;
+    }
+    
+    #psFollowupTable td {
+        padding: 0.5rem 0.25rem;
+        font-size: 0.8rem;
+        vertical-align: middle;
+        white-space: nowrap;
+    }
+    
+    #psFollowupTable .badge {
+        font-size: 0.7rem;
+        padding: 0.25rem 0.5rem;
+    }
+    
+    /* Enhanced table responsiveness for desktop */
+    #psFollowupTable .table-responsive {
+        overflow-x: auto;
+        max-width: 100%;
+    }
+    
+    /* Inline leads table styling */
+    #psFollowupTable .ps-inline-details .table {
+        font-size: 0.8rem;
+        margin: 0;
+    }
+    
+    #psFollowupTable .ps-inline-details .table th,
+    #psFollowupTable .ps-inline-details .table td {
+        padding: 0.4rem 0.3rem;
+        font-size: 0.75rem;
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+    
+    /* Ensure proper column widths for the new columns */
+    #psFollowupTable .ps-inline-details .table th:nth-child(6),
+    #psFollowupTable .ps-inline-details .table td:nth-child(6) {
+        min-width: 120px; /* PS Assigned At */
+    }
+    
+    #psFollowupTable .ps-inline-details .table th:nth-child(7),
+    #psFollowupTable .ps-inline-details .table td:nth-child(7) {
+        min-width: 120px; /* Created At */
+    }
+    
+    /* Sub-column header styling */
+    #psFollowupTable th.small {
+        font-size: 0.7rem;
+        padding: 0.25rem 0.1rem;
+        border-left: 1px solid #dee2e6;
+        border-right: 1px solid #dee2e6;
+        white-space: nowrap;
+        min-width: 80px;
+    }
+    
+    /* Main PS followup table responsiveness */
+    #psFollowupTable {
+        min-width: max-content;
+        width: 100%;
+    }
+    
+    #psFollowupTable .table-responsive {
+        overflow-x: auto;
+        overflow-y: visible;
+    }
+    
+    /* Ensure the table container can handle horizontal scroll */
+    .card-body .table-responsive {
+        max-width: 100%;
+        overflow-x: auto;
+    }
+    
+    /* Enhanced styling for the new timestamp columns */
+    #psFollowupTable .ps-inline-details .table td:nth-child(6),
+    #psFollowupTable .ps-inline-details .table td:nth-child(7) {
+        font-family: 'Courier New', monospace;
+        font-size: 0.7rem;
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        text-align: center;
+    }
+    
+    /* Source column styling */
+    #psFollowupTable .ps-inline-details .table td:nth-child(5) {
+        text-align: center;
+    }
+    
+    /* Ensure proper spacing for all columns */
+    #psFollowupTable .ps-inline-details .table th,
+    #psFollowupTable .ps-inline-details .table td {
+        border: 1px solid #dee2e6;
+    }
+    
+    /* Responsive breakpoints for better desktop experience */
+    @media (min-width: 1200px) {
+        #psFollowupTable .ps-inline-details .table {
+            font-size: 0.85rem;
+        }
+        
+        #psFollowupTable .ps-inline-details .table th,
+        #psFollowupTable .ps-inline-details .table td {
+            padding: 0.5rem 0.4rem;
+        }
+    }
+    
+    /* Additional responsive design for better desktop experience */
+    @media (min-width: 1400px) {
+        #psFollowupTable .ps-inline-details .table {
+            font-size: 0.9rem;
+        }
+        
+        #psFollowupTable .ps-inline-details .table th,
+        #psFollowupTable .ps-inline-details .table td {
+            padding: 0.6rem 0.5rem;
+        }
+        
+        /* Ensure proper column spacing on large screens */
+        #psFollowupTable .ps-inline-details .table th:nth-child(6),
+        #psFollowupTable .ps-inline-details .table td:nth-child(6),
+        #psFollowupTable .ps-inline-details .table th:nth-child(7),
+        #psFollowupTable .ps-inline-details .table td:nth-child(7) {
+            min-width: 140px;
+        }
+    }
+    
+    /* Ensure horizontal scroll works properly on all screen sizes */
+    #psFollowupTable .table-responsive {
+        scrollbar-width: thin;
+        scrollbar-color: #6c757d #f8f9fa;
+    }
+    
+    #psFollowupTable .table-responsive::-webkit-scrollbar {
+        height: 8px;
+    }
+    
+    #psFollowupTable .table-responsive::-webkit-scrollbar-track {
+        background: #f8f9fa;
+        border-radius: 4px;
+    }
+    
+    #psFollowupTable .table-responsive::-webkit-scrollbar-thumb {
+        background: #6c757d;
+        border-radius: 4px;
+    }
+    
+            #psFollowupTable .table-responsive::-webkit-scrollbar-thumb:hover {
+            background: #495057;
+        }
+        
+        /* Timestamp column styling for better readability */
+        #followupLeadsTable th:nth-child(8),
+        #followupLeadsTable th:nth-child(9) {
+            min-width: 140px;
+            white-space: nowrap;
+        }
+        
+        #followupLeadsTable td:nth-child(8),
+        #followupLeadsTable td:nth-child(9) {
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            text-align: center;
+            white-space: nowrap;
+        }
+        
+        /* Responsive adjustments for timestamp columns */
+        @media (max-width: 1400px) {
+            #followupLeadsTable th:nth-child(8),
+            #followupLeadsTable th:nth-child(9) {
+                min-width: 120px;
+                font-size: 0.8rem;
+            }
+            
+            #followupLeadsTable td:nth-child(8),
+            #followupLeadsTable td:nth-child(9) {
+                font-size: 0.75rem;
+                padding: 0.25rem 0.5rem;
+            }
+        }
+    
+    /* Follow-up level headers */
+    #psFollowupTable th[colspan="2"] {
+        background: linear-gradient(135deg, #495057 0%, #343a40 100%);
+        color: white;
+        font-weight: 600;
+        text-align: center;
+        border: 1px solid #dee2e6;
+    }
+    
+    /* Clickable cell styling */
+    #psFollowupTable .clickable-cell {
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+    
+    #psFollowupTable .clickable-cell:hover {
+        background-color: #f8f9fa !important;
+        transform: scale(1.05);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        z-index: 10;
+        position: relative;
+    }
+    
+    #psFollowupTable .clickable-cell:active {
+        transform: scale(0.98);
+    }
+    
+    /* Ensure no horizontal scroll on main container */
+    .w-100 {
+        overflow-x: hidden;
+    }
+    
+    /* Table container optimizations */
+    .table-responsive {
+        margin: 0;
+        padding: 0;
+        border: none;
+    }
+    
+    /* Remove any potential horizontal margins */
+    .row {
+        margin-left: 0;
+        margin-right: 0;
+    }
+    
+    .col, .col-md-3, .col-md-4, .col-md-2, .col-auto {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
 </style>
 {% endblock %}
 
@@ -312,6 +1102,9 @@
                             <i class="fas fa-clock me-1"></i>
                             <span id="currentDateTime"></span>
                         </span>
+                        <button class="btn btn-outline-info btn-sm" onclick="showPerformanceStats()" title="View Performance Statistics">
+                            <i class="fas fa-tachometer-alt"></i>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -536,6 +1329,79 @@
                 </div>
             </div>
 
+            <!-- Product Specialist Follow-up Summary Table -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-users me-2"></i>Product Specialist Follow-up Summary
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="psFollowupTable">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th rowspan="2" class="align-middle">PS Name</th>
+                                    <th colspan="2" class="text-center">F1</th>
+                                    <th colspan="2" class="text-center">F2</th>
+                                    <th colspan="2" class="text-center">F3</th>
+                                    <th colspan="2" class="text-center">F4</th>
+                                    <th colspan="2" class="text-center">F5</th>
+                                    <th colspan="2" class="text-center">F6</th>
+                                    <th colspan="2" class="text-center">F7</th>
+                                </tr>
+                                <tr>
+                                    <!-- F1 sub-columns -->
+                                    <th class="text-center small">CRE</th>
+                                    <th class="text-center small">Walk-in</th>
+                                    <!-- F2 sub-columns -->
+                                    <th class="text-center small">CRE</th>
+                                    <th class="text-center small">Walk-in</th>
+                                    <!-- F3 sub-columns -->
+                                    <th class="text-center small">CRE</th>
+                                    <th class="text-center small">Walk-in</th>
+                                    <!-- F4 sub-columns -->
+                                    <th class="text-center small">CRE</th>
+                                    <th class="text-center small">Walk-in</th>
+                                    <!-- F5 sub-columns -->
+                                    <th class="text-center small">CRE</th>
+                                    <th class="text-center small">Walk-in</th>
+                                    <!-- F6 sub-columns -->
+                                    <th class="text-center small">CRE</th>
+                                    <th class="text-center small">Walk-in</th>
+                                    <!-- F7 sub-columns -->
+                                    <th class="text-center small">CRE</th>
+                                    <th class="text-center small">Walk-in</th>
+                                </tr>
+                            </thead>
+                            <tbody id="psFollowupTableBody">
+                                <tr><td colspan="15" class="text-center">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lead Details Modal -->
+            <div class="modal fade" id="leadDetailsModal" tabindex="-1" aria-labelledby="leadDetailsModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-xl">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="leadDetailsModalLabel">Lead Details</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div id="leadDetailsContent">
+                                <!-- Lead details will be loaded here -->
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Branch Head Dashboards -->
             <div class="card mb-3">
                 <div class="card-body">
@@ -625,10 +1491,14 @@
                                     <th class="py-2">Lead Category</th>
                                     <th class="py-2">PS Assigned At</th>
                                     <th class="py-2">Created At</th>
+                                    <th class="py-2">Call History</th>
                                 </tr>
                             </thead>
                             <tbody id="freshLeadsTableBody">
-                                <tr><td colspan="9" class="text-center py-2">Loading...</td></tr>
+                                <tr><td colspan="10" class="text-center py-2">
+                                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                                    Loading leads...
+                                </td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -706,10 +1576,11 @@
                                     <th class="py-2">Lead Category</th>
                                     <th class="py-2">PS Assigned At</th>
                                     <th class="py-2">Created At</th>
+                                    <th class="py-2">Call History</th>
                                 </tr>
                             </thead>
                             <tbody id="freshLeadsSectionTableBody">
-                                <tr><td colspan="9" class="text-center py-2">Loading...</td></tr>
+                                <tr><td colspan="10" class="text-center py-2">Loading...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -784,11 +1655,14 @@
                                     <th class="py-2">Lead Category</th>
                                     <th class="py-2">Lead Status</th>
                                     <th class="py-2">PS Name</th>
+                                    <th class="py-2">Created At</th>
+                                    <th class="py-2">PS Assigned At</th>
                                     <th class="py-2">Follow-up Date</th>
+                                    <th class="py-2">Call History</th>
                                 </tr>
                             </thead>
                             <tbody id="followupLeadsTableBody">
-                                <tr><td colspan="8" class="text-center py-2">
+                                <tr><td colspan="11" class="text-center py-2">
                                     <i class="fas fa-spinner fa-spin me-2"></i>Loading today's follow-ups...
                                 </td></tr>
                             </tbody>
@@ -845,6 +1719,55 @@
     </div>
 </div>
 
+<!-- Call Attempt History Modal -->
+<div class="modal fade" id="callAttemptHistoryModal" tabindex="-1" aria-labelledby="callAttemptHistoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="callAttemptHistoryModalLabel">
+                    <i class="fas fa-phone-alt me-2"></i>Call Attempt History
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Call Summary Statistics -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="alert alert-info" id="callHistorySummary">
+                            <i class="fas fa-info-circle me-2"></i>Loading call history...
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Call History Table -->
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>UID</th>
+                                <th>Call No</th>
+                                <th>Attempt</th>
+                                <th>Status</th>
+                                <th>Role</th>
+                                <th>Name</th>
+                                <th>Timestamp</th>
+                                <th>Remarks</th>
+                                <th>Follow-up Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="callHistoryTableBody">
+                            <tr><td colspan="9" class="text-center">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     // Configuration for sections
 const sectionConfig = {
@@ -852,39 +1775,58 @@ const sectionConfig = {
     tab: 'fresh-tab',
     tbody: 'freshLeadsTableBody',
             psSelectId: 'freshLeadsPsSelect',
+            sourceSelectId: 'freshLeadsSourceSelect',
             statusSelectId: 'freshLeadsStatusSelect',
             dateFilterId: 'freshLeadsDateFilter',
             dateFromId: 'freshLeadsDateFrom',
             dateToId: 'freshLeadsDateTo',
             searchId: 'freshLeadsSearchInput',
-            columns: ['uid', 'customer_name', 'customer_mobile_number', 'final_status', 'ps_name', 'source', 'lead_category', 'ps_assigned_at', 'created_at']
+            columns: ['uid', 'customer_name', 'customer_mobile_number', 'final_status', 'ps_name', 'source', 'lead_category', 'ps_assigned_at', 'created_at', 'call_history']
   },
   fresh_leads_section: {
     tab: 'fresh-leads-tab',
     tbody: 'freshLeadsSectionTableBody',
             psSelectId: 'freshLeadsSectionPsSelect',
+            sourceSelectId: 'freshLeadsSectionSourceSelect',
+            statusSelectId: 'freshLeadsSectionStatusSelect',
             dateFilterId: 'freshLeadsSectionDateFilter',
             dateFromId: 'freshLeadsSectionDateFrom',
             dateToId: 'freshLeadsSectionDateTo',
             searchId: 'freshLeadsSectionSearchInput',
-            columns: ['uid', 'customer_name', 'customer_mobile_number', 'final_status', 'ps_name', 'source', 'lead_category', 'ps_assigned_at', 'created_at']
+            columns: ['uid', 'customer_name', 'customer_mobile_number', 'final_status', 'ps_name', 'source', 'lead_category', 'ps_assigned_at', 'created_at', 'call_history']
   },
   followup_leads: {
     tab: 'followup-tab',
     tbody: 'followupLeadsTableBody',
             psSelectId: 'followupLeadsPsSelect',
+            sourceSelectId: 'followupLeadsSourceSelect',
+            statusSelectId: 'followupLeadsStatusSelect',
+            dateFilterId: 'followupLeadsDateFilter',
+            dateFromId: 'followupLeadsDateFrom',
+            dateToId: 'followupLeadsDateTo',
             searchId: 'followupLeadsSearchInput',
-            columns: ['uid', 'customer_name', 'customer_mobile_number', 'source', 'lead_category', 'lead_status', 'ps_name', 'follow_up_date']
+            columns: ['uid', 'customer_name', 'customer_mobile_number', 'source', 'lead_category', 'lead_status', 'ps_name', 'created_at', 'ps_assigned_at', 'follow_up_date', 'call_history']
         }
     };
 
     // OPTIMIZED: Load section data with improved performance and server-side filtering
     function loadSection(section) {
+        const startTime = performance.now();
+        console.log(`[DEBUG] loadSection called with section: ${section}`);
+        
         const config = sectionConfig[section];
+        console.log('[DEBUG] Section config:', config);
+        
         const tbody = document.getElementById(config.tbody);
+        console.log('[DEBUG] Table body element:', tbody);
+        
+        if (!tbody) {
+            console.error('[DEBUG] Table body not found for section:', section);
+            return;
+        }
         
         // Show loading state for table
-        tbody.innerHTML = '<tr><td colspan="9" class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr>';
         
         // Get filter values
         const psSelect = document.getElementById(config.psSelectId);
@@ -929,7 +1871,7 @@ const sectionConfig = {
         });
         
         // Debug logging
-        console.log('DEBUG: API call parameters:', {
+        console.log('[DEBUG] API call parameters:', {
             section: section,
             ps_name: ps_name,
             source: source,
@@ -939,6 +1881,8 @@ const sectionConfig = {
             end_date: end_date,
             search: searchTerm
         });
+        
+        console.log(`[DEBUG] Making API call to /api/branch_head_dashboard_data for section: ${section}`);
         
         // Create AbortController for timeout
         const controller = new AbortController();
@@ -952,18 +1896,24 @@ const sectionConfig = {
             }
         })
         .then(response => {
+            const responseTime = performance.now() - startTime;
             clearTimeout(timeoutId);
+            console.log(`[DEBUG] Response received for section ${section} in ${responseTime.toFixed(3)}s, status: ${response.status}`);
+            
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             return response.json();
         })
         .then(data => {
+            const parseTime = performance.now() - startTime;
+            console.log(`[DEBUG] Data parsed for section ${section} in ${parseTime.toFixed(3)}s, rows: ${data.rows ? data.rows.length : 0}`);
+            
             if (data.success) {
                 // Update table efficiently
                 tbody.innerHTML = '';
                 if (data.rows.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">No data found</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">No data found</td></tr>';
                 } else {
                     // Use DocumentFragment for better performance
                     const fragment = document.createDocumentFragment();
@@ -974,13 +1924,39 @@ const sectionConfig = {
                         
                         config.columns.forEach(column => {
                             const td = document.createElement('td');
-                            const value = row[column] || '';
                             
-                            // Special handling for lead_category column
-                            if (column === 'lead_category' && value === 'Not Set') {
-                                td.innerHTML = '<span class="lead-category-not-set">Not Set</span>';
+                            if (column === 'call_history') {
+                                // Create call history button
+                                const callHistoryBtn = document.createElement('button');
+                                callHistoryBtn.className = 'btn btn-sm btn-outline-primary';
+                                callHistoryBtn.innerHTML = '<i class="fas fa-phone-alt me-1"></i>View History';
+                                callHistoryBtn.onclick = () => showCallHistory(row.uid);
+                                td.appendChild(callHistoryBtn);
+                            } else if (column === 'created_at' || column === 'ps_assigned_at') {
+                                // Format timestamp columns with +5:30 offset and dd/mm/yyyy hh:mm AM/PM format
+                                const value = row[column] || '';
+                                if (value && value !== 'N/A') {
+                                    td.textContent = formatTimestampWithOffset(value);
+                                } else {
+                                    td.textContent = 'N/A';
+                                }
+                            } else if (column === 'follow_up_date') {
+                                // Format follow-up date as dd/mm/yyyy (no time offset)
+                                const value = row[column] || '';
+                                if (value) {
+                                    td.textContent = formatDate(value);
+                                } else {
+                                    td.textContent = 'N/A';
+                                }
                             } else {
-                                td.textContent = value;
+                                const value = row[column] || '';
+                                
+                                // Special handling for lead_category column
+                                if (column === 'lead_category' && value === 'Not Set') {
+                                    td.innerHTML = '<span class="lead-category-not-set">Not Set</span>';
+                                } else {
+                                    td.textContent = value;
+                                }
                             }
                             
                             tr.appendChild(td);
@@ -990,18 +1966,26 @@ const sectionConfig = {
                     
                     tbody.appendChild(fragment);
                 }
+                
+                const totalTime = performance.now() - startTime;
+                console.log(`[DEBUG] Section ${section} completed in ${totalTime.toFixed(3)}s`);
+                logPerformanceMetric(`section_${section}_loading`, totalTime / 1000);
             } else {
-                tbody.innerHTML = `<tr><td colspan="9" class="text-center text-danger">Error: ${data.error || 'Unknown error'}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="10" class="text-center text-danger">Error: ${data.error || 'Unknown error'}</td></tr>`;
             }
         })
         .catch(error => {
+            const totalTime = performance.now() - startTime;
             clearTimeout(timeoutId);
-            console.error('Error:', error);
+            console.error(`[DEBUG] Error in section ${section} after ${totalTime.toFixed(3)}s:`, error);
+            
             if (error.name === 'AbortError') {
-                tbody.innerHTML = '<tr><td colspan="9" class="text-center text-warning">Request timed out. Please try again.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" class="text-center text-warning">Request timed out. Please try again.</td></tr>';
             } else {
-                tbody.innerHTML = '<tr><td colspan="9" class="text-center text-danger">Error loading data. Please refresh the page.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" class="text-center text-danger">Error loading data. Please refresh the page.</td></tr>';
             }
+            
+            logPerformanceMetric(`section_${section}_error`, totalTime / 1000);
         });
     }
 
@@ -1074,7 +2058,7 @@ const sectionConfig = {
             // PS filter
             if (showRow && psFilter && psFilter !== '-- all ps --') {
                 let psCell;
-                // PS Name column position depends on section
+                // PS Name column position depends on section (adjusted for new call history column)
                 if (sectionName === 'fresh_leads') {
                     psCell = row.querySelector('td:nth-child(5)'); // PS Name column (5th)
                 } else if (sectionName === 'followup_leads') {
@@ -1169,9 +2153,19 @@ const sectionConfig = {
 
     // Load dynamic sources for dropdowns
     function loadDynamicSources() {
+        const startTime = performance.now();
+        console.log('[DEBUG] loadDynamicSources called');
+        
         fetch('/api/branch_sources')
-            .then(response => response.json())
+            .then(response => {
+                const responseTime = performance.now() - startTime;
+                console.log(`[DEBUG] /api/branch_sources response received in ${responseTime.toFixed(3)}s, status: ${response.status}`);
+                return response.json();
+            })
             .then(data => {
+                const parseTime = performance.now() - startTime;
+                console.log(`[DEBUG] Dynamic sources data parsed in ${parseTime.toFixed(3)}s, sources: ${data.sources ? data.sources.length : 0}`);
+                
                 if (data.success && data.sources) {
                     // Update all source dropdowns (only for All Leads section now)
                     const sourceDropdowns = [
@@ -1195,10 +2189,16 @@ const sectionConfig = {
                             });
                         }
                     });
+                    
+                    const totalTime = performance.now() - startTime;
+                    console.log(`[DEBUG] loadDynamicSources completed in ${totalTime.toFixed(3)}s`);
+                    logPerformanceMetric('dynamic_sources_loading', totalTime / 1000);
                 }
             })
             .catch(error => {
-                console.error('Error loading dynamic sources:', error);
+                const totalTime = performance.now() - startTime;
+                console.error(`[DEBUG] Error in loadDynamicSources after ${totalTime.toFixed(3)}s:`, error);
+                logPerformanceMetric('dynamic_sources_error', totalTime / 1000);
             });
     }
 
@@ -1262,31 +2262,70 @@ function loadBranchHeadDashboards() {
         });
 }
 
-// Load Analytics Data
+// Load Analytics Data - OPTIMIZED
 function loadAnalyticsData() {
-    // Load PS Performance Data
-    loadPSPerformanceData();
+    const startTime = performance.now();
     
-    // Load Source-wise Leads Data
-    loadSourceLeadsData();
+    // Show loading state for all analytics tables
+    showAnalyticsLoadingState();
     
-    // Load Walk-in Leads Data
-    loadWalkinLeadsData();
+    // OPTIMIZATION: Use single endpoint to load all analytics data at once
+    const params = getAnalyticsFilterParams();
+    if (!params) {
+        hideAnalyticsLoadingState();
+        return;
+    }
     
-    // Load Branch Head Dashboards
-    loadBranchHeadDashboards();
-}
-
-// Load Product Specialist Performance Data
-function loadPSPerformanceData() {
-    fetch('/api/branch_analytics/ps_performance')
+    const queryString = new URLSearchParams(params).toString();
+    
+    fetch(`/api/branch_analytics/all?${queryString}`)
         .then(response => response.json())
         .then(data => {
+            if (data.success) {
+                // Update all tables with single response
+                updatePSPerformanceTable(data.data.ps_performance);
+                updateSourceLeadsTable(data.data.source_leads, data.data.sources);
+                updateWalkinLeadsTable(data.data.walkin_leads);
+                updateBranchSummary(data.data.summary);
+                
+                // Load PS Follow-up Summary Data (separate as it has different logic)
+                loadPSFollowupSummaryData();
+                
+                // Load Branch Head Dashboards with progressive loading
+                setTimeout(() => loadBranchHeadDashboards(), 100);
+                
+                // Log performance metric
+                const endTime = performance.now();
+                const duration = (endTime - startTime) / 1000;
+                logPerformanceMetric('analytics_loading', duration);
+                
+                // Show performance info in console
+                console.log(`[PERF] Analytics loaded in ${duration.toFixed(3)}s (${getAveragePerformance('analytics_loading').toFixed(3)}s avg)`);
+            } else {
+                console.error('Error loading analytics data:', data.message);
+                showAnalyticsError(data.message);
+            }
+            hideAnalyticsLoadingState();
+        })
+        .catch(error => {
+            console.error('Error loading analytics data:', error);
+            showAnalyticsError('Network error occurred. Please try again.');
+            hideAnalyticsLoadingState();
+            
+            // Log error performance
+            const endTime = performance.now();
+            const duration = (endTime - startTime) / 1000;
+            logPerformanceMetric('analytics_error', duration);
+        });
+}
+
+// Update PS Performance Table
+function updatePSPerformanceTable(data) {
             const tbody = document.getElementById('psPerformanceTableBody');
             tbody.innerHTML = '';
             
-            if (data.success && data.data.length > 0) {
-                data.data.forEach(row => {
+    if (data && data.length > 0) {
+        data.forEach(row => {
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td>${row.ps_name}</td>
@@ -1299,12 +2338,225 @@ function loadPSPerformanceData() {
             } else {
                 tbody.innerHTML = '<tr><td colspan="4" class="text-center">No data available</td></tr>';
             }
-        })
-        .catch(error => {
-            console.error('Error loading PS performance data:', error);
-            document.getElementById('psPerformanceTableBody').innerHTML = 
-                '<tr><td colspan="4" class="text-center text-danger">Error loading data</td></tr>';
+}
+
+// Update Source Leads Table
+function updateSourceLeadsTable(data, sources) {
+    const tbody = document.getElementById('sourceLeadsTableBody');
+    const thead = document.getElementById('sourceLeadsTableHead');
+    tbody.innerHTML = '';
+    
+    if (data && data.length > 0) {
+        // Update table headers with dynamic source columns
+        const headerRow = thead.querySelector('tr');
+        // Keep the first 4 columns (Product Specialist, Total Leads, Won Leads, Win Rate)
+        headerRow.innerHTML = `
+            <th>Product Specialist</th>
+            <th>Total Leads</th>
+            <th>Won Leads</th>
+            <th>Win Rate (%)</th>
+        `;
+        
+        // Add dynamic source columns
+        if (sources && sources.length > 0) {
+            sources.forEach(source => {
+                const th = document.createElement('th');
+                th.textContent = source;
+                headerRow.appendChild(th);
+            });
+        }
+        
+        // Populate table data
+        data.forEach(row => {
+            const tr = document.createElement('tr');
+            const winRate = row.total_leads > 0 ? ((row.won_leads / row.total_leads) * 100).toFixed(1) : '0.0';
+            
+            // Start with the basic columns
+            let rowHTML = `
+                <td>${row.ps_name}</td>
+                <td>${row.total_leads}</td>
+                <td>${row.won_leads}</td>
+                <td>${winRate}%</td>
+            `;
+            
+            // Add dynamic source columns
+            if (sources && sources.length > 0) {
+                sources.forEach(source => {
+                    const sourceStats = row.source_breakdown && row.source_breakdown[source] ? row.source_breakdown[source] : { total_leads: 0, won_leads: 0 };
+                    const sourceWinRate = sourceStats.total_leads > 0 ? ((sourceStats.won_leads / sourceStats.total_leads) * 100).toFixed(1) : '0.0';
+                    rowHTML += `<td>${sourceStats.total_leads} (${sourceStats.won_leads} won, ${sourceWinRate}%)</td>`;
+                });
+            }
+            
+            tr.innerHTML = rowHTML;
+            tbody.appendChild(tr);
         });
+    } else {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center">No data available</td></tr>';
+    }
+}
+
+// Update Walkin Leads Table
+function updateWalkinLeadsTable(data) {
+    const tbody = document.getElementById('walkinLeadsTableBody');
+    tbody.innerHTML = '';
+    
+    if (data && data.length > 0) {
+        data.forEach(row => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${row.ps_name}</td>
+                <td>${row.total_walkin_leads}</td>
+                <td>${row.pending_leads}</td>
+                <td>${row.lost_leads}</td>
+                <td>${row.won_leads}</td>
+                <td>${row.today_followups}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } else {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center">No data available</td></tr>';
+    }
+}
+
+// Update Branch Summary
+function updateBranchSummary(data) {
+    if (data) {
+        document.getElementById('totalLeadsAssigned').textContent = data.total_leads_assigned || 0;
+        document.getElementById('totalPendingLeads').textContent = data.total_pending_leads || 0;
+        document.getElementById('totalWonLeads').textContent = data.total_won_leads || 0;
+        document.getElementById('totalLostLeads').textContent = data.total_lost_leads || 0;
+    }
+}
+
+// Show Analytics Loading State
+function showAnalyticsLoadingState() {
+    const loadingHTML = '<tr><td colspan="10" class="text-center"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Loading...</td></tr>';
+    
+    // Show loading in all analytics tables
+    document.getElementById('psPerformanceTableBody').innerHTML = loadingHTML.replace('colspan="10"', 'colspan="4"');
+    document.getElementById('sourceLeadsTableBody').innerHTML = loadingHTML.replace('colspan="10"', 'colspan="4"');
+    document.getElementById('walkinLeadsTableBody').innerHTML = loadingHTML.replace('colspan="10"', 'colspan="6"');
+    
+    // Show loading in KPI cards
+    document.getElementById('totalLeadsAssigned').textContent = '...';
+    document.getElementById('totalPendingLeads').textContent = '...';
+    document.getElementById('totalWonLeads').textContent = '...';
+    document.getElementById('totalLostLeads').textContent = '...';
+}
+
+// Hide Analytics Loading State
+function hideAnalyticsLoadingState() {
+    // Loading states are cleared when data is populated
+}
+
+// Show Analytics Error
+function showAnalyticsError(message) {
+    const errorHTML = `<tr><td colspan="10" class="text-center text-danger"><i class="fas fa-exclamation-triangle me-2"></i>${message}</td></tr>`;
+    
+    document.getElementById('psPerformanceTableBody').innerHTML = errorHTML.replace('colspan="10"', 'colspan="4"');
+    document.getElementById('sourceLeadsTableBody').innerHTML = errorHTML.replace('colspan="10"', 'colspan="4"');
+    document.getElementById('walkinLeadsTableBody').innerHTML = errorHTML.replace('colspan="10"', 'colspan="6"');
+    
+    // Show error in KPI cards
+    document.getElementById('totalLeadsAssigned').textContent = 'Error';
+    document.getElementById('totalPendingLeads').textContent = 'Error';
+    document.getElementById('totalWonLeads').textContent = 'Error';
+    document.getElementById('totalLostLeads').textContent = 'Error';
+}
+
+// Performance Monitoring
+function logPerformanceMetric(operation, duration) {
+    console.log(`[PERF] ${operation}: ${duration.toFixed(3)}s`);
+    
+    // Store in localStorage for tracking
+    const metrics = JSON.parse(localStorage.getItem('dashboard_performance') || '{}');
+    if (!metrics[operation]) {
+        metrics[operation] = [];
+    }
+    metrics[operation].push({
+        timestamp: Date.now(),
+        duration: duration
+    });
+    
+    // Keep only last 10 measurements
+    if (metrics[operation].length > 10) {
+        metrics[operation] = metrics[operation].slice(-10);
+    }
+    
+    localStorage.setItem('dashboard_performance', JSON.stringify(metrics));
+}
+
+// Get Average Performance
+function getAveragePerformance(operation) {
+    const metrics = JSON.parse(localStorage.getItem('dashboard_performance') || '{}');
+    const operationMetrics = metrics[operation] || [];
+    
+    if (operationMetrics.length === 0) return 0;
+    
+    const total = operationMetrics.reduce((sum, m) => sum + m.duration, 0);
+    return total / operationMetrics.length;
+}
+
+// Show Performance Statistics
+function showPerformanceStats() {
+    const metrics = JSON.parse(localStorage.getItem('dashboard_perytics') || '{}');
+    
+    let statsHTML = '<div class="table-responsive"><table class="table table-sm">';
+    statsHTML += '<thead><tr><th>Operation</th><th>Last 10 Avg</th><th>Best</th><th>Worst</th></tr></thead><tbody>';
+    
+    for (const [operation, measurements] of Object.entries(metrics)) {
+        if (measurements.length === 0) continue;
+        
+        const avg = getAveragePerformance(operation);
+        const best = Math.min(...measurements.map(m => m.duration));
+        const worst = Math.max(...measurements.map(m => m.duration));
+        
+        statsHTML += `<tr>
+            <td><strong>${operation.replace('_', ' ').toUpperCase()}</strong></td>
+            <td>${avg.toFixed(3)}s</td>
+            <td class="text-success">${best.toFixed(3)}s</td>
+            <td class="text-danger">${worst.toFixed(3)}s</td>
+        </tr>`;
+    }
+    
+    statsHTML += '</tbody></table></div>';
+    
+    // Show in a modal or alert
+    const modal = new bootstrap.Modal(document.getElementById('performanceModal') || createPerformanceModal());
+    document.getElementById('performanceModalBody').innerHTML = statsHTML;
+    modal.show();
+}
+
+// Create Performance Modal if it doesn't exist
+function createPerformanceModal() {
+    const modalHTML = `
+        <div class="modal fade" id="performanceModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Dashboard Performance Statistics</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body" id="performanceModalBody">
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-warning" onclick="clearPerformanceData()">Clear Data</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    return document.getElementById('performanceModal');
+}
+
+// Clear Performance Data
+function clearPerformanceData() {
+    localStorage.removeItem('dashboard_performance');
+    document.getElementById('performanceModalBody').innerHTML = '<div class="alert alert-info">Performance data cleared.</div>';
 }
 
 // Load Source-wise Leads Data
@@ -1405,6 +2657,302 @@ function loadWalkinLeadsData() {
         });
 }
 
+// Load PS Follow-up Summary Data
+function loadPSFollowupSummaryData() {
+    fetch('/api/ps_followup_summary')
+        .then(response => response.json())
+        .then(data => {
+            const tbody = document.getElementById('psFollowupTableBody');
+            tbody.innerHTML = '';
+            
+            if (data.success && data.data.length > 0) {
+                data.data.forEach(row => {
+                    const tr = document.createElement('tr');
+                    
+                    // Helper function to create sub-column cells for each follow-up level with click functionality
+                    function createFollowupCells(followupData, fLevel, psName) {
+                        const creCount = followupData.ps_followup || 0;
+                        const walkinCount = followupData.walkin || 0;
+                        
+                        return `
+                            <td class="text-center clickable-cell" 
+                                data-ps="${psName}" 
+                                data-level="${fLevel}" 
+                                data-source="cre" 
+                                data-count="${creCount}"
+                                style="cursor: pointer;">
+                                <span class="badge bg-primary">${creCount}</span>
+                            </td>
+                            <td class="text-center clickable-cell" 
+                                data-ps="${psName}" 
+                                data-level="${fLevel}" 
+                                data-source="walkin" 
+                                data-count="${walkinCount}"
+                                style="cursor: pointer;">
+                                <span class="badge bg-info">${walkinCount}</span>
+                            </td>
+                        `;
+                    }
+                    
+                    tr.innerHTML = `
+                        <td><strong>${row.ps_name}</strong></td>
+                        ${createFollowupCells(row.F1, 'F1', row.ps_name)}
+                        ${createFollowupCells(row.F2, 'F2', row.ps_name)}
+                        ${createFollowupCells(row.F3, 'F3', row.ps_name)}
+                        ${createFollowupCells(row.F4, 'F4', row.ps_name)}
+                        ${createFollowupCells(row.F5, 'F5', row.ps_name)}
+                        ${createFollowupCells(row.F6, 'F6', row.ps_name)}
+                        ${createFollowupCells(row.F7, 'F7', row.ps_name)}
+
+                    `;
+                    tbody.appendChild(tr);
+                });
+                
+                // Add click event listeners to all clickable cells
+                addClickEventListeners();
+                
+                // Ensure table responsiveness
+                ensureTableResponsiveness();
+            } else {
+                tbody.innerHTML = '<tr><td colspan="15" class="text-center">No data available</td></tr>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading PS follow-up summary data:', error);
+            document.getElementById('psFollowupTableBody').innerHTML = 
+                '<tr><td colspan="15" class="text-center text-danger">Error loading data</td></tr>';
+        });
+}
+
+// Add click event listeners to clickable cells
+function addClickEventListeners() {
+    const clickableCells = document.querySelectorAll('.clickable-cell');
+    clickableCells.forEach(cell => {
+        cell.addEventListener('click', function() {
+            const psName = this.getAttribute('data-ps');
+            const level = this.getAttribute('data-level');
+            const source = this.getAttribute('data-source');
+            const count = parseInt(this.getAttribute('data-count')) || 0;
+            const psRow = this.closest('tr');
+            if (count > 0 && psRow) {
+                toggleInlineLeadDetails(psName, level, source, psRow);
+            }
+        });
+    });
+}
+
+// Toggle details row under the PS row and render leads inline
+function toggleInlineLeadDetails(psName, level, source, anchorRow) {
+    // If an existing details row exists right after this PS row, remove it (toggle)
+    const nextRow = anchorRow.nextElementSibling;
+    if (nextRow && nextRow.classList.contains('ps-inline-details')) {
+        nextRow.remove();
+        return;
+    }
+
+    // Remove any other open details row in the table to keep UI clean
+    document.querySelectorAll('#psFollowupTable .ps-inline-details').forEach(r => r.remove());
+
+    // Create a new details row
+    const detailsRow = document.createElement('tr');
+    detailsRow.className = 'ps-inline-details bg-light';
+    const colCount = document.querySelectorAll('#psFollowupTable thead tr:last-child th').length + 1; // +1 for PS Name
+    const detailsCell = document.createElement('td');
+    detailsCell.setAttribute('colspan', colCount.toString());
+    detailsCell.innerHTML = `
+        <div class="p-2">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="fw-semibold">${psName} – ${level} ${source === 'cre' ? 'CRE Assigned' : 'Walk-in'} Leads</div>
+                <button class="btn btn-sm btn-outline-secondary" onclick="this.closest('tr').remove()">Hide</button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered mb-0">
+                    <thead class="table-secondary">
+                        <tr>
+                            <th style="width: 140px;">Lead ID</th>
+                            <th>Customer</th>
+                            <th style="width: 120px;">Phone</th>
+                            <th style="width: 90px;">Status</th>
+                            <th style="width: 90px;">Source</th>
+                            <th style="width: 140px;">PS Assigned At</th>
+                            <th style="width: 140px;">Created At</th>
+                            <th style="width: 160px;">Follow-up Date</th>
+                            <th style="width: 120px;">History</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inlineLeadsBody"></tbody>
+                </table>
+            </div>
+        </div>
+    `;
+    detailsRow.appendChild(detailsCell);
+    anchorRow.parentNode.insertBefore(detailsRow, anchorRow.nextSibling);
+
+    const tbody = detailsCell.querySelector('#inlineLeadsBody');
+    tbody.innerHTML = `<tr><td colspan="9" class="text-center"><i class=\"fas fa-spinner fa-spin\"></i> Loading...</td></tr>`;
+
+    fetch(`/api/ps_followup_leads?ps_name=${encodeURIComponent(psName)}&level=${level}&source=${source}`)
+        .then(r => r.json())
+        .then(data => {
+            if (!(data.success && data.leads && data.leads.length)) {
+                tbody.innerHTML = `<tr><td colspan="9" class="text-center text-muted">No leads found.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = '';
+            data.leads.forEach(lead => {
+                const uid = lead.uid || lead.lead_uid || '';
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><code>${uid}</code></td>
+                    <td>${(lead.customer_name||'').toString()}</td>
+                    <td>${lead.mobile_number || lead.customer_phone_number || 'N/A'}</td>
+                    <td><span class="badge bg-${(lead.status||lead.final_status)==='Pending' ? 'warning' : (lead.status||lead.final_status)==='Won' ? 'success' : 'danger'}">${lead.status || lead.final_status || 'N/A'}</span></td>
+                    <td><span class="badge bg-info">${source === 'cre' ? (lead.source || 'CRE') : 'Walk-in'}</span></td>
+                    <td>${source === 'cre' ? formatDate(lead.ps_assigned_at) : 'N/A'}</td>
+                    <td>${source === 'walkin' ? formatDate(lead.created_at) : 'N/A'}</td>
+                    <td>${lead.follow_up_date || lead.next_followup_date || 'N/A'}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" data-uid="${uid}" onclick="toggleCallHistoryInline(this)">View history</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+
+                // Placeholder row for history (hidden initially)
+                const historyRow = document.createElement('tr');
+                historyRow.className = 'lead-history-row d-none';
+                const historyCell = document.createElement('td');
+                historyCell.setAttribute('colspan', '9');
+                historyCell.innerHTML = `<div class="p-2 small text-muted">History will appear here...</div>`;
+                historyRow.appendChild(historyCell);
+                tbody.appendChild(historyRow);
+            });
+        })
+        .catch(err => {
+            console.error('Inline leads load error:', err);
+            tbody.innerHTML = `<tr><td colspan="9" class="text-center text-danger">Error loading leads</td></tr>`;
+        });
+}
+
+// Helper function to format dates consistently
+function formatDate(dateString) {
+    if (!dateString) return 'N/A';
+    try {
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return 'N/A';
+        return date.toLocaleDateString('en-IN', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+    } catch (e) {
+        return 'N/A';
+    }
+}
+
+function formatTimestampWithOffset(dateString) {
+    if (!dateString) return 'N/A';
+    try {
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return 'N/A';
+        
+        // Add +5:30 hours offset (IST timezone)
+        const istOffset = 5.5 * 60 * 60 * 1000; // 5.5 hours in milliseconds
+        const istDate = new Date(date.getTime() + istOffset);
+        
+        // Format as dd/mm/yyyy hh:mm AM/PM
+        const day = String(istDate.getUTCDate()).padStart(2, '0');
+        const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+        const year = istDate.getUTCFullYear();
+        
+        let hours = istDate.getUTCHours();
+        const minutes = String(istDate.getUTCMinutes()).padStart(2, '0');
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12;
+        hours = hours ? hours : 12; // the hour '0' should be '12'
+        hours = String(hours).padStart(2, '0');
+        
+        return `${day}/${month}/${year} ${hours}:${minutes} ${ampm}`;
+    } catch (e) {
+        return 'N/A';
+    }
+}
+
+// Function to ensure table responsiveness
+function ensureTableResponsiveness() {
+    const psFollowupTable = document.getElementById('psFollowupTable');
+    if (psFollowupTable) {
+        const tableContainer = psFollowupTable.closest('.table-responsive');
+        if (tableContainer) {
+            // Ensure horizontal scroll is enabled
+            tableContainer.style.overflowX = 'auto';
+            tableContainer.style.maxWidth = '100%';
+            
+            // Add custom scrollbar styling
+            tableContainer.style.scrollbarWidth = 'thin';
+            tableContainer.style.scrollbarColor = '#6c757d #f8f9fa';
+        }
+    }
+}
+
+// Toggle inline call history for a single lead
+function toggleCallHistoryInline(btn) {
+    const uid = btn.getAttribute('data-uid');
+    const currentRow = btn.closest('tr');
+    const historyRow = currentRow.nextElementSibling;
+    if (!historyRow || !historyRow.classList.contains('lead-history-row')) return;
+    const cell = historyRow.querySelector('td');
+
+    if (!historyRow.classList.contains('d-none')) {
+        historyRow.classList.add('d-none');
+        return;
+    }
+
+    // Show and load
+    historyRow.classList.remove('d-none');
+    cell.innerHTML = `<div class="p-2 text-center"><i class=\"fas fa-spinner fa-spin\"></i> Loading history...</div>`;
+    fetch(`/api/lead_call_history/${encodeURIComponent(uid)}`)
+        .then(r => r.json())
+        .then(data => {
+            if (!(data.success && data.history)) {
+                cell.innerHTML = `<div class="p-2 text-muted">No history found.</div>`;
+                return;
+            }
+            const rows = data.history.map(h => `
+                <tr>
+                    <td>${h.role}</td>
+                    <td>${(h.call_no||'').toString().toUpperCase()}</td>
+                    <td>${h.attempt ?? ''}</td>
+                    <td>${h.status || ''}</td>
+                    <td>${h.follow_up_date ? formatDate(h.follow_up_date) : ''}</td>
+                    <td>${h.timestamp ? formatDate(h.timestamp) : ''}</td>
+                    <td>${h.remarks ? `<small>${h.remarks}</small>` : ''}</td>
+                </tr>
+            `).join('');
+            cell.innerHTML = `
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped mb-0">
+                        <thead>
+                            <tr>
+                                <th>Role</th>
+                                <th>Call</th>
+                                <th>Attempt</th>
+                                <th>Status</th>
+                                <th>Follow-up</th>
+                                <th>Timestamp</th>
+                                <th>Remarks</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+            `;
+        })
+        .catch(err => {
+            console.error('History load error:', err);
+            cell.innerHTML = `<div class="p-2 text-danger">Error loading history</div>`;
+        });
+}
+
     // Export functions
     function exportLeadsData(leadType) {
         const dateFrom = document.getElementById('exportDateFrom').value;
@@ -1492,20 +3040,68 @@ function loadWalkinLeadsData() {
     }
 
     function loadAnalyticsDataWithFilter() {
+        console.log('[DEBUG] loadAnalyticsDataWithFilter called');
+        const startTime = performance.now();
+        
         const params = getAnalyticsFilterParams();
-        if (!params) return;
+        if (!params) {
+            console.log('[DEBUG] No filter params, returning');
+            return;
+        }
         
-        // Load Branch Summary Data with filter
-        loadBranchSummaryDataWithFilter(params);
+        console.log('[DEBUG] Filter params:', params);
         
-        // Load PS Performance Data with filter
-        loadPSPerformanceDataWithFilter(params);
+        // OPTIMIZATION: Use single endpoint instead of multiple individual calls
+        const queryString = new URLSearchParams(params).toString();
+        console.log('[DEBUG] Making single API call to /api/branch_analytics/all');
         
-        // Load Source-wise Leads Data with filter
-        loadSourceLeadsDataWithFilter(params);
+        // Show loading state for all analytics tables
+        showAnalyticsLoadingState();
         
-        // Load Walk-in Leads Data with filter
-        loadWalkinLeadsDataWithFilter(params);
+        fetch(`/api/branch_analytics/all?${queryString}`)
+            .then(response => {
+                console.log('[DEBUG] Response received, status:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                const endTime = performance.now();
+                const duration = (endTime - startTime) / 1000;
+                console.log(`[DEBUG] Analytics data loaded in ${duration.toFixed(3)}s`);
+                
+                if (data.success) {
+                    console.log('[DEBUG] Data loaded successfully, updating tables...');
+                    
+                    // Update all tables with single response
+                    updatePSPerformanceTable(data.data.ps_performance);
+                    updateSourceLeadsTable(data.data.source_leads, data.data.sources);
+                    updateWalkinLeadsTable(data.data.walkin_leads);
+                    updateBranchSummary(data.data.summary);
+                    
+                    // Load PS Follow-up Summary Data (separate as it has different logic)
+                    loadPSFollowupSummaryData();
+                    
+                    // Load Branch Head Dashboards with progressive loading
+                    setTimeout(() => loadBranchHeadDashboards(), 100);
+                    
+                    // Log performance metric
+                    logPerformanceMetric('analytics_loading_filtered', duration);
+                    console.log(`[PERF] Filtered analytics loaded in ${duration.toFixed(3)}s (${getAveragePerformance('analytics_loading_filtered').toFixed(3)}s avg)`);
+                } else {
+                    console.error('[DEBUG] Error in data response:', data.message);
+                    showAnalyticsError(data.message);
+                }
+                hideAnalyticsLoadingState();
+            })
+            .catch(error => {
+                const endTime = performance.now();
+                const duration = (endTime - startTime) / 1000;
+                console.error('[DEBUG] Fetch error:', error);
+                showAnalyticsError('Network error occurred. Please try again.');
+                hideAnalyticsLoadingState();
+                
+                // Log error performance
+                logPerformanceMetric('analytics_error_filtered', duration);
+            });
     }
 
     function loadPSPerformanceDataWithFilter(params) {
@@ -1706,13 +3302,50 @@ function loadWalkinLeadsData() {
 
     // OPTIMIZED: Load initial data with better performance
     document.addEventListener('DOMContentLoaded', function() {
+        const pageLoadStartTime = performance.now();
+        console.log('[DEBUG] DOM Content Loaded - Starting initialization...');
+        
         // Load dynamic sources
+        console.log('[DEBUG] Loading dynamic sources...');
         loadDynamicSources();
         
         // Load analytics data by default with timeout
         setTimeout(() => {
+            console.log('[DEBUG] Loading analytics data...');
             loadAnalyticsDataWithFilter();
         }, 100); // Small delay to ensure DOM is ready
+        
+        // Ensure table responsiveness after a short delay
+        setTimeout(() => {
+            ensureTableResponsiveness();
+        }, 500);
+        
+        // Add window resize listener for table responsiveness
+        window.addEventListener('resize', function() {
+            setTimeout(() => {
+                ensureTableResponsiveness();
+            }, 100);
+        });
+        
+        // Debug: Check if tab elements exist
+        console.log('Checking tab elements...');
+        console.log('Analytics tab:', document.getElementById('analytics'));
+        console.log('Fresh tab:', document.getElementById('fresh'));
+        console.log('Fresh-leads tab:', document.getElementById('fresh-leads'));
+        console.log('Followup tab:', document.getElementById('followup'));
+        console.log('Export tab:', document.getElementById('export'));
+        
+        // Test tab functionality
+        console.log('Testing tab functionality...');
+        const tabLinks = document.querySelectorAll('.nav-tabs .nav-link');
+        console.log('Tab links found:', tabLinks.length);
+        
+        tabLinks.forEach((link, index) => {
+            console.log(`Tab ${index}:`, link.textContent.trim(), link.getAttribute('href'));
+            link.addEventListener('click', function(e) {
+                console.log('Tab clicked:', this.textContent.trim(), this.getAttribute('href'));
+            });
+        });
         
         // Update current date and time
         function updateDateTime() {
@@ -1743,6 +3376,10 @@ function loadWalkinLeadsData() {
                 card.innerHTML = loadingSpinner + 'Loading...';
             }
         });
+        
+        const pageLoadTime = performance.now() - pageLoadStartTime;
+        console.log(`[DEBUG] Page initialization completed in ${pageLoadTime.toFixed(3)}s`);
+        logPerformanceMetric('page_initialization', pageLoadTime / 1000);
     });
 
     // OPTIMIZED: Date filter functionality for All Leads and Fresh Leads sections
@@ -1925,5 +3562,97 @@ function loadWalkinLeadsData() {
             }
         });
 });
+
+// Function to show call attempt history for a lead
+function showCallHistory(uid) {
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('callAttemptHistoryModal'));
+    modal.show();
+    
+    // Clear previous data
+    document.getElementById('callHistorySummary').innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Loading call history...';
+    document.getElementById('callHistoryTableBody').innerHTML = '<tr><td colspan="9" class="text-center">Loading...</td></tr>';
+    
+    // Fetch call history data
+    fetch(`/api/lead_call_history/${uid}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.history.length > 0) {
+                // Update summary
+                const summary = data.summary;
+                document.getElementById('callHistorySummary').innerHTML = `
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Total Calls Made:</strong> ${summary.total_calls} &nbsp; | &nbsp; 
+                    <strong>RNR Calls:</strong> ${summary.rnr_calls} &nbsp; | &nbsp; 
+                    <strong>Busy on another Call:</strong> ${summary.busy_calls} &nbsp; | &nbsp; 
+                    <strong>Call me Back:</strong> ${summary.call_me_back} &nbsp; | &nbsp; 
+                    <strong>Call not Connected:</strong> ${summary.call_not_connected} &nbsp; | &nbsp; 
+                    <strong>Connected Calls:</strong> ${summary.connected_calls}
+                `;
+                
+                // Update table
+                const tbody = document.getElementById('callHistoryTableBody');
+                tbody.innerHTML = '';
+                
+                data.history.forEach(call => {
+                    const tr = document.createElement('tr');
+                    
+                    // Format timestamp with +5:30 offset and dd/mm/yyyy hh:mm AM/PM format
+                    let timestamp = '';
+                    if (call.timestamp) {
+                        timestamp = formatTimestampWithOffset(call.timestamp);
+                    }
+                    
+                    // Format follow-up date
+                    let followUpDate = '';
+                    if (call.follow_up_date) {
+                        followUpDate = formatDate(call.follow_up_date);
+                    }
+                    
+                    tr.innerHTML = `
+                        <td>${call.uid || ''}</td>
+                        <td><span class="badge bg-primary">${call.call_no || ''}</span></td>
+                        <td><span class="badge bg-secondary">${call.attempt || ''}</span></td>
+                        <td data-status="${call.status || ''}" class="status-cell">
+                            <strong>${call.status || ''}</strong>
+                        </td>
+                        <td><span class="badge bg-${call.role === 'CRE' ? 'info' : 'success'}">${call.role || ''}</span></td>
+                        <td>${call.name || ''}</td>
+                        <td><small>${timestamp}</small></td>
+                        <td>${call.remarks || ''}</td>
+                        <td><small>${followUpDate}</small></td>
+                    `;
+                    
+                    tbody.appendChild(tr);
+                });
+            } else {
+                document.getElementById('callHistorySummary').innerHTML = '<div class="alert alert-info"><i class="fas fa-info-circle me-2"></i>No call attempt history found for this lead.</div>';
+                document.getElementById('callHistoryTableBody').innerHTML = '<tr><td colspan="9" class="text-center text-muted">No call history available</td></tr>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading call history:', error);
+            document.getElementById('callHistorySummary').innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle me-2"></i>Failed to load call attempt history.</div>';
+            document.getElementById('callHistoryTableBody').innerHTML = '<tr><td colspan="9" class="text-center text-danger">Error loading call history</td></tr>';
+        });
+}
+
+// Helper function to get badge class for status
+function getStatusBadgeClass(status) {
+    if (!status) return 'secondary';
+    
+    const statusLower = status.toLowerCase();
+    if (statusLower.includes('interested') || statusLower.includes('booked') || statusLower.includes('test drive')) {
+        return 'success';
+    } else if (statusLower.includes('not interested') || statusLower.includes('lost')) {
+        return 'danger';
+    } else if (statusLower.includes('rnr') || statusLower.includes('busy') || statusLower.includes('call me back')) {
+        return 'warning';
+    } else if (statusLower.includes('call not connected')) {
+        return 'secondary';
+    } else {
+        return 'info';
+    }
+}
 </script>
 {% endblock %} 
