@@ -7610,6 +7610,196 @@ def export_all_cre_leads():
         flash(f'Error exporting all CRE leads: {str(e)}', 'error')
         return redirect(url_for('manage_leads'))
 
+@app.route('/download_lead_master')
+@require_admin
+def download_lead_master():
+    """Download leads from lead_master table with date filtering and comprehensive columns."""
+    import io
+    import csv
+    import openpyxl
+    from flask import send_file
+    
+    try:
+        # Get filters from query params
+        date_filter = request.args.get('date_filter', 'all')
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        format_ = request.args.get('format', 'excel')
+        
+        # Get all leads from lead_master
+        all_leads = safe_get_data('lead_master')
+        
+        # Apply date filtering
+        filtered_leads = []
+        today = datetime.now().date()
+        
+        for lead in all_leads:
+            lead_date = None
+            # Try to get date from various date fields
+            date_fields = ['date', 'created_at', 'cre_assigned_at', 'first_call_date']
+            for field in date_fields:
+                if lead.get(field):
+                    try:
+                        # Handle different date formats
+                        date_str = str(lead.get(field))
+                        if 'T' in date_str:
+                            date_str = date_str.split('T')[0]
+                        elif ' ' in date_str:
+                            date_str = date_str.split(' ')[0]
+                        lead_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                        break
+                    except:
+                        continue
+            
+            if not lead_date:
+                # If no valid date found, include the lead
+                filtered_leads.append(lead)
+                continue
+                
+            # Apply date filtering
+            if date_filter == 'today':
+                if lead_date == today:
+                    filtered_leads.append(lead)
+            elif date_filter == 'yesterday':
+                if lead_date == today - timedelta(days=1):
+                    filtered_leads.append(lead)
+            elif date_filter == 'this_week':
+                week_start = today - timedelta(days=today.weekday())
+                if week_start <= lead_date <= today:
+                    filtered_leads.append(lead)
+            elif date_filter == 'this_month':
+                if lead_date.year == today.year and lead_date.month == today.month:
+                    filtered_leads.append(lead)
+            elif date_filter == 'last_month':
+                last_month = today.replace(day=1) - timedelta(days=1)
+                if lead_date.year == last_month.year and lead_date.month == last_month.month:
+                    filtered_leads.append(lead)
+            elif date_filter == 'range' and start_date and end_date:
+                try:
+                    start_dt = datetime.strptime(start_date, '%Y-%m-%d').date()
+                    end_dt = datetime.strptime(end_date, '%Y-%m-%d').date()
+                    if start_dt <= lead_date <= end_dt:
+                        filtered_leads.append(lead)
+                except:
+                    # If date parsing fails, include the lead
+                    filtered_leads.append(lead)
+            else:  # 'all' or any other value
+                filtered_leads.append(lead)
+        
+        # Define export columns with all required fields
+        export_columns = [
+            ('uid', 'UID'),
+            ('date', 'Date'),
+            ('customer_name', 'Customer Name'),
+            ('customer_mobile_number', 'Customer Mobile Number'),
+            ('source', 'Source'),
+            ('cre_name', 'CRE Name'),
+            ('lead_category', 'Lead Category'),
+            ('model_interested', 'Model Interested'),
+            ('branch', 'Branch'),
+            ('ps_name', 'PS Name'),
+            ('lead_status', 'Lead Status'),
+            ('first_call_date', 'First Call Date'),
+            ('first_call_remark', 'First Call Remark'),
+            ('second_call_date', 'Second Call Date'),
+            ('second_call_remark', 'Second Call Remark'),
+            ('third_call_date', 'Third Call Date'),
+            ('third_call_remark', 'Third Call Remark'),
+            ('fourth_call_date', 'Fourth Call Date'),
+            ('fourth_call_remark', 'Fourth Call Remark'),
+            ('fifth_call_date', 'Fifth Call Date'),
+            ('fifth_call_remark', 'Fifth Call Remark'),
+            ('sixth_call_date', 'Sixth Call Date'),
+            ('sixth_call_remark', 'Sixth Call Remark'),
+            ('seventh_call_date', 'Seventh Call Date'),
+            ('seventh_call_remark', 'Seventh Call Remark'),
+            ('campaign', 'Campaign'),
+            ('tat', 'TAT'),
+            ('sub_source', 'Sub Source')
+        ]
+        
+        if format_ == 'excel':
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = 'Lead Master Data'
+            
+            # Add header
+            ws.append([col[1] for col in export_columns])
+            
+            # Add data
+            for lead in filtered_leads:
+                row_data = []
+                for col_key, col_name in export_columns:
+                    value = lead.get(col_key, '')
+                    # Format dates if they exist
+                    if 'date' in col_key and value:
+                        try:
+                            if isinstance(value, str):
+                                if 'T' in value:
+                                    value = value.split('T')[0]
+                                elif ' ' in value:
+                                    value = value.split(' ')[0]
+                            value = str(value)[:10] if len(str(value)) >= 10 else str(value)
+                        except:
+                            pass
+                    row_data.append(value)
+                ws.append(row_data)
+            
+            # Auto-adjust column widths
+            for column in ws.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 50)  # Cap at 50 characters
+                ws.column_dimensions[column_letter].width = adjusted_width
+            
+            output = io.BytesIO()
+            wb.save(output)
+            output.seek(0)
+            filename = f"lead_master_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            return send_file(output, as_attachment=True, download_name=filename, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        else:
+            output = io.StringIO()
+            writer = csv.writer(output)
+            
+            # Add header
+            writer.writerow([col[1] for col in export_columns])
+            
+            # Add data
+            for lead in filtered_leads:
+                row_data = []
+                for col_key, col_name in export_columns:
+                    value = lead.get(col_key, '')
+                    # Format dates if they exist
+                    if 'date' in col_key and value:
+                        try:
+                            if isinstance(value, str):
+                                if 'T' in value:
+                                    value = value.split('T')[0]
+                                elif ' ' in value:
+                                    value = value.split(' ')[0]
+                            value = str(value)[:10] if len(str(value)) >= 10 else str(value)
+                        except:
+                            pass
+                    row_data.append(value)
+                writer.writerow(row_data)
+            
+            output.seek(0)
+            filename = f"lead_master_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            return send_file(io.BytesIO(output.getvalue().encode('utf-8')), as_attachment=True, download_name=filename, mimetype='text/csv')
+    
+    except Exception as e:
+        print(f"Error downloading lead master data: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        flash(f'Error downloading lead master data: {str(e)}', 'error')
+        return redirect(url_for('manage_leads'))
+
 @app.route('/api/export_branch_leads', methods=['POST'])
 def api_export_branch_leads():
     """Export leads data for branch head with date range and branch filtering"""
