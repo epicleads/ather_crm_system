@@ -772,8 +772,6 @@ def fix_missing_timestamps():
 def index():
     session.clear()  # Ensure no session data is present
     return render_template('index.html')
-
-
 @app.route('/unified_login', methods=['POST'])
 @limiter.limit("100000 per minute")
 def unified_login() -> Response:
@@ -1548,8 +1546,6 @@ def add_cre():
             flash(f'Error adding CRE: {str(e)}', 'error')
 
     return render_template('add_cre.html')
-
-
 @app.route('/add_ps', methods=['GET', 'POST'])
 @require_admin
 def add_ps():
@@ -2246,7 +2242,6 @@ def check_duplicate_lead():
     except Exception as e:
         print(f"Error checking duplicate lead: {e}")
         return jsonify({'success': False, 'message': f'Error checking duplicate: {str(e)}'}), 500
-
 @app.route('/add_lead', methods=['GET', 'POST'])
 @require_cre
 def add_lead():
@@ -2871,7 +2866,6 @@ def add_lead_with_cre():
         else:
             flash(f'Error adding lead: {str(e)}', 'error')
             return redirect('/assign_leads')
-
 @app.route('/cre_dashboard')
 @require_cre
 def cre_dashboard():
@@ -3273,7 +3267,6 @@ def update_lead(uid):
     except Exception as e:
         flash(f'Error loading lead: {str(e)}', 'error')
         return redirect(url_for('cre_dashboard'))
-
 @app.route('/ps_dashboard')
 @require_ps
 def ps_dashboard():
@@ -3940,8 +3933,6 @@ def update_walkin_lead(walkin_id):
         flash(f'Error updating walk-in lead: {str(e)}', 'error')
         redirect_url = url_for('ps_dashboard', tab=return_tab)
         return redirect(redirect_url)
-
-
 @app.route('/update_ps_lead/<uid>', methods=['GET', 'POST'])
 @require_ps
 def update_ps_lead(uid):
@@ -4631,13 +4622,6 @@ def ensure_static_directories():
     except Exception as e:
         print(f"Error creating static directories: {e}")
         return None
-
-
-
-
-
-
-
 @app.route('/analytics')
 @require_auth(['admin'])
 def analytics():
@@ -5109,7 +5093,6 @@ def branch_head_dashboard():
                          event_leads_count=event_leads_count,
                          won_leads_count=won_leads_count,
                          lost_leads_count=lost_leads_count)
-
 @app.route('/api/branch_head_dashboard_data')
 def api_branch_head_dashboard_data():
     """Get data for branch head dashboard"""
@@ -5603,12 +5586,12 @@ def api_branch_head_dashboard_data():
         # Debug logging
         print(f"DEBUG: Followup filter parameters - ps_name: {ps_name}, search: {search}")
         
-        # Get today's follow-ups using proper date filtering (like your SQL query)
+        # Get today's and past follow-ups using proper date filtering (follow_up_date <= today)
         today_str = datetime.now().strftime('%Y-%m-%d')
         
-        # PS follow-ups for today (exact date match) AND final_status = 'Pending'
+        # PS follow-ups for today and past dates (follow_up_date <= today) AND final_status = 'Pending'
         print(f"DEBUG: Today's date for PS query: {today_str}")
-        ps_query = supabase.table('ps_followup_master').select('*, created_at, ps_assigned_at').eq('ps_branch', branch).eq('final_status', 'Pending').eq('follow_up_date', today_str)
+        ps_query = supabase.table('ps_followup_master').select('*, created_at, ps_assigned_at').eq('ps_branch', branch).eq('final_status', 'Pending').lte('follow_up_date', today_str)
         # Apply PS filter if specified
         if ps_name:
             ps_query = ps_query.eq('ps_name', ps_name)
@@ -5617,19 +5600,20 @@ def api_branch_head_dashboard_data():
         if ps_today:
             print(f"DEBUG: Sample PS data: {ps_today[0]}")
             print(f"DEBUG: Sample PS follow_up_date: {ps_today[0].get('follow_up_date')}")
+            print(f"DEBUG: PS query filter: follow_up_date <= {today_str}")
         
-        # Event follow-ups for today (exact date match) AND final_status = 'Pending'
-        # Use date range queries for timestamp columns
-        act_query = supabase.table('activity_leads').select('*, created_at').eq('location', branch).eq('final_status', 'Pending').gte('ps_followup_date_ts', f'{today_str} 00:00:00').lt('ps_followup_date_ts', f'{today_str} 23:59:59')
+        # Event follow-ups for today and past dates (ps_followup_date_ts <= today) AND final_status = 'Pending'
+        # Use lte (less than or equal) to get today and past follow-up dates
+        act_query = supabase.table('activity_leads').select('*, created_at').eq('location', branch).eq('final_status', 'Pending').lte('ps_followup_date_ts', f'{today_str} 23:59:59')
         # Apply PS filter if specified
         if ps_name:
             act_query = act_query.eq('ps_name', ps_name)
         act_today_raw = act_query.execute().data or []
         
-        # Walk-in follow-ups for today (exact date match) AND status = 'Pending'
-        # Use date range queries for timestamp columns
+        # Walk-in follow-ups for today and past dates (next_followup_date <= today) AND status = 'Pending'
+        # Use lte (less than or equal) to get today and past follow-up dates
         print(f"DEBUG: Today's date for walk-in query: {today_str}")
-        walkin_query = supabase.table('walkin_table').select('*, created_at').eq('branch', branch).eq('status', 'Pending').gte('next_followup_date', f'{today_str} 00:00:00').lt('next_followup_date', f'{today_str} 23:59:59')
+        walkin_query = supabase.table('walkin_table').select('*, created_at').eq('branch', branch).eq('status', 'Pending').lte('next_followup_date', f'{today_str} 23:59:59')
         # Apply PS filter if specified
         if ps_name:
             walkin_query = walkin_query.eq('ps_assigned', ps_name)
@@ -5638,6 +5622,7 @@ def api_branch_head_dashboard_data():
         if walkin_today_raw:
             print(f"DEBUG: Sample walk-in data: {walkin_today_raw[0]}")
             print(f"DEBUG: Sample walk-in next_followup_date: {walkin_today_raw[0].get('next_followup_date')}")
+            print(f"DEBUG: Walk-in query filter: next_followup_date <= {today_str} 23:59:59")
         
         # Mark all as not missed and set source_type and phone
         ps_today = [{**row, 'missed': False, 'lead_status': row.get('lead_status', '')} for row in ps_today]
@@ -5659,11 +5644,12 @@ def api_branch_head_dashboard_data():
         if walkin_today:
             print(f"DEBUG: Sample Walkin data: {walkin_today[0] if walkin_today else 'None'}")
         
-        # Merge all today's followups (PS, Activity, and Walk-in)
+        # Merge all today's and past followups (PS, Activity, and Walk-in)
         all_rows = ps_today + act_today + walkin_today
         
         # Debug: Print counts before and after search filter
         print(f"DEBUG: Before search filter - PS: {len(ps_today)}, Event: {len(act_today)}, Walkin: {len(walkin_today)}, Total: {len(all_rows)}")
+        print(f"DEBUG: Date filter applied: follow_up_date <= {today_str}")
         
         # Format rows for frontend with proper column mapping
         formatted_rows = []
@@ -5675,11 +5661,11 @@ def api_branch_head_dashboard_data():
                 # For walk-in leads, use created_at, ignore ps_assigned_at
                 formatted_rows.append({
                     'uid': row.get('uid', ''),
-                    'customer_name': row.get('customer_name', ''),
+                'customer_name': row.get('customer_name', ''),
                     'customer_mobile_number': row.get('mobile_number', ''),
                     'source': 'Walk-in',
-                    'lead_category': row.get('lead_category') if row.get('lead_category') else 'Not Set',
-                    'lead_status': row.get('lead_status', ''),
+                'lead_category': row.get('lead_category') if row.get('lead_category') else 'Not Set',
+                'lead_status': row.get('lead_status', ''),
                     'ps_name': row.get('ps_assigned', ''),
                     'follow_up_date': row.get('next_followup_date', ''),
                     'created_at': row.get('created_at', ''),
@@ -5729,13 +5715,13 @@ def api_branch_head_dashboard_data():
         
         print(f"DEBUG: Final formatted rows count: {len(formatted_rows)}")
         
-        # Calculate actual counts from loaded data
+        # Calculate actual counts from loaded data (today and past follow-ups)
         actual_ps_count = len(ps_today)
         actual_event_count = len(act_today_raw)
         actual_walkin_count = len(walkin_today_raw)
         actual_total_count = actual_ps_count + actual_event_count + actual_walkin_count
         
-        print(f"DEBUG: Actual data counts - PS: {actual_ps_count}, Event: {actual_event_count}, Walkin: {actual_walkin_count}, Total: {actual_total_count}")
+        print(f"DEBUG: Actual data counts (follow_up_date <= {today_str}) - PS: {actual_ps_count}, Event: {actual_event_count}, Walkin: {actual_walkin_count}, Total: {actual_total_count}")
         print(f"DEBUG: Formatted rows count: {len(formatted_rows)}")
         
         response = {
@@ -5807,7 +5793,6 @@ def api_branch_head_dashboard_data():
             'lost_leads_count': lost_leads_count
         }
         return jsonify(response)
-
     elif section == 'won_leads':
         # Fetch from ps_followup_master
         query = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Won')
@@ -6527,8 +6512,6 @@ def get_leads_by_date_range():
     except Exception as e:
         print(f"Error getting leads by date range: {e}")
         return jsonify({'success': False, 'message': str(e)})
-
-
 @app.route('/export_leads_by_date_csv')
 @require_admin
 def export_leads_by_date_csv():
@@ -7218,7 +7201,16 @@ def lead_journey(uid):
         ps_calls = ps_calls_result.data if ps_calls_result.data else []
 
         # Fetch PS followup (if any)
-        ps_followup_result = supabase.table('ps_followup_master').select('*').eq('lead_uid', uid).execute()
+        ps_followup_result = supabase.table('ps_followup_master').select(
+            'lead_uid, ps_name, follow_up_date, final_status, source, lead_status, customer_name, customer_mobile_number, ps_assigned_at, '
+            'first_call_remark, first_call_date, '
+            'second_call_remark, second_call_date, '
+            'third_call_remark, third_call_date, '
+            'fourth_call_remark, fourth_call_date, '
+            'fifth_call_remark, fifth_call_date, '
+            'sixth_call_remark, sixth_call_date, '
+            'seventh_call_remark, seventh_call_date'
+        ).eq('lead_uid', uid).execute()
         ps_followup = ps_followup_result.data[0] if ps_followup_result.data else None
 
         # Assignment history (CRE, PS)
@@ -7321,7 +7313,6 @@ def lead_journey(uid):
     except Exception as e:
         print(f"Error in lead_journey: {e}")
         return jsonify({'success': False, 'message': str(e)})
-
 @app.route('/lead_journey_report/<uid>')
 @require_admin
 def lead_journey_report(uid):
@@ -7336,7 +7327,16 @@ def lead_journey_report(uid):
         cre_calls = cre_calls_result.data if cre_calls_result.data else []
         ps_calls_result = supabase.table('ps_call_attempt_history').select('*').eq('uid', uid).order('created_at', desc=False).execute()
         ps_calls = ps_calls_result.data if ps_calls_result.data else []
-        ps_followup_result = supabase.table('ps_followup_master').select('*').eq('lead_uid', uid).execute()
+        ps_followup_result = supabase.table('ps_followup_master').select(
+            'lead_uid, ps_name, follow_up_date, final_status, source, lead_status, customer_name, customer_mobile_number, ps_assigned_at, '
+            'first_call_remark, first_call_date, '
+            'second_call_remark, second_call_date, '
+            'third_call_remark, third_call_date, '
+            'fourth_call_remark, fourth_call_date, '
+            'fifth_call_remark, fifth_call_date, '
+            'sixth_call_remark, sixth_call_date, '
+            'seventh_call_remark, seventh_call_date'
+        ).eq('lead_uid', uid).execute()
         ps_followup = ps_followup_result.data[0] if ps_followup_result.data else None
         assignment_history = []
         if lead.get('cre_name'):
@@ -8069,7 +8069,6 @@ def api_export_branch_leads():
         
     except Exception as e:
         return jsonify({'success': False, 'message': f'Export failed: {str(e)}'}), 500
-
 @app.route('/cre_analytics')
 @require_cre
 def cre_analytics():
@@ -8826,7 +8825,6 @@ def update_event_lead_cre(activity_uid):
     except Exception as e:
         flash(f'Error updating event lead: {str(e)}', 'error')
         return redirect(url_for('cre_dashboard'))
-
 @app.route('/admin_duplicate_leads', methods=['GET'])
 @require_admin
 def admin_duplicate_leads():
@@ -9623,7 +9621,6 @@ def rec_logout():
     session.pop('user_type', None)
     flash('Logged out successfully.', 'info')
     return redirect(url_for('rec_login'))
-
 @app.route('/rec_dashboard')
 @require_rec
 def rec_dashboard():
@@ -10404,7 +10401,6 @@ def api_branch_analytics_all():
         print(f"[DEBUG] Error in combined analytics API after {total_time:.3f}s: {str(e)}")
         print(f"[DEBUG] Full error traceback:", exc_info=True)
         return jsonify({'success': False, 'message': f'Error loading analytics data: {str(e)}'})
-
 @app.route('/api/branch_analytics/summary')
 def api_branch_analytics_summary():
     """API endpoint for Branch Summary KPI data - OPTIMIZED"""
@@ -10545,7 +10541,7 @@ def api_ps_followup_summary():
                 'fifth_call_remark, fifth_call_date, '
                 'sixth_call_remark, sixth_call_date, '
                 'seventh_call_remark, seventh_call_date'
-            ).eq('ps_branch', branch).eq('follow_up_date', today).eq('final_status', 'Pending').execute()
+            ).eq('ps_branch', branch).lte('follow_up_date', today).eq('final_status', 'Pending').execute()
             
             if ps_followup_result.data:
                 for lead in ps_followup_result.data:
@@ -10632,7 +10628,7 @@ def api_ps_followup_summary():
                 'fifth_call_remark, fifth_call_date, '
                 'sixth_call_remark, sixth_call_date, '
                 'seventh_call_remark, seventh_call_date'
-            ).eq('branch', branch).eq('status', 'Pending').execute()
+            ).eq('branch', branch).eq('status', 'Pending').lte('next_followup_date', f'{today} 23:59:59').execute()
             
             if walkin_result.data:
                 for lead in walkin_result.data:
@@ -10752,7 +10748,7 @@ def api_ps_followup_leads():
             # Fetch from ps_followup_master
             try:
                 ps_followup_result = supabase.table('ps_followup_master').select(
-                    'lead_uid, ps_name, follow_up_date, final_status, source, customer_name, customer_mobile_number, ps_assigned_at, '
+                    'lead_uid, ps_name, follow_up_date, final_status, source, lead_status, customer_name, customer_mobile_number, ps_assigned_at, '
                     'first_call_remark, first_call_date, '
                     'second_call_remark, second_call_date, '
                     'third_call_remark, third_call_date, '
@@ -10760,7 +10756,7 @@ def api_ps_followup_leads():
                     'fifth_call_remark, fifth_call_date, '
                     'sixth_call_remark, sixth_call_date, '
                     'seventh_call_remark, seventh_call_date'
-                ).eq('ps_branch', branch).eq('ps_name', ps_name).eq('follow_up_date', today).eq('final_status', 'Pending').execute()
+                ).eq('ps_branch', branch).eq('ps_name', ps_name).lte('follow_up_date', today).eq('final_status', 'Pending').execute()
                 
                 if ps_followup_result.data:
                     for lead in ps_followup_result.data:
@@ -11188,7 +11184,6 @@ def api_transfer_options():
     except Exception as e:
         print(f"Error in api_transfer_options: {str(e)}")
         return jsonify({'success': False, 'message': 'Error fetching transfer options'})
-
 @app.route('/api/branches')
 @require_admin
 def api_branches():
