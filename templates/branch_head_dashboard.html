@@ -1359,7 +1359,7 @@
             <div class="card mb-4">
                 <div class="card-header">
                     <h5 class="mb-0">
-                        <i class="fas fa-users me-2"></i>Product Specialist Follow-up Summary
+                        <i class="fas fa-users me-2"></i>Product Specialist Missed Follow-up Summary
                     </h5>
                 </div>
                 <div class="card-body">
@@ -2073,6 +2073,8 @@ const sectionConfig = {
 
     // Client-side table filtering with all filters
     function filterTableData(sectionName) {
+        console.log(`[DEBUG] filterTableData called for section: ${sectionName}`);
+        
         const config = sectionConfig[sectionName];
         const tbody = document.getElementById(config.tbody);
         const searchInput = document.getElementById(config.searchId);
@@ -2090,8 +2092,19 @@ const sectionConfig = {
         const sourceFilter = sourceSelect ? sourceSelect.value.toLowerCase().trim() : '';
         const statusFilter = statusSelect ? statusSelect.value.toLowerCase().trim() : '';
         
+        console.log(`[DEBUG] Filter values for ${sectionName}:`, {
+            searchTerm,
+            psFilter,
+            sourceFilter,
+            statusFilter,
+            dateFilter: dateFilterEl ? dateFilterEl.value : 'N/A',
+            dateFrom: dateFromEl ? dateFromEl.value : 'N/A',
+            dateTo: dateToEl ? dateToEl.value : 'N/A'
+        });
+        
         // Get all rows
         const rows = tbody.querySelectorAll('tr');
+        console.log(`[DEBUG] Total rows to filter: ${rows.length}`);
         
         rows.forEach(row => {
             let showRow = true;
@@ -2139,6 +2152,7 @@ const sectionConfig = {
                 const filterValue = dateFilterEl.value;
                 let fromValue = (dateFromEl && dateFromEl.value) ? dateFromEl.value : '';
                 let toValue = (dateToEl && dateToEl.value) ? dateToEl.value : '';
+                
                 if (filterValue === 'today') {
                     const today = new Date();
                     const y = today.getFullYear();
@@ -2147,21 +2161,54 @@ const sectionConfig = {
                     fromValue = `${y}-${m}-${d}`;
                     toValue = `${y}-${m}-${d}`;
                 }
+                
                 if (filterValue === 'today' || (filterValue === 'date_range' && (fromValue || toValue))) {
                     // Follow-up Date column is the 10th column in followup table
                     const followupCell = row.querySelector('td:nth-child(10)');
                     if (followupCell) {
                         const cellText = followupCell.textContent.trim();
-                        // cellText is formatted dd/mm/yyyy; normalize to yyyy-mm-dd for compare
-                        const parts = cellText.split('/');
-                        // Guard: require three parts
-                        if (parts.length === 3) {
-                            const norm = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-                            if (fromValue && norm < fromValue) showRow = false;
-                            if (toValue && norm > toValue) showRow = false;
+                        
+                        // Debug logging for date filtering
+                        if (filterValue === 'today' || filterValue === 'date_range') {
+                            console.log(`[DEBUG] Date filtering - Filter: ${filterValue}, From: ${fromValue}, To: ${toValue}, Cell: ${cellText}`);
+                        }
+                        
+                        // Handle different date formats: dd/mm/yyyy or yyyy-mm-dd
+                        let normalizedDate = '';
+                        if (cellText && cellText !== 'N/A') {
+                            if (cellText.includes('/')) {
+                                // Format: dd/mm/yyyy - normalize to yyyy-mm-dd
+                                const parts = cellText.split('/');
+                                if (parts.length === 3) {
+                                    normalizedDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                                }
+                            } else if (cellText.includes('-')) {
+                                // Format: yyyy-mm-dd - already normalized
+                                normalizedDate = cellText;
+                            }
+                        }
+                        
+                        // Debug logging for normalized date
+                        if (filterValue === 'today' || filterValue === 'date_range') {
+                            console.log(`[DEBUG] Normalized date: ${normalizedDate}`);
+                        }
+                        
+                        // Apply date filtering
+                        if (normalizedDate) {
+                            if (fromValue && normalizedDate < fromValue) {
+                                showRow = false;
+                                console.log(`[DEBUG] Row hidden - date ${normalizedDate} < ${fromValue}`);
+                            }
+                            if (toValue && normalizedDate > toValue) {
+                                showRow = false;
+                                console.log(`[DEBUG] Row hidden - date ${normalizedDate} > ${toValue}`);
+                            }
                         } else {
                             // When filtering by date, rows without a valid date should be hidden
-                            showRow = false;
+                            if (filterValue === 'today' || filterValue === 'date_range') {
+                                showRow = false;
+                                console.log(`[DEBUG] Row hidden - no valid date found`);
+                            }
                         }
                     }
                 }
@@ -2170,6 +2217,12 @@ const sectionConfig = {
             // Show/hide row
             row.style.display = showRow ? '' : 'none';
         });
+        
+        // Count visible rows
+        const visibleRows = tbody.querySelectorAll('tr:not([style*="display: none"])').length;
+        const hiddenRows = rows.length - visibleRows;
+        
+        console.log(`[DEBUG] Filtering results for ${sectionName}: ${visibleRows} visible, ${hiddenRows} hidden`);
         
         // Update row count
         updateVisibleRowCount(sectionName);
@@ -3487,6 +3540,7 @@ function toggleCallHistoryInline(btn) {
             if (dateFilter) {
                 dateFilter.addEventListener('change', function() {
                     const filterValue = this.value;
+                    console.log(`[DEBUG] Date filter changed to: ${filterValue} for ${filterId}`);
                     
                     // Handle different container structures
                     let dateRangeRow = null;
@@ -3507,6 +3561,7 @@ function toggleCallHistoryInline(btn) {
                     }
                     
                     if (filterValue === 'date_range') {
+                        console.log(`[DEBUG] Showing date range inputs for ${filterId}`);
                         // Show date range inputs
                         if (dateRangeRow) {
                             dateRangeRow.style.display = 'block';
@@ -3519,7 +3574,8 @@ function toggleCallHistoryInline(btn) {
                         if (dateFrom) dateFrom.value = '';
                         if (dateTo) dateTo.value = '';
                     } else if (filterValue === 'today') {
-                        // Set today's date
+                        console.log(`[DEBUG] Setting today's date for ${filterId}`);
+                        // Set today's date and hide date range inputs
                         const today = new Date();
                         const formatDate = (date) => {
                             const year = date.getFullYear();
@@ -3528,14 +3584,34 @@ function toggleCallHistoryInline(btn) {
                             return `${year}-${month}-${day}`;
                         };
                         
+                        const todayFormatted = formatDate(today);
+                        console.log(`[DEBUG] Today's date formatted: ${todayFormatted}`);
+                        
                         if (dateFrom && dateTo) {
-                            dateFrom.value = formatDate(today);
-                            dateTo.value = formatDate(today);
+                            dateFrom.value = todayFormatted;
+                            dateTo.value = todayFormatted;
+                        }
+                        
+                        // Ensure date range inputs are hidden for today filter
+                        if (dateRangeRow) {
+                            dateRangeRow.style.display = 'none';
+                        } else {
+                            if (dateRangeContainer) dateRangeContainer.style.display = 'none';
+                            if (dateRangeContainer2) dateRangeContainer2.style.display = 'none';
                         }
                     } else {
+                        console.log(`[DEBUG] Clearing date values for ${filterId}`);
                         // Clear date values for "All Time"
                         if (dateFrom) dateFrom.value = '';
                         if (dateTo) dateTo.value = '';
+                    }
+                    
+                    // Auto-apply filters for followup section when date filter changes
+                    if (filterId === 'followupLeadsDateFilter') {
+                        console.log('[DEBUG] Auto-applying filters for followup section');
+                        setTimeout(() => {
+                            filterTableData('followup_leads');
+                        }, 100);
                     }
                 });
             }
@@ -3617,8 +3693,25 @@ function toggleCallHistoryInline(btn) {
         const followupApplyButton = document.getElementById('followupLeadsApplyFiltersBtn');
         if (followupApplyButton) {
             followupApplyButton.addEventListener('click', function() {
-                console.log('Followup Apply button clicked - reloading data');
-                loadSection('followup_leads');
+                console.log('Followup Apply button clicked - applying filters');
+                
+                // Get current filter values
+                const psSelect = document.getElementById('followupLeadsPsSelect');
+                const dateFilter = document.getElementById('followupLeadsDateFilter');
+                const dateFrom = document.getElementById('followupLeadsDateFrom');
+                const dateTo = document.getElementById('followupLeadsDateTo');
+                const searchInput = document.getElementById('followupLeadsSearchInput');
+                
+                console.log('[DEBUG] Filter values:', {
+                    ps: psSelect ? psSelect.value : 'N/A',
+                    dateFilter: dateFilter ? dateFilter.value : 'N/A',
+                    dateFrom: dateFrom ? dateFrom.value : 'N/A',
+                    dateTo: dateTo ? dateTo.value : 'N/A',
+                    search: searchInput ? searchInput.value : 'N/A'
+                });
+                
+                // Apply filters to the current table data
+                filterTableData('followup_leads');
             });
         }
         
@@ -3629,8 +3722,20 @@ function toggleCallHistoryInline(btn) {
                 console.log('Followup Reset button clicked - clearing filters');
                 // Clear all filters for followup section
                 const psSelect = document.getElementById('followupLeadsPsSelect');
+                const dateFilterSelect = document.getElementById('followupLeadsDateFilter');
+                const dateFromInput = document.getElementById('followupLeadsDateFrom');
+                const dateToInput = document.getElementById('followupLeadsDateTo');
+                const searchInput = document.getElementById('followupLeadsSearchInput');
                 
                 if (psSelect) psSelect.value = '';
+                if (dateFilterSelect) dateFilterSelect.value = '';
+                if (dateFromInput) dateFromInput.value = '';
+                if (dateToInput) dateToInput.value = '';
+                if (searchInput) searchInput.value = '';
+                
+                // Hide date range containers
+                const followupDateRangeRow = document.getElementById('followupDateRangeRow');
+                if (followupDateRangeRow) followupDateRangeRow.style.display = 'none';
                 
                 // Reload data with cleared filters
                 loadSection('followup_leads');
@@ -3744,6 +3849,44 @@ function getStatusBadgeClass(status) {
     } else {
         return 'info';
     }
+}
+
+// Test function for date filtering (can be called from console for debugging)
+function testDateFiltering() {
+    console.log('[DEBUG] Testing date filtering functionality...');
+    
+    // Test followup date filter
+    const dateFilter = document.getElementById('followupLeadsDateFilter');
+    const dateFrom = document.getElementById('followupLeadsDateFrom');
+    const dateTo = document.getElementById('followupLeadsDateTo');
+    
+    console.log('[DEBUG] Date filter elements:', {
+        dateFilter: dateFilter ? dateFilter.value : 'N/A',
+        dateFrom: dateFrom ? dateFrom.value : 'N/A',
+        dateTo: dateTo ? dateTo.value : 'N/A'
+    });
+    
+    // Test today filter
+    if (dateFilter) {
+        dateFilter.value = 'today';
+        dateFilter.dispatchEvent(new Event('change'));
+        console.log('[DEBUG] Today filter applied');
+    }
+    
+    // Test date range filter
+    setTimeout(() => {
+        if (dateFilter) {
+            dateFilter.value = 'date_range';
+            dateFilter.dispatchEvent(new Event('change'));
+            console.log('[DEBUG] Date range filter applied');
+        }
+    }, 1000);
+    
+    // Test filter application
+    setTimeout(() => {
+        console.log('[DEBUG] Applying filters...');
+        filterTableData('followup_leads');
+    }, 2000);
 }
 </script>
 {% endblock %} 

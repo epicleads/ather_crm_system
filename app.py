@@ -11133,6 +11133,10 @@ def api_bulk_transfer_cre_leads():
         # Update all pending leads from the source CRE to the target CRE in ps_followup_master
         ps_followup_result = supabase.table('ps_followup_master').update({'cre_name': target_cre_name}).eq('cre_name', from_cre_name).eq('final_status', 'Pending').execute()
         
+        # Also update ps_name in lead_master if the source CRE had any PS assigned leads
+        # This ensures consistency between lead_master and ps_followup_master
+        lead_master_ps_update = supabase.table('lead_master').update({'ps_name': None}).eq('cre_name', target_cre_name).eq('ps_name', from_cre_name).execute()
+        
         # Count transferred leads from lead_master only (for display purposes)
         lead_count = len(lead_result.data) if lead_result.data else 0
         
@@ -11229,7 +11233,12 @@ def api_transfer_ps_lead():
             'ps_branch': new_ps.get('branch', '')
         }).eq('lead_uid', lead_uid).execute()
         
+        # Also update ps_name in lead_master table to maintain consistency
         if result.data:
+            lead_master_update = supabase.table('lead_master').update({
+                'ps_name': new_ps_name
+            }).eq('uid', lead_uid).execute()
+            
             return jsonify({'success': True, 'message': 'Lead transferred successfully'})
         else:
             return jsonify({'success': False, 'message': 'Lead not found or transfer failed'})
@@ -11279,6 +11288,11 @@ def api_bulk_transfer_ps_leads():
             'ps_name': to_ps_name,
             'ps_branch': target_branch
         }).eq('ps_name', from_ps_name).eq('final_status', 'Pending').execute()
+        
+        # Also update ps_name in lead_master table to maintain consistency
+        lead_master_result = supabase.table('lead_master').update({
+            'ps_name': to_ps_name
+        }).eq('ps_name', from_ps_name).execute()
         
         # Update all pending leads from the source PS to the target PS in walkin_table (if table exists)
         walkin_count = 0
