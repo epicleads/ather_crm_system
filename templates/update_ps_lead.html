@@ -215,9 +215,9 @@
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="call_remark" class="form-label">{{ next_call.title() }} Call Remark</label>
+                                <label for="call_remark" class="form-label">{{ next_call.title() }} Call Remark <span class="text-danger">*</span></label>
                                 <textarea class="form-control" id="call_remark" name="call_remark" rows="2"
-                                          placeholder="Enter call details and customer response..."></textarea>
+                                          placeholder="Enter call details and customer response..." required></textarea>
                             </div>
                         </div>
                     </div>
@@ -369,6 +369,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Form validation
     document.getElementById('psLeadUpdateForm').addEventListener('submit', function(e) {
+        // Validate call remark is filled if call date is provided
+        const callDate = document.getElementById('call_date');
+        const callRemark = document.getElementById('call_remark');
+        
+        if (callDate && callRemark && callDate.value && !callRemark.value.trim()) {
+            e.preventDefault();
+            alert('Please fill in the call remark before submitting the form.');
+            callRemark.focus();
+            return;
+        }
+        
         // Show loading state
         const submitBtn = this.querySelector('button[type="submit"]');
         const originalText = submitBtn.innerHTML;

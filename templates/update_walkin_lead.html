@@ -610,5 +610,17 @@
       nextFollowupField.setAttribute('required', 'required');
     }
   });
+  
+  // Form validation for call remark
+  document.querySelector('form').addEventListener('submit', function(e) {
+    const callRemark = document.querySelector('textarea[name="call_remark"]');
+    
+    if (callRemark && !callRemark.value.trim()) {
+      e.preventDefault();
+      alert('Please fill in the call remark before submitting the form.');
+      callRemark.focus();
+      return;
+    }
+  });
 </script>
 {% endblock %} 
