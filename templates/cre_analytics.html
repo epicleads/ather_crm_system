@@ -150,15 +150,7 @@
     <h5 class="mb-0"><i class="fas fa-user-circle"></i> Analytics for: {{ analytics.current_cre }}</h5>
 </div>
 
-<!-- Zoho Dashboards Section -->
-<div class="mb-4">
-    <h5 style="color: var(--airbnb-red); font-weight: 600; margin-bottom: 1rem;">
-        <i class="fas fa-tachometer-alt" style="color: var(--airbnb-red);"></i> Zoho Dashboards
-    </h5>
-    <div id="creDashboardsContainer">
-        <!-- CRE dashboards will be loaded here -->
-    </div>
-</div>
+
 
 <!-- Date Filter -->
 <div class="filter-section">
@@ -528,71 +520,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <!-- Separate script for dashboard loading -->
 <script>
-        // Load CRE dashboards
-        function loadCreDashboards() {
-            const container = document.getElementById('creDashboardsContainer');
-            if (!container) {
-                console.error('creDashboardsContainer not found!');
-                return;
-            }
-            
-            // Show loading state
-            container.innerHTML = '<div class="text-center text-muted py-4"><i class="fas fa-spinner fa-spin fa-3x mb-3"></i><p>Loading dashboards...</p></div>';
-            
-            fetch('/api/dashboards')
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    if (data.success && data.dashboards && data.dashboards.cre && data.dashboards.cre.length > 0) {
-                        let html = '';
-                        
-                        data.dashboards.cre.forEach(dashboard => {
-                            if (dashboard && dashboard.url && dashboard.name) {
-                                html += `
-                                    <div class="card mb-3">
-                                        <div class="card-header d-flex justify-content-between align-items-center">
-                                            <h6 class="mb-0">${dashboard.name}</h6>
-                                            <small class="text-muted">Added: ${new Date(dashboard.created_at).toLocaleDateString()}</small>
-                                        </div>
-                                        <div class="card-body p-0">
-                                            <iframe src="${dashboard.url}" 
-                                                    style="width: 100%; height: 600px; border: none;" 
-                                                    frameborder="0"
-                                                    onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\'text-center text-danger py-4\'><i class=\'fas fa-exclamation-triangle fa-3x mb-3\'></i><p>Failed to load dashboard</p></div>';">
-                                            </iframe>
-                                        </div>
-                                    </div>
-                                `;
-                            }
-                        });
-                        
-                        if (html === '') {
-                            html = '<div class="text-center text-muted py-4"><i class="fas fa-chart-bar fa-3x mb-3"></i><p>No CRE dashboards configured yet.</p></div>';
-                        }
-                        
-                        container.innerHTML = html;
-                    } else {
-                        container.innerHTML = '<div class="text-center text-muted py-4"><i class="fas fa-chart-bar fa-3x mb-3"></i><p>No CRE dashboards configured yet.</p></div>';
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading CRE dashboards:', error);
-                    container.innerHTML = '<div class="text-center text-danger py-4"><i class="fas fa-exclamation-triangle fa-3x mb-3"></i><p>Error loading dashboards. Please try again.</p></div>';
-                });
-        }
 
-        // Load dashboards on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            loadCreDashboards();
-        });
-        
-        // Also try loading when window loads
-        window.addEventListener('load', function() {
-            loadCreDashboards();
-        });
+
+
 </script>
 {% endblock %} 
