@@ -95,7 +95,7 @@
     margin-bottom: 1.5rem;
   }
   
-  .field-icon {
+    .field-icon {
     position: absolute;
     left: 15px;
     top: 50%;
@@ -106,6 +106,17 @@
   
   .field-with-icon {
     padding-left: 45px;
+  }
+  
+  .alert-sm {
+    padding: 0.5rem;
+    font-size: 0.875rem;
+    border-radius: 0.375rem;
+  }
+  
+  .is-warning {
+    border-color: #ffc107 !important;
+    box-shadow: 0 0 0 0.2rem rgba(255, 193, 7, 0.25) !important;
   }
 </style>
 
@@ -162,8 +173,9 @@
                   </label>
                   <div class="position-relative">
                     <i class="fas fa-phone field-icon"></i>
-                    <input type="text" class="form-control field-with-icon" name="mobile_number" required 
+                    <input type="text" class="form-control field-with-icon" name="mobile_number" id="mobile_number" required 
                            placeholder="Enter mobile number">
+                    <div id="phone-feedback" class="mt-1" style="display: none;"></div>
                   </div>
                 </div>
               </div>
@@ -252,12 +264,37 @@
 
             <!-- Submit Button -->
             <div class="text-center mt-4">
-              <button type="submit" class="btn btn-submit btn-lg">
+              <button type="submit" class="btn btn-submit btn-lg" onclick="return checkDuplicateWalkinLead(event)">
                 <i class="fas fa-plus-circle me-2"></i>Add Walk-in Lead
               </button>
             </div>
           </form>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Duplicate Lead Modal -->
+<div class="modal fade" id="duplicateWalkinLeadModal" tabindex="-1" aria-labelledby="duplicateWalkinLeadModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-warning text-dark">
+        <h5 class="modal-title" id="duplicateWalkinLeadModalLabel">
+          <i class="fas fa-exclamation-triangle me-2"></i>Duplicate Lead Detected
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="duplicateWalkinLeadDetails">
+          <!-- Content will be populated by JavaScript -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-warning" onclick="proceedWithDuplicateWalkin()">
+          <i class="fas fa-plus-circle me-2"></i>Add as Duplicate
+        </button>
       </div>
     </div>
   </div>
@@ -306,5 +343,172 @@
       }
     });
   });
+
+  // Duplicate lead checking functions
+  function normalizePhoneNumber(phone) {
+    // Remove all non-digit characters
+    return phone.replace(/\D/g, '');
+  }
+
+  async function checkDuplicateWalkinLead(event) {
+    event.preventDefault();
+    
+    const phoneNumber = document.getElementById('mobile_number').value;
+    
+    if (!phoneNumber) {
+      // If phone number is missing, let the form validation handle it
+      return true;
+    }
+    
+    const normalizedPhone = normalizePhoneNumber(phoneNumber);
+    
+    try {
+      const response = await fetch('/check_duplicate_walkin_lead', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          phone_number: normalizedPhone
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.is_duplicate) {
+        // Show duplicate lead modal
+        const modal = new bootstrap.Modal(document.getElementById('duplicateWalkinLeadModal'));
+        const detailsDiv = document.getElementById('duplicateWalkinLeadDetails');
+        
+        let detailsHtml = `
+          <div class="alert alert-warning">
+            <strong>Phone Number:</strong> ${phoneNumber}<br>
+            <strong>Source:</strong> Walk-in
+          </div>
+        `;
+        
+                  if (result.duplicate_type === 'exact_match') {
+            detailsHtml += `
+              <div class="alert alert-danger">
+                <strong>⚠️ Exact Duplicate Found!</strong><br>
+                This phone number already exists as a Walk-in lead.
+              </div>
+            `;
+          } else {
+            detailsHtml += `
+              <div class="alert alert-info">
+                <strong>Existing Lead Details:</strong><br>
+                <strong>UID:</strong> ${result.existing_lead.uid || result.existing_lead.activity_uid || 'N/A'}<br>
+                <strong>Customer Name:</strong> ${result.existing_lead.customer_name}<br>
+                <strong>Status:</strong> ${result.existing_lead.lead_status || result.existing_lead.status || result.existing_lead.final_status || 'N/A'}<br>
+                <strong>Source:</strong> ${result.source || 'Unknown'}
+              </div>
+            `;
+            
+            if (result.existing_sources && result.existing_sources.length > 0) {
+              detailsHtml += `
+                <div class="alert alert-secondary">
+                  <strong>Existing Sources:</strong><br>
+                  ${result.existing_sources.map(s => `${s.source} - ${s.sub_source || 'N/A'}`).join('<br>')}
+                </div>
+              `;
+            }
+            
+            detailsHtml += `
+              <div class="alert alert-success">
+                <strong>💡 This will be added as a duplicate with new source (Walk-in)</strong>
+              </div>
+            `;
+          }
+        
+        detailsDiv.innerHTML = detailsHtml;
+        modal.show();
+        return false;
+      } else {
+        // No duplicate found, proceed with form submission
+        document.querySelector('form').submit();
+        return true;
+      }
+    } catch (error) {
+      console.error('Error checking duplicate lead:', error);
+      // If there's an error, proceed with form submission
+      return true;
+    }
+  }
+
+  function proceedWithDuplicateWalkin() {
+    // Close the modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('duplicateWalkinLeadModal'));
+    modal.hide();
+    
+    // Submit the form
+    document.querySelector('form').submit();
+  }
+
+  // Add real-time duplicate checking on phone number input (without form submission)
+  document.getElementById('mobile_number').addEventListener('blur', function() {
+    const phoneNumber = this.value;
+    if (phoneNumber) {
+      checkDuplicateOnBlur(phoneNumber);
+    }
+  });
+
+  // Function to check duplicates on blur without submitting form
+  async function checkDuplicateOnBlur(phoneNumber) {
+    const normalizedPhone = normalizePhoneNumber(phoneNumber);
+    const feedbackDiv = document.getElementById('phone-feedback');
+    
+    try {
+      const response = await fetch('/check_duplicate_walkin_lead', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          phone_number: normalizedPhone
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.is_duplicate) {
+        if (result.duplicate_type === 'exact_match') {
+          // Show error feedback
+          feedbackDiv.innerHTML = `
+            <div class="alert alert-danger alert-sm">
+              <i class="fas fa-exclamation-triangle me-1"></i>
+              <strong>Duplicate Found!</strong> This phone number already exists as a Walk-in lead.
+            </div>
+          `;
+          feedbackDiv.style.display = 'block';
+          document.getElementById('mobile_number').classList.add('is-invalid');
+        } else {
+          // Show warning feedback for new source
+          feedbackDiv.innerHTML = `
+            <div class="alert alert-warning alert-sm">
+              <i class="fas fa-info-circle me-1"></i>
+              <strong>Existing Lead Found!</strong> This phone number exists with other sources. It will be added as a duplicate.
+            </div>
+          `;
+          feedbackDiv.style.display = 'block';
+          document.getElementById('mobile_number').classList.add('is-warning');
+        }
+      } else {
+        // No duplicate found
+        feedbackDiv.innerHTML = `
+          <div class="alert alert-success alert-sm">
+            <i class="fas fa-check-circle me-1"></i>
+            <strong>Available!</strong> This phone number is new.
+          </div>
+        `;
+        feedbackDiv.style.display = 'block';
+        document.getElementById('mobile_number').classList.remove('is-invalid', 'is-warning');
+        document.getElementById('mobile_number').classList.add('is-valid');
+      }
+    } catch (error) {
+      console.error('Error checking duplicate lead:', error);
+      // Don't show error feedback on blur, just log it
+    }
+  }
 </script>
 {% endblock %} 

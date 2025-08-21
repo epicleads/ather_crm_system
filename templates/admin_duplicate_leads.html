@@ -244,6 +244,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <th>UID</th>
                     <th>Name</th>
                     <th>Phone</th>
+                    <th>Original Source</th>
                     <th>Sources</th>
                     <th>Sub-Sources</th>
                     <th>Enquiry Date</th>
@@ -258,6 +259,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     <td class="uid-cell">{{ lead.uid }}</td>
                     <td>{{ lead.customer_name }}</td>
                     <td>{{ lead.customer_mobile_number }}</td>
+                    <td>
+                        <span class="badge badge-source" style="background: #17a2b8 !important; color: #fff !important;">
+                            {{ lead.source_type or 'Unknown' }}
+                        </span>
+                        {% if lead.original_record_id %}
+                            <br><small class="text-muted">ID: {{ lead.original_record_id }}</small>
+                        {% endif %}
+                    </td>
                     <td>
                         {% for src in lead.sources %}
                             <span class="badge badge-source">{{ src }}</span>
