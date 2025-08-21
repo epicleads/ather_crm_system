@@ -3,6 +3,32 @@
 {% block title %}Event Leads Entry - Ather CRM{% endblock %}
 
 {% block content %}
+<style>
+  .alert-sm {
+    padding: 0.5rem;
+    font-size: 0.875rem;
+    border-radius: 0.375rem;
+  }
+  
+  .is-warning {
+    border-color: #ffc107 !important;
+    box-shadow: 0 0 0 0.2rem rgba(255, 193, 7, 0.25) !important;
+  }
+  
+  .is-valid {
+    border-color: #28a745 !important;
+    box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25) !important;
+  }
+  
+  .is-invalid {
+    border-color: #dc3545 !important;
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important;
+  }
+  
+  .duplicate-feedback {
+    margin-top: 0.25rem;
+  }
+</style>
 <div class="container mt-4">
     <div class="card shadow">
         <div class="card-header bg-info text-white">
@@ -118,11 +144,38 @@
                     <button type="button" class="btn btn-secondary" id="addCustomerLead"><i class="fas fa-plus"></i> Add Another Lead</button>
                 </div>
                 <div class="d-grid">
-                    <button type="submit" class="btn btn-info btn-lg"><i class="fas fa-save"></i> Submit Event Leads</button>
+                    <button type="submit" class="btn btn-info btn-lg" onclick="return checkDuplicateEventLeads(event)">
+                        <i class="fas fa-save"></i> Submit Event Leads
+                    </button>
                 </div>
             </form>
         </div>
     </div>
+</div>
+
+<!-- Duplicate Lead Modal -->
+<div class="modal fade" id="duplicateEventLeadModal" tabindex="-1" aria-labelledby="duplicateEventLeadModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-warning text-dark">
+        <h5 class="modal-title" id="duplicateEventLeadModalLabel">
+          <i class="fas fa-exclamation-triangle me-2"></i>Duplicate Leads Detected
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="duplicateEventLeadDetails">
+          <!-- Content will be populated by JavaScript -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-warning" onclick="proceedWithDuplicateEvent()">
+          <i class="fas fa-plus-circle me-2"></i>Add as Duplicates
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 <script>
 document.getElementById('addCustomerLead').addEventListener('click', function() {
@@ -135,10 +188,230 @@ document.getElementById('addCustomerLead').addEventListener('click', function() 
     newRow.querySelector('.remove-lead-row').style.display = 'block';
     container.appendChild(newRow);
 });
+
 document.getElementById('customerLeads').addEventListener('click', function(e) {
     if (e.target.classList.contains('remove-lead-row')) {
         e.target.closest('.customer-lead-row').remove();
     }
 });
+
+// Duplicate lead checking functions
+function normalizePhoneNumber(phone) {
+    // Remove all non-digit characters
+    return phone.replace(/\D/g, '');
+}
+
+async function checkDuplicateEventLeads(event) {
+    event.preventDefault();
+    
+    // Get all phone numbers from the form
+    const phoneInputs = document.querySelectorAll('input[name="customer_phone_number[]"]');
+    const nameInputs = document.querySelectorAll('input[name="customer_name[]"]');
+    
+    let duplicates = [];
+    let validLeads = [];
+    
+    // Check each phone number for duplicates
+    for (let i = 0; i < phoneInputs.length; i++) {
+        const phoneNumber = phoneInputs[i].value.trim();
+        const customerName = nameInputs[i].value.trim();
+        
+        if (phoneNumber && customerName) {
+            const normalizedPhone = normalizePhoneNumber(phoneNumber);
+            
+            try {
+                const response = await fetch('/check_duplicate_event_lead', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        phone_number: normalizedPhone
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.is_duplicate) {
+                    if (result.duplicate_type === 'exact_match') {
+                        duplicates.push({
+                            phone: phoneNumber,
+                            name: customerName,
+                            type: 'exact_match',
+                            message: result.message,
+                            source: result.source
+                        });
+                    } else {
+                        // This is a duplicate with new source - can be added
+                        validLeads.push({
+                            phone: phoneNumber,
+                            name: customerName,
+                            type: 'new_source',
+                            message: result.message,
+                            source: result.source
+                        });
+                    }
+                } else {
+                    // No duplicate found
+                    validLeads.push({
+                        phone: phoneNumber,
+                        name: customerName,
+                        type: 'new',
+                        message: 'No duplicate found'
+                    });
+                }
+            } catch (error) {
+                console.error('Error checking duplicate lead:', error);
+                // If there's an error, treat as valid lead
+                validLeads.push({
+                    phone: phoneNumber,
+                    name: customerName,
+                    type: 'error',
+                    message: 'Error checking duplicate'
+                });
+            }
+        }
+    }
+    
+    if (duplicates.length > 0) {
+        // Show duplicate lead modal
+        const modal = new bootstrap.Modal(document.getElementById('duplicateEventLeadModal'));
+        const detailsDiv = document.getElementById('duplicateEventLeadDetails');
+        
+        let detailsHtml = `
+            <div class="alert alert-danger">
+                <strong>⚠️ Exact Duplicates Found!</strong><br>
+                The following leads cannot be added as they already exist:
+            </div>
+        `;
+        
+        duplicates.forEach(duplicate => {
+            detailsHtml += `
+                <div class="alert alert-warning">
+                    <strong>${duplicate.name}</strong> - ${duplicate.phone}<br>
+                    <small>${duplicate.message}</small>
+                </div>
+            `;
+        });
+        
+        if (validLeads.length > 0) {
+            detailsHtml += `
+                <div class="alert alert-info">
+                    <strong>✅ Valid Leads:</strong><br>
+                    ${validLeads.map(lead => `${lead.name} - ${lead.phone}`).join('<br>')}
+                </div>
+            `;
+        }
+        
+        detailsHtml += `
+            <div class="alert alert-success">
+                <strong>💡 You can still submit the form to add the valid leads</strong>
+            </div>
+        `;
+        
+        detailsDiv.innerHTML = detailsHtml;
+        modal.show();
+        return false;
+    } else {
+        // No exact duplicates found, proceed with form submission
+        document.getElementById('eventLeadForm').submit();
+        return true;
+    }
+}
+
+function proceedWithDuplicateEvent() {
+    // Close the modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('duplicateEventLeadModal'));
+    modal.hide();
+    
+    // Submit the form
+    document.getElementById('eventLeadForm').submit();
+}
+
+// Add real-time duplicate checking on phone number input
+document.addEventListener('DOMContentLoaded', function() {
+    const phoneInputs = document.querySelectorAll('input[name="customer_phone_number[]"]');
+    
+    phoneInputs.forEach(input => {
+        input.addEventListener('blur', function() {
+            const phoneNumber = this.value.trim();
+            if (phoneNumber) {
+                checkDuplicateOnBlur(phoneNumber, this);
+            }
+        });
+    });
+});
+
+// Function to check duplicates on blur without submitting form
+async function checkDuplicateOnBlur(phoneNumber, inputElement) {
+    const normalizedPhone = normalizePhoneNumber(phoneNumber);
+    
+    try {
+        const response = await fetch('/check_duplicate_event_lead', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                phone_number: normalizedPhone
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.is_duplicate) {
+            if (result.duplicate_type === 'exact_match') {
+                // Show error feedback
+                inputElement.classList.add('is-invalid');
+                inputElement.classList.remove('is-valid');
+                
+                // Add feedback below the input
+                let feedbackDiv = inputElement.parentNode.querySelector('.duplicate-feedback');
+                if (!feedbackDiv) {
+                    feedbackDiv = document.createElement('div');
+                    feedbackDiv.className = 'duplicate-feedback mt-1';
+                    inputElement.parentNode.appendChild(feedbackDiv);
+                }
+                
+                feedbackDiv.innerHTML = `
+                    <div class="alert alert-danger alert-sm">
+                        <i class="fas fa-exclamation-triangle me-1"></i>
+                        <strong>Duplicate Found!</strong> ${result.message}
+                    </div>
+                `;
+            } else {
+                // Show warning feedback for new source
+                inputElement.classList.add('is-warning');
+                inputElement.classList.remove('is-invalid', 'is-valid');
+                
+                let feedbackDiv = inputElement.parentNode.querySelector('.duplicate-feedback');
+                if (!feedbackDiv) {
+                    feedbackDiv = document.createElement('div');
+                    feedbackDiv.className = 'duplicate-feedback mt-1';
+                    inputElement.parentNode.appendChild(feedbackDiv);
+                }
+                
+                feedbackDiv.innerHTML = `
+                    <div class="alert alert-warning alert-sm">
+                        <i class="fas fa-info-circle me-1"></i>
+                        <strong>Existing Lead Found!</strong> ${result.message}
+                    </div>
+                `;
+            }
+        } else {
+            // No duplicate found
+            inputElement.classList.remove('is-invalid', 'is-warning');
+            inputElement.classList.add('is-valid');
+            
+            let feedbackDiv = inputElement.parentNode.querySelector('.duplicate-feedback');
+            if (feedbackDiv) {
+                feedbackDiv.remove();
+            }
+        }
+    } catch (error) {
+        console.error('Error checking duplicate lead:', error);
+        // Don't show error feedback on blur, just log it
+    }
+}
 </script>
 {% endblock %} 

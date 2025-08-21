@@ -2242,6 +2242,357 @@ def check_duplicate_lead():
     except Exception as e:
         print(f"Error checking duplicate lead: {e}")
         return jsonify({'success': False, 'message': f'Error checking duplicate: {str(e)}'}), 500
+
+@app.route('/check_duplicate_walkin_lead', methods=['POST'])
+@require_rec
+def check_duplicate_walkin_lead():
+    """
+    Check if a walkin lead with the same phone number already exists.
+    Returns duplicate information if found.
+    """
+    try:
+        data = request.get_json()
+        phone_number = data.get('phone_number', '').strip()
+        
+        if not phone_number:
+            return jsonify({'success': False, 'message': 'Phone number is required'}), 400
+        
+        # Normalize phone number (remove all non-digits)
+        normalized_phone = ''.join(filter(str.isdigit, phone_number))
+        
+        print(f"🔍 Checking for duplicates for phone: {normalized_phone}")
+        
+        # 1. Check in walkin_table (most important for walkin leads)
+        walkin_result = supabase.table('walkin_table').select('*').eq('mobile_number', normalized_phone).execute()
+        existing_walkin_leads = walkin_result.data or []
+        
+        if existing_walkin_leads:
+            print(f"📱 Found {len(existing_walkin_leads)} existing walkin leads")
+            # Found existing walkin lead(s) - this is an exact duplicate
+            existing_lead = existing_walkin_leads[0]
+            return jsonify({
+                'success': True,
+                'is_duplicate': True,
+                'existing_lead': existing_lead,
+                'duplicate_type': 'exact_match',
+                'message': 'Lead with this phone number already exists as Walk-in',
+                'source': 'walkin_table'
+            })
+        
+        # 2. Check in activity_leads table
+        activity_result = supabase.table('activity_leads').select('*').eq('customer_phone_number', normalized_phone).execute()
+        existing_activity_leads = activity_result.data or []
+        
+        if existing_activity_leads:
+            print(f"🎯 Found {len(existing_activity_leads)} existing activity leads")
+            # Found existing activity lead(s)
+            existing_lead = existing_activity_leads[0]
+            existing_sources = []
+            for lead in existing_activity_leads:
+                existing_sources.append({
+                    'source': 'Event',
+                    'sub_source': lead.get('location', 'N/A')
+                })
+            
+            return jsonify({
+                'success': True,
+                'is_duplicate': True,
+                'existing_lead': existing_lead,
+                'existing_sources': existing_sources,
+                'duplicate_type': 'new_source',
+                'message': 'Phone number exists with Event source',
+                'source': 'activity_leads'
+            })
+        
+        # 3. Check in lead_master table
+        lead_master_result = supabase.table('lead_master').select('*').eq('customer_mobile_number', normalized_phone).execute()
+        existing_leads = lead_master_result.data or []
+        
+        if existing_leads:
+            print(f"📋 Found {len(existing_leads)} existing leads in lead_master")
+            # Found existing lead(s)
+            existing_lead = existing_leads[0]
+            
+            # Check if Walk-in source already exists
+            walkin_exists = any(
+                lead.get('source') == 'Walk-in' 
+                for lead in existing_leads
+            )
+            
+            if walkin_exists:
+                # This is a true duplicate - same phone, same source (Walk-in)
+                return jsonify({
+                    'success': True,
+                    'is_duplicate': True,
+                    'existing_lead': existing_lead,
+                    'duplicate_type': 'exact_match',
+                    'message': 'Lead with this phone number already exists as Walk-in',
+                    'source': 'lead_master'
+                })
+            else:
+                # Phone exists but with different source
+                # Get all existing sources for this phone number
+                existing_sources = []
+                for lead in existing_leads:
+                    if lead.get('source'):
+                        existing_sources.append({
+                            'source': lead.get('source'),
+                            'sub_source': lead.get('sub_source')
+                        })
+                
+                return jsonify({
+                    'success': True,
+                    'is_duplicate': True,
+                    'existing_lead': existing_lead,
+                    'existing_sources': existing_sources,
+                    'duplicate_type': 'new_source',
+                    'message': 'Phone number exists with different sources',
+                    'source': 'lead_master'
+                })
+        
+        # 4. Check in duplicate_leads table
+        duplicate_result = supabase.table('duplicate_leads').select('*').eq('customer_mobile_number', normalized_phone).execute()
+        duplicate_leads = duplicate_result.data or []
+        
+        if duplicate_leads:
+            print(f"🔄 Found {len(duplicate_leads)} existing duplicate leads")
+            # Found in duplicate_leads table
+            duplicate_lead = duplicate_leads[0]
+            
+            # Check if Walk-in source already exists in any slot
+            walkin_exists = False
+            for duplicate_lead in duplicate_leads:
+                # Check all source slots (source1 to source10)
+                for i in range(1, 11):
+                    source_field = f'source{i}'
+                    
+                    if duplicate_lead.get(source_field) == 'Walk-in':
+                        walkin_exists = True
+                        break
+                if walkin_exists:
+                    break
+            
+            if walkin_exists:
+                return jsonify({
+                    'success': True,
+                    'is_duplicate': True,
+                    'existing_lead': duplicate_lead,
+                    'duplicate_type': 'exact_match',
+                    'message': 'Lead with this phone number already exists as Walk-in in duplicates',
+                    'source': 'duplicate_leads'
+                })
+            else:
+                # Phone exists in duplicates but not as Walk-in
+                existing_sources = []
+                for duplicate_lead in duplicate_leads:
+                    for i in range(1, 11):
+                        source_field = f'source{i}'
+                        sub_source_field = f'sub_source{i}'
+                        source_value = duplicate_lead.get(source_field)
+                        
+                        if source_value:
+                            existing_sources.append({
+                                'source': source_value,
+                                'sub_source': duplicate_lead.get(sub_source_field)
+                            })
+                
+                return jsonify({
+                    'success': True,
+                    'is_duplicate': True,
+                    'existing_lead': duplicate_lead,
+                    'existing_sources': existing_sources,
+                    'duplicate_type': 'new_source',
+                    'message': 'Phone number exists in duplicates with different sources',
+                    'source': 'duplicate_leads'
+                })
+        
+        # No duplicate found
+        print(f"✅ No duplicates found for phone: {normalized_phone}")
+        return jsonify({
+            'success': True,
+            'is_duplicate': False,
+            'message': 'No duplicate found'
+        })
+        
+    except Exception as e:
+        print(f"❌ Error checking duplicate walkin lead: {e}")
+        return jsonify({'success': False, 'message': f'Error checking duplicate: {str(e)}'}), 500
+
+@app.route('/check_duplicate_event_lead', methods=['POST'])
+@require_ps
+def check_duplicate_event_lead():
+    """
+    Check if an event lead with the same phone number already exists.
+    Returns duplicate information if found.
+    """
+    try:
+        data = request.get_json()
+        phone_number = data.get('phone_number', '').strip()
+        
+        if not phone_number:
+            return jsonify({'success': False, 'message': 'Phone number is required'}), 400
+        
+        # Normalize phone number (remove all non-digits)
+        normalized_phone = ''.join(filter(str.isdigit, phone_number))
+        
+        print(f"🔍 Checking for duplicates for event lead phone: {normalized_phone}")
+        
+        # 1. Check in activity_leads table FIRST (most important for event leads)
+        activity_result = supabase.table('activity_leads').select('*').eq('customer_phone_number', normalized_phone).execute()
+        existing_activity_leads = activity_result.data or []
+        
+        if existing_activity_leads:
+            print(f"🎯 Found {len(existing_activity_leads)} existing activity leads")
+            # Found existing activity lead(s) - this is an exact duplicate
+            existing_lead = existing_activity_leads[0]
+            return jsonify({
+                'success': True,
+                'is_duplicate': True,
+                'existing_lead': existing_lead,
+                'duplicate_type': 'exact_match',
+                'message': 'Lead with this phone number already exists as Event lead',
+                'source': 'activity_leads'
+            })
+        
+        # 2. Check in walkin_table
+        walkin_result = supabase.table('walkin_table').select('*').eq('mobile_number', normalized_phone).execute()
+        existing_walkin_leads = walkin_result.data or []
+        
+        if existing_walkin_leads:
+            print(f"📱 Found {len(existing_walkin_leads)} existing walkin leads")
+            # Found existing walkin lead(s)
+            existing_lead = existing_walkin_leads[0]
+            existing_sources = []
+            for lead in existing_walkin_leads:
+                existing_sources.append({
+                    'source': 'Walk-in',
+                    'sub_source': lead.get('branch', 'N/A')
+                })
+            
+            return jsonify({
+                'success': True,
+                'is_duplicate': True,
+                'existing_lead': existing_lead,
+                'existing_sources': existing_sources,
+                'duplicate_type': 'new_source',
+                'message': 'Phone number exists with Walk-in source',
+                'source': 'walkin_table'
+            })
+        
+        # 3. Check in lead_master table
+        lead_master_result = supabase.table('lead_master').select('*').eq('customer_mobile_number', normalized_phone).execute()
+        existing_leads = lead_master_result.data or []
+        
+        if existing_leads:
+            print(f"📋 Found {len(existing_leads)} existing leads in lead_master")
+            # Found existing lead(s)
+            existing_lead = existing_leads[0]
+            
+            # Check if Event source already exists
+            event_exists = any(
+                lead.get('source') == 'Event' 
+                for lead in existing_leads
+            )
+            
+            if event_exists:
+                # This is a true duplicate - same phone, same source (Event)
+                return jsonify({
+                    'success': True,
+                    'is_duplicate': True,
+                    'existing_lead': existing_lead,
+                    'duplicate_type': 'exact_match',
+                    'message': 'Lead with this phone number already exists as Event',
+                    'source': 'lead_master'
+                })
+            else:
+                # Phone exists but with different source
+                # Get all existing sources for this phone number
+                existing_sources = []
+                for lead in existing_leads:
+                    if lead.get('source'):
+                        existing_sources.append({
+                            'source': lead.get('source'),
+                            'sub_source': lead.get('sub_source')
+                        })
+                
+                return jsonify({
+                    'success': True,
+                    'is_duplicate': True,
+                    'existing_lead': existing_lead,
+                    'existing_sources': existing_sources,
+                    'duplicate_type': 'new_source',
+                    'message': 'Phone number exists with different sources',
+                    'source': 'lead_master'
+                })
+        
+        # 4. Check in duplicate_leads table
+        duplicate_result = supabase.table('duplicate_leads').select('*').eq('customer_mobile_number', normalized_phone).execute()
+        duplicate_leads = duplicate_result.data or []
+        
+        if duplicate_leads:
+            print(f"🔄 Found {len(duplicate_leads)} existing duplicate leads")
+            # Found in duplicate_leads table
+            duplicate_lead = duplicate_leads[0]
+            
+            # Check if Event source already exists in any slot
+            event_exists = False
+            for duplicate_lead in duplicate_leads:
+                # Check all source slots (source1 to source10)
+                for i in range(1, 11):
+                    source_field = f'source{i}'
+                    
+                    if duplicate_lead.get(source_field) == 'Event':
+                        event_exists = True
+                        break
+                if event_exists:
+                    break
+            
+            if event_exists:
+                return jsonify({
+                    'success': True,
+                    'is_duplicate': True,
+                    'existing_lead': duplicate_lead,
+                    'duplicate_type': 'exact_match',
+                    'message': 'Lead with this phone number already exists as Event in duplicates',
+                    'source': 'duplicate_leads'
+                })
+            else:
+                # Phone exists in duplicates but not as Event
+                existing_sources = []
+                for duplicate_lead in duplicate_leads:
+                    for i in range(1, 11):
+                        source_field = f'source{i}'
+                        sub_source_field = f'sub_source{i}'
+                        source_value = duplicate_lead.get(source_field)
+                        
+                        if source_value:
+                            existing_sources.append({
+                                'source': source_value,
+                                'sub_source': duplicate_lead.get(sub_source_field)
+                            })
+                
+                return jsonify({
+                    'success': True,
+                    'is_duplicate': True,
+                    'existing_lead': duplicate_lead,
+                    'existing_sources': existing_sources,
+                    'duplicate_type': 'new_source',
+                    'message': 'Phone number exists in duplicates with different sources',
+                    'source': 'duplicate_leads'
+                })
+        
+        # No duplicate found
+        print(f"✅ No duplicates found for event lead phone: {normalized_phone}")
+        return jsonify({
+            'success': True,
+            'is_duplicate': False,
+            'message': 'No duplicate found'
+        })
+        
+    except Exception as e:
+        print(f"❌ Error checking duplicate event lead: {e}")
+        return jsonify({'success': False, 'message': f'Error checking duplicate: {str(e)}'}), 500
+
 @app.route('/add_lead', methods=['GET', 'POST'])
 @require_cre
 def add_lead():
@@ -6898,49 +7249,217 @@ def activity_event():
         
         try:
             leads_added = 0
+            duplicate_leads = []
             # Fetch all CREs for round-robin assignment
             cre_users = safe_get_data('cre_users')
             cre_names = [cre['name'] for cre in cre_users] if cre_users else []
             cre_count = len(cre_names)
             cre_index = 0  # Start from the first CRE for each batch
+            
             for i in range(len(customer_names)):
                 if customer_names[i] and customer_phones[i]:  # Only process if name and phone are provided
-                    # Assign CRE in round-robin
-                    cre_assigned = cre_names[cre_index] if cre_count > 0 else None
-                    cre_index = (cre_index + 1) % cre_count if cre_count > 0 else 0
-                    # Generate UID for event lead
-                    uid = f"E-{activity_name[:3].upper()}-{customer_phones[i][-4:]}"
-                    # Create event lead data strictly matching activity_leads schema
-                    event_lead_data = {
-                        'activity_uid': uid,
-                        'activity_name': activity_name,
-                        'activity_location': activity_location,
-                        'ps_name': session.get('ps_name'),
-                        'location': session.get('branch'),
-                        'customer_name': customer_names[i].strip(),
-                        'customer_location': customer_locations[i].strip() if i < len(customer_locations) else '',
-                        'customer_profession': customer_professions[i].strip() if i < len(customer_professions) else '',
-                        'gender': genders[i] if i < len(genders) else 'MALE',
-                        'interested_model': interested_models[i].strip() if i < len(interested_models) else '',
-                        'remarks': remarks_list[i].strip() if i < len(remarks_list) else '',
-                        'lead_status': lead_statuses[i] if i < len(lead_statuses) else 'WARM',
-                        'month': months[i] if i < len(months) else datetime.now().strftime('%b'),
-                        'date': dates[i] if i < len(dates) else datetime.now().strftime('%Y-%m-%d'),
-                        'customer_phone_number': customer_phones[i].strip(),
-                        'created_at': datetime.now().isoformat(),
-                        'lead_category': lead_statuses[i] if i < len(lead_statuses) else 'WARM',
-                        'cre_assigned': cre_assigned
-                    }
-                    # Insert into activity_leads
-                    result = supabase.table('activity_leads').insert(event_lead_data).execute()
-                    if result.data:
-                        leads_added += 1
+                    customer_phone = customer_phones[i].strip()
+                    normalized_phone = ''.join(filter(str.isdigit, customer_phone))
+                    
+                    # Initialize variables for this iteration
+                    should_add_to_duplicates = False
+                    original_lead = None
+                    
+                    # Check for duplicates in ALL relevant tables
+                    try:
+                        print(f"🔍 Checking for duplicates for event lead phone: {normalized_phone}")
+                        
+                        # 1. Check in activity_leads table FIRST (most important for event leads)
+                        activity_result = supabase.table('activity_leads').select('*').eq('customer_phone_number', normalized_phone).execute()
+                        existing_activity_leads = activity_result.data or []
+                        
+                        if existing_activity_leads:
+                            print(f"🎯 Found {len(existing_activity_leads)} existing activity leads")
+                            duplicate_leads.append({
+                                'phone': customer_phone,
+                                'name': customer_names[i].strip(),
+                                'type': 'exact_match',
+                                'message': 'Lead with this phone number already exists as Event lead'
+                            })
+                            continue  # Skip this lead
+                        
+                        # 2. Check in walkin_table
+                        walkin_result = supabase.table('walkin_table').select('*').eq('mobile_number', normalized_phone).execute()
+                        existing_walkin_leads = walkin_result.data or []
+                        
+                        if existing_walkin_leads:
+                            print(f"📱 Found {len(existing_walkin_leads)} existing walkin leads")
+                            # This will be added as duplicate with new source
+                            should_add_to_duplicates = True
+                            original_lead = existing_walkin_leads[0]
+                            print(f"✅ Will add to duplicate_leads: Walk-in → Event")
+                        
+                        # 3. Check in lead_master table
+                        lead_master_result = supabase.table('lead_master').select('*').eq('customer_mobile_number', normalized_phone).execute()
+                        existing_leads = lead_master_result.data or []
+                        
+                        if existing_leads:
+                            print(f"📋 Found {len(existing_leads)} existing leads in lead_master")
+                            # Check for exact source-subsource match (Event)
+                            exact_match = any(
+                                lead.get('source') == 'Event' 
+                                for lead in existing_leads
+                            )
+                            
+                            if exact_match:
+                                duplicate_leads.append({
+                                    'phone': customer_phone,
+                                    'name': customer_names[i].strip(),
+                                    'type': 'exact_match',
+                                    'message': 'Lead with this phone number already exists as Event'
+                                })
+                                continue  # Skip this lead
+                            else:
+                                # This will be added as duplicate with new source
+                                should_add_to_duplicates = True
+                                original_lead = existing_leads[0]
+                                print(f"✅ Will add to duplicate_leads: CRE Lead → Event")
+                        
+                        # 4. Check in duplicate_leads
+                        duplicate_result = supabase.table('duplicate_leads').select('*').eq('customer_mobile_number', normalized_phone).execute()
+                        existing_duplicate_leads = duplicate_result.data or []
+                        
+                        if existing_duplicate_leads:
+                            print(f"🔄 Found {len(existing_duplicate_leads)} existing duplicate leads")
+                            # Check if Event source already exists in any slot
+                            exact_match = False
+                            for duplicate_lead in existing_duplicate_leads:
+                                # Check all source slots (source1 to source10)
+                                for j in range(1, 11):
+                                    source_field = f'source{j}'
+                                    
+                                    if duplicate_lead.get(source_field) == 'Event':
+                                        exact_match = True
+                                        break
+                                if exact_match:
+                                    break
+                            
+                            if exact_match:
+                                duplicate_leads.append({
+                                    'phone': customer_phone,
+                                    'name': customer_names[i].strip(),
+                                    'type': 'exact_match',
+                                    'message': 'Lead with this phone number already exists as Event in duplicates'
+                                })
+                                continue  # Skip this lead
+                            else:
+                                # This will be added as duplicate with new source
+                                should_add_to_duplicates = True
+                                original_lead = existing_duplicate_leads[0]
+                                print(f"✅ Will add to duplicate_leads: Existing Duplicate → Event")
+                        
+                        # Check if we should add to duplicate_leads instead of activity_leads
+                        if should_add_to_duplicates and original_lead:
+                            try:
+                                print(f"🔄 Creating duplicate record for {customer_phone}...")
+                                print(f"🔄 Original lead data: {original_lead}")
+                                
+                                # Generate UID for duplicate record
+                                duplicate_uid = f"E-{activity_name[:3].upper()}-{customer_phones[i][-4:]}"
+                                print(f"🔄 Generated duplicate UID: {duplicate_uid}")
+                                
+                                # Create duplicate record
+                                duplicate_data = {
+                                    'uid': duplicate_uid,
+                                    'customer_mobile_number': normalized_phone,
+                                    'customer_name': customer_names[i].strip(),
+                                    'original_lead_id': None,  # We'll handle this differently
+                                    'source1': original_lead.get('source', 'Event' if 'activity_uid' in original_lead else 'Walk-in' if 'id' in original_lead else 'Unknown'),
+                                    'sub_source1': original_lead.get('sub_source') or original_lead.get('location', 'N/A') or original_lead.get('branch', 'N/A'),
+                                    'date1': original_lead.get('date') or original_lead.get('created_at', ''),
+                                    'source2': 'Event',
+                                    'sub_source2': activity_name,  # Use activity name as sub-source for event
+                                    'date2': datetime.now().strftime('%Y-%m-%d'),
+                                    'duplicate_count': 2,
+                                    'created_at': datetime.now().isoformat(),
+                                    'updated_at': datetime.now().isoformat()
+                                }
+                                
+                                print(f"🔄 Duplicate data prepared: {duplicate_data}")
+                                
+                                # Try to add the new columns if they exist (for better source tracking)
+                                try:
+                                    duplicate_data['original_table'] = 'walkin_table' if 'id' in original_lead else 'activity_leads' if 'activity_uid' in original_lead else 'lead_master'
+                                    duplicate_data['original_record_id'] = original_lead.get('id') or original_lead.get('activity_uid') or original_lead.get('uid')
+                                    print(f"🔄 Added source tracking: {duplicate_data.get('original_table')} - {duplicate_data.get('original_record_id')}")
+                                except Exception as e:
+                                    print(f"⚠️ Could not add source tracking columns: {e}")
+                                
+                                # Initialize remaining slots as None
+                                for k in range(3, 11):
+                                    duplicate_data[f'source{k}'] = None
+                                    duplicate_data[f'sub_source{k}'] = None
+                                    duplicate_data[f'date{k}'] = None
+                                
+                                print(f"🔄 Attempting to insert into duplicate_leads...")
+                                result = supabase.table('duplicate_leads').insert(duplicate_data).execute()
+                                print(f"✅ Successfully added to duplicate_leads: {customer_names[i].strip()} - {customer_phone}")
+                                print(f"✅ Insert result: {result}")
+                                continue  # Skip adding to activity_leads
+                                
+                            except Exception as e:
+                                print(f"❌ Error creating duplicate record for {customer_phone}: {e}")
+                                print(f"❌ Full error details: {str(e)}")
+                                # Continue with normal flow if duplicate creation fails
+                        
+                        # No exact duplicate found, proceed with adding the lead
+                        # Assign CRE in round-robin
+                        cre_assigned = cre_names[cre_index] if cre_count > 0 else None
+                        cre_index = (cre_index + 1) % cre_count if cre_count > 0 else 0
+                        
+                        # Generate UID for event lead
+                        uid = f"E-{activity_name[:3].upper()}-{customer_phones[i][-4:]}"
+                        
+                        # Create event lead data strictly matching activity_leads schema
+                        event_lead_data = {
+                            'activity_uid': uid,
+                            'activity_name': activity_name,
+                            'activity_location': activity_location,
+                            'ps_name': session.get('ps_name'),
+                            'location': session.get('branch'),
+                            'customer_name': customer_names[i].strip(),
+                            'customer_location': customer_locations[i].strip() if i < len(customer_locations) else '',
+                            'customer_profession': customer_professions[i].strip() if i < len(customer_professions) else '',
+                            'gender': genders[i] if i < len(genders) else 'MALE',
+                            'interested_model': interested_models[i].strip() if i < len(interested_models) else '',
+                            'remarks': remarks_list[i].strip() if i < len(remarks_list) else '',
+                            'lead_status': lead_statuses[i] if i < len(lead_statuses) else 'WARM',
+                            'month': months[i] if i < len(months) else datetime.now().strftime('%b'),
+                            'date': dates[i] if i < len(dates) else datetime.now().strftime('%Y-%m-%d'),
+                            'customer_phone_number': customer_phone,
+                            'created_at': datetime.now().isoformat(),
+                            'lead_category': lead_statuses[i] if i < len(lead_statuses) else 'WARM',
+                            'cre_assigned': cre_assigned
+                        }
+                        
+                        # Insert into activity_leads
+                        result = supabase.table('activity_leads').insert(event_lead_data).execute()
+                        if result.data:
+                            leads_added += 1
+                            print(f"✅ Added event lead: {customer_names[i].strip()} - {customer_phone}")
+                        
+                    except Exception as e:
+                        print(f"❌ Error checking duplicates for {customer_phone}: {e}")
+                        # Continue with other leads even if one fails
+                        continue
             
             if leads_added > 0:
-                flash(f'{leads_added} event lead(s) added successfully!', 'success')
+                if duplicate_leads:
+                    duplicate_message = f"{leads_added} event lead(s) added successfully! {len(duplicate_leads)} exact duplicate(s) skipped."
+                    flash(duplicate_message, 'warning')
+                else:
+                    flash(f'{leads_added} event lead(s) added successfully!', 'success')
                 return redirect(url_for('ps_dashboard'))
             else:
-                flash('Error adding event leads', 'error')
+                if duplicate_leads:
+                    flash(f'All leads were exact duplicates. {len(duplicate_leads)} duplicate(s) found.', 'warning')
+                else:
+                    flash('Error adding event leads', 'error')
                 
         except Exception as e:
             flash(f'Error adding event leads: {str(e)}', 'error')
@@ -9013,6 +9532,16 @@ def admin_duplicate_leads():
                     continue
             else:
                 continue
+        # Determine source type based on available columns
+        source_type = 'CRE Lead'  # Default
+        if lead.get('original_table'):
+            if lead.get('original_table') == 'lead_master':
+                source_type = 'CRE Lead'
+            elif lead.get('original_table') == 'activity_leads':
+                source_type = 'Event Lead'
+            elif lead.get('original_table') == 'walkin_table':
+                source_type = 'Walk-in Lead'
+        
         leads_display.append({
             'uid': lead.get('uid'),
             'customer_name': lead.get('customer_name'),
@@ -9022,7 +9551,10 @@ def admin_duplicate_leads():
             'last_enquiry_date': last_enquiry_date,
             'days_old': days_old,
             'cre_name': cre_name,
-            'assigned': assigned
+            'assigned': assigned,
+            'source_type': source_type,
+            'original_table': lead.get('original_table'),
+            'original_record_id': lead.get('original_record_id')
         })
     # Calculate total pages
     total_pages = (total_count + page_size - 1) // page_size
@@ -9781,9 +10313,84 @@ def add_walkin_lead():
     ps_options_json = json.dumps(ps_options)
 
     if request.method == 'POST':
-        # Generate UID for walk-in lead
+        # Get form data
+        customer_name = request.form['customer_name']
         mobile_number = request.form['mobile_number']
+        customer_location = request.form.get('customer_location')
+        model_interested = request.form['model_interested']
+        occupation = request.form.get('occupation')
+        branch = request.form['branch']
+        ps_assigned = request.form['ps_assigned']
         
+        # Normalize phone number
+        normalized_phone = ''.join(filter(str.isdigit, mobile_number))
+        
+        # Check for duplicates in ALL relevant tables
+        try:
+            print(f"🔍 Checking for duplicates for phone: {normalized_phone}")
+            
+            # 1. Check in walkin_table FIRST (most important for walkin leads)
+            walkin_result = supabase.table('walkin_table').select('*').eq('mobile_number', normalized_phone).execute()
+            existing_walkin_leads = walkin_result.data or []
+            
+            if existing_walkin_leads:
+                print(f"📱 Found {len(existing_walkin_leads)} existing walkin leads")
+                flash('Lead with this phone number already exists as Walk-in!', 'error')
+                return render_template('add_walkin_lead.html', models=models, branches=branches, ps_options_json=ps_options_json, default_branch=branch)
+            
+            # 2. Check in activity_leads table
+            activity_result = supabase.table('activity_leads').select('*').eq('customer_phone_number', normalized_phone).execute()
+            existing_activity_leads = activity_result.data or []
+            
+            if existing_activity_leads:
+                print(f"🎯 Found {len(existing_activity_leads)} existing activity leads")
+                # This will be added as duplicate with new source
+            
+            # 3. Check in lead_master table
+            lead_master_result = supabase.table('lead_master').select('*').eq('customer_mobile_number', normalized_phone).execute()
+            existing_leads = lead_master_result.data or []
+            
+            if existing_leads:
+                print(f"📋 Found {len(existing_leads)} existing leads in lead_master")
+                # Check for exact source-subsource match (Walk-in)
+                exact_match = any(
+                    lead.get('source') == 'Walk-in' 
+                    for lead in existing_leads
+                )
+                
+                if exact_match:
+                    flash('Lead with this phone number already exists as Walk-in!', 'error')
+                    return render_template('add_walkin_lead.html', models=models, branches=branches, ps_options_json=ps_options_json, default_branch=branch)
+            
+            # 4. Check in duplicate_leads
+            duplicate_result = supabase.table('duplicate_leads').select('*').eq('customer_mobile_number', normalized_phone).execute()
+            duplicate_leads = duplicate_result.data or []
+            
+            if duplicate_leads:
+                print(f"🔄 Found {len(duplicate_leads)} existing duplicate leads")
+                # Check if Walk-in source already exists in any slot
+                exact_match = False
+                for duplicate_lead in duplicate_leads:
+                    # Check all source slots (source1 to source10)
+                    for i in range(1, 11):
+                        source_field = f'source{i}'
+                        
+                        if duplicate_lead.get(source_field) == 'Walk-in':
+                            exact_match = True
+                            break
+                    if exact_match:
+                        break
+                
+                if exact_match:
+                    flash('Lead with this phone number already exists as Walk-in in duplicates!', 'error')
+                    return render_template('add_walkin_lead.html', models=models, branches=branches, ps_options_json=ps_options_json, default_branch=branch)
+                    
+        except Exception as e:
+            print(f"❌ Error checking duplicates: {e}")
+            flash('Error checking for duplicates. Please try again.', 'error')
+            return render_template('add_walkin_lead.html', models=models, branches=branches, ps_options_json=ps_options_json, default_branch=branch)
+        
+        # Generate UID for walk-in lead
         # Get count of existing walk-in leads for this mobile number
         existing_count = get_accurate_count('walkin_table', {'mobile_number': mobile_number})
         sequence = existing_count + 1
@@ -9791,62 +10398,124 @@ def add_walkin_lead():
         # Generate UID using 'Walk-in' as source (which maps to 'W')
         uid = generate_uid('Walk-in', mobile_number, sequence)
         
-        data = {
-            'customer_name': request.form['customer_name'],
-            'mobile_number': request.form['mobile_number'],
-            'customer_location': request.form.get('customer_location'),
-            'model_interested': request.form['model_interested'],
-            'occupation': request.form.get('occupation'),
-            'branch': request.form['branch'],
-            'ps_assigned': request.form['ps_assigned'],
-            'status': 'Pending',
-            'followup_no': 1,
-            'uid': uid,  # Add UID
-            'created_at': datetime.now().isoformat(),
-            'updated_at': datetime.now().isoformat(),
-        }
-        try:
-            # Insert into walkin_table only
-            supabase.table('walkin_table').insert(data).execute()
-            
-            flash('Walk-in lead added and assigned to PS successfully!', 'success')
-            return redirect(url_for('add_walkin_lead'))
-        except Exception as e:
-            error_str = str(e)
-            if 'duplicate key value violates unique constraint "walkin_table_pkey"' in error_str:
-                # This is a sequence issue - try to fix it by using a different approach
-                try:
-                    # Get the maximum ID from the table
-                    max_id_result = supabase.table('walkin_table').select('id').order('id', desc=True).limit(1).execute()
-                    if max_id_result.data:
-                        max_id = max_id_result.data[0]['id']
-                        
-                        # Try to insert with a higher ID manually
-                        # First, try to find the next available ID
-                        next_id = max_id + 1
-                        while True:
-                            # Check if this ID exists
-                            existing = supabase.table('walkin_table').select('id').eq('id', next_id).execute()
-                            if not existing.data:
-                                # This ID is available, use it
-                                data['id'] = next_id
-                                break
-                            next_id += 1
-                            if next_id > max_id + 100:  # Safety limit
-                                flash('Error: Could not find an available ID. Please contact administrator.', 'danger')
-                                break
-                        
-                        if 'id' in data:
-                            # Try the insertion with the specific ID
-                            supabase.table('walkin_table').insert(data).execute()
-                            flash('Walk-in lead added and assigned to PS successfully!', 'success')
-                            return redirect(url_for('add_walkin_lead'))
-                    else:
-                        flash('Error: Could not determine the maximum ID in the table', 'danger')
-                except Exception as reset_error:
-                    flash(f'Error fixing sequence: {str(reset_error)}. Please contact administrator.', 'danger')
-            else:
-                flash(f'Error adding walk-in lead: {error_str}', 'danger')
+        # Check if this is a duplicate with new source (phone exists but not as Walk-in)
+        is_duplicate_new_source = False
+        original_lead = None
+        
+        if existing_activity_leads:
+            # Phone exists in activity_leads - this is a duplicate with new source
+            is_duplicate_new_source = True
+            original_lead = existing_activity_leads[0]
+        elif existing_leads:
+            # Phone exists in lead_master but not as Walk-in - this is a duplicate with new source
+            is_duplicate_new_source = True
+            original_lead = existing_leads[0]
+        elif duplicate_leads:
+            # Phone exists in duplicate_leads but not as Walk-in - this is also a duplicate
+            is_duplicate_new_source = True
+            original_lead = duplicate_leads[0]
+        
+        if is_duplicate_new_source:
+            # This is a duplicate with new source - add to duplicate_leads table
+            try:
+                if original_lead:
+                    # Create new duplicate record
+                    duplicate_data = {
+                        'uid': uid,
+                        'customer_mobile_number': normalized_phone,
+                        'customer_name': customer_name,
+                        'original_lead_id': None,  # We'll handle this differently
+                        'source1': original_lead.get('source', 'Event' if 'activity_uid' in original_lead else 'Walk-in' if 'id' in original_lead else 'Unknown'),
+                        'sub_source1': original_lead.get('sub_source') or original_lead.get('location', 'N/A') or original_lead.get('branch', 'N/A'),
+                        'date1': original_lead.get('date') or original_lead.get('created_at', ''),
+                        'source2': 'Walk-in',
+                        'sub_source2': branch,  # Use branch as sub-source for walk-in
+                        'date2': datetime.now().strftime('%Y-%m-%d'),
+                        'duplicate_count': 2,
+                        'created_at': datetime.now().isoformat(),
+                        'updated_at': datetime.now().isoformat()
+                    }
+                    
+                    # Try to add the new columns if they exist (for better source tracking)
+                    try:
+                        duplicate_data['original_table'] = 'walkin_table' if 'id' in original_lead else 'activity_leads' if 'activity_uid' in original_lead else 'lead_master'
+                        duplicate_data['original_record_id'] = original_lead.get('id') or original_lead.get('activity_uid') or original_lead.get('uid')
+                    except:
+                        pass  # These columns might not exist yet
+                    
+                    # Initialize remaining slots as None
+                    for i in range(3, 11):
+                        duplicate_data[f'source{i}'] = None
+                        duplicate_data[f'sub_source{i}'] = None
+                        duplicate_data[f'date{i}'] = None
+                    
+                    supabase.table('duplicate_leads').insert(duplicate_data).execute()
+                    flash(f'Lead added to duplicates with new source: Walk-in - {branch}', 'success')
+                    return redirect(url_for('add_walkin_lead'))
+                else:
+                    flash('Error: Original lead not found for duplicate creation', 'error')
+                    return render_template('add_walkin_lead.html', models=models, branches=branches, ps_options_json=ps_options_json, default_branch=branch)
+            except Exception as e:
+                flash(f'Error creating duplicate record: {str(e)}', 'error')
+                return render_template('add_walkin_lead.html', models=models, branches=branches, ps_options_json=ps_options_json, default_branch=branch)
+        else:
+            # This is a new lead - add to walkin_table
+            data = {
+                'customer_name': customer_name,
+                'mobile_number': mobile_number,
+                'customer_location': customer_location,
+                'model_interested': model_interested,
+                'occupation': occupation,
+                'branch': branch,
+                'ps_assigned': ps_assigned,
+                'status': 'Pending',
+                'followup_no': 1,
+                'uid': uid,  # Add UID
+                'created_at': datetime.now().isoformat(),
+                'updated_at': datetime.now().isoformat(),
+            }
+            try:
+                # Insert into walkin_table only
+                supabase.table('walkin_table').insert(data).execute()
+                
+                flash('Walk-in lead added and assigned to PS successfully!', 'success')
+                return redirect(url_for('add_walkin_lead'))
+            except Exception as e:
+                error_str = str(e)
+                if 'duplicate key value violates unique constraint "walkin_table_pkey"' in error_str:
+                    # This is a sequence issue - try to fix it by using a different approach
+                    try:
+                        # Get the maximum ID from the table
+                        max_id_result = supabase.table('walkin_table').select('id').order('id', desc=True).limit(1).execute()
+                        if max_id_result.data:
+                            max_id = max_id_result.data[0]['id']
+                            
+                            # Try to insert with a higher ID manually
+                            # First, try to find the next available ID
+                            next_id = max_id + 1
+                            while True:
+                                # Check if this ID exists
+                                existing = supabase.table('walkin_table').select('id').eq('id', next_id).execute()
+                                if not existing.data:
+                                    # This ID is available, use it
+                                    data['id'] = next_id
+                                    break
+                                next_id += 1
+                                if next_id > max_id + 100:  # Safety limit
+                                    flash('Error: Could not find an available ID. Please contact administrator.', 'danger')
+                                    break
+                            
+                            if 'id' in data:
+                                # Try the insertion with the specific ID
+                                supabase.table('walkin_table').insert(data).execute()
+                                flash('Walk-in lead added and assigned to PS successfully!', 'success')
+                                return redirect(url_for('add_walkin_lead'))
+                        else:
+                            flash('Error: Could not determine the maximum ID in the table', 'danger')
+                    except Exception as reset_error:
+                        flash(f'Error fixing sequence: {str(reset_error)}. Please contact administrator.', 'danger')
+                else:
+                    flash(f'Error adding walk-in lead: {error_str}', 'danger')
 
     # Get receptionist's branch from session
     rec_branch = session.get('rec_branch', '')
