@@ -59,6 +59,10 @@
             box-shadow: var(--airbnb-shadow);
             transition: all 0.3s ease;
             border: none;
+            height: 140px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
         }
 
         .kpi-card:hover {
@@ -82,12 +86,20 @@
             font-size: 2.25rem;
             font-weight: 700;
             margin-bottom: 0.5rem;
+            line-height: 1;
         }
 
         .kpi-label {
             font-size: 0.9rem;
             opacity: 0.9;
             font-weight: 500;
+            line-height: 1.2;
+        }
+
+        .kpi-label small {
+            font-size: 0.75rem;
+            opacity: 0.7;
+            margin-top: 0.25rem;
         }
 
         .chart-container {
@@ -192,11 +204,18 @@
             gap: 0.5rem;
         }
 
+        .filter-buttons .d-flex {
+            display: flex;
+            align-items: center;
+            white-space: nowrap;
+        }
+
         .filter-buttons label {
             font-weight: 500;
             color: var(--airbnb-gray-600);
             margin: 0;
             white-space: nowrap;
+            font-size: 0.9rem;
         }
 
         .filter-buttons input[type="date"] {
@@ -205,6 +224,7 @@
             padding: 0.375rem 0.75rem;
             font-size: 0.875rem;
             transition: border-color 0.15s ease-in-out;
+            min-width: 140px;
         }
 
         .filter-buttons input[type="date"]:focus {
@@ -786,6 +806,37 @@
             color: #00695c;
             font-weight: bold;
         }
+        
+        /* Branch Summary Table Styling */
+        #branch-summary-table th, #branch-summary-table td {
+            border: 2px solid #e0e0e0 !important;
+            text-align: center;
+            vertical-align: middle;
+            font-size: 1rem;
+        }
+        #branch-summary-table th {
+            font-size: 1rem;
+            background: #f8f9fa;
+            font-weight: 600;
+        }
+        #branch-summary-table td:first-child {
+            text-align: left;
+            font-weight: 600;
+        }
+        .untouched-link {
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        .untouched-link:hover {
+            transform: scale(1.05);
+            text-decoration: none;
+        }
+        .untouched-link .badge {
+            transition: all 0.3s ease;
+        }
+        .untouched-link:hover .badge {
+            box-shadow: 0 4px 8px rgba(25, 118, 210, 0.3);
+        }
     </style>
 </head>
 <body>
@@ -821,16 +872,23 @@
         <!-- Replace the old Time Period filter buttons with From Date to Date filter -->
         <div class="filter-buttons">
             <h5 style="color: var(--airbnb-gray-700); font-weight: 600; margin-bottom: 1rem;">Time Period:</h5>
-            <form class="d-flex align-items-center" method="get" action="{{ url_for('analytics') }}" id="dateFilterForm">
-                <label for="start_date" class="me-2 mb-0">From:</label>
-                <input type="date" id="start_date" name="start_date" class="form-control form-control-sm me-2" 
-                       value="{{ request.args.get('start_date', '') }}" required>
-                <label for="end_date" class="me-2 mb-0">To:</label>
-                <input type="date" id="end_date" name="end_date" class="form-control form-control-sm me-2" 
-                       value="{{ request.args.get('end_date', '') }}" required>
+            <form class="d-flex align-items-center flex-wrap" method="get" action="{{ url_for('analytics') }}" id="dateFilterForm">
+                <div class="d-flex align-items-center me-3">
+                    <label for="start_date" class="me-2 mb-0">From:</label>
+                    <input type="date" id="start_date" name="start_date" class="form-control form-control-sm" 
+                           value="{{ request.args.get('start_date', '') }}">
+                </div>
+                <div class="d-flex align-items-center me-3">
+                    <label for="end_date" class="me-2 mb-0">To:</label>
+                    <input type="date" id="end_date" name="end_date" class="form-control form-control-sm" 
+                           value="{{ request.args.get('end_date', '') }}">
+                </div>
                 <button type="submit" class="btn btn-primary btn-sm me-2">
                     <i class="fas fa-filter"></i> Apply Filter
                 </button>
+                <a href="{{ url_for('analytics', today='true') }}" class="btn btn-success btn-sm me-2">
+                    <i class="fas fa-calendar-day"></i> Today
+                </a>
                 <a href="{{ url_for('analytics') }}" class="btn btn-outline-secondary btn-sm">
                     <i class="fas fa-undo"></i> Reset
                 </a>
@@ -841,32 +899,34 @@
         <div class="row">
             <div class="col-md-3">
                 <div class="kpi-card">
-                    <div class="kpi-value">{{ analytics.total_leads }}</div>
+                    <div class="kpi-value">{{ analytics.total_leads | default(0) }}</div>
                     <div class="kpi-label">
                         <i class="fas fa-users"></i> Total Leads
-                        <span class="badge bg-light text-dark ms-2">+{{ analytics.leads_growth }}%</span>
+                        <span class="badge bg-light text-dark ms-2">+{{ analytics.leads_growth | default(0) }}%</span>
                     </div>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="kpi-card success">
-                    <div class="kpi-value">{{ analytics.conversion_rate }}%</div>
+                    <div class="kpi-value">{{ analytics.conversion_rate | default(0) }}%</div>
                     <div class="kpi-label">
                         <i class="fas fa-trophy"></i> Conversion Rate
+                        <small class="d-block mt-1" style="opacity: 0.8;">(Won/Total Leads)</small>
                     </div>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="kpi-card warning">
-                    <div class="kpi-value">{{ analytics.avg_response_time }}</div>
+                    <div class="kpi-value">{{ analytics.walkin_conversion_rate | default(0) }}%</div>
                     <div class="kpi-label">
-                        <i class="fas fa-clock"></i> Avg Response Time
+                        <i class="fas fa-store"></i> Walk-in Rate
+                        <small class="d-block mt-1" style="opacity: 0.8;">(Won Walk-ins)</small>
                     </div>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="kpi-card info">
-                    <div class="kpi-value">{{ analytics.total_cres }}</div>
+                    <div class="kpi-value">{{ analytics.total_cres | default(0) }}</div>
                     <div class="kpi-label">
                         <i class="fas fa-user-tie"></i> Active CREs
                     </div>
@@ -874,21 +934,77 @@
             </div>
         </div>
 
-        <!-- KPI Cards Info Note -->
-        <!-- <div class="alert alert-info mt-3 mb-4" style="background: var(--airbnb-gray-100); border: 1px solid var(--airbnb-blue); color: var(--airbnb-gray-700);">
+        <!-- Debug Section for Conversion Rate Issue
+        <div class="alert alert-warning mt-3 mb-4" style="background: #fff3cd; border: 1px solid #ffeaa7; color: #856404;">
             <div class="d-flex align-items-center">
-                <i class="fas fa-info-circle me-2" style="color: var(--airbnb-blue);"></i>
+                <i class="fas fa-bug me-2" style="color: #856404;"></i>
                 <div>
-                    <strong>KPI Information:</strong> 
-                    <ul class="mb-0 mt-1" style="padding-left: 1.5rem;">
-                        <li><strong>Total Leads:</strong> Count of all leads in the selected date range</li>
-                        <li><strong>Conversion Rate:</strong> Percentage of leads that resulted in successful sales (Won leads / Total leads × 100)</li>
-                        <li><strong>Avg Response Time:</strong> Average time taken to respond to leads</li>
-                        <li><strong>Active CREs:</strong> Number of Customer Relationship Executives currently active</li>
-                    </ul>
+                    <strong>Debug Information - Conversion Rate Issue:</strong>
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <strong>Lead Master Table:</strong>
+                            <ul class="mb-0 mt-1" style="padding-left: 1.5rem;">
+                                <li>Total Leads: <code>{{ analytics.total_leads | default('Not Set') }}</code></li>
+                                <li>Won Leads: <code>{{ analytics.won_leads | default('Not Set') }}</code></li>
+                                <li>Conversion Rate: <code>{{ analytics.conversion_rate | default('Not Set') }}%</code></li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Walkin Table:</strong>
+                            <ul class="mb-0 mt-1" style="padding-left: 1.5rem;">
+                                <li>Total Walk-ins: <code>{{ analytics.total_walkins | default('Not Set') }}</code></li>
+                                <li>Won Walk-ins: <code>{{ analytics.won_walkins | default('Not Set') }}</code></li>
+                                <li>Walk-in Rate: <code>{{ analytics.walkin_conversion_rate | default('Not Set') }}%</code></li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="mt-3 p-3" style="background: #f8f9fa; border-radius: 8px; border-left: 4px solid #dc3545;">
+                        <strong>Expected Values (Based on Database):</strong>
+                        <ul class="mb-0 mt-2" style="padding-left: 1.5rem;">
+                            <li><strong>Lead Master:</strong> Should show ~71 Won leads out of total leads</li>
+                            <li><strong>Walkin Table:</strong> Should show ~72 Won walk-ins out of total walk-ins</li>
+                            <li><strong>Date Filter:</strong> Current filter: {{ request.args.get('start_date', 'Not Set') }} to {{ request.args.get('end_date', 'Not Set') }}</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
         </div> -->
+
+        <!-- Branch-wise Lead Summary Table -->
+        <div class="table-container mb-4">
+            <h5 style="color: var(--airbnb-red); font-weight: 600; margin-bottom: 1rem;">
+                <i class="fas fa-building" style="color: var(--airbnb-red);"></i> Branch-wise Lead Summary
+            </h5>
+            <form class="d-flex align-items-center mb-3" method="get" action="{{ url_for('analytics') }}">
+                <label for="branch_summary_start_date" class="me-2 mb-0">From:</label>
+                <input type="date" id="branch_summary_start_date" name="start_date" class="form-control form-control-sm me-2" value="{{ request.args.get('start_date', '') }}">
+                <label for="branch_summary_end_date" class="me-2 mb-0">To:</label>
+                <input type="date" id="branch_summary_end_date" name="end_date" class="form-control form-control-sm me-2" value="{{ request.args.get('end_date', '') }}">
+                <button type="submit" class="btn btn-primary btn-sm me-2">Apply</button>
+                <a href="{{ url_for('analytics', today='true') }}" class="btn btn-success btn-sm me-2">Today</a>
+                <a href="{{ url_for('analytics') }}" class="btn btn-outline-secondary btn-sm ms-2">Reset</a>
+            </form>
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" id="branch-summary-table">
+                    <thead>
+                        <tr>
+                            <th>Branch Name</th>
+                            <th colspan="2">From Date</th>
+                            <th>To Date</th>
+                        </tr>
+                        <tr>
+                            <th></th>
+                            <th class="text-center" style="background: #e3f2fd; color: #1976d2;">Untouched</th>
+                            <th class="text-center" style="background: #e8f5e9; color: #2e7d32;">Called</th>
+                            <th class="text-center" style="background: #fff3e0; color: #f57c00;">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody id="branch-summary-tbody">
+                        <tr><td colspan="4" class="text-center">Loading branch summary data...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
         <!-- Campaign/Platform/Lead Count Table -->
         <div class="table-container mb-4">
@@ -900,7 +1016,8 @@
                 <input type="date" id="campaign_start_date" name="start_date" class="form-control form-control-sm me-2" value="{{ request.args.get('start_date', '') }}">
                 <label for="campaign_end_date" class="me-2 mb-0">To:</label>
                 <input type="date" id="campaign_end_date" name="end_date" class="form-control form-control-sm me-2" value="{{ request.args.get('end_date', '') }}">
-                <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+                <button type="submit" class="btn btn-primary btn-sm me-2">Apply</button>
+                <a href="{{ url_for('analytics', today='true') }}" class="btn btn-success btn-sm me-2">Today</a>
                 <a href="{{ url_for('analytics') }}" class="btn btn-outline-secondary btn-sm ms-2">Reset</a>
             </form>
             <div class="mb-2" style="color: var(--airbnb-gray-600); font-size: 1rem;">
@@ -1947,6 +2064,7 @@
             populateCreDropdown();
             fetchSourceAnalysis();
             fetchCreAnalysis();
+            fetchBranchSummary();
             
             // Date filter validation and enhancement
             const dateFilterForm = document.getElementById('dateFilterForm');
@@ -1981,21 +2099,68 @@
                         return false;
                     }
                 }
+                
+                // Show loading state
+                showLoadingState();
             });
             
-            // Auto-submit form when dates change (optional)
+            // Auto-refresh charts when dates change (optional)
             startDateInput.addEventListener('change', function() {
                 if (startDateInput.value && endDateInput.value) {
-                    // dateFilterForm.submit(); // Uncomment if you want auto-submit
+                    // Optionally auto-refresh charts here
+                    // refreshChartsWithNewDates();
                 }
             });
             
             endDateInput.addEventListener('change', function() {
                 if (startDateInput.value && endDateInput.value) {
-                    // dateFilterForm.submit(); // Uncomment if you want auto-submit
+                    // Optionally auto-refresh charts here
+                    // refreshChartsWithNewDates();
                 }
             });
         });
+        
+        // Function to show loading state
+        function showLoadingState() {
+            // Add loading indicator to the page
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = 'loading-overlay';
+            loadingDiv.innerHTML = `
+                <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+                     background: rgba(0,0,0,0.5); z-index: 9999; display: flex; 
+                     align-items: center; justify-content: center;">
+                    <div style="background: white; padding: 2rem; border-radius: 12px; text-align: center;">
+                        <div class="spinner-border text-primary mb-3" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <h5>Updating Analytics...</h5>
+                        <p>Please wait while we fetch data for the selected date range.</p>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(loadingDiv);
+        }
+        
+        // Function to refresh charts with new date range
+        function refreshChartsWithNewDates() {
+            const startDate = document.getElementById('start_date').value;
+            const endDate = document.getElementById('end_date').value;
+            
+            if (startDate && endDate) {
+                // Refresh source analysis
+                fetchSourceAnalysis();
+                
+                // Refresh CRE analysis
+                fetchCreAnalysis();
+                
+                // Refresh negative feedback analysis
+                fetchNegativeCallAttempts();
+                
+                // Note: Charts will be updated when the page reloads with new data
+                // For real-time chart updates, you would need to make AJAX calls to get new chart data
+                console.log('Refreshing analytics for date range:', startDate, 'to', endDate);
+            }
+        }
 
         // Mini donut chart renderer
         function renderMiniDonut(canvas, percent, color) {
@@ -2067,7 +2232,271 @@
             fetchNegativeCallAttempts();
         }
         document.addEventListener('DOMContentLoaded', function() { fetchNegativeCallAttempts(); });
+
+        // Branch Summary Functions
+        function fetchBranchSummary() {
+            const startDate = document.getElementById('branch_summary_start_date').value;
+            const endDate = document.getElementById('branch_summary_end_date').value;
+            
+            // Check if today filter is active
+            const urlParams = new URLSearchParams(window.location.search);
+            const todayFilter = urlParams.get('today') === 'true';
+            
+            // Show loading state
+            document.getElementById('branch-summary-tbody').innerHTML = '<tr><td colspan="4" class="text-center">Loading branch summary data...</td></tr>';
+            
+            // Build query parameters
+            let params = new URLSearchParams();
+            if (todayFilter) {
+                const today = new Date().toISOString().split('T')[0];
+                params.append('start_date', today);
+                params.append('end_date', today);
+            } else {
+                if (startDate) params.append('start_date', startDate);
+                if (endDate) params.append('end_date', endDate);
+            }
+            
+            fetch(`/api/branch_summary?${params.toString()}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.success) {
+                        document.getElementById('branch-summary-tbody').innerHTML = `<tr><td colspan="4" class="text-center text-danger">${data.message || 'Error loading data'}</td></tr>`;
+                        return;
+                    }
+                    updateBranchSummaryTable(data.data);
+                })
+                .catch(err => {
+                    document.getElementById('branch-summary-tbody').innerHTML = '<tr><td colspan="4" class="text-center text-danger">Error loading branch summary data</td></tr>';
+                    console.error("Error fetching branch summary:", err);
+                });
+        }
+
+        function updateBranchSummaryTable(data) {
+            if (!data || !Array.isArray(data)) {
+                document.getElementById('branch-summary-tbody').innerHTML = '<tr><td colspan="4" class="text-center">No data available</td></tr>';
+                return;
+            }
+            
+            let html = '';
+            data.forEach(branch => {
+                html += `<tr>
+                    <td><strong>${branch.branch_name}</strong></td>
+                    <td class="text-center">
+                        <a href="#" class="untouched-link" 
+                           data-branch="${branch.branch_name}" 
+                           data-untouched-count="${branch.untouched_count}"
+                           onclick="showUntouchedLeads('${branch.branch_name}', ${branch.untouched_count})">
+                            <span class="badge" style="background: #e3f2fd; color: #1976d2; font-size: 1rem; padding: 0.5rem 1rem;">
+                                ${branch.untouched_count}
+                            </span>
+                        </a>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge" style="background: #e8f5e9; color: #2e7d32; font-size: 1rem; padding: 0.5rem 1rem;">
+                            ${branch.called_count}
+                        </span>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge" style="background: #fff3e0; color: #f57c00; font-size: 1rem; padding: 0.5rem 1rem;">
+                            ${branch.total_count}
+                        </span>
+                    </td>
+                </tr>`;
+            });
+            
+            document.getElementById('branch-summary-tbody').innerHTML = html;
+        }
+
+        function showUntouchedLeads(branchName, untouchedCount) {
+            if (untouchedCount === 0) {
+                alert('No untouched leads for this branch in the selected date range.');
+                return;
+            }
+            
+            // Update modal title and show modal
+            document.getElementById('branchNameUntouched').textContent = branchName;
+            document.getElementById('untouchedDateRange').textContent = getDateRangeText();
+            
+            const modal = new bootstrap.Modal(document.getElementById('untouchedLeadsModal'));
+            modal.show();
+            
+            // Fetch untouched leads data
+            fetchUntouchedLeads(branchName);
+        }
+
+        function fetchUntouchedLeads(branchName) {
+            const startDate = document.getElementById('branch_summary_start_date').value;
+            const endDate = document.getElementById('branch_summary_end_date').value;
+            
+            // Check if today filter is active
+            const urlParams = new URLSearchParams(window.location.search);
+            const todayFilter = urlParams.get('today') === 'true';
+            
+            // Show loading state
+            document.getElementById('untouchedLeadsTableBody').innerHTML = '<tr><td colspan="8" class="text-center">Loading lead details...</td></tr>';
+            
+            // Build query parameters
+            let params = new URLSearchParams();
+            params.append('branch_name', branchName);
+            if (todayFilter) {
+                const today = new Date().toISOString().split('T')[0];
+                params.append('start_date', today);
+                params.append('end_date', today);
+            } else {
+                if (startDate) params.append('start_date', startDate);
+                if (endDate) params.append('end_date', endDate);
+            }
+            
+            fetch(`/api/untouched_leads?${params.toString()}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.success) {
+                        document.getElementById('untouchedLeadsTableBody').innerHTML = `<tr><td colspan="8" class="text-center text-danger">${data.message || 'Error loading lead details'}</td></tr>`;
+                        return;
+                    }
+                    updateUntouchedLeadsTable(data.data);
+                })
+                .catch(err => {
+                    document.getElementById('untouchedLeadsTableBody').innerHTML = '<tr><td colspan="8" class="text-center text-danger">Error loading lead details</td></tr>';
+                    console.error("Error fetching untouched leads:", err);
+                });
+        }
+
+        function updateUntouchedLeadsTable(leads) {
+            if (!leads || !Array.isArray(leads)) {
+                document.getElementById('untouchedLeadsTableBody').innerHTML = '<tr><td colspan="8" class="text-center">No untouched leads found</td></tr>';
+                return;
+            }
+            
+            let html = '';
+            leads.forEach(lead => {
+                html += `<tr>
+                    <td><code>${lead.lead_uid || 'N/A'}</code></td>
+                    <td>${lead.customer_name || 'N/A'}</td>
+                    <td>${lead.customer_mobile_number || 'N/A'}</td>
+                    <td><span class="badge bg-secondary">${lead.source || 'N/A'}</span></td>
+                    <td><span class="badge bg-info">${lead.lead_category || 'N/A'}</span></td>
+                    <td>${lead.ps_name || 'Not Assigned'}</td>
+                    <td>${lead.ps_assigned_at ? new Date(lead.ps_assigned_at).toLocaleDateString() : 'N/A'}</td>
+                    <td><span class="badge bg-warning">${lead.final_status || 'Pending'}</span></td>
+                </tr>`;
+            });
+            
+            document.getElementById('untouchedLeadsTableBody').innerHTML = html;
+        }
+
+        function getDateRangeText() {
+            // Check if today filter is active
+            const urlParams = new URLSearchParams(window.location.search);
+            const todayFilter = urlParams.get('today') === 'true';
+            
+            if (todayFilter) {
+                const today = new Date().toISOString().split('T')[0];
+                return `Today (${today})`;
+            }
+            
+            const startDate = document.getElementById('branch_summary_start_date').value;
+            const endDate = document.getElementById('branch_summary_end_date').value;
+            
+            if (startDate && endDate) {
+                return `${startDate} to ${endDate}`;
+            } else if (startDate) {
+                return `From ${startDate}`;
+            } else if (endDate) {
+                return `Until ${endDate}`;
+            } else {
+                return 'All time';
+            }
+        }
+
+        function exportUntouchedLeads() {
+            const branchName = document.getElementById('branchNameUntouched').textContent;
+            const startDate = document.getElementById('branch_summary_start_date').value;
+            const endDate = document.getElementById('branch_summary_end_date').value;
+            
+            // Check if today filter is active
+            const urlParams = new URLSearchParams(window.location.search);
+            const todayFilter = urlParams.get('today') === 'true';
+            
+            // Build export URL
+            let params = new URLSearchParams();
+            params.append('branch_name', branchName);
+            if (todayFilter) {
+                const today = new Date().toISOString().split('T')[0];
+                params.append('start_date', today);
+                params.append('end_date', today);
+            } else {
+                if (startDate) params.append('start_date', startDate);
+                if (endDate) params.append('end_date', endDate);
+            }
+            params.append('export', 'csv');
+            
+            // Trigger download
+            const link = document.createElement('a');
+            link.href = `/api/untouched_leads?${params.toString()}`;
+            link.download = `untouched_leads_${branchName}_${startDate || 'all'}_${endDate || 'all'}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Auto-refresh branch summary when date filters change
+        document.getElementById('branch_summary_start_date').addEventListener('change', function() {
+            if (this.value && document.getElementById('branch_summary_end_date').value) {
+                fetchBranchSummary();
+            }
+        });
+        
+        document.getElementById('branch_summary_end_date').addEventListener('change', function() {
+            if (this.value && document.getElementById('branch_summary_start_date').value) {
+                fetchBranchSummary();
+            }
+        });
         </script>
+    </div>
+
+    <!-- Untouched Leads Drill-down Modal -->
+    <div class="modal fade" id="untouchedLeadsModal" tabindex="-1" aria-labelledby="untouchedLeadsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header" style="background: #e3f2fd; color: #1976d2;">
+                    <h5 class="modal-title" id="untouchedLeadsModalLabel">
+                        <i class="fas fa-users"></i> Untouched Leads - <span id="branchNameUntouched"></span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <strong>Date Range:</strong> <span id="untouchedDateRange"></span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Lead UID</th>
+                                    <th>Customer Name</th>
+                                    <th>Mobile Number</th>
+                                    <th>Source</th>
+                                    <th>Lead Category</th>
+                                    <th>PS Assigned</th>
+                                    <th>PS Assigned Date</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="untouchedLeadsTableBody">
+                                <tr><td colspan="8" class="text-center">Loading lead details...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="exportUntouchedLeads()">
+                        <i class="fas fa-download"></i> Export to CSV
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Branch Details Modal -->

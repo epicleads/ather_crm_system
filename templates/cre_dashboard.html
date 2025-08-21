@@ -4,6 +4,37 @@
 
 {% block extra_css %}
 <style>
+    /* Overdue lead highlighting */
+    .table-danger {
+        background-color: #f8d7da !important;
+        border-left: 4px solid #dc3545 !important;
+    }
+    
+    .table-danger:hover {
+        background-color: #f5c6cb !important;
+    }
+    
+    .table-danger td {
+        border-color: #f5c6cb !important;
+    }
+    
+    /* Overdue badge styling */
+    .badge.bg-danger {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+    
+    /* Followup summary styling */
+    .alert-info {
+        background-color: #d1ecf1;
+        border-color: #bee5eb;
+        color: #0c5460;
+    }
+    
+    .alert-info strong {
+        color: #0c5460;
+    }
+    
     /* Style for low priority fresh leads */
     .fresh-lead-row[data-lead-status="RNR"],
     .fresh-lead-row[data-lead-status="Busy on another Call"],
@@ -477,6 +508,20 @@
                 </div>
 
                 {% if todays_followups %}
+                <!-- Followup Summary -->
+                {% set overdue_count = todays_followups | selectattr('is_overdue', 'equalto', true) | list | length %}
+                {% set today_count = todays_followups | selectattr('is_overdue', 'equalto', false) | list | length %}
+                <div class="alert alert-info mb-3">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <strong><i class="fas fa-calendar-check text-success"></i> Today's Followups:</strong> {{ today_count }}
+                        </div>
+                        <div class="col-md-6">
+                            <strong><i class="fas fa-exclamation-triangle text-danger"></i> Overdue Followups:</strong> {{ overdue_count }}
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="table-responsive">
                     <table class="table table-striped table-hover" id="followupTable">
                         <thead class="table-dark">
@@ -492,7 +537,8 @@
                         <tbody>
                             {% for lead in todays_followups %}
                                 {% if lead.is_event_lead %}
-                                    <tr>
+                                    <tr class="{% if lead.is_overdue %}table-danger{% endif %}"
+                                        {% if lead.is_overdue %}title="OVERDUE: {{ lead.overdue_days }} day(s) past due"{% endif %}>
                                         <td>
                                             <a href="{{ url_for('update_event_lead_cre', activity_uid=lead.activity_uid, return_tab='event-leads') }}" class="btn btn-sm btn-outline-primary">
                                                 <i class="fas fa-edit"></i> Update
@@ -505,7 +551,8 @@
                                         <td>{{ lead.activity_name }}</td>
                                     </tr>
                                 {% else %}
-                                    <tr>
+                                    <tr class="{% if lead.is_overdue %}table-danger{% endif %}"
+                                        {% if lead.is_overdue %}title="OVERDUE: {{ lead.overdue_days }} day(s) past due"{% endif %}>
                                         <td>
                                             <a href="{{ url_for('update_lead', uid=lead.uid, return_tab='followups') }}" class="btn btn-sm btn-outline-primary">
                                                 <i class="fas fa-edit"></i> Update

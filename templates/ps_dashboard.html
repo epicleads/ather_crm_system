@@ -2,6 +2,39 @@
 
 {% block title %}PS Dashboard - Ather CRM{% endblock %}
 
+<style>
+    /* Overdue lead highlighting */
+    .table-danger {
+        background-color: #f8d7da !important;
+        border-left: 4px solid #dc3545 !important;
+    }
+    
+    .table-danger:hover {
+        background-color: #f5c6cb !important;
+    }
+    
+    .table-danger td {
+        border-color: #f5c6cb !important;
+    }
+    
+    /* Overdue badge styling */
+    .badge.bg-danger {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+    
+    /* Followup summary styling */
+    .alert-info {
+        background-color: #d1ecf1;
+        border-color: #bee5eb;
+        color: #0c5460;
+    }
+    
+    .alert-info strong {
+        color: #0c5460;
+    }
+</style>
+
 {% block content %}
 
 <div class="row">
@@ -246,6 +279,20 @@
                 </div>
 
                 {% if todays_followups %}
+                <!-- Followup Summary -->
+                {% set overdue_count = todays_followups | selectattr('is_overdue', 'equalto', true) | list | length %}
+                {% set today_count = todays_followups | selectattr('is_overdue', 'equalto', false) | list | length %}
+                <div class="alert alert-info mb-3">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <strong><i class="fas fa-calendar-check text-success"></i> Today's Followups:</strong> {{ today_count }}
+                        </div>
+                        <div class="col-md-6">
+                            <strong><i class="fas fa-exclamation-triangle text-danger"></i> Overdue Followups:</strong> {{ overdue_count }}
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="table-responsive">
                     <table class="table table-striped table-hover" id="followupTable">
                         <thead class="table-dark">
@@ -262,7 +309,9 @@
                         </thead>
                         <tbody>
                             {% for lead in todays_followups %}
-                            <tr data-search="{{ ((lead.lead_uid or '') + ' ' + (lead.customer_name or '') + ' ' + (lead.customer_mobile_number or '') + ' ' + (lead.source or ''))|lower }}">
+                            <tr class="{% if lead.is_overdue %}table-danger{% endif %}" 
+                                data-search="{{ ((lead.lead_uid or '') + ' ' + (lead.customer_name or '') + ' ' + (lead.customer_mobile_number or '') + ' ' + (lead.source or ''))|lower }}"
+                                {% if lead.is_overdue %}title="OVERDUE: {{ lead.overdue_days }} day(s) past due"{% endif %}>
                                 <td>
                                     {% if lead.activity_uid %}
                                         <a href="{{ url_for('update_event_lead', activity_uid=lead.activity_uid, return_tab='followups') }}" class="btn btn-sm btn-outline-primary">
@@ -301,7 +350,15 @@
                                 <td>{{ lead.model_interested or 'Not specified' }}</td>
                                 <td>
                                     {% if lead.follow_up_date %}
-                                    <span class="badge bg-warning">{{ lead.follow_up_date.replace('T', ' ')[:16] }}</span>
+                                        {% if lead.is_overdue %}
+                                            <span class="badge bg-danger">
+                                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                                OVERDUE: {{ lead.overdue_days }} day(s)
+                                            </span>
+                                            <br><small class="text-muted">{{ lead.follow_up_date.replace('T', ' ')[:16] }}</small>
+                                        {% else %}
+                                            <span class="badge bg-warning">{{ lead.follow_up_date.replace('T', ' ')[:16] }}</span>
+                                        {% endif %}
                                     {% endif %}
                                 </td>
                                 <td><span class="badge bg-primary">{{ lead.lead_uid }}</span></td>
