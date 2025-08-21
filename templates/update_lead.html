@@ -141,8 +141,8 @@
     <div id="followup-section" class="row" style="display: none;">
         <div class="col-md-6">
             <div class="mb-3">
-                <label for="follow_up_date" class="form-label">Follow-up Date <span class="text-danger">*</span></label>
-                <input type="datetime-local" class="form-control" id="follow_up_date" name="follow_up_date" value="{{ lead.follow_up_date[:16] if lead.follow_up_date else '' }}">
+                <label for="follow_up_date_first" class="form-label">Follow-up Date <span class="text-danger">*</span></label>
+                <input type="datetime-local" class="form-control" id="follow_up_date_first" name="follow_up_date_first" value="{{ lead.follow_up_date[:16] if lead.follow_up_date else '' }}">
             </div>
         </div>
     </div>
@@ -333,8 +333,8 @@
                     </div>
                     <div class="col-md-6">
                         <div class="mb-3">
-                            <label for="follow_up_date" class="form-label">Follow-up Date</label>
-                            <input type="datetime-local" class="form-control" id="follow_up_date" name="follow_up_date" value="{{ lead.follow_up_date[:16] if lead.follow_up_date else '' }}">
+                            <label for="follow_up_date_nth" class="form-label">Follow-up Date</label>
+                            <input type="datetime-local" class="form-control" id="follow_up_date_nth" name="follow_up_date_nth" value="{{ lead.follow_up_date[:16] if lead.follow_up_date else '' }}">
                         </div>
                     </div>
                 </div>
@@ -482,7 +482,7 @@ function handleLeadStatusChange() {
     const callDetailsSection = document.getElementById('call-details-section');
     const extendedOptions = document.getElementById('extended-options');
     const shouldRecordCall = document.getElementById('should_record_call');
-    const followupDate = document.getElementById('follow_up_date');
+    const followupDate = document.getElementById('follow_up_date_first') || document.getElementById('follow_up_date_nth');
     const callDate = document.getElementById('call_date');
     const callRemark = document.getElementById('call_remark');
     const finalStatus = document.getElementById('final_status');
@@ -733,10 +733,20 @@ function updatePS() {
 document.addEventListener('DOMContentLoaded', function() {
     // Set minimum date for follow-up and call date to today
     const today = new Date().toISOString().slice(0, 16);
-    const followUpDate = document.getElementById('follow_up_date');
+    const followUpDate = document.getElementById('follow_up_date_first') || document.getElementById('follow_up_date_nth');
     const callDate = document.getElementById('call_date');
 
-    if (followUpDate) followUpDate.min = today;
+    if (followUpDate) {
+        followUpDate.min = today;
+        // Ensure the current value is not earlier than the minimum
+        if (followUpDate.value) {
+            const fieldDate = new Date(followUpDate.value);
+            const minDate = new Date(today);
+            if (fieldDate < minDate) {
+                followUpDate.value = today;
+            }
+        }
+    }
     if (callDate) callDate.min = new Date().toISOString().split('T')[0];
 
     // Initialize model dropdown based on current selection
@@ -760,13 +770,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize form state based on current lead status
     handleLeadStatusChange();
 
-    // Form validation and submission
-    document.getElementById('leadUpdateForm').addEventListener('submit', function(e) {
-        const leadStatus = document.getElementById('lead_status').value;
-        const followupDate = document.getElementById('follow_up_date');
-        const callDate = document.getElementById('call_date');
-        const callRemark = document.getElementById('call_remark');
-        const shouldRecordCall = document.getElementById('should_record_call').value;
+            // Form validation and submission
+        document.getElementById('leadUpdateForm').addEventListener('submit', function(e) {
+            const leadStatus = document.getElementById('lead_status').value;
+            const followupDate = document.getElementById('follow_up_date_first') || document.getElementById('follow_up_date_nth');
+            const callDate = document.getElementById('call_date');
+            const callRemark = document.getElementById('call_remark');
+            const shouldRecordCall = document.getElementById('should_record_call').value;
 
         // Validate required fields based on status
         if (!leadStatus) {
@@ -870,7 +880,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Toggle follow-up date requirement based on final status
     const finalStatus = document.getElementById('final_status');
-    const followupDate = document.getElementById('follow_up_date');
+    const followupDate = document.getElementById('follow_up_date_first') || document.getElementById('follow_up_date_nth');
     
     function toggleFollowUpRequired() {
         if (finalStatus && followupDate) {
