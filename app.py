@@ -2993,11 +2993,30 @@ def cre_dashboard():
     # Get today's followups
     today = date.today()
     today_str = today.isoformat()
-    todays_followups = [
-        lead for lead in all_leads
-        if (lead.get('follow_up_date') and str(lead.get('follow_up_date')).startswith(today_str)
-        and lead.get('final_status') not in ['Won', 'Lost'])
-    ]
+    # Get all leads with follow-up date <= today and final_status = 'Pending'
+    todays_followups = []
+    for lead in all_leads:
+        follow_up_date = lead.get('follow_up_date')
+        final_status = lead.get('final_status')
+        
+        if follow_up_date and final_status == 'Pending':
+            # Parse follow_up_date and check if it's <= today
+            try:
+                if 'T' in str(follow_up_date):
+                    followup_date_parsed = datetime.fromisoformat(str(follow_up_date).replace('Z', '+00:00')).date()
+                else:
+                    followup_date_parsed = datetime.strptime(str(follow_up_date)[:10], '%Y-%m-%d').date()
+                
+                if followup_date_parsed <= datetime.now().date():
+                    # Add overdue flag for highlighting
+                    lead['is_overdue'] = followup_date_parsed < datetime.now().date()
+                    lead['overdue_days'] = (datetime.now().date() - followup_date_parsed).days
+                    todays_followups.append(lead)
+            except (ValueError, TypeError):
+                # If date parsing fails, include the lead for manual review
+                lead['is_overdue'] = False
+                lead['overdue_days'] = 0
+                todays_followups.append(lead)
 
     # Add event leads with today's cre_followup_date to the follow-up list
     event_leads_today = []
@@ -3430,11 +3449,27 @@ def ps_dashboard():
 
             # Add to today's followups if applicable (exclude Won/Lost and specific statuses)
             follow_up_date = lead.get('follow_up_date')
-            if (follow_up_date and
-                str(follow_up_date).startswith(today_str) and
-                final_status not in ['Won', 'Lost'] and
+            if (follow_up_date and final_status == 'Pending' and
                 (not lead_status or lead_status not in excluded_statuses)):
-                todays_followups_regular.append(lead_dict)
+                # Parse follow_up_date and check if it's <= today
+                try:
+                    if 'T' in str(follow_up_date):
+                        followup_date_parsed = datetime.fromisoformat(str(follow_up_date).replace('Z', '+00:00')).date()
+                    else:
+                        followup_date_parsed = datetime.strptime(str(follow_up_date)[:10], '%Y-%m-%d').date()
+                    
+                    if followup_date_parsed <= datetime.now().date():
+                        # Add overdue flag for highlighting
+                        lead_dict['is_overdue'] = followup_date_parsed < datetime.now().date()
+                        lead_dict['overdue_days'] = (datetime.now().date() - followup_date_parsed).days
+                        todays_followups_regular.append(lead_dict)
+                        print(f"[DEBUG] Added to today's followups: {lead.get('lead_uid')}")
+                except (ValueError, TypeError):
+                    # If date parsing fails, include the lead for manual review
+                    lead_dict['is_overdue'] = False
+                    lead_dict['overdue_days'] = 0
+                    todays_followups_regular.append(lead_dict)
+                    print(f"[DEBUG] Added to today's followups (date parse failed): {lead.get('lead_uid')}")
 
 
 
@@ -3599,11 +3634,28 @@ def ps_dashboard():
                 lost_leads.append(lead_dict)
                 print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to lost_leads")
             elif final_status == 'Pending' or not final_status:
-                # Add to today's followups if next_followup_date is today
-                if next_followup_date and str(next_followup_date)[:10] == today_str:
-                    lead_dict['follow_up_date'] = str(next_followup_date)
-                    todays_followups_walkin.append(lead_dict)
-                    print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to today's followups")
+                # Add to today's followups if next_followup_date is <= today
+                if next_followup_date:
+                    try:
+                        if 'T' in str(next_followup_date):
+                            followup_date_parsed = datetime.fromisoformat(str(next_followup_date).replace('Z', '+00:00')).date()
+                        else:
+                            followup_date_parsed = datetime.strptime(str(next_followup_date)[:10], '%Y-%m-%d').date()
+                        
+                        if followup_date_parsed <= datetime.now().date():
+                            # Add overdue flag for highlighting
+                            lead_dict['is_overdue'] = followup_date_parsed < datetime.now().date()
+                            lead_dict['overdue_days'] = (datetime.now().date() - followup_date_parsed).days
+                            lead_dict['follow_up_date'] = str(next_followup_date)
+                            todays_followups_walkin.append(lead_dict)
+                            print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to today's followups")
+                    except (ValueError, TypeError):
+                        # If date parsing fails, include the lead for manual review
+                        lead_dict['is_overdue'] = False
+                        lead_dict['overdue_days'] = 0
+                        lead_dict['follow_up_date'] = str(next_followup_date)
+                        todays_followups_walkin.append(lead_dict)
+                        print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to today's followups (date parse failed)")
                 
                 # Add to pending leads if no first call has been made yet
                 first_call_date = lead.get('first_call_date')
@@ -4630,14 +4682,22 @@ def analytics():
         period = request.args.get('period', '30')
         start_date_str = request.args.get('start_date')
         end_date_str = request.args.get('end_date')
+        today_filter = request.args.get('today', 'false') == 'true'
 
         today = datetime.now().date()
         start_date = None
         end_date = None
-        if start_date_str and end_date_str:
+        
+        if today_filter:
+            # Today filter - set both start and end to today
+            start_date = today
+            end_date = today
+        elif start_date_str and end_date_str:
             try:
                 start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
                 end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+                # Ensure end_date includes the full day by setting it to end of day
+                end_date = end_date
             except Exception:
                 start_date = None
                 end_date = None
@@ -4653,6 +4713,7 @@ def analytics():
         all_cres = safe_get_data('cre_users')
         all_ps = safe_get_data('ps_users')
         ps_followups = safe_get_data('ps_followup_master')
+        all_walkins = safe_get_data('walkin_table')  # Add walkin table data
 
         # Filter leads by date if needed
         filtered_leads = []
@@ -4668,6 +4729,7 @@ def analytics():
                     filtered_leads.append(lead)
                     continue
                 if start_date and end_date:
+                    # Include both start and end dates (inclusive)
                     if start_date <= lead_date <= end_date:
                         filtered_leads.append(lead)
                 elif start_date:
@@ -4679,10 +4741,43 @@ def analytics():
                 filtered_leads.append(lead)
         leads = filtered_leads
 
+        # Filter walkins by date if needed
+        filtered_walkins = []
+        for walkin in all_walkins:
+            walkin_date_str = walkin.get('created_at')
+            if walkin_date_str:
+                try:
+                    if 'T' in walkin_date_str:
+                        walkin_date = datetime.fromisoformat(walkin_date_str.replace('Z', '+00:00')).date()
+                    else:
+                        walkin_date = datetime.strptime(walkin_date_str, '%Y-%m-%d').date()
+                except (ValueError, TypeError):
+                    filtered_walkins.append(walkin)
+                    continue
+                if start_date and end_date:
+                    # Include both start and end dates (inclusive)
+                    if start_date <= walkin_date <= end_date:
+                        filtered_walkins.append(walkin)
+                elif start_date:
+                    if walkin_date >= start_date:
+                        filtered_walkins.append(walkin)
+                else:
+                    filtered_walkins.append(walkin)
+            else:
+                filtered_walkins.append(walkin)
+        walkins = filtered_walkins
+
         # Calculate KPIs
         total_leads = len(leads)
         won_leads = len([l for l in leads if l.get('final_status') == 'Won'])
         conversion_rate = round((won_leads / total_leads * 100) if total_leads > 0 else 0, 1)
+
+        # Calculate walkin KPIs
+        total_walkins = len(walkins)
+        won_walkins = len([w for w in walkins if w.get('status') == 'Won'])
+        walkin_conversion_rate = round((won_walkins / total_walkins * 100) if total_walkins > 0 else 0, 1)
+
+
 
         # Calculate average response time (days to first call)
         response_times = []
@@ -4958,7 +5053,11 @@ def analytics():
         analytics = {
             'total_leads': total_leads,
             'leads_growth': leads_growth,
+            'won_leads': won_leads,  # Add won leads count
             'conversion_rate': conversion_rate,
+            'total_walkins': total_walkins,  # Add walkin data
+            'won_walkins': won_walkins,  # Add won walkins count
+            'walkin_conversion_rate': walkin_conversion_rate,  # Add walkin conversion rate
             'avg_response_time': avg_response_time,
             'active_cres': active_cres,
             'total_cres': total_cres,
@@ -4994,7 +5093,11 @@ def analytics():
         empty_analytics = {
             'total_leads': 0,
             'leads_growth': 0,
+            'won_leads': 0,  # Add won leads count
             'conversion_rate': 0,
+            'total_walkins': 0,  # Add walkin data
+            'won_walkins': 0,  # Add won walkins count
+            'walkin_conversion_rate': 0,  # Add walkin conversion rate
             'avg_response_time': "N/A",
             'active_cres': 0,
             'total_cres': 0,
@@ -5061,9 +5164,10 @@ def branch_head_dashboard():
         
         # Today's follow-ups count
         today_str = datetime.now().strftime('%Y-%m-%d')
-        followup_today = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('follow_up_date', today_str).execute().data or []
-        event_today = supabase.table('activity_leads').select('*').eq('location', branch).eq('ps_followup_date_ts', today_str).execute().data or []
-        walkin_today = supabase.table('walkin_table').select('*').eq('branch', branch).eq('next_followup_date', today_str).execute().data or []
+        # Get followups with date <= today and status = Pending
+        followup_today = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch).eq('final_status', 'Pending').lte('follow_up_date', today_str).execute().data or []
+        event_today = supabase.table('activity_leads').select('*').eq('location', branch).eq('final_status', 'Pending').lte('ps_followup_date_ts', today_str).execute().data or []
+        walkin_today = supabase.table('walkin_table').select('*').eq('branch', branch).eq('status', 'Pending').lte('next_followup_date', today_str).execute().data or []
         followup_leads_count = len(followup_today) + len(event_today) + len(walkin_today)
         
         # Event leads count
@@ -5132,14 +5236,14 @@ def api_branch_head_dashboard_data():
             # Today's follow-ups count (using exact date matching like your SQL query)
             today_str = datetime.now().strftime('%Y-%m-%d')
             
-            # Use the same logic as data loading for accurate counts
-            followup_today_count = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).eq('final_status', 'Pending').eq('follow_up_date', today_str).execute().count or 0
+            # Use the same logic as data loading for accurate counts - followup_date <= today
+            followup_today_count = supabase.table('ps_followup_master').select('*', count='exact').eq('ps_branch', branch).eq('final_status', 'Pending').lte('follow_up_date', today_str).execute().count or 0
             
-            # Event count with range query AND final_status = 'Pending'
-            event_today_count = supabase.table('activity_leads').select('*', count='exact').eq('location', branch).eq('final_status', 'Pending').gte('ps_followup_date_ts', f'{today_str} 00:00:00').lt('ps_followup_date_ts', f'{today_str} 23:59:59').execute().count or 0
+            # Event count with ps_followup_date_ts <= today AND final_status = 'Pending'
+            event_today_count = supabase.table('activity_leads').select('*', count='exact').eq('location', branch).eq('final_status', 'Pending').lte('ps_followup_date_ts', today_str).execute().count or 0
             
-            # Walk-in count with range query AND status = 'Pending'
-            walkin_today_count = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('status', 'Pending').gte('next_followup_date', f'{today_str} 00:00:00').lt('next_followup_date', f'{today_str} 23:59:59').execute().count or 0
+            # Walk-in count with next_followup_date <= today AND status = 'Pending'
+            walkin_today_count = supabase.table('walkin_table').select('*', count='exact').eq('branch', branch).eq('status', 'Pending').lte('next_followup_date', today_str).execute().count or 0
             
             followup_leads_count = followup_today_count + event_today_count + walkin_today_count
             
@@ -9947,9 +10051,20 @@ def api_branch_analytics_walkin_leads():
             elif status == 'Won':
                 ps_data[ps_name]['won_leads'] += 1
             
-            # Count today's follow-ups
-            if next_followup_date == today_str:
-                ps_data[ps_name]['today_followups'] += 1
+            # Count follow-ups with date <= today and final_status = 'Pending'
+            final_status = lead.get('final_status')
+            if next_followup_date and final_status == 'Pending':
+                try:
+                    if 'T' in str(next_followup_date):
+                        followup_date_parsed = datetime.fromisoformat(str(next_followup_date).replace('Z', '+00:00')).date()
+                    else:
+                        followup_date_parsed = datetime.strptime(str(next_followup_date)[:10], '%Y-%m-%d').date()
+                    
+                    if followup_date_parsed <= datetime.now().date():
+                        ps_data[ps_name]['today_followups'] += 1
+                except (ValueError, TypeError):
+                    # If date parsing fails, include for manual review
+                    ps_data[ps_name]['today_followups'] += 1
         
         # Format result data
         result_data = []
@@ -10143,8 +10258,19 @@ def api_branch_analytics_all():
                 elif status == 'Won':
                     walkin_data[ps_name]['won_leads'] += 1
                 
-                if next_followup_date == today_str:
-                    walkin_data[ps_name]['today_followups'] += 1
+                # Count follow-ups with date <= today and status = 'Pending'
+                if next_followup_date and status == 'Pending':
+                    try:
+                        if 'T' in str(next_followup_date):
+                            followup_date_parsed = datetime.fromisoformat(str(next_followup_date).replace('Z', '+00:00')).date()
+                        else:
+                            followup_date_parsed = datetime.strptime(str(next_followup_date)[:10], '%Y-%m-%d').date()
+                        
+                        if followup_date_parsed <= datetime.now().date():
+                            walkin_data[ps_name]['today_followups'] += 1
+                    except (ValueError, TypeError):
+                        # If date parsing fails, include for manual review
+                        walkin_data[ps_name]['today_followups'] += 1
         
         # Process Summary data
         print("[DEBUG] Processing summary data...")
@@ -10237,6 +10363,137 @@ def api_branch_analytics_all():
         print(f"[DEBUG] Error in combined analytics API after {total_time:.3f}s: {str(e)}")
         print(f"[DEBUG] Full error traceback:", exc_info=True)
         return jsonify({'success': False, 'message': f'Error loading analytics data: {str(e)}'})
+@app.route('/api/branch_summary')
+def api_branch_summary():
+    """Get branch-wise lead summary with untouched, called, and total counts"""
+    try:
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Get all branches from ps_followup_master
+        branches_query = supabase.table('ps_followup_master').select('ps_branch').not_.is_('ps_branch', 'null').execute()
+        branches = list(set([row.get('ps_branch') for row in (branches_query.data or []) if row.get('ps_branch')]))
+        
+        branch_summary = []
+        
+        for branch in branches:
+            # Base query for this branch
+            base_query = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch)
+            
+            # Apply date filter if provided
+            if start_date:
+                base_query = base_query.gte('ps_assigned_at', start_date)
+            if end_date:
+                # For end_date, we need to include the full day
+                # Add 1 day to end_date to make it inclusive
+                end_date_plus_one = (datetime.strptime(end_date, '%Y-%m-%d').date() + timedelta(days=1)).strftime('%Y-%m-%d')
+                base_query = base_query.lt('ps_assigned_at', end_date_plus_one)
+            
+            # Get all leads for this branch
+            all_leads = base_query.execute().data or []
+            
+            # Count untouched leads (follow_up_date is NULL and final_status is Pending)
+            untouched_count = len([lead for lead in all_leads 
+                                 if not lead.get('follow_up_date') and lead.get('final_status') == 'Pending'])
+            
+            # Count called leads (all remaining leads)
+            called_count = len(all_leads) - untouched_count
+            
+            # Total count
+            total_count = len(all_leads)
+            
+            branch_summary.append({
+                'branch_name': branch,
+                'untouched_count': untouched_count,
+                'called_count': called_count,
+                'total_count': total_count
+            })
+        
+        # Sort by total count descending
+        branch_summary.sort(key=lambda x: x['total_count'], reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'data': branch_summary
+        })
+        
+    except Exception as e:
+        print(f"Error in branch_summary API: {str(e)}")
+        return jsonify({'success': False, 'message': f'Error loading branch summary: {str(e)}'})
+
+@app.route('/api/untouched_leads')
+def api_untouched_leads():
+    """Get untouched leads for a specific branch with drill-down details"""
+    try:
+        branch_name = request.args.get('branch_name')
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        export_csv = request.args.get('export') == 'csv'
+        
+        if not branch_name:
+            return jsonify({'success': False, 'message': 'Branch name is required'})
+        
+        # Base query for this branch
+        base_query = supabase.table('ps_followup_master').select('*').eq('ps_branch', branch_name)
+        
+        # Apply date filter if provided
+        if start_date:
+            base_query = base_query.gte('ps_assigned_at', start_date)
+        if end_date:
+            # For end_date, we need to include the full day
+            # Add 1 day to end_date to make it inclusive
+            end_date_plus_one = (datetime.strptime(end_date, '%Y-%m-%d').date() + timedelta(days=1)).strftime('%Y-%m-%d')
+            base_query = base_query.lt('ps_assigned_at', end_date_plus_one)
+        
+        # Get all leads for this branch
+        all_leads = base_query.execute().data or []
+        
+        # Filter for untouched leads (follow_up_date is NULL and final_status is Pending)
+        untouched_leads = [lead for lead in all_leads 
+                          if not lead.get('follow_up_date') and lead.get('final_status') == 'Pending']
+        
+        if export_csv:
+            # Return CSV format
+            import csv
+            import io
+            
+            output = io.StringIO()
+            writer = csv.writer(output)
+            
+            # Write headers
+            writer.writerow(['Lead UID', 'Customer Name', 'Mobile Number', 'Source', 'Lead Category', 'PS Assigned', 'PS Assigned Date', 'Status'])
+            
+            # Write data
+            for lead in untouched_leads:
+                writer.writerow([
+                    lead.get('lead_uid', ''),
+                    lead.get('customer_name', ''),
+                    lead.get('customer_mobile_number', ''),
+                    lead.get('source', ''),
+                    lead.get('lead_category', ''),
+                    lead.get('ps_name', ''),
+                    lead.get('ps_assigned_at', ''),
+                    lead.get('final_status', '')
+                ])
+            
+            output.seek(0)
+            
+            return Response(
+                output.getvalue(),
+                mimetype='text/csv',
+                headers={'Content-Disposition': f'attachment; filename=untouched_leads_{branch_name}_{start_date or "all"}_{end_date or "all"}.csv'}
+            )
+        
+        # Return JSON format for modal display
+        return jsonify({
+            'success': True,
+            'data': untouched_leads
+        })
+        
+    except Exception as e:
+        print(f"Error in untouched_leads API: {str(e)}")
+        return jsonify({'success': False, 'message': f'Error loading untouched leads: {str(e)}'})
+
 @app.route('/api/branch_analytics/summary')
 def api_branch_analytics_summary():
     """API endpoint for Branch Summary KPI data - OPTIMIZED"""
@@ -11177,6 +11434,39 @@ def fix_timestamps():
     fix_missing_timestamps()
     flash('Timestamps fixed successfully', 'success')
     return redirect(url_for('admin_dashboard'))
+
+@app.route('/debug_analytics_data')
+@require_admin
+def debug_analytics_data():
+    """Debug route to check analytics data"""
+    try:
+        # Get all data
+        all_leads = safe_get_data('lead_master')
+        all_walkins = safe_get_data('walkin_table')
+        
+        # Sample data
+        sample_leads = all_leads[:5] if all_leads else []
+        sample_walkins = all_walkins[:5] if all_walkins else []
+        
+        # Count won leads
+        won_leads = len([l for l in all_leads if l.get('final_status') == 'Won'])
+        won_walkins = len([w for w in all_walkins if w.get('status') == 'Won'])
+        
+        debug_info = {
+            'total_leads': len(all_leads),
+            'won_leads': won_leads,
+            'total_walkins': len(all_walkins),
+            'won_walkins': won_walkins,
+            'sample_leads': sample_leads,
+            'sample_walkins': sample_walkins,
+            'lead_final_status_values': list(set([l.get('final_status') for l in all_leads if l.get('final_status')])),
+            'walkin_status_values': list(set([w.get('status') for w in all_walkins if w.get('status')]))
+        }
+        
+        return jsonify(debug_info)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/debug_ps_users')
 @require_admin
