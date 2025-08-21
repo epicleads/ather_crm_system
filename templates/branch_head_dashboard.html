@@ -2,6 +2,7 @@
 {% block title %}Branch Head Dashboard - Ather CRM{% endblock %}
 
 {% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
     /* Centered full-width layout with proper spacing */
     .container-main, .container, .container-fluid {
@@ -1072,6 +1073,143 @@
     #psFollowupTable .clickable-cell:active {
         transform: scale(0.98);
     }
+    
+    /* Call History Analytics specific styling */
+    #call-history-analytics .kpi-card {
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+    }
+    
+    #call-history-analytics .kpi-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    
+    #call-history-analytics .kpi-card.border-info:hover {
+        border-color: #17a2b8;
+        box-shadow: 0 8px 25px rgba(23, 162, 184, 0.2);
+    }
+    
+    #call-history-analytics .kpi-card.border-success:hover {
+        border-color: #28a745;
+        box-shadow: 0 8px 25px rgba(40, 167, 69, 0.2);
+    }
+    
+    #call-history-analytics .kpi-card.border-warning:hover {
+        border-color: #ffc107;
+        box-shadow: 0 8px 25px rgba(255, 193, 7, 0.2);
+    }
+    
+    #call-history-analytics .kpi-card.border-danger:hover {
+        border-color: #dc3545;
+        box-shadow: 0 8px 25px rgba(220, 53, 69, 0.2);
+    }
+    
+    /* Call History Table styling */
+    #callHistoryAnalyticsTable {
+        font-size: 0.875rem;
+    }
+    
+    #callHistoryAnalyticsTable th {
+        background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+        color: white;
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.8rem;
+        letter-spacing: 0.5px;
+        padding: 1rem 0.75rem;
+        border: none;
+        text-align: center;
+    }
+    
+    #callHistoryAnalyticsTable td {
+        padding: 0.75rem;
+        vertical-align: middle;
+        border-color: #e9ecef;
+        text-align: center;
+    }
+    
+    #callHistoryAnalyticsTable tbody tr:hover {
+        background-color: rgba(23, 162, 184, 0.05);
+        transform: scale(1.001);
+    }
+    
+    /* Chart container styling */
+    #callStatusChart {
+        max-height: 300px;
+        margin: 0 auto;
+    }
+    
+    #callStatusLegend {
+        padding: 1rem;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border: 1px solid #e9ecef;
+    }
+    
+    #callStatusLegend .badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+    
+    /* PS Feedback Table Styling */
+    #psFeedbackTable {
+        font-size: 0.9rem;
+    }
+    
+    #psFeedbackTable th {
+        background-color: #343a40;
+        color: white;
+        font-weight: 600;
+        text-align: center;
+        vertical-align: middle;
+        padding: 0.75rem 0.5rem;
+        border: 1px solid #495057;
+    }
+    
+    #psFeedbackTable td {
+        padding: 0.5rem;
+        border: 1px solid #dee2e6;
+        vertical-align: middle;
+    }
+    
+    #psFeedbackTable tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+    
+    #psFeedbackTable .table-info {
+        background-color: #d1ecf1 !important;
+        border-color: #bee5eb !important;
+    }
+    
+    #psFeedbackTable .fw-bold {
+        font-weight: 700 !important;
+    }
+    
+    /* Status Summary Cards Styling */
+    #statusSummaryCards .card {
+        transition: transform 0.2s ease-in-out;
+    }
+    
+    #statusSummaryCards .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    
+    #statusSummaryCards .card-title {
+        font-size: 0.9rem;
+        line-height: 1.2;
+        min-height: 2.4rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    #statusSummaryCards .alert-success {
+        background-color: #d1ecf1;
+        border-color: #bee5eb;
+        color: #0c5460;
+    }
 </style>
 {% endblock %}
 
@@ -1186,6 +1324,11 @@
                 <li class="nav-item">
                     <a class="nav-link active" id="analytics-tab" data-bs-toggle="tab" href="#analytics" role="tab">
                         <i class="fas fa-chart-bar me-2"></i>Analytics Dashboard
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" id="call-history-analytics-tab" data-bs-toggle="tab" href="#call-history-analytics" role="tab">
+                        <i class="fas fa-phone-alt me-2"></i>Call History Analytics
                     </a>
                 </li>
                 <li class="nav-item">
@@ -1399,6 +1542,178 @@
             </div>
 
 
+        </div>
+
+        <!-- Call History Analytics Tab -->
+        <div class="tab-pane fade" id="call-history-analytics" role="tabpanel">
+            <!-- Call History Analytics Filter -->
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-phone-alt me-2"></i>Call History Analytics Filter
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <label for="callHistoryPsSelect" class="form-label fw-semibold">Product Specialist:</label>
+                            <select id="callHistoryPsSelect" class="form-select">
+                                <option value="">-- All PS --</option>
+                                {% for ps in ps_users %}
+                                    <option value="{{ ps.name }}">{{ ps.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="callHistoryDateFrom" class="form-label fw-semibold">From Date:</label>
+                            <input type="date" id="callHistoryDateFrom" class="form-control">
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="callHistoryDateTo" class="form-label fw-semibold">To Date:</label>
+                            <input type="date" id="callHistoryDateTo" class="form-control">
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button id="applyCallHistoryFilter" class="btn btn-info me-2">
+                                <i class="fas fa-search me-1"></i>Apply Filter
+                            </button>
+                            <button id="resetCallHistoryFilter" class="btn btn-outline-secondary">
+                                <i class="fas fa-undo me-1"></i>Reset
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Call History Summary Cards -->
+            <div class="row mb-4">
+                <div class="col-md-3 mb-3">
+                    <div class="card kpi-card border-info">
+                        <div class="card-body p-3 text-center">
+                            <div class="d-flex align-items-center justify-content-center mb-2">
+                                <i class="fas fa-phone fa-2x text-info me-3"></i>
+                                <div>
+                                    <h3 class="mb-0" id="totalCallAttempts">-</h3>
+                                    <small class="text-muted">Total Call Attempts</small>
+                                </div>
+                            </div>
+                            <div class="progress" style="height: 4px;">
+                                <div class="progress-bar bg-info" role="progressbar" style="width: 100%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="card kpi-card border-success">
+                        <div class="card-body p-3 text-center">
+                            <div class="d-flex align-items-center justify-content-center mb-2">
+                                <i class="fas fa-check-circle fa-2x text-success me-3"></i>
+                                <div>
+                                    <h3 class="mb-0" id="connectedCalls">-</h3>
+                                    <small class="text-muted">Connected Calls</small>
+                                </div>
+                            </div>
+                            <div class="progress" style="height: 4px;">
+                                <div class="progress-bar bg-success" role="progressbar" style="width: 100%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="card kpi-card border-warning">
+                        <div class="card-body p-3 text-center">
+                            <div class="d-flex align-items-center justify-content-center mb-2">
+                                <i class="fas fa-clock fa-2x text-warning me-3"></i>
+                                <div>
+                                    <h3 class="mb-0" id="rnrCalls">-</h3>
+                                    <small class="text-muted">RNR Calls</small>
+                                </div>
+                            </div>
+                            <div class="progress" style="height: 4px;">
+                                <div class="progress-bar bg-warning" role="progressbar" style="width: 100%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="card kpi-card border-danger">
+                        <div class="card-body p-3 text-center">
+                            <div class="d-flex align-items-center justify-content-center mb-2">
+                                <i class="fas fa-times-circle fa-2x text-danger me-3"></i>
+                                <div>
+                                    <h3 class="mb-0" id="disconnectedCalls">-</h3>
+                                    <small class="text-muted">Disconnected Calls</small>
+                                </div>
+                            </div>
+                            <div class="progress" style="height: 4px;">
+                                <div class="progress-bar bg-danger" role="progressbar" style="width: 100%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+
+            <!-- PS Feedback Follow-up Analysis -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-table me-2"></i>PS Feedback Follow-up Analysis
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- Status Summary Cards -->
+                    <div class="row mb-3" id="statusSummaryCards">
+                        <div class="col-12">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Status Summary:</strong> Loading status counts...
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped" id="psFeedbackTable">
+                            <thead class="thead-dark">
+                                <tr>
+                                    <th class="text-center" style="min-width: 200px;">PS FEEDBACK</th>
+                                    <th class="text-center">F1</th>
+                                    <th class="text-center">F2</th>
+                                    <th class="text-center">F3</th>
+                                    <th class="text-center">F4</th>
+                                    <th class="text-center">F5</th>
+                                    <th class="text-center">F6</th>
+                                    <th class="text-center">F7</th>
+                                </tr>
+                            </thead>
+                            <tbody id="psFeedbackTableBody">
+                                <tr><td colspan="8" class="text-center">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Call Status Distribution Chart -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-pie me-2"></i>Call Status Distribution
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <canvas id="callStatusChart" width="400" height="200"></canvas>
+                        </div>
+                        <div class="col-md-4">
+                            <div id="callStatusLegend" class="d-flex flex-column">
+                                <!-- Legend will be populated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- All Leads Tab -->
@@ -3320,17 +3635,47 @@ function toggleCallHistoryInline(btn) {
             loadAnalyticsDataWithFilter();
         });
         
-        // Reset filter button
-        document.getElementById('resetAnalyticsFilter').addEventListener('click', function() {
-            // Reset to current month
-            const today = new Date();
-            const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+                    // Reset filter button
+            document.getElementById('resetAnalyticsFilter').addEventListener('click', function() {
+                // Reset to current month
+                const today = new Date();
+                const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+                
+                document.getElementById('analyticsDateFrom').value = monthStart.toISOString().split('T')[0];
+                document.getElementById('analyticsDateTo').value = today.toISOString().split('T')[0];
+                loadAnalyticsDataWithFilter(); // Load with default current month filter
+            });
             
-            document.getElementById('analyticsDateFrom').value = monthStart.toISOString().split('T')[0];
-            document.getElementById('analyticsDateTo').value = today.toISOString().split('T')[0];
-            loadAnalyticsDataWithFilter(); // Load with default current month filter
+            // Call History Analytics Filter Event Listeners
+            // Set default dates for call history (last 30 days)
+            const thirtyDaysAgo = new Date(today.getTime() - (30 * 24 * 60 * 60 * 1000));
+            document.getElementById('callHistoryDateFrom').value = thirtyDaysAgo.toISOString().split('T')[0];
+            document.getElementById('callHistoryDateTo').value = today.toISOString().split('T')[0];
+            
+            // Apply call history filter button
+            const applyCallHistoryFilter = document.getElementById('applyCallHistoryFilter');
+            if (applyCallHistoryFilter) {
+                applyCallHistoryFilter.addEventListener('click', function() {
+                    loadCallHistoryAnalytics();
+                });
+            }
+            
+            // Reset call history filter button
+            const resetCallHistoryFilter = document.getElementById('resetCallHistoryFilter');
+            if (resetCallHistoryFilter) {
+                resetCallHistoryFilter.addEventListener('click', function() {
+                    // Reset to last 30 days
+                    const today = new Date();
+                    const thirtyDaysAgo = new Date(today.getTime() - (30 * 24 * 60 * 60 * 1000));
+                    
+                    document.getElementById('callHistoryDateFrom').value = thirtyDaysAgo.toISOString().split('T')[0];
+                    document.getElementById('callHistoryDateTo').value = today.toISOString().split('T')[0];
+                    document.getElementById('callHistoryPsSelect').value = '';
+                    
+                    loadCallHistoryAnalytics();
+                });
+            }
         });
-    });
 
     // Export event listeners
     document.addEventListener('DOMContentLoaded', function() {
@@ -3661,6 +4006,8 @@ function toggleCallHistoryInline(btn) {
                 loadSection('followup_leads');
             } else if (targetId === 'analytics') {
                 loadAnalyticsDataWithFilter();
+            } else if (targetId === 'call-history-analytics') {
+                loadCallHistoryAnalytics();
             }
         });
 });
@@ -3793,6 +4140,445 @@ function testDateFiltering() {
         console.log('[DEBUG] Applying filters...');
         filterTableData('followup_leads');
     }, 2000);
+}
+
+// Call History Analytics Functions
+let callStatusChart = null;
+
+// Load Call History Analytics Data
+function loadCallHistoryAnalytics() {
+    console.log('[DEBUG] Loading call history analytics...');
+    
+    // Show loading state
+    showCallHistoryLoadingState();
+    
+    // Get filter values
+    const psName = document.getElementById('callHistoryPsSelect').value;
+    const dateFrom = document.getElementById('callHistoryDateFrom').value;
+    const dateTo = document.getElementById('callHistoryDateTo').value;
+    
+    // Build query parameters
+    const params = new URLSearchParams();
+    if (psName) params.append('ps_name', psName);
+    if (dateFrom) params.append('date_from', dateFrom);
+    if (dateTo) params.append('date_to', dateTo);
+    
+    const apiUrl = `/api/call_history_analytics?${params.toString()}`;
+    console.log(`[DEBUG] Making API call to: ${apiUrl}`);
+    console.log(`[DEBUG] Filter values - PS: ${psName}, Date From: ${dateFrom}, Date To: ${dateTo}`);
+    
+    // Fetch call history analytics data
+    fetch(apiUrl)
+        .then(response => {
+            console.log(`[DEBUG] Response status: ${response.status}, ok: ${response.ok}`);
+            
+            if (!response.ok) {
+                if (response.status === 401) {
+                    throw new Error('Authentication required. Please log in again.');
+                } else if (response.status === 302) {
+                    throw new Error('Session expired. Please refresh the page and log in again.');
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+            }
+            
+            return response.json();
+        })
+        .then(data => {
+            console.log('[DEBUG] Call history analytics data received:', data);
+            
+            if (data.success) {
+                updateCallHistorySummary(data.summary);
+                updatePsFeedbackTable(data.records);
+                updateCallStatusChart(data.status_distribution);
+                hideCallHistoryLoadingState();
+            } else {
+                console.error('Error loading call history analytics:', data.message);
+                showCallHistoryError(data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading call history analytics:', error);
+            showCallHistoryError(`Error: ${error.message}`);
+            hideCallHistoryLoadingState();
+        });
+}
+
+// Update Call History Summary Cards
+function updateCallHistorySummary(summary) {
+    if (summary) {
+        document.getElementById('totalCallAttempts').textContent = summary.total_attempts || 0;
+        document.getElementById('connectedCalls').textContent = summary.connected_calls || 0;
+        document.getElementById('rnrCalls').textContent = summary.rnr_calls || 0;
+        document.getElementById('disconnectedCalls').textContent = summary.disconnected_calls || 0;
+    }
+}
+
+
+
+// Update Call Status Distribution Chart
+function updateCallStatusChart(statusDistribution) {
+    // Add a small delay to ensure the canvas element is ready
+    setTimeout(() => {
+        const ctx = document.getElementById('callStatusChart');
+        if (!ctx) {
+            console.warn('Canvas element not found for chart');
+            return;
+        }
+        
+        // Destroy existing chart if it exists
+        if (callStatusChart) {
+            callStatusChart.destroy();
+        }
+        
+        // Handle no data case
+        if (!statusDistribution || Object.keys(statusDistribution).length === 0) {
+            // Create placeholder chart
+            callStatusChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['No Data'],
+                    datasets: [{
+                        data: [1],
+                        backgroundColor: ['#6c757d'],
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return 'No call data available for selected filters';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Update legend for no data
+            updateCallStatusLegend(['No Data'], [1], ['#6c757d']);
+            return;
+        }
+        
+        // Prepare chart data
+        const labels = Object.keys(statusDistribution);
+        const data = Object.values(statusDistribution);
+        const colors = [
+            '#28a745', '#ffc107', '#dc3545', '#17a2b8', 
+            '#6f42c1', '#fd7e14', '#e83e8c', '#6c757d'
+        ];
+        
+        try {
+            // Create new chart
+            callStatusChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: colors.slice(0, labels.length),
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                    return `${context.label}: ${context.parsed} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Update legend
+            updateCallStatusLegend(labels, data, colors);
+        } catch (error) {
+            console.error('Error creating chart:', error);
+        }
+    }, 100);
+}
+
+// Update Call Status Legend
+function updateCallStatusLegend(labels, data, colors) {
+    const legend = document.getElementById('callStatusLegend');
+    if (!legend) return;
+    
+    legend.innerHTML = '';
+    
+    labels.forEach((label, index) => {
+        const legendItem = document.createElement('div');
+        legendItem.className = 'd-flex align-items-center mb-2';
+        legendItem.innerHTML = `
+            <div class="d-flex align-items-center me-2">
+                <div class="rounded-circle me-2" style="width: 12px; height: 12px; background-color: ${colors[index]};"></div>
+                <span class="small fw-semibold">${label}</span>
+            </div>
+            <span class="badge bg-light text-dark ms-auto">${data[index]}</span>
+        `;
+        legend.appendChild(legendItem);
+    });
+}
+
+// Get Call Status Badge Class
+function getCallStatusBadgeClass(status) {
+    if (!status) return 'bg-secondary';
+    
+    const statusLower = status.toLowerCase();
+    if (statusLower.includes('connected') || statusLower.includes('interested')) {
+        return 'bg-success';
+    } else if (statusLower.includes('rnr') || statusLower.includes('busy') || statusLower.includes('call me back')) {
+        return 'bg-warning';
+    } else if (statusLower.includes('disconnected') || statusLower.includes('not interested') || statusLower.includes('lost')) {
+        return 'bg-danger';
+    } else if (statusLower.includes('call not connected')) {
+        return 'bg-secondary';
+    } else {
+        return 'bg-info';
+    }
+}
+
+// Show Call History Loading State
+function showCallHistoryLoadingState() {
+    document.getElementById('totalCallAttempts').textContent = '...';
+    document.getElementById('connectedCalls').textContent = '...';
+    document.getElementById('rnrCalls').textContent = '...';
+    document.getElementById('disconnectedCalls').textContent = '...';
+}
+
+// Hide Call History Loading State
+function hideCallHistoryLoadingState() {
+    // Loading states are cleared when data is populated
+}
+
+// Show Call History Error
+function showCallHistoryError(message) {
+    document.getElementById('totalCallAttempts').textContent = 'Error';
+    document.getElementById('connectedCalls').textContent = 'Error';
+    document.getElementById('rnrCalls').textContent = 'Error';
+    document.getElementById('disconnectedCalls').textContent = 'Error';
+}
+
+// Update PS Feedback Follow-up Analysis Table
+function updatePsFeedbackTable(records) {
+    console.log('[DEBUG] updatePsFeedbackTable called with', records ? records.length : 0, 'records');
+    
+    const tableBody = document.getElementById('psFeedbackTableBody');
+    if (!tableBody) {
+        console.error('[DEBUG] psFeedbackTableBody element not found!');
+        return;
+    }
+    
+    console.log('[DEBUG] Found psFeedbackTableBody element');
+    
+    if (!records || records.length === 0) {
+        console.log('[DEBUG] No records, showing no data message');
+        tableBody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No data available</td></tr>';
+        return;
+    }
+    
+    // Dynamically discover all possible feedback statuses from the data
+    const allStatuses = new Set();
+    records.forEach(record => {
+        if (record.status) {
+            allStatuses.add(record.status);
+        }
+    });
+    
+    console.log('[DEBUG] Discovered statuses:', Array.from(allStatuses));
+    
+    // Initialize the data structure for all discovered statuses
+    const feedbackData = {};
+    allStatuses.forEach(status => {
+        feedbackData[status] = { F1: 0, F2: 0, F3: 0, F4: 0, F5: 0, F6: 0, F7: 0 };
+    });
+    
+    // Process records to categorize by follow-up attempt based on call_no field
+    console.log('[DEBUG] Processing records for PS Feedback table...');
+    
+    records.forEach((record, index) => {
+        const status = record.status || 'Unknown';
+        const callNo = (record.call_no || '').toLowerCase();
+        
+        // Categorize into follow-up groups based on call_no field
+        let followUpGroup = 'F1';
+        if (callNo.includes('first')) followUpGroup = 'F1';
+        else if (callNo.includes('second')) followUpGroup = 'F2';
+        else if (callNo.includes('third')) followUpGroup = 'F3';
+        else if (callNo.includes('fourth')) followUpGroup = 'F4';
+        else if (callNo.includes('fifth')) followUpGroup = 'F5';
+        else if (callNo.includes('sixth')) followUpGroup = 'F6';
+        else if (callNo.includes('seventh')) followUpGroup = 'F7';
+        else {
+            // Default to F1 if call_no doesn't match expected patterns
+            followUpGroup = 'F1';
+        }
+        
+        if (index < 5) {  // Log first 5 records for debugging
+            console.log(`[DEBUG] Record ${index + 1}: Status="${status}", Call_No="${record.call_no}", Group=${followUpGroup}`);
+        }
+        
+        // Log all call numbers for debugging
+        if (index < 10) {
+            console.log(`[DEBUG] Call_No: "${record.call_no}" → Group: ${followUpGroup}`);
+        }
+        
+        // Increment the count for this status and follow-up group
+        if (feedbackData[status]) {
+            feedbackData[status][followUpGroup]++;
+        } else {
+            // If status not in predefined list, add it
+            if (!feedbackData[status]) {
+                feedbackData[status] = { F1: 0, F2: 0, F3: 0, F4: 0, F5: 0, F6: 0, F7: 0 };
+            }
+            feedbackData[status][followUpGroup]++;
+        }
+    });
+    
+    // Generate table rows
+    console.log('[DEBUG] Generating table rows...');
+    console.log('[DEBUG] Feedback data structure:', feedbackData);
+    
+    // Log summary of call number categorization
+    const callNumberSummary = {};
+    records.forEach(record => {
+        const callNo = record.call_no || 'Unknown';
+        if (!callNumberSummary[callNo]) {
+            callNumberSummary[callNo] = 0;
+        }
+        callNumberSummary[callNo]++;
+    });
+    console.log('[DEBUG] Call number distribution:', callNumberSummary);
+    
+    // Sort statuses by total count (highest first) for better readability
+    const sortedStatuses = Array.from(allStatuses).sort((a, b) => {
+        const totalA = Object.values(feedbackData[a]).reduce((sum, count) => sum + count, 0);
+        const totalB = Object.values(feedbackData[b]).reduce((sum, count) => sum + count, 0);
+        return totalB - totalA; // Descending order
+    });
+    
+    console.log('[DEBUG] Sorted statuses by total count:', sortedStatuses.map(status => ({
+        status,
+        total: Object.values(feedbackData[status]).reduce((sum, count) => sum + count, 0)
+    })));
+    
+    tableBody.innerHTML = '';
+    
+    let rowsAdded = 0;
+    sortedStatuses.forEach(status => {
+        const data = feedbackData[status];
+        
+        // Only show rows that have data
+        const totalCount = Object.values(data).reduce((sum, count) => sum + count, 0);
+        if (totalCount > 0) {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td class="fw-semibold">${status}</td>
+                <td class="text-center">${data.F1}</td>
+                <td class="text-center">${data.F2}</td>
+                <td class="text-center">${data.F3}</td>
+                <td class="text-center">${data.F4}</td>
+                <td class="text-center">${data.F5}</td>
+                <td class="text-center">${data.F6}</td>
+                <td class="text-center">${data.F7}</td>
+            `;
+            tableBody.appendChild(row);
+            rowsAdded++;
+            console.log(`[DEBUG] Added row for status: ${status} with total count: ${totalCount}`);
+        }
+    });
+    
+    console.log(`[DEBUG] Total rows added: ${rowsAdded}`);
+    
+    // Add a total row at the bottom
+    const totalRow = document.createElement('tr');
+    totalRow.className = 'table-info fw-bold';
+    
+    const totals = { F1: 0, F2: 0, F3: 0, F4: 0, F5: 0, F6: 0, F7: 0 };
+    Object.values(feedbackData).forEach(statusData => {
+        Object.keys(totals).forEach(key => {
+            totals[key] += statusData[key];
+        });
+    });
+    
+    totalRow.innerHTML = `
+        <td class="fw-bold">TOTAL</td>
+        <td class="text-center fw-bold">${totals.F1}</td>
+        <td class="text-center fw-bold">${totals.F2}</td>
+        <td class="text-center fw-bold">${totals.F3}</td>
+        <td class="text-center fw-bold">${totals.F4}</td>
+        <td class="text-center fw-bold">${totals.F5}</td>
+        <td class="text-center fw-bold">${totals.F6}</td>
+        <td class="text-center fw-bold">${totals.F7}</td>
+    `;
+    tableBody.appendChild(totalRow);
+    
+    // Update status summary cards
+    updateStatusSummaryCards(feedbackData, totals);
+}
+
+// Update Status Summary Cards
+function updateStatusSummaryCards(feedbackData, totals) {
+    const summaryContainer = document.getElementById('statusSummaryCards');
+    if (!summaryContainer) return;
+    
+    // Calculate total calls across all statuses
+    const totalCalls = Object.values(totals).reduce((sum, count) => sum + count, 0);
+    
+    // Get top 8 statuses by total count
+    const topStatuses = Object.entries(feedbackData)
+        .map(([status, data]) => ({
+            status,
+            total: Object.values(data).reduce((sum, count) => sum + count, 0)
+        }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 8);
+    
+    let summaryHTML = `
+        <div class="col-12 mb-3">
+            <div class="alert alert-success">
+                <i class="fas fa-chart-bar me-2"></i>
+                <strong>Total Calls Analyzed:</strong> ${totalCalls} | 
+                <strong>Unique Statuses:</strong> ${Object.keys(feedbackData).length}
+            </div>
+        </div>
+    `;
+    
+    // Create status summary cards
+    topStatuses.forEach(({ status, total }) => {
+        const percentage = ((total / totalCalls) * 100).toFixed(1);
+        summaryHTML += `
+            <div class="col-md-3 col-sm-6 mb-2">
+                <div class="card border-primary h-100">
+                    <div class="card-body p-2 text-center">
+                        <h6 class="card-title mb-1 text-primary">${status}</h6>
+                        <h4 class="mb-1">${total}</h4>
+                        <small class="text-muted">${percentage}% of total</small>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    summaryContainer.innerHTML = summaryHTML;
 }
 </script>
 {% endblock %} 

@@ -11497,6 +11497,129 @@ def debug_ps_users():
     except Exception as e:
         return jsonify({'error': str(e)})
 
+@app.route('/api/call_history_analytics')
+def api_call_history_analytics():
+    """Get call history analytics data for branch head dashboard"""
+    try:
+        # Check if user is authenticated (branch head)
+        if 'branch_head_branch' not in session:
+            return jsonify({'success': False, 'message': 'Authentication required'}), 401
+        
+        # Get query parameters
+        ps_name = request.args.get('ps_name', '')
+        date_from = request.args.get('date_from', '')
+        date_to = request.args.get('date_to', '')
+        
+        # Get branch from session
+        branch = session.get('branch_head_branch')
+        if not branch:
+            return jsonify({'success': False, 'message': 'Branch not found in session'})
+        
+        print(f"[DEBUG] Call History Analytics - Branch: {branch}, PS: {ps_name}, Date Range: {date_from} to {date_to}")
+        
+        # First get all PS names for this branch
+        ps_users_result = supabase.table('ps_users').select('name').eq('branch', branch).eq('is_active', True).execute()
+        branch_ps_names = [ps['name'] for ps in ps_users_result.data] if ps_users_result.data else []
+        
+        print(f"[DEBUG] Found {len(branch_ps_names)} PS users for branch {branch}: {branch_ps_names}")
+        
+        if not branch_ps_names:
+            return jsonify({
+                'success': True,
+                'summary': {
+                    'total_attempts': 0,
+                    'connected_calls': 0,
+                    'rnr_calls': 0,
+                    'disconnected_calls': 0
+                },
+                'records': [],
+                'status_distribution': {}
+            })
+        
+        # Build the base query for ps_call_attempt_history
+        # Filter by PS names that belong to this branch
+        query = supabase.table('ps_call_attempt_history').select('*').in_('ps_name', branch_ps_names)
+        
+        # Apply PS filter if specified
+        if ps_name:
+            query = query.eq('ps_name', ps_name)
+        
+        # Apply date filter if specified (using updated_at timestamp)
+        if date_from:
+            query = query.gte('updated_at', f"{date_from}T00:00:00")
+        if date_to:
+            query = query.lte('updated_at', f"{date_to}T23:59:59")
+        
+        print(f"[DEBUG] Executing query for ps_call_attempt_history...")
+        
+        # Execute query
+        result = query.execute()
+        
+        print(f"[DEBUG] Query result: {len(result.data) if result.data else 0} records found")
+        
+        if not result.data:
+            return jsonify({
+                'success': True,
+                'summary': {
+                    'total_attempts': 0,
+                    'connected_calls': 0,
+                    'rnr_calls': 0,
+                    'disconnected_calls': 0
+                },
+                'records': [],
+                'status_distribution': {}
+            })
+        
+        records = result.data
+        
+        # Calculate summary statistics with improved status counting
+        total_attempts = len(records)
+        connected_calls = 0
+        rnr_calls = 0
+        disconnected_calls = 0
+        status_distribution = {}
+        
+        print(f"[DEBUG] Processing {total_attempts} records for status counting...")
+        
+        for record in records:
+            status = record.get('status', '')
+            if status:
+                status_lower = status.lower()
+                
+                # Count by status categories with more comprehensive matching
+                if any(keyword in status_lower for keyword in ['connected', 'interested', 'booked', 'test drive', 'sale']):
+                    connected_calls += 1
+                elif any(keyword in status_lower for keyword in ['rnr', 'busy', 'call me back', 'ring no reply', 'no reply']):
+                    rnr_calls += 1
+                elif any(keyword in status_lower for keyword in ['disconnected', 'not interested', 'lost', 'rejected', 'cancelled']):
+                    disconnected_calls += 1
+                
+                # Build status distribution (keep original status text)
+                status_distribution[status] = status_distribution.get(status, 0) + 1
+        
+        print(f"[DEBUG] Status counts - Connected: {connected_calls}, RNR: {rnr_calls}, Disconnected: {disconnected_calls}")
+        print(f"[DEBUG] Status distribution: {status_distribution}")
+        
+        summary = {
+            'total_attempts': total_attempts,
+            'connected_calls': connected_calls,
+            'rnr_calls': rnr_calls,
+            'disconnected_calls': disconnected_calls
+        }
+        
+        return jsonify({
+            'success': True,
+            'summary': summary,
+            'records': records,
+            'status_distribution': status_distribution
+        })
+        
+    except Exception as e:
+        print(f"Error in api_call_history_analytics: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': f'Error loading call history analytics: {str(e)}'})
+
 if __name__ == '__main__':
     # socketio.run(app, debug=True)
     print(" Starting Ather CRM System...")
