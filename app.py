@@ -11263,15 +11263,16 @@ def lead_transfer():
 
 @app.route('/api/ps_followup_summary')
 def api_ps_followup_summary():
-    """API to get PS Follow-up Summary for branch head dashboard with sub-columns for each table"""
+    """API to get PS Follow-up Summary for branch head dashboard with date filtering and new logic based on call dates only"""
     try:
         # Get branch from session
         branch = session.get('branch_head_branch')
         if not branch:
             return jsonify({'success': False, 'message': 'Branch not found in session'})
         
-        # Get current date
-        today = datetime.now().strftime('%Y-%m-%d')
+        # Get date filter parameters from request
+        from_date = request.args.get('from_date')
+        to_date = request.args.get('to_date')
         
         # Get all PS users for this branch
         ps_users_result = supabase.table('ps_users').select('name').eq('branch', branch).eq('is_active', True).execute()
@@ -11279,7 +11280,7 @@ def api_ps_followup_summary():
         
         ps_summary = {}
         
-        # Initialize summary for each PS with sub-columns (removed activity/events and pending leads)
+        # Initialize summary for each PS with sub-columns
         for ps_name in ps_users:
             ps_summary[ps_name] = {
                 'ps_name': ps_name,
@@ -11292,18 +11293,21 @@ def api_ps_followup_summary():
                 'F7': {'ps_followup': 0, 'walkin': 0, 'total': 0}
             }
         
-        # OPTIMIZED: Single query for ps_followup_master with better column selection
+        # Query ps_followup_master table - only final_status = 'Pending' with date filtering on ps_assigned_at
         try:
-            ps_followup_result = supabase.table('ps_followup_master').select(
-                'lead_uid, ps_name, follow_up_date, final_status, source, lead_status, ps_assigned_at, '
-                'first_call_remark, first_call_date, '
-                'second_call_remark, second_call_date, '
-                'third_call_remark, third_call_date, '
-                'fourth_call_remark, fourth_call_date, '
-                'fifth_call_remark, fifth_call_date, '
-                'sixth_call_remark, sixth_call_date, '
-                'seventh_call_remark, seventh_call_date'
-            ).eq('ps_branch', branch).lte('follow_up_date', today).eq('final_status', 'Pending').execute()
+            query = supabase.table('ps_followup_master').select(
+                'lead_uid, ps_name, final_status, ps_assigned_at, '
+                'first_call_date, second_call_date, third_call_date, fourth_call_date, '
+                'fifth_call_date, sixth_call_date, seventh_call_date'
+            ).eq('ps_branch', branch).eq('final_status', 'Pending')
+            
+            # Apply date filtering if dates are provided
+            if from_date:
+                query = query.gte('ps_assigned_at', f'{from_date} 00:00:00')
+            if to_date:
+                query = query.lte('ps_assigned_at', f'{to_date} 23:59:59')
+            
+            ps_followup_result = query.execute()
             
             if ps_followup_result.data:
                 for lead in ps_followup_result.data:
@@ -11311,86 +11315,105 @@ def api_ps_followup_summary():
                     if ps_name not in ps_summary:
                         continue
                     
-                    # Helper function to check if remark is valid (not null, not empty, not 'na'/'n/a')
-                    def is_valid_remark(remark):
-                        if not remark:
-                            return False
-                        remark_clean = str(remark).strip()
-                        if remark_clean == '':
-                            return False
-                        if remark_clean.lower() in ['na', 'n/a']:
-                            return False
-                        return True
+                    # Helper function to check if a call date is empty/null
+                    def is_call_date_empty(call_date):
+                        return not call_date or call_date == '' or call_date is None
                     
-                    # F1: first remark present, first date still empty
-                    if (not lead.get('first_call_date') and 
-                        is_valid_remark(lead.get('lead_status')) and 
-                        is_valid_remark(lead.get('first_call_remark'))):
+                    # F1: first_call_date is empty, all other call dates are also empty
+                    if (is_call_date_empty(lead.get('first_call_date')) and
+                        is_call_date_empty(lead.get('second_call_date')) and
+                        is_call_date_empty(lead.get('third_call_date')) and
+                        is_call_date_empty(lead.get('fourth_call_date')) and
+                        is_call_date_empty(lead.get('fifth_call_date')) and
+                        is_call_date_empty(lead.get('sixth_call_date')) and
+                        is_call_date_empty(lead.get('seventh_call_date'))):
                         ps_summary[ps_name]['F1']['ps_followup'] += 1
                         ps_summary[ps_name]['F1']['total'] += 1
                     
-                    # F2: first done (with remark), second still pending (date & remark empty)
-                    elif (lead.get('first_call_date') and 
-                          is_valid_remark(lead.get('first_call_remark')) and
-                          not lead.get('second_call_date') and
-                          not is_valid_remark(lead.get('second_call_remark'))):
+                    # F2: second_call_date is empty, first_call_date is filled, all subsequent dates are empty
+                    elif (not is_call_date_empty(lead.get('first_call_date')) and
+                          is_call_date_empty(lead.get('second_call_date')) and
+                          is_call_date_empty(lead.get('third_call_date')) and
+                          is_call_date_empty(lead.get('fourth_call_date')) and
+                          is_call_date_empty(lead.get('fifth_call_date')) and
+                          is_call_date_empty(lead.get('sixth_call_date')) and
+                          is_call_date_empty(lead.get('seventh_call_date'))):
                         ps_summary[ps_name]['F2']['ps_followup'] += 1
                         ps_summary[ps_name]['F2']['total'] += 1
                     
-                    # F3: second done (with remark), third pending
-                    elif (lead.get('second_call_date') and 
-                          is_valid_remark(lead.get('second_call_remark')) and
-                          not lead.get('third_call_date') and
-                          not is_valid_remark(lead.get('third_call_remark'))):
+                    # F3: third_call_date is empty, first and second are filled, all subsequent dates are empty
+                    elif (not is_call_date_empty(lead.get('first_call_date')) and
+                          not is_call_date_empty(lead.get('second_call_date')) and
+                          is_call_date_empty(lead.get('third_call_date')) and
+                          is_call_date_empty(lead.get('fourth_call_date')) and
+                          is_call_date_empty(lead.get('fifth_call_date')) and
+                          is_call_date_empty(lead.get('sixth_call_date')) and
+                          is_call_date_empty(lead.get('seventh_call_date'))):
                         ps_summary[ps_name]['F3']['ps_followup'] += 1
                         ps_summary[ps_name]['F3']['total'] += 1
                     
-                    # F4: third done, fourth pending
-                    elif (lead.get('third_call_date') and 
-                          is_valid_remark(lead.get('third_call_remark')) and
-                          not lead.get('fourth_call_date') and
-                          not is_valid_remark(lead.get('fourth_call_remark'))):
+                    # F4: fourth_call_date is empty, first three are filled, all subsequent dates are empty
+                    elif (not is_call_date_empty(lead.get('first_call_date')) and
+                          not is_call_date_empty(lead.get('second_call_date')) and
+                          not is_call_date_empty(lead.get('third_call_date')) and
+                          is_call_date_empty(lead.get('fourth_call_date')) and
+                          is_call_date_empty(lead.get('fifth_call_date')) and
+                          is_call_date_empty(lead.get('sixth_call_date')) and
+                          is_call_date_empty(lead.get('seventh_call_date'))):
                         ps_summary[ps_name]['F4']['ps_followup'] += 1
                         ps_summary[ps_name]['F4']['total'] += 1
                     
-                    # F5: fourth done, fifth pending
-                    elif (lead.get('fourth_call_date') and 
-                          is_valid_remark(lead.get('fourth_call_remark')) and
-                          not lead.get('fifth_call_date') and
-                          not is_valid_remark(lead.get('fifth_call_remark'))):
+                    # F5: fifth_call_date is empty, first four are filled, all subsequent dates are empty
+                    elif (not is_call_date_empty(lead.get('first_call_date')) and
+                          not is_call_date_empty(lead.get('second_call_date')) and
+                          not is_call_date_empty(lead.get('third_call_date')) and
+                          not is_call_date_empty(lead.get('fourth_call_date')) and
+                          is_call_date_empty(lead.get('fifth_call_date')) and
+                          is_call_date_empty(lead.get('sixth_call_date')) and
+                          is_call_date_empty(lead.get('seventh_call_date'))):
                         ps_summary[ps_name]['F5']['ps_followup'] += 1
                         ps_summary[ps_name]['F5']['total'] += 1
                     
-                    # F6: fifth done, sixth pending
-                    elif (lead.get('fifth_call_date') and 
-                          is_valid_remark(lead.get('fifth_call_remark')) and
-                          not lead.get('sixth_call_date') and
-                          not is_valid_remark(lead.get('sixth_call_remark'))):
+                    # F6: sixth_call_date is empty, first five are filled, seventh date is empty
+                    elif (not is_call_date_empty(lead.get('first_call_date')) and
+                          not is_call_date_empty(lead.get('second_call_date')) and
+                          not is_call_date_empty(lead.get('third_call_date')) and
+                          not is_call_date_empty(lead.get('fourth_call_date')) and
+                          not is_call_date_empty(lead.get('fifth_call_date')) and
+                          is_call_date_empty(lead.get('sixth_call_date')) and
+                          is_call_date_empty(lead.get('seventh_call_date'))):
                         ps_summary[ps_name]['F6']['ps_followup'] += 1
                         ps_summary[ps_name]['F6']['total'] += 1
                     
-                    # F7: sixth done, seventh pending
-                    elif (lead.get('sixth_call_date') and 
-                          is_valid_remark(lead.get('sixth_call_remark')) and
-                          not lead.get('seventh_call_date') and
-                          not is_valid_remark(lead.get('seventh_call_remark'))):
+                    # F7: seventh_call_date is empty, first six are filled
+                    elif (not is_call_date_empty(lead.get('first_call_date')) and
+                          not is_call_date_empty(lead.get('second_call_date')) and
+                          not is_call_date_empty(lead.get('third_call_date')) and
+                          not is_call_date_empty(lead.get('fourth_call_date')) and
+                          not is_call_date_empty(lead.get('fifth_call_date')) and
+                          not is_call_date_empty(lead.get('sixth_call_date')) and
+                          is_call_date_empty(lead.get('seventh_call_date'))):
                         ps_summary[ps_name]['F7']['ps_followup'] += 1
                         ps_summary[ps_name]['F7']['total'] += 1
+                        
         except Exception as e:
             print(f"Warning: Error fetching ps_followup_master data: {str(e)}")
         
-        # OPTIMIZED: Single query for walkin_table with better column selection
+        # Query walkin_table - only status = 'Pending' with date filtering on created_at
         try:
-            walkin_result = supabase.table('walkin_table').select(
-                'uid, ps_assigned, status, branch, next_followup_date, '
-                'first_call_remark, first_call_date, '
-                'second_call_remark, second_call_date, '
-                'third_call_remark, third_call_date, '
-                'fourth_call_remark, fourth_call_date, '
-                'fifth_call_remark, fifth_call_date, '
-                'sixth_call_remark, sixth_call_date, '
-                'seventh_call_remark, seventh_call_date'
-            ).eq('branch', branch).eq('status', 'Pending').lte('next_followup_date', f'{today} 23:59:59').execute()
+            query = supabase.table('walkin_table').select(
+                'uid, ps_assigned, status, created_at, '
+                'first_call_date, second_call_date, third_call_date, fourth_call_date, '
+                'fifth_call_date, sixth_call_date, seventh_call_date'
+            ).eq('branch', branch).eq('status', 'Pending')
+            
+            # Apply date filtering if dates are provided
+            if from_date:
+                query = query.gte('created_at', f'{from_date} 00:00:00')
+            if to_date:
+                query = query.lte('created_at', f'{to_date} 23:59:59')
+            
+            walkin_result = query.execute()
             
             if walkin_result.data:
                 for lead in walkin_result.data:
@@ -11398,73 +11421,89 @@ def api_ps_followup_summary():
                     if ps_name not in ps_summary:
                         continue
                     
-                    # Helper function to check if remark is valid (not null, not empty, not 'na'/'n/a')
-                    def is_valid_remark(remark):
-                        if not remark:
-                            return False
-                        remark_clean = str(remark).strip()
-                        if remark_clean == '':
-                            return False
-                        if remark_clean.lower() in ['na', 'n/a']:
-                            return False
-                        return True
+                    # Helper function to check if a call date is empty/null
+                    def is_call_date_empty(call_date):
+                        return not call_date or call_date == '' or call_date is None
                     
-                    # F1: next_followup_date IS NULL AND status = 'Pending'
-                    if (not lead.get('next_followup_date') and (lead.get('status') == 'Pending')):
+                    # F1: first_call_date is empty, all other call dates are also empty
+                    if (is_call_date_empty(lead.get('first_call_date')) and
+                        is_call_date_empty(lead.get('second_call_date')) and
+                        is_call_date_empty(lead.get('third_call_date')) and
+                        is_call_date_empty(lead.get('fourth_call_date')) and
+                        is_call_date_empty(lead.get('fifth_call_date')) and
+                        is_call_date_empty(lead.get('sixth_call_date')) and
+                        is_call_date_empty(lead.get('seventh_call_date'))):
                         ps_summary[ps_name]['F1']['walkin'] += 1
                         ps_summary[ps_name]['F1']['total'] += 1
                     
-                    # F2: first done (with remark), second still pending (date & remark empty)
-                    elif (lead.get('first_call_date') and 
-                          is_valid_remark(lead.get('first_call_remark')) and
-                          not lead.get('second_call_date') and
-                          not is_valid_remark(lead.get('second_call_remark'))):
+                    # F2: second_call_date is empty, first_call_date is filled, all subsequent dates are empty
+                    elif (not is_call_date_empty(lead.get('first_call_date')) and
+                          is_call_date_empty(lead.get('second_call_date')) and
+                          is_call_date_empty(lead.get('third_call_date')) and
+                          is_call_date_empty(lead.get('fourth_call_date')) and
+                          is_call_date_empty(lead.get('fifth_call_date')) and
+                          is_call_date_empty(lead.get('sixth_call_date')) and
+                          is_call_date_empty(lead.get('seventh_call_date'))):
                         ps_summary[ps_name]['F2']['walkin'] += 1
                         ps_summary[ps_name]['F2']['total'] += 1
                     
-                    # F3: second done (with remark), third pending
-                    elif (lead.get('second_call_date') and 
-                          is_valid_remark(lead.get('second_call_remark')) and
-                          not lead.get('third_call_date') and
-                          not is_valid_remark(lead.get('third_call_remark'))):
+                    # F3: third_call_date is empty, first and second are filled, all subsequent dates are empty
+                    elif (not is_call_date_empty(lead.get('first_call_date')) and
+                          not is_call_date_empty(lead.get('second_call_date')) and
+                          is_call_date_empty(lead.get('third_call_date')) and
+                          is_call_date_empty(lead.get('fourth_call_date')) and
+                          is_call_date_empty(lead.get('fifth_call_date')) and
+                          is_call_date_empty(lead.get('sixth_call_date')) and
+                          is_call_date_empty(lead.get('seventh_call_date'))):
                         ps_summary[ps_name]['F3']['walkin'] += 1
                         ps_summary[ps_name]['F3']['total'] += 1
                     
-                    # F4: third done, fourth pending
-                    elif (lead.get('third_call_date') and 
-                          is_valid_remark(lead.get('third_call_remark')) and
-                          not lead.get('fourth_call_date') and
-                          not is_valid_remark(lead.get('fourth_call_remark'))):
+                    # F4: fourth_call_date is empty, first three are filled, all subsequent dates are empty
+                    elif (not is_call_date_empty(lead.get('first_call_date')) and
+                          not is_call_date_empty(lead.get('second_call_date')) and
+                          not is_call_date_empty(lead.get('third_call_date')) and
+                          is_call_date_empty(lead.get('fourth_call_date')) and
+                          is_call_date_empty(lead.get('fifth_call_date')) and
+                          is_call_date_empty(lead.get('sixth_call_date')) and
+                          is_call_date_empty(lead.get('seventh_call_date'))):
                         ps_summary[ps_name]['F4']['walkin'] += 1
                         ps_summary[ps_name]['F4']['total'] += 1
                     
-                    # F5: fourth done, fifth pending
-                    elif (lead.get('fourth_call_date') and 
-                          is_valid_remark(lead.get('fourth_call_remark')) and
-                          not lead.get('fifth_call_date') and
-                          not is_valid_remark(lead.get('fifth_call_remark'))):
+                    # F5: fifth_call_date is empty, first four are filled, all subsequent dates are empty
+                    elif (not is_call_date_empty(lead.get('first_call_date')) and
+                          not is_call_date_empty(lead.get('second_call_date')) and
+                          not is_call_date_empty(lead.get('third_call_date')) and
+                          not is_call_date_empty(lead.get('fourth_call_date')) and
+                          is_call_date_empty(lead.get('fifth_call_date')) and
+                          is_call_date_empty(lead.get('sixth_call_date')) and
+                          is_call_date_empty(lead.get('seventh_call_date'))):
                         ps_summary[ps_name]['F5']['walkin'] += 1
                         ps_summary[ps_name]['F5']['total'] += 1
                     
-                    # F6: fifth done, sixth pending
-                    elif (lead.get('fifth_call_date') and 
-                          is_valid_remark(lead.get('fifth_call_remark')) and
-                          not lead.get('sixth_call_date') and
-                          not is_valid_remark(lead.get('sixth_call_remark'))):
+                    # F6: sixth_call_date is empty, first five are filled, seventh date is empty
+                    elif (not is_call_date_empty(lead.get('first_call_date')) and
+                          not is_call_date_empty(lead.get('second_call_date')) and
+                          not is_call_date_empty(lead.get('third_call_date')) and
+                          not is_call_date_empty(lead.get('fourth_call_date')) and
+                          not is_call_date_empty(lead.get('fifth_call_date')) and
+                          is_call_date_empty(lead.get('sixth_call_date')) and
+                          is_call_date_empty(lead.get('seventh_call_date'))):
                         ps_summary[ps_name]['F6']['walkin'] += 1
                         ps_summary[ps_name]['F6']['total'] += 1
                     
-                    # F7: sixth done, seventh pending
-                    elif (lead.get('sixth_call_date') and 
-                          is_valid_remark(lead.get('sixth_call_remark')) and
-                          not lead.get('seventh_call_date') and
-                          not is_valid_remark(lead.get('seventh_call_remark'))):
+                    # F7: seventh_call_date is empty, first six are filled
+                    elif (not is_call_date_empty(lead.get('first_call_date')) and
+                          not is_call_date_empty(lead.get('second_call_date')) and
+                          not is_call_date_empty(lead.get('third_call_date')) and
+                          not is_call_date_empty(lead.get('fourth_call_date')) and
+                          not is_call_date_empty(lead.get('fifth_call_date')) and
+                          not is_call_date_empty(lead.get('sixth_call_date')) and
+                          is_call_date_empty(lead.get('seventh_call_date'))):
                         ps_summary[ps_name]['F7']['walkin'] += 1
                         ps_summary[ps_name]['F7']['total'] += 1
+                        
         except Exception as e:
             print(f"Warning: Error fetching walkin_table data: {str(e)}")
-        
-
         
         # Format the data for display with sub-columns
         formatted_summary = []

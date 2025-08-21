@@ -1472,10 +1472,35 @@
             <div class="card mb-4">
                 <div class="card-header">
                     <h5 class="mb-0">
-                        <i class="fas fa-users me-2"></i>Product Specialist Missed Follow-up Summary
+                        <i class="fas fa-users me-2"></i>Product Specialist Follow-up Summary
                     </h5>
                 </div>
                 <div class="card-body">
+                    <!-- Date Filter for PS Follow-up Summary -->
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label for="psFollowupFromDate" class="form-label fw-semibold">From Date:</label>
+                            <input type="date" id="psFollowupFromDate" class="form-control" placeholder="DD/MM/YYYY">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="psFollowupToDate" class="form-label fw-semibold">To Date:</label>
+                            <input type="date" id="psFollowupToDate" class="form-control" placeholder="DD/MM/YYYY">
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button type="button" id="psFollowupApplyFilter" class="btn btn-primary me-2">
+                                <i class="fas fa-filter me-1"></i>Apply Filter
+                            </button>
+                            <button type="button" id="psFollowupResetFilter" class="btn btn-secondary">
+                                <i class="fas fa-undo me-1"></i>Reset
+                            </button>
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle me-1"></i>
+                                CRE: ps_assigned_at | Walk-in: created_at
+                            </small>
+                        </div>
+                    </div>
                     <div class="table-responsive">
                         <table class="table table-striped table-hover" id="psFollowupTable">
                             <thead class="table-dark">
@@ -3022,7 +3047,16 @@ function loadWalkinLeadsData() {
 
 // Load PS Follow-up Summary Data
 function loadPSFollowupSummaryData() {
-    fetch('/api/ps_followup_summary')
+    // Get date filter values
+    const fromDate = document.getElementById('psFollowupFromDate').value;
+    const toDate = document.getElementById('psFollowupToDate').value;
+    
+    // Build query parameters
+    const params = new URLSearchParams();
+    if (fromDate) params.append('from_date', fromDate);
+    if (toDate) params.append('to_date', toDate);
+    
+    fetch(`/api/ps_followup_summary?${params.toString()}`)
         .then(response => response.json())
         .then(data => {
             const tbody = document.getElementById('psFollowupTableBody');
@@ -3673,6 +3707,31 @@ function toggleCallHistoryInline(btn) {
                     document.getElementById('callHistoryPsSelect').value = '';
                     
                     loadCallHistoryAnalytics();
+                });
+            }
+            
+            // PS Follow-up Summary Filter Event Listeners
+            // Set default dates for PS follow-up (01-07-2025 to 21-08-2025)
+            document.getElementById('psFollowupFromDate').value = '2025-07-01';
+            document.getElementById('psFollowupToDate').value = '2025-08-21';
+            
+            // Apply PS follow-up filter button
+            const applyPsFollowupFilter = document.getElementById('psFollowupApplyFilter');
+            if (applyPsFollowupFilter) {
+                applyPsFollowupFilter.addEventListener('click', function() {
+                    loadPSFollowupSummaryData();
+                });
+            }
+            
+            // Reset PS follow-up filter button
+            const resetPsFollowupFilter = document.getElementById('psFollowupResetFilter');
+            if (resetPsFollowupFilter) {
+                resetPsFollowupFilter.addEventListener('click', function() {
+                    // Reset to default dates (01-07-2025 to 21-08-2025)
+                    document.getElementById('psFollowupFromDate').value = '2025-07-01';
+                    document.getElementById('psFollowupToDate').value = '2025-08-21';
+                    
+                    loadPSFollowupSummaryData();
                 });
             }
         });
