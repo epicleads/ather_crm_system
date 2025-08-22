@@ -3775,17 +3775,16 @@ def ps_dashboard():
                         if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
                             lead_dict['lead_category'] = 'Not Set'
                         
-                        # IMPORTANT: Only categorize into fresh leads subsections if this is the FIRST call
-                        # If lead has any status other than 'Pending', it means it's been called before
-                        if lead_status and lead_status != 'Pending':
-                            # This lead has been called before (has a status), so it should NOT go to fresh leads
-                            # It should go to pending_leads instead
-                            pending_leads.append(lead_dict)
-                            print(f"[DEBUG] Lead {lead.get('lead_uid')} has been called before (status: {lead_status}), added to pending_leads instead of fresh leads")
+                        # Categorize into fresh leads subsections based on lead_status
+                        if lead_status == 'Call me Back':
+                            follow_up_leads.append(lead_dict)
+                            print(f"[DEBUG] Added to follow_up_leads (Call me Back status): {lead.get('lead_uid')}")
+                        elif lead_status in ['RNR', 'Busy on another Call', 'Call Disconnected', 'Call not Connected']:
+                            called_leads.append(lead_dict)
+                            print(f"[DEBUG] Added to called_leads (Non-contact status): {lead.get('lead_uid')}")
                         else:
-                            # This is truly a fresh lead (no previous calls)
                             untouched_leads.append(lead_dict)
-                            print(f"[DEBUG] Added to untouched_leads (truly fresh lead): {lead.get('lead_uid')}")
+                            print(f"[DEBUG] Added to untouched_leads (Pending status): {lead.get('lead_uid')}")
                         
                         # Also add to fresh_leads for backward compatibility
                         fresh_leads.append(lead_dict)
@@ -3811,17 +3810,16 @@ def ps_dashboard():
                         if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
                             lead_dict['lead_category'] = 'Not Set'
                         
-                        # IMPORTANT: Only categorize into fresh leads subsections if this is the FIRST call
-                        # If lead has any status other than 'Pending', it means it's been called before
-                        if lead_status and lead_status != 'Pending':
-                            # This lead has been called before (has a status), so it should NOT go to fresh leads
-                            # It should go to pending_leads instead
-                            pending_leads.append(lead_dict)
-                            print(f"[DEBUG] Lead {lead.get('lead_uid')} has been called before (status: {lead_status}), added to pending_leads instead of fresh leads")
+                        # Categorize into fresh leads subsections based on lead_status
+                        if lead_status == 'Call me Back':
+                            follow_up_leads.append(lead_dict)
+                            print(f"[DEBUG] Added to follow_up_leads (Call me Back status): {lead.get('lead_uid')}")
+                        elif lead_status in ['RNR', 'Busy on another Call', 'Call Disconnected', 'Call not Connected']:
+                            called_leads.append(lead_dict)
+                            print(f"[DEBUG] Added to called_leads (Non-contact status): {lead.get('lead_uid')}")
                         else:
-                            # This is truly a fresh lead (no previous calls)
                             untouched_leads.append(lead_dict)
-                            print(f"[DEBUG] Added to untouched_leads (truly fresh lead): {lead.get('lead_uid')}")
+                            print(f"[DEBUG] Added to untouched_leads (Pending status): {lead.get('lead_uid')}")
                         
                         # Also add to fresh_leads for backward compatibility
                         fresh_leads.append(lead_dict)
@@ -3934,17 +3932,16 @@ def ps_dashboard():
                     # Event lead hasn't been called yet, categorize into fresh leads subsections
                     print(f"[DEBUG] Event lead with final_status == 'Pending' but no ps_first_call_date: {lead_dict['lead_uid']} | lead_status: {lead_status}")
                     if not lead_status or lead_status not in excluded_statuses:
-                        # IMPORTANT: Only categorize into fresh leads subsections if this is the FIRST call
-                        # If lead has any status other than 'Pending', it means it's been called before
-                        if lead_status and lead_status != 'Pending':
-                            # This event lead has been called before (has a status), so it should NOT go to fresh leads
-                            # It should go to pending_leads instead
-                            pending_leads.append(lead_dict)
-                            print(f"[DEBUG] Event lead {lead_dict['lead_uid']} has been called before (status: {lead_status}), added to pending_leads instead of fresh leads")
+                        # Categorize into fresh leads subsections based on lead_status
+                        if lead_status == 'Call me Back':
+                            follow_up_leads.append(lead_dict)
+                            print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to follow_up_leads (Call me Back status)")
+                        elif lead_status in ['RNR', 'Busy on another Call', 'Call Disconnected', 'Call not Connected']:
+                            called_leads.append(lead_dict)
+                            print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to called_leads (Non-contact status)")
                         else:
-                            # This is truly a fresh event lead (no previous calls)
                             untouched_leads.append(lead_dict)
-                            print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to untouched_leads (truly fresh lead)")
+                            print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to untouched_leads (Pending status)")
                         
                         # Also add to fresh_leads for backward compatibility
                         fresh_leads.append(lead_dict)
@@ -3963,17 +3960,16 @@ def ps_dashboard():
                     # Event lead hasn't been called yet, categorize into fresh leads subsections
                     print(f"[DEBUG] Event lead with no final_status and no ps_first_call_date: {lead_dict['lead_uid']} | lead_status: {lead_status}")
                     if not lead_status or lead_status not in excluded_statuses:
-                        # IMPORTANT: Only categorize into fresh leads subsections if this is the FIRST call
-                        # If lead has any status other than 'Pending', it means it's been called before
-                        if lead_status and lead_status != 'Pending':
-                            # This event lead has been called before (has a status), so it should NOT go to fresh leads
-                            # It should go to pending_leads instead
-                            pending_leads.append(lead_dict)
-                            print(f"[DEBUG] Event lead {lead_dict['lead_uid']} has been called before (status: {lead_status}), added to pending_leads instead of fresh leads")
+                        # Categorize into fresh leads subsections based on lead_status
+                        if lead_status == 'Call me Back':
+                            follow_up_leads.append(lead_dict)
+                            print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to follow_up_leads (Call me Back status)")
+                        elif lead_status in ['RNR', 'Busy on another Call', 'Call Disconnected', 'Call not Connected']:
+                            called_leads.append(lead_dict)
+                            print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to called_leads (Non-contact status)")
                         else:
-                            # This is truly a fresh event lead (no previous calls)
                             untouched_leads.append(lead_dict)
-                            print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to untouched_leads (truly fresh lead)")
+                            print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to untouched_leads (Pending status)")
                         
                         # Also add to fresh_leads for backward compatibility
                         fresh_leads.append(lead_dict)
