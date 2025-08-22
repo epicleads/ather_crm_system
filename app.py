@@ -3716,6 +3716,10 @@ def ps_dashboard():
 
         todays_followups_event = []  # Separate list for event followups
         fresh_leads = []
+        # Initialize three subsections for fresh leads (similar to CRE dashboard)
+        untouched_leads = []
+        called_leads = []
+        follow_up_leads = []
         pending_leads = []
         attended_leads = []
         won_leads = []
@@ -3764,14 +3768,26 @@ def ps_dashboard():
                     else:
                         print(f"[DEBUG] Lead {lead.get('lead_uid')} excluded from pending_leads due to lead_status: {lead_status}")
                 else:
-                    # Lead hasn't been called yet, goes to fresh_leads
+                    # Lead hasn't been called yet, categorize into fresh leads subsections
                     print(f"[DEBUG] Found lead with final_status == 'Pending' but no first_call_date: {lead.get('lead_uid')} | lead_status: {lead_status}")
                     if not lead_status or lead_status not in excluded_statuses:
                         # Set default lead_category if missing
                         if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
                             lead_dict['lead_category'] = 'Not Set'
+                        
+                        # Categorize into fresh leads subsections based on lead_status
+                        if lead_status == 'Call me Back':
+                            follow_up_leads.append(lead_dict)
+                            print(f"[DEBUG] Added to follow_up_leads (Call me Back status): {lead.get('lead_uid')}")
+                        elif lead_status in ['RNR', 'Busy on another Call', 'Call Disconnected', 'Call not Connected']:
+                            called_leads.append(lead_dict)
+                            print(f"[DEBUG] Added to called_leads (Non-contact status): {lead.get('lead_uid')}")
+                        else:
+                            untouched_leads.append(lead_dict)
+                            print(f"[DEBUG] Added to untouched_leads (Pending status): {lead.get('lead_uid')}")
+                        
+                        # Also add to fresh_leads for backward compatibility
                         fresh_leads.append(lead_dict)
-                        print(f"[DEBUG] Added to fresh_leads (Pending status without first_call_date): {lead.get('lead_uid')}")
                     else:
                         print(f"[DEBUG] Lead {lead.get('lead_uid')} excluded from fresh_leads due to lead_status: {lead_status}")
             elif not final_status:  # Include leads with no final_status
@@ -3787,14 +3803,26 @@ def ps_dashboard():
                     else:
                         print(f"[DEBUG] Lead {lead.get('lead_uid')} excluded from pending_leads due to lead_status: {lead_status}")
                 else:
-                    # Lead hasn't been called yet, goes to fresh_leads
+                    # Lead hasn't been called yet, categorize into fresh leads subsections
                     print(f"[DEBUG] Found lead with no final_status and no first_call_date: {lead.get('lead_uid')} | lead_status: {lead_status}")
                     if not lead_status or lead_status not in excluded_statuses:
                         # Set default lead_category if missing
                         if 'lead_category' not in lead_dict or not lead_dict['lead_category']:
                             lead_dict['lead_category'] = 'Not Set'
+                        
+                        # Categorize into fresh leads subsections based on lead_status
+                        if lead_status == 'Call me Back':
+                            follow_up_leads.append(lead_dict)
+                            print(f"[DEBUG] Added to follow_up_leads (Call me Back status): {lead.get('lead_uid')}")
+                        elif lead_status in ['RNR', 'Busy on another Call', 'Call Disconnected', 'Call not Connected']:
+                            called_leads.append(lead_dict)
+                            print(f"[DEBUG] Added to called_leads (Non-contact status): {lead.get('lead_uid')}")
+                        else:
+                            untouched_leads.append(lead_dict)
+                            print(f"[DEBUG] Added to untouched_leads (Pending status): {lead.get('lead_uid')}")
+                        
+                        # Also add to fresh_leads for backward compatibility
                         fresh_leads.append(lead_dict)
-                        print(f"[DEBUG] Added to fresh_leads (no final_status without first_call_date): {lead.get('lead_uid')}")
                     else:
                         print(f"[DEBUG] Lead {lead.get('lead_uid')} excluded from fresh_leads due to lead_status: {lead_status}")
 
@@ -3901,11 +3929,22 @@ def ps_dashboard():
                     else:
                         print(f"[DEBUG] Event lead {lead_dict['lead_uid']} excluded from pending_leads due to lead_status: {lead_status}")
                 else:
-                    # Event lead hasn't been called yet, goes to fresh_leads
+                    # Event lead hasn't been called yet, categorize into fresh leads subsections
                     print(f"[DEBUG] Event lead with final_status == 'Pending' but no ps_first_call_date: {lead_dict['lead_uid']} | lead_status: {lead_status}")
                     if not lead_status or lead_status not in excluded_statuses:
+                        # Categorize into fresh leads subsections based on lead_status
+                        if lead_status == 'Call me Back':
+                            follow_up_leads.append(lead_dict)
+                            print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to follow_up_leads (Call me Back status)")
+                        elif lead_status in ['RNR', 'Busy on another Call', 'Call Disconnected', 'Call not Connected']:
+                            called_leads.append(lead_dict)
+                            print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to called_leads (Non-contact status)")
+                        else:
+                            untouched_leads.append(lead_dict)
+                            print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to untouched_leads (Pending status)")
+                        
+                        # Also add to fresh_leads for backward compatibility
                         fresh_leads.append(lead_dict)
-                        print(f"[DEBUG] Event lead {lead_dict['lead_uid']} also added to fresh_leads (Pending status without ps_first_call_date)")
                     else:
                         print(f"[DEBUG] Event lead {lead_dict['lead_uid']} excluded from fresh_leads due to lead_status: {lead_status}")
             elif not final_status:  # Include leads with no final_status
@@ -3918,11 +3957,22 @@ def ps_dashboard():
                     else:
                         print(f"[DEBUG] Event lead {lead_dict['lead_uid']} excluded from pending_leads due to lead_status: {lead_status}")
                 else:
-                    # Event lead hasn't been called yet, goes to fresh_leads
+                    # Event lead hasn't been called yet, categorize into fresh leads subsections
                     print(f"[DEBUG] Event lead with no final_status and no ps_first_call_date: {lead_dict['lead_uid']} | lead_status: {lead_status}")
                     if not lead_status or lead_status not in excluded_statuses:
+                        # Categorize into fresh leads subsections based on lead_status
+                        if lead_status == 'Call me Back':
+                            follow_up_leads.append(lead_dict)
+                            print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to follow_up_leads (Call me Back status)")
+                        elif lead_status in ['RNR', 'Busy on another Call', 'Call Disconnected', 'Call not Connected']:
+                            called_leads.append(lead_dict)
+                            print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to called_leads (Non-contact status)")
+                        else:
+                            untouched_leads.append(lead_dict)
+                            print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to untouched_leads (Pending status)")
+                        
+                        # Also add to fresh_leads for backward compatibility
                         fresh_leads.append(lead_dict)
-                        print(f"[DEBUG] Event lead {lead_dict['lead_uid']} also added to fresh_leads (no final_status without ps_first_call_date)")
                     else:
                         print(f"[DEBUG] Event lead {lead_dict['lead_uid']} excluded from fresh_leads due to lead_status: {lead_status}")
 
@@ -4108,7 +4158,14 @@ def ps_dashboard():
                                status=status)  # <-- Add status here
 
         print(f"[PERF] ps_dashboard: render_template took {time.time() - t6:.3f} seconds")
+        # Calculate counts for fresh leads subsections
+        untouched_count = len(untouched_leads)
+        called_count = len(called_leads)
+        follow_up_count = len(follow_up_leads)
+        total_fresh_leads = untouched_count + called_count + follow_up_count
+        
         print(f"[DEBUG] FINAL COUNTS - Fresh: {len(fresh_leads)}, Pending: {len(pending_leads)}, Attended: {len(attended_leads)}, Won: {len(won_leads)}, Lost: {len(lost_leads)}, Event: {len(event_leads)}")
+        print(f"[DEBUG] Fresh leads subsections - Untouched: {untouched_count}, Called: {called_count}, Follow Up: {follow_up_count}")
         print(f"[DEBUG] Fresh leads being sent to template: {[lead.get('lead_uid') for lead in fresh_leads]}")
         print(f"[DEBUG] Pending leads being sent to template: {[lead.get('lead_uid') for lead in pending_leads]}")
         print(f"[DEBUG] Won leads being sent to template: {[lead.get('lead_uid') for lead in won_leads]}")
@@ -4122,6 +4179,13 @@ def ps_dashboard():
         template_data = {
             'assigned_leads': assigned_leads,
             'fresh_leads': fresh_leads,
+            'untouched_leads': untouched_leads,
+            'called_leads': called_leads,
+            'follow_up_leads': follow_up_leads,
+            'untouched_count': untouched_count,
+            'called_count': called_count,
+            'follow_up_count': follow_up_count,
+            'total_fresh_leads': total_fresh_leads,
             'pending_leads': pending_leads,
             'todays_followups': todays_followups,
             'attended_leads': attended_leads,
