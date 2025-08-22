@@ -1476,13 +1476,20 @@
                     </h5>
                 </div>
                 <div class="card-body">
-                    <!-- Date Filter for PS Follow-up Summary -->
+                    <!-- Date Filter and Mode Selection for PS Follow-up Summary -->
                     <div class="row mb-3">
-                        <div class="col-md-3">
+                        <div class="col-md-2">
+                            <label for="psFollowupMode" class="form-label fw-semibold">Mode:</label>
+                            <select id="psFollowupMode" class="form-select" onchange="updateModeInfo();">
+                                <option value="all_pending">All Pending Leads</option>
+                                <option value="today_missed">Today's & Missed Followup</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
                             <label for="psFollowupFromDate" class="form-label fw-semibold">From Date:</label>
                             <input type="date" id="psFollowupFromDate" class="form-control" placeholder="DD/MM/YYYY">
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <label for="psFollowupToDate" class="form-label fw-semibold">To Date:</label>
                             <input type="date" id="psFollowupToDate" class="form-control" placeholder="DD/MM/YYYY">
                         </div>
@@ -1497,7 +1504,7 @@
                         <div class="col-md-3 d-flex align-items-end">
                             <small class="text-muted">
                                 <i class="fas fa-info-circle me-1"></i>
-                                CRE: ps_assigned_at | Walk-in: created_at
+                                <span id="psFollowupModeInfo">Mode 1: All pending leads</span>
                             </small>
                         </div>
                     </div>
@@ -1539,7 +1546,10 @@
                                 </tr>
                             </thead>
                             <tbody id="psFollowupTableBody">
-                                <tr><td colspan="15" class="text-center">Loading...</td></tr>
+                                <tr><td colspan="15" class="text-center text-muted">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    Please select mode and date range, then click Apply Filter to view data
+                                </td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1757,7 +1767,7 @@
                                     {% endfor %}
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <label for="freshLeadsStatusSelect" class="fw-semibold small">Final Status:</label>
                                 <select id="freshLeadsStatusSelect" class="form-select form-select-sm">
                                     <option value="">-- All Statuses --</option>
@@ -1766,10 +1776,19 @@
                                     <option value="Lost">Lost</option>
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
+                                <label for="freshLeadsSourceSelect" class="fw-semibold small">Lead Source:</label>
+                                <select id="freshLeadsSourceSelect" class="form-select form-select-sm">
+                                    <option value="">-- All Sources --</option>
+                                    <option value="cre">CRE Assigned Leads</option>
+                                    <option value="walkin">Walk-in Leads</option>
+                                    <option value="event">Event Leads</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
                                 <label for="freshLeadsDateFilter" class="fw-semibold small">Date Filter:</label>
                                 <select id="freshLeadsDateFilter" class="form-select form-select-sm">
-                                    <option value="">-- All Time --</option>
+                                    <option value="">-- Select Date Range --</option>
                                     <option value="today">Today</option>
                                     <option value="date_range">Date Range</option>
                                 </select>
@@ -1824,9 +1843,9 @@
                                 </tr>
                             </thead>
                             <tbody id="freshLeadsTableBody">
-                                <tr><td colspan="10" class="text-center py-2">
-                                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-                                    Loading leads...
+                                <tr><td colspan="10" class="text-center py-2 text-muted">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    Please select a date range and click Apply to view leads
                                 </td></tr>
                             </tbody>
                         </table>
@@ -1909,7 +1928,10 @@
                                 </tr>
                             </thead>
                             <tbody id="freshLeadsSectionTableBody">
-                                <tr><td colspan="10" class="text-center py-2">Loading...</td></tr>
+                                <tr><td colspan="10" class="text-center py-2 text-muted">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    Please select a date range and click Apply to view leads
+                                </td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -2010,8 +2032,9 @@
                                 </tr>
                             </thead>
                             <tbody id="followupLeadsTableBody">
-                                <tr><td colspan="11" class="text-center py-2">
-                                    <i class="fas fa-spinner fa-spin me-2"></i>Loading today's and past follow-ups...
+                                <tr><td colspan="11" class="text-center py-2 text-muted">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    Please select a date range and click Apply to view leads
                                 </td></tr>
                             </tbody>
                         </table>
@@ -2157,6 +2180,145 @@ const sectionConfig = {
         }
     };
 
+    // Set default dates for PS follow-up (1st of current month to today) - GLOBAL SCOPE
+    function setDefaultMonthToDateDates() {
+        console.log(`[DEBUG] setDefaultMonthToDateDates() function called at ${new Date().toISOString()}`);
+        const today = new Date();
+        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        
+        // Format dates as YYYY-MM-DD
+        const fromDate = firstDayOfMonth.toISOString().split('T')[0];
+        const toDate = today.toISOString().split('T')[0];
+        
+        // Set PS Follow-up Summary dates
+        const psFromDate = document.getElementById('psFollowupFromDate');
+        const psToDate = document.getElementById('psFollowupToDate');
+        if (psFromDate && psToDate) {
+            psFromDate.value = fromDate;
+            psToDate.value = toDate;
+            console.log(`[DEBUG] Set PS Follow-up dates: ${fromDate} to ${toDate}`);
+        } else {
+            console.log(`[DEBUG] PS Follow-up date elements not found`);
+        }
+        
+        // Set All Leads section dates
+        const freshLeadsDateFrom = document.getElementById('freshLeadsDateFrom');
+        const freshLeadsDateTo = document.getElementById('freshLeadsDateTo');
+        const freshLeadsDateFilter = document.getElementById('freshLeadsDateFilter');
+        if (freshLeadsDateFrom && freshLeadsDateTo) {
+            freshLeadsDateFrom.value = fromDate;
+            freshLeadsDateTo.value = toDate;
+            // Set date filter to date_range mode
+            if (freshLeadsDateFilter) {
+                freshLeadsDateFilter.value = 'date_range';
+                // Show the date range inputs
+                const dateRangeRow = document.getElementById('dateRangeRow');
+                if (dateRangeRow) {
+                    dateRangeRow.style.display = 'flex';
+                }
+            }
+            console.log(`[DEBUG] Set All Leads dates: ${fromDate} to ${toDate}`);
+        } else {
+            console.log(`[DEBUG] All Leads date elements not found`);
+        }
+        
+        // Set Fresh Leads section dates
+        const freshLeadsSectionDateFrom = document.getElementById('freshLeadsSectionDateFrom');
+        const freshLeadsSectionDateTo = document.getElementById('freshLeadsSectionDateTo');
+        const freshLeadsSectionDateFilter = document.getElementById('freshLeadsSectionDateFilter');
+        if (freshLeadsSectionDateFrom && freshLeadsSectionDateTo) {
+            freshLeadsSectionDateFrom.value = fromDate;
+            freshLeadsSectionDateTo.value = toDate;
+            // Set date filter to date_range mode
+            if (freshLeadsSectionDateFilter) {
+                freshLeadsSectionDateFilter.value = 'date_range';
+                // Show the date range inputs
+                const freshLeadsSectionDateRangeRow = document.getElementById('freshLeadsSectionDateRangeRow');
+                if (freshLeadsSectionDateRangeRow) {
+                    freshLeadsSectionDateRangeRow.style.display = 'flex';
+                }
+            }
+            console.log(`[DEBUG] Set Fresh Leads dates: ${fromDate} to ${toDate}`);
+        } else {
+            console.log(`[DEBUG] Fresh Leads date elements not found`);
+        }
+        
+        // Set Followup Leads section dates
+        const followupLeadsDateFrom = document.getElementById('followupLeadsDateFrom');
+        const followupLeadsDateTo = document.getElementById('followupLeadsDateTo');
+        const followupLeadsDateFilter = document.getElementById('followupLeadsDateFilter');
+        if (followupLeadsDateFrom && followupLeadsDateTo) {
+            followupLeadsDateFrom.value = fromDate;
+            followupLeadsDateTo.value = toDate;
+            // Set date filter to date_range mode
+            if (followupLeadsDateFilter) {
+                followupLeadsDateFilter.value = 'date_range';
+                // Show the date range inputs
+                const followupDateRangeRow = document.getElementById('followupDateRangeRow');
+                if (followupDateRangeRow) {
+                    followupDateRangeRow.style.display = 'flex';
+                }
+            }
+            console.log(`[DEBUG] Set Followup Leads dates: ${fromDate} to ${toDate}`);
+        } else {
+            console.log(`[DEBUG] Followup Leads date elements not found`);
+        }
+        
+        console.log(`[DEBUG] Set default dates: ${fromDate} to ${toDate}`);
+        console.log(`[DEBUG] Default month-to-date dates set successfully`);
+        
+        // Debug: Log the actual values set in the DOM
+        console.log(`[DEBUG] Current date values in DOM:`);
+        console.log(`[DEBUG] PS Follow-up From: ${document.getElementById('psFollowupFromDate')?.value || 'NOT SET'}`);
+        console.log(`[DEBUG] PS Follow-up To: ${document.getElementById('psFollowupToDate')?.value || 'NOT SET'}`);
+        console.log(`[DEBUG] All Leads From: ${document.getElementById('freshLeadsDateFrom')?.value || 'NOT SET'}`);
+        console.log(`[DEBUG] All Leads To: ${document.getElementById('freshLeadsDateTo')?.value || 'NOT SET'}`);
+        console.log(`[DEBUG] Fresh Leads From: ${document.getElementById('freshLeadsSectionDateFrom')?.value || 'NOT SET'}`);
+        console.log(`[DEBUG] Fresh Leads To: ${document.getElementById('freshLeadsSectionDateTo')?.value || 'NOT SET'}`);
+        console.log(`[DEBUG] Followup Leads From: ${document.getElementById('followupLeadsDateFrom')?.value || 'NOT SET'}`);
+        console.log(`[DEBUG] Followup Leads To: ${document.getElementById('followupLeadsDateTo')?.value || 'NOT SET'}`);
+        
+        // Automatically load data for all sections after setting default dates
+        console.log(`[DEBUG] Auto-loading data for all sections...`);
+        
+        // Use setTimeout to ensure functions are available and DOM is fully ready
+        setTimeout(() => {
+            // Load PS Follow-up Summary data
+            if (typeof loadPSFollowupSummaryData === 'function') {
+                console.log(`[DEBUG] Loading PS Follow-up Summary data...`);
+                loadPSFollowupSummaryData();
+            } else {
+                console.log(`[DEBUG] loadPSFollowupSummaryData function not available yet`);
+            }
+            
+            // Load All Leads data
+            if (typeof loadSection === 'function') {
+                console.log(`[DEBUG] Loading All Leads data...`);
+                loadSection('fresh_leads');
+            } else {
+                console.log(`[DEBUG] loadSection function not available yet`);
+            }
+            
+            // Load Fresh Leads data
+            if (typeof loadSection === 'function') {
+                console.log(`[DEBUG] Loading Fresh Leads data...`);
+                loadSection('fresh_leads_section');
+            } else {
+                console.log(`[DEBUG] loadSection function not available yet`);
+            }
+            
+            // Load Followup Leads data
+            if (typeof loadSection === 'function') {
+                console.log(`[DEBUG] Loading Followup Leads data...`);
+                loadSection('followup_leads');
+            } else {
+                console.log(`[DEBUG] loadSection function not available yet`);
+            }
+            
+            console.log(`[DEBUG] Auto-loading completed`);
+        }, 500); // 500ms delay to ensure functions are available
+    }
+
     // OPTIMIZED: Load section data with improved performance and server-side filtering
     function loadSection(section) {
         const startTime = performance.now();
@@ -2204,6 +2366,13 @@ const sectionConfig = {
             };
             start_date = formatDate(today);
             end_date = formatDate(today);
+        }
+        
+        // For All Leads section, require date selection
+        if (section === 'fresh_leads' && !date_filter && !start_date && !end_date) {
+            const tbody = document.getElementById(config.tbody);
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">Please select a date range to view leads</td></tr>';
+            return;
         }
         
         // Make API call with filter parameters and timeout
@@ -3045,14 +3214,30 @@ function loadWalkinLeadsData() {
         });
 }
 
+// Update mode info display
+function updateModeInfo() {
+    const mode = document.getElementById('psFollowupMode').value;
+    const modeInfo = document.getElementById('psFollowupModeInfo');
+    
+    if (mode === 'today_missed') {
+        modeInfo.textContent = "Mode 2: Today's & missed followup (follow_up_date ≤ today)";
+        modeInfo.className = 'text-warning fw-semibold';
+    } else {
+        modeInfo.textContent = "Mode 1: All pending leads";
+        modeInfo.className = 'text-muted';
+    }
+}
+
 // Load PS Follow-up Summary Data
 function loadPSFollowupSummaryData() {
-    // Get date filter values
+    // Get mode and date filter values
+    const mode = document.getElementById('psFollowupMode').value;
     const fromDate = document.getElementById('psFollowupFromDate').value;
     const toDate = document.getElementById('psFollowupToDate').value;
     
     // Build query parameters
     const params = new URLSearchParams();
+    params.append('mode', mode);
     if (fromDate) params.append('from_date', fromDate);
     if (toDate) params.append('to_date', toDate);
     
@@ -3188,7 +3373,21 @@ function toggleInlineLeadDetails(psName, level, source, anchorRow) {
     const tbody = detailsCell.querySelector('#inlineLeadsBody');
     tbody.innerHTML = `<tr><td colspan="9" class="text-center"><i class=\"fas fa-spinner fa-spin\"></i> Loading...</td></tr>`;
 
-    fetch(`/api/ps_followup_leads?ps_name=${encodeURIComponent(psName)}&level=${level}&source=${source}`)
+    // Get current mode and date filter values to pass to the API
+    const mode = document.getElementById('psFollowupMode').value;
+    const fromDate = document.getElementById('psFollowupFromDate').value;
+    const toDate = document.getElementById('psFollowupToDate').value;
+    
+    // Build query parameters including mode and date filters
+    const params = new URLSearchParams();
+    params.append('ps_name', psName);
+    params.append('level', level);
+    params.append('source', source);
+    params.append('mode', mode);
+    if (fromDate) params.append('from_date', fromDate);
+    if (toDate) params.append('to_date', toDate);
+    
+    fetch(`/api/ps_followup_leads?${params.toString()}`)
         .then(r => r.json())
         .then(data => {
             if (!(data.success && data.leads && data.leads.length)) {
@@ -3711,9 +3910,6 @@ function toggleCallHistoryInline(btn) {
             }
             
             // PS Follow-up Summary Filter Event Listeners
-            // Set default dates for PS follow-up (01-07-2025 to 21-08-2025)
-            document.getElementById('psFollowupFromDate').value = '2025-07-01';
-            document.getElementById('psFollowupToDate').value = '2025-08-21';
             
             // Apply PS follow-up filter button
             const applyPsFollowupFilter = document.getElementById('psFollowupApplyFilter');
@@ -3723,14 +3919,19 @@ function toggleCallHistoryInline(btn) {
                 });
             }
             
+            // Initialize mode info display
+            updateModeInfo();
+            
             // Reset PS follow-up filter button
             const resetPsFollowupFilter = document.getElementById('psFollowupResetFilter');
             if (resetPsFollowupFilter) {
                 resetPsFollowupFilter.addEventListener('click', function() {
-                    // Reset to default dates (01-07-2025 to 21-08-2025)
-                    document.getElementById('psFollowupFromDate').value = '2025-07-01';
-                    document.getElementById('psFollowupToDate').value = '2025-08-21';
+                    // Reset mode to default
+                    document.getElementById('psFollowupMode').value = 'all_pending';
+                    // Reset to default month-to-date dates
+                    setDefaultMonthToDateDates();
                     
+                    updateModeInfo();
                     loadPSFollowupSummaryData();
                 });
             }
@@ -3743,11 +3944,11 @@ function toggleCallHistoryInline(btn) {
         document.getElementById('exportWalkinLeads').addEventListener('click', () => exportLeadsData('Walkin'));
         document.getElementById('exportEventLeads').addEventListener('click', () => exportLeadsData('Event'));
         
-        // Set default dates (last 30 days)
+        // Set default dates (month-to-date)
         const today = new Date();
-        const thirtyDaysAgo = new Date(today.getTime() - (30 * 24 * 60 * 60 * 1000));
+        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
         
-        document.getElementById('exportDateFrom').value = thirtyDaysAgo.toISOString().split('T')[0];
+        document.getElementById('exportDateFrom').value = firstDayOfMonth.toISOString().split('T')[0];
         document.getElementById('exportDateTo').value = today.toISOString().split('T')[0];
     });
 
@@ -3759,6 +3960,12 @@ function toggleCallHistoryInline(btn) {
         // Load dynamic sources
         console.log('[DEBUG] Loading dynamic sources...');
         loadDynamicSources();
+        
+        // Set default month-to-date dates for all sections with a delay to ensure DOM is ready
+        console.log('[DEBUG] Setting default month-to-date dates...');
+        setTimeout(() => {
+            setDefaultMonthToDateDates();
+        }, 200); // Small delay to ensure DOM is fully ready
         
         // Load analytics data by default with timeout
         setTimeout(() => {
@@ -3927,6 +4134,45 @@ function toggleCallHistoryInline(btn) {
             }
         }
         
+        // Date filter change handler for All Leads
+        const dateFilterSelect = document.getElementById('freshLeadsDateFilter');
+        if (dateFilterSelect) {
+            dateFilterSelect.addEventListener('change', function() {
+                const dateRangeRow = document.getElementById('dateRangeRow');
+                if (this.value === 'date_range') {
+                    dateRangeRow.style.display = 'flex';
+                } else {
+                    dateRangeRow.style.display = 'none';
+                }
+            });
+        }
+        
+        // Date filter change handler for Fresh Leads Section
+        const freshLeadsSectionDateFilter = document.getElementById('freshLeadsSectionDateFilter');
+        if (freshLeadsSectionDateFilter) {
+            freshLeadsSectionDateFilter.addEventListener('change', function() {
+                const dateRangeRow = document.getElementById('freshLeadsSectionDateRangeRow');
+                if (this.value === 'date_range') {
+                    dateRangeRow.style.display = 'flex';
+                } else {
+                    dateRangeRow.style.display = 'none';
+                }
+            });
+        }
+        
+        // Date filter change handler for Followup Leads
+        const followupLeadsDateFilter = document.getElementById('followupLeadsDateFilter');
+        if (followupLeadsDateFilter) {
+            followupLeadsDateFilter.addEventListener('change', function() {
+                const followupDateRangeRow = document.getElementById('followupDateRangeRow');
+                if (this.value === 'date_range') {
+                    followupDateRangeRow.style.display = 'flex';
+                } else {
+                    followupDateRangeRow.style.display = 'none';
+                }
+            });
+        }
+        
         // Apply filter button for All Leads
         const applyButton = document.getElementById('freshLeadsApplyFiltersBtn');
         if (applyButton) {
@@ -3953,8 +4199,9 @@ function toggleCallHistoryInline(btn) {
                 if (sourceSelect) sourceSelect.value = '';
                 if (statusSelect) statusSelect.value = '';
                 if (dateFilterSelect) dateFilterSelect.value = '';
-                if (dateFromInput) dateFromInput.value = '';
-                if (dateToInput) dateToInput.value = '';
+                
+                // Reset to default month-to-date dates
+                setDefaultMonthToDateDates();
                 
                 // Hide date range containers
                 const dateRangeRow = document.getElementById('dateRangeRow');
@@ -3987,8 +4234,9 @@ function toggleCallHistoryInline(btn) {
                 
                 if (psSelect) psSelect.value = '';
                 if (dateFilterSelect) dateFilterSelect.value = '';
-                if (dateFromInput) dateFromInput.value = '';
-                if (dateToInput) dateToInput.value = '';
+                
+                // Reset to default month-to-date dates
+                setDefaultMonthToDateDates();
                 
                 // Hide date range containers
                 const dateRangeRow = document.getElementById('freshLeadsSectionDateRangeRow');
@@ -4039,9 +4287,10 @@ function toggleCallHistoryInline(btn) {
                 
                 if (psSelect) psSelect.value = '';
                 if (dateFilterSelect) dateFilterSelect.value = '';
-                if (dateFromInput) dateFromInput.value = '';
-                if (dateToInput) dateToInput.value = '';
                 if (searchInput) searchInput.value = '';
+                
+                // Reset to default month-to-date dates
+                setDefaultMonthToDateDates();
                 
                 // Hide date range containers
                 const followupDateRangeRow = document.getElementById('followupDateRangeRow');
@@ -4053,21 +4302,16 @@ function toggleCallHistoryInline(btn) {
         }
     });
 
-    // Tab change event
+    // Tab change event - No automatic data loading
     document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
         tab.addEventListener('shown.bs.tab', function(e) {
             const targetId = e.target.getAttribute('href').substring(1);
-            if (targetId === 'fresh') {
-                loadSection('fresh_leads');
-            } else if (targetId === 'fresh-leads') {
-                loadSection('fresh_leads_section');
-            } else if (targetId === 'followup') {
-                loadSection('followup_leads');
-            } else if (targetId === 'analytics') {
+            if (targetId === 'analytics') {
                 loadAnalyticsDataWithFilter();
             } else if (targetId === 'call-history-analytics') {
                 loadCallHistoryAnalytics();
             }
+            // Note: All Leads, Fresh Leads, and Followup Leads sections require manual filter application
         });
 });
 

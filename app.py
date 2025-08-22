@@ -5711,6 +5711,10 @@ def api_branch_head_dashboard_data():
         walkin_rows = []
         event_rows = []
         
+        # Initialize counts for response
+        fresh_leads_count = 0
+        followup_leads_count = 0
+        
         # Apply different logic based on section
         if section == 'fresh_leads_section':
             # Fresh Leads Section Logic - Only show leads with NULL follow-up dates and Pending status
@@ -5835,6 +5839,9 @@ def api_branch_head_dashboard_data():
         ps_formatted = format_ps_rows(ps_rows)
         walkin_formatted = format_walkin_rows(walkin_rows)
         event_formatted = format_event_rows(event_rows)
+        
+        # Calculate fresh leads count for this section
+        fresh_leads_count = len(ps_formatted) + len(walkin_formatted) + len(event_formatted)
         
         # Combine all rows
         all_formatted_rows = ps_formatted + walkin_formatted + event_formatted
@@ -11273,6 +11280,10 @@ def api_ps_followup_summary():
         # Get date filter parameters from request
         from_date = request.args.get('from_date')
         to_date = request.args.get('to_date')
+        mode = request.args.get('mode', 'all_pending')
+        
+        # Debug logging
+        print(f"DEBUG: PS Follow-up Summary API called with - from_date: {from_date}, to_date: {to_date}, mode: {mode}")
         
         # Get all PS users for this branch
         ps_users_result = supabase.table('ps_users').select('name').eq('branch', branch).eq('is_active', True).execute()
@@ -11296,16 +11307,23 @@ def api_ps_followup_summary():
         # Query ps_followup_master table - only final_status = 'Pending' with date filtering on ps_assigned_at
         try:
             query = supabase.table('ps_followup_master').select(
-                'lead_uid, ps_name, final_status, ps_assigned_at, '
+                'lead_uid, ps_name, final_status, ps_assigned_at, follow_up_date, '
                 'first_call_date, second_call_date, third_call_date, fourth_call_date, '
                 'fifth_call_date, sixth_call_date, seventh_call_date'
             ).eq('ps_branch', branch).eq('final_status', 'Pending')
             
-            # Apply date filtering if dates are provided
-            if from_date:
-                query = query.gte('ps_assigned_at', f'{from_date} 00:00:00')
-            if to_date:
-                query = query.lte('ps_assigned_at', f'{to_date} 23:59:59')
+            # Apply mode-specific filtering
+            if mode == 'today_missed':
+                # For today's and missed followup: follow_up_date <= today
+                from datetime import datetime
+                today = datetime.now().strftime('%Y-%m-%d')
+                query = query.lte('follow_up_date', f'{today} 23:59:59')
+            else:
+                # For all pending leads: apply date filtering if dates are provided
+                if from_date:
+                    query = query.gte('ps_assigned_at', f'{from_date} 00:00:00')
+                if to_date:
+                    query = query.lte('ps_assigned_at', f'{to_date} 23:59:59')
             
             ps_followup_result = query.execute()
             
@@ -11402,16 +11420,23 @@ def api_ps_followup_summary():
         # Query walkin_table - only status = 'Pending' with date filtering on created_at
         try:
             query = supabase.table('walkin_table').select(
-                'uid, ps_assigned, status, created_at, '
+                'uid, ps_assigned, status, created_at, next_followup_date, '
                 'first_call_date, second_call_date, third_call_date, fourth_call_date, '
                 'fifth_call_date, sixth_call_date, seventh_call_date'
             ).eq('branch', branch).eq('status', 'Pending')
             
-            # Apply date filtering if dates are provided
-            if from_date:
-                query = query.gte('created_at', f'{from_date} 00:00:00')
-            if to_date:
-                query = query.lte('created_at', f'{to_date} 23:59:59')
+            # Apply mode-specific filtering
+            if mode == 'today_missed':
+                # For today's and missed followup: next_followup_date <= today
+                from datetime import datetime
+                today = datetime.now().strftime('%Y-%m-%d')
+                query = query.lte('next_followup_date', f'{today} 23:59:59')
+            else:
+                # For all pending leads: apply date filtering if dates are provided
+                if from_date:
+                    query = query.gte('created_at', f'{from_date} 00:00:00')
+                if to_date:
+                    query = query.lte('created_at', f'{to_date} 23:59:59')
             
             walkin_result = query.execute()
             
@@ -11536,187 +11561,362 @@ def api_ps_followup_leads():
         ps_name = request.args.get('ps_name')
         level = request.args.get('level')  # F1, F2, F3, etc.
         source = request.args.get('source')  # 'cre' or 'walkin'
+        mode = request.args.get('mode', 'all_pending')  # Default to 'all_pending'
         branch = session.get('branch_head_branch')
         
         if not all([ps_name, level, source, branch]):
             return jsonify({'success': False, 'message': 'Missing required parameters'})
         
-        # Get current date
-        today = datetime.now().strftime('%Y-%m-%d')
+        # Get date filter parameters from request to match the summary filtering
+        from_date = request.args.get('from_date')
+        to_date = request.args.get('to_date')
+        
         leads = []
         
         if source == 'cre':
-            # Fetch from ps_followup_master
+            # Fetch from ps_followup_master using the EXACT same logic as summary
             try:
-                ps_followup_result = supabase.table('ps_followup_master').select(
+                query = supabase.table('ps_followup_master').select(
                     'lead_uid, ps_name, follow_up_date, final_status, source, lead_status, customer_name, customer_mobile_number, ps_assigned_at, '
-                    'first_call_remark, first_call_date, '
-                    'second_call_remark, second_call_date, '
-                    'third_call_remark, third_call_date, '
-                    'fourth_call_remark, fourth_call_date, '
-                    'fifth_call_remark, fifth_call_date, '
-                    'sixth_call_remark, sixth_call_date, '
-                    'seventh_call_remark, seventh_call_date'
-                ).eq('ps_branch', branch).eq('ps_name', ps_name).lte('follow_up_date', today).eq('final_status', 'Pending').execute()
+                    'first_call_date, second_call_date, third_call_date, fourth_call_date, '
+                    'fifth_call_date, sixth_call_date, seventh_call_date'
+                ).eq('ps_branch', branch).eq('ps_name', ps_name).eq('final_status', 'Pending')
+                
+                # Apply mode-specific filtering (same as summary)
+                if mode == 'today_missed':
+                    # For today's and missed followup: follow_up_date <= today
+                    today = datetime.now().strftime('%Y-%m-%d')
+                    query = query.lte('follow_up_date', f'{today} 23:59:59')
+                else:
+                    # For all pending leads: apply date filtering if dates are provided
+                    if from_date:
+                        query = query.gte('ps_assigned_at', f'{from_date} 00:00:00')
+                    if to_date:
+                        query = query.lte('ps_assigned_at', f'{to_date} 23:59:59')
+                
+                ps_followup_result = query.execute()
                 
                 if ps_followup_result.data:
                     for lead in ps_followup_result.data:
-                        # Determine follow-up level exactly per spec using the same logic as summary
-                        last_remark = None
+                        # Use the EXACT same logic as summary counting
                         level_num = int(level.replace('F', ''))
                         
-                        # Helper function to check if remark is valid (not null, not empty, not 'na'/'n/a')
-                        def is_valid_remark(remark):
-                            if not remark:
-                                return False
-                            remark_clean = str(remark).strip()
-                            if remark_clean == '':
-                                return False
-                            if remark_clean.lower() in ['na', 'n/a']:
-                                return False
-                            return True
+                        # Helper function to check if a call date is empty/null (same as summary)
+                        def is_call_date_empty(call_date):
+                            return not call_date or call_date == '' or call_date is None
                         
-                        def matches(lvl: int) -> bool:
-                            if lvl == 1:
-                                return (not lead.get('first_call_date') and 
-                                       is_valid_remark(lead.get('lead_status')) and 
-                                       is_valid_remark(lead.get('first_call_remark')))
-                            if lvl == 2:
-                                return (lead.get('first_call_date') and 
-                                       is_valid_remark(lead.get('first_call_remark')) and
-                                       not lead.get('second_call_date') and
-                                       not is_valid_remark(lead.get('second_call_remark')))
-                            if lvl == 3:
-                                return (lead.get('second_call_date') and 
-                                       is_valid_remark(lead.get('second_call_remark')) and
-                                       not lead.get('third_call_date') and
-                                       not is_valid_remark(lead.get('third_call_remark')))
-                            if lvl == 4:
-                                return (lead.get('third_call_date') and 
-                                       is_valid_remark(lead.get('third_call_remark')) and
-                                       not lead.get('fourth_call_date') and
-                                       not is_valid_remark(lead.get('fourth_call_remark')))
-                            if lvl == 5:
-                                return (lead.get('fourth_call_date') and 
-                                       is_valid_remark(lead.get('fourth_call_remark')) and
-                                       not lead.get('fifth_call_date') and
-                                       not is_valid_remark(lead.get('fifth_call_remark')))
-                            if lvl == 6:
-                                return (lead.get('fifth_call_date') and 
-                                       is_valid_remark(lead.get('fifth_call_remark')) and
-                                       not lead.get('sixth_call_date') and
-                                       not is_valid_remark(lead.get('sixth_call_remark')))
-                            if lvl == 7:
-                                return (lead.get('sixth_call_date') and 
-                                       is_valid_remark(lead.get('sixth_call_remark')) and
-                                       not lead.get('seventh_call_date') and
-                                       not is_valid_remark(lead.get('seventh_call_remark')))
-                            return False
-
-                        if matches(level_num):
-                            # pick the latest known remark
-                            for key in [
-                                'seventh_call_remark','sixth_call_remark','fifth_call_remark',
-                                'fourth_call_remark','third_call_remark','second_call_remark','first_call_remark'
-                            ]:
-                                if lead.get(key):
-                                    last_remark = lead.get(key)
-                                    break
-                            leads.append({
-                                'uid': lead.get('lead_uid'),
-                                'customer_name': lead.get('customer_name'),
-                                'mobile_number': lead.get('customer_mobile_number'),
-                                'status': lead.get('final_status'),
-                                'source': lead.get('source'),
-                                'ps_assigned_at': lead.get('ps_assigned_at'),
-                                'follow_up_date': lead.get('follow_up_date'),
-                                'last_remark': last_remark or ''
+                        # F1: first_call_date is empty, all other call dates are also empty
+                        if level_num == 1:
+                            if (is_call_date_empty(lead.get('first_call_date')) and
+                                is_call_date_empty(lead.get('second_call_date')) and
+                                is_call_date_empty(lead.get('third_call_date')) and
+                                is_call_date_empty(lead.get('fourth_call_date')) and
+                                is_call_date_empty(lead.get('fifth_call_date')) and
+                                is_call_date_empty(lead.get('sixth_call_date')) and
+                                is_call_date_empty(lead.get('seventh_call_date'))):
+                                leads.append({
+                                    'uid': lead.get('lead_uid'),
+                                    'customer_name': lead.get('customer_name'),
+                                    'mobile_number': lead.get('customer_mobile_number'),
+                                    'status': lead.get('final_status'),
+                                    'source': lead.get('source'),
+                                    'ps_assigned_at': lead.get('ps_assigned_at'),
+                                    'follow_up_date': lead.get('follow_up_date'),
+                                    'last_remark': ''
+                                })
+                        
+                        # F2: second_call_date is empty, first_call_date is filled, all subsequent dates are empty
+                        elif level_num == 2:
+                            if (not is_call_date_empty(lead.get('first_call_date')) and
+                                is_call_date_empty(lead.get('second_call_date')) and
+                                is_call_date_empty(lead.get('third_call_date')) and
+                                is_call_date_empty(lead.get('fourth_call_date')) and
+                                is_call_date_empty(lead.get('fifth_call_date')) and
+                                is_call_date_empty(lead.get('sixth_call_date')) and
+                                is_call_date_empty(lead.get('seventh_call_date'))):
+                                leads.append({
+                                    'uid': lead.get('lead_uid'),
+                                    'customer_name': lead.get('customer_name'),
+                                    'mobile_number': lead.get('customer_mobile_number'),
+                                    'status': lead.get('final_status'),
+                                    'source': lead.get('source'),
+                                    'ps_assigned_at': lead.get('ps_assigned_at'),
+                                    'follow_up_date': lead.get('follow_up_date'),
+                                    'last_remark': ''
+                                })
+                        
+                        # F3: third_call_date is empty, first and second are filled, all subsequent dates are empty
+                        elif level_num == 3:
+                            if (not is_call_date_empty(lead.get('first_call_date')) and
+                                not is_call_date_empty(lead.get('second_call_date')) and
+                                is_call_date_empty(lead.get('third_call_date')) and
+                                is_call_date_empty(lead.get('fourth_call_date')) and
+                                is_call_date_empty(lead.get('fifth_call_date')) and
+                                is_call_date_empty(lead.get('sixth_call_date')) and
+                                is_call_date_empty(lead.get('seventh_call_date'))):
+                                leads.append({
+                                    'uid': lead.get('lead_uid'),
+                                    'customer_name': lead.get('customer_name'),
+                                    'mobile_number': lead.get('customer_mobile_number'),
+                                    'status': lead.get('final_status'),
+                                    'source': lead.get('source'),
+                                    'ps_assigned_at': lead.get('ps_assigned_at'),
+                                    'follow_up_date': lead.get('follow_up_date'),
+                                    'last_remark': ''
+                                })
+                        
+                        # F4: fourth_call_date is empty, first three are filled, all subsequent dates are empty
+                        elif level_num == 4:
+                            if (not is_call_date_empty(lead.get('first_call_date')) and
+                                not is_call_date_empty(lead.get('second_call_date')) and
+                                not is_call_date_empty(lead.get('third_call_date')) and
+                                is_call_date_empty(lead.get('fourth_call_date')) and
+                                is_call_date_empty(lead.get('fifth_call_date')) and
+                                is_call_date_empty(lead.get('sixth_call_date')) and
+                                is_call_date_empty(lead.get('seventh_call_date'))):
+                                leads.append({
+                                    'uid': lead.get('lead_uid'),
+                                    'customer_name': lead.get('customer_name'),
+                                    'mobile_number': lead.get('customer_mobile_number'),
+                                    'status': lead.get('final_status'),
+                                    'source': lead.get('source'),
+                                    'ps_assigned_at': lead.get('ps_assigned_at'),
+                                    'follow_up_date': lead.get('follow_up_date'),
+                                    'last_remark': ''
+                                })
+                        
+                        # F5: fifth_call_date is empty, first four are filled, all subsequent dates are empty
+                        elif level_num == 5:
+                            if (not is_call_date_empty(lead.get('first_call_date')) and
+                                not is_call_date_empty(lead.get('second_call_date')) and
+                                not is_call_date_empty(lead.get('third_call_date')) and
+                                not is_call_date_empty(lead.get('fourth_call_date')) and
+                                is_call_date_empty(lead.get('fifth_call_date')) and
+                                is_call_date_empty(lead.get('sixth_call_date')) and
+                                is_call_date_empty(lead.get('seventh_call_date'))):
+                                leads.append({
+                                    'uid': lead.get('lead_uid'),
+                                    'customer_name': lead.get('customer_name'),
+                                    'mobile_number': lead.get('customer_mobile_number'),
+                                    'status': lead.get('final_status'),
+                                    'source': lead.get('source'),
+                                    'ps_assigned_at': lead.get('ps_assigned_at'),
+                                    'follow_up_date': lead.get('follow_up_date'),
+                                    'last_remark': ''
+                                })
+                        
+                        # F6: sixth_call_date is empty, first five are filled, seventh date is empty
+                        elif level_num == 6:
+                            if (not is_call_date_empty(lead.get('first_call_date')) and
+                                not is_call_date_empty(lead.get('second_call_date')) and
+                                not is_call_date_empty(lead.get('third_call_date')) and
+                                not is_call_date_empty(lead.get('fourth_call_date')) and
+                                not is_call_date_empty(lead.get('fifth_call_date')) and
+                                is_call_date_empty(lead.get('sixth_call_date')) and
+                                is_call_date_empty(lead.get('seventh_call_date'))):
+                                leads.append({
+                                    'uid': lead.get('lead_uid'),
+                                    'customer_name': lead.get('customer_name'),
+                                    'mobile_number': lead.get('customer_mobile_number'),
+                                    'status': lead.get('final_status'),
+                                    'source': lead.get('source'),
+                                    'ps_assigned_at': lead.get('ps_assigned_at'),
+                                    'follow_up_date': lead.get('follow_up_date'),
+                                    'last_remark': ''
+                                })
+                        
+                        # F7: seventh_call_date is empty, first six are filled
+                        elif level_num == 7:
+                            if (not is_call_date_empty(lead.get('first_call_date')) and
+                                not is_call_date_empty(lead.get('second_call_date')) and
+                                not is_call_date_empty(lead.get('third_call_date')) and
+                                not is_call_date_empty(lead.get('fourth_call_date')) and
+                                not is_call_date_empty(lead.get('fifth_call_date')) and
+                                not is_call_date_empty(lead.get('sixth_call_date')) and
+                                is_call_date_empty(lead.get('seventh_call_date'))):
+                                leads.append({
+                                    'uid': lead.get('lead_uid'),
+                                    'customer_name': lead.get('customer_name'),
+                                    'mobile_number': lead.get('customer_mobile_number'),
+                                    'status': lead.get('final_status'),
+                                    'source': lead.get('source'),
+                                    'ps_assigned_at': lead.get('ps_assigned_at'),
+                                    'follow_up_date': lead.get('follow_up_date'),
+                                    'last_remark': ''
                             })
             except Exception as e:
                 print(f"Warning: Error fetching ps_followup_master data: {str(e)}")
         
         elif source == 'walkin':
-            # Fetch from walkin_table
+            # Fetch from walkin_table using the EXACT same logic as summary
             try:
-                walkin_result = supabase.table('walkin_table').select(
+                query = supabase.table('walkin_table').select(
                     'uid, ps_assigned, status, branch, next_followup_date, customer_name, mobile_number, created_at, '
-                    'first_call_remark, first_call_date, '
-                    'second_call_remark, second_call_date, '
-                    'third_call_remark, third_call_date, '
-                    'fourth_call_remark, fourth_call_date, '
-                    'fifth_call_remark, fifth_call_date, '
-                    'sixth_call_remark, sixth_call_date, '
-                    'seventh_call_remark, seventh_call_date'
-                ).eq('branch', branch).eq('ps_assigned', ps_name).eq('status', 'Pending').execute()
+                    'first_call_date, second_call_date, third_call_date, fourth_call_date, '
+                    'fifth_call_date, sixth_call_date, seventh_call_date'
+                ).eq('branch', branch).eq('ps_assigned', ps_name).eq('status', 'Pending')
+                
+                # Apply mode-specific filtering (same as summary)
+                if mode == 'today_missed':
+                    # For today's and missed followup: next_followup_date <= today
+                    today = datetime.now().strftime('%Y-%m-%d')
+                    query = query.lte('next_followup_date', f'{today} 23:59:59')
+                else:
+                    # For all pending leads: apply date filtering if dates are provided
+                    if from_date:
+                        query = query.gte('created_at', f'{from_date} 00:00:00')
+                    if to_date:
+                        query = query.lte('created_at', f'{to_date} 23:59:59')
+                
+                walkin_result = query.execute()
                 
                 if walkin_result.data:
                     for lead in walkin_result.data:
+                        # Use the EXACT same logic as summary counting
                         level_num = int(level.replace('F', ''))
                         
-                        # Helper function to check if remark is valid (not null, not empty, not 'na'/'n/a')
-                        def is_valid_remark(remark):
-                            if not remark:
-                                return False
-                            remark_clean = str(remark).strip()
-                            if remark_clean == '':
-                                return False
-                            if remark_clean.lower() in ['na', 'n/a']:
-                                return False
-                            return True
+                        # Helper function to check if a call date is empty/null (same as summary)
+                        def is_call_date_empty(call_date):
+                            return not call_date or call_date == '' or call_date is None
                         
-                        def matches(lvl: int) -> bool:
-                            if lvl == 1:
-                                return (not lead.get('next_followup_date') and lead.get('status') == 'Pending')
-                            if lvl == 2:
-                                return (lead.get('first_call_date') and 
-                                       is_valid_remark(lead.get('first_call_remark')) and
-                                       not lead.get('second_call_date') and
-                                       not is_valid_remark(lead.get('second_call_remark')))
-                            if lvl == 3:
-                                return (lead.get('second_call_date') and 
-                                       is_valid_remark(lead.get('second_call_remark')) and
-                                       not lead.get('third_call_date') and
-                                       not is_valid_remark(lead.get('third_call_remark')))
-                            if lvl == 4:
-                                return (lead.get('third_call_date') and 
-                                       is_valid_remark(lead.get('third_call_remark')) and
-                                       not lead.get('fourth_call_date') and
-                                       not is_valid_remark(lead.get('fourth_call_remark')))
-                            if lvl == 5:
-                                return (lead.get('fourth_call_date') and 
-                                       is_valid_remark(lead.get('fourth_call_remark')) and
-                                       not lead.get('fifth_call_date') and
-                                       not is_valid_remark(lead.get('fifth_call_remark')))
-                            if lvl == 6:
-                                return (lead.get('fifth_call_date') and 
-                                       is_valid_remark(lead.get('fifth_call_remark')) and
-                                       not lead.get('sixth_call_date') and
-                                       not is_valid_remark(lead.get('sixth_call_remark')))
-                            if lvl == 7:
-                                return (lead.get('sixth_call_date') and 
-                                       is_valid_remark(lead.get('sixth_call_remark')) and
-                                       not lead.get('seventh_call_date') and
-                                       not is_valid_remark(lead.get('seventh_call_remark')))
-                            return False
-
-                        if matches(level_num):
-                            last_remark = None
-                            for key in [
-                                'seventh_call_remark','sixth_call_remark','fifth_call_remark',
-                                'fourth_call_remark','third_call_remark','second_call_remark','first_call_remark'
-                            ]:
-                                if lead.get(key):
-                                    last_remark = lead.get(key)
-                                    break
-                            leads.append({
-                                'uid': lead.get('uid'),
-                                'customer_name': lead.get('customer_name'),
-                                'mobile_number': lead.get('mobile_number'),
-                                'status': lead.get('status'),
-                                'source': 'Walk In',
-                                'created_at': lead.get('created_at'),
-                                'follow_up_date': lead.get('next_followup_date'),
-                                'last_remark': last_remark or ''
+                        # F1: first_call_date is empty, all other call dates are also empty
+                        if level_num == 1:
+                            if (is_call_date_empty(lead.get('first_call_date')) and
+                                is_call_date_empty(lead.get('second_call_date')) and
+                                is_call_date_empty(lead.get('third_call_date')) and
+                                is_call_date_empty(lead.get('fourth_call_date')) and
+                                is_call_date_empty(lead.get('fifth_call_date')) and
+                                is_call_date_empty(lead.get('sixth_call_date')) and
+                                is_call_date_empty(lead.get('seventh_call_date'))):
+                                leads.append({
+                                    'uid': lead.get('uid'),
+                                    'customer_name': lead.get('customer_name'),
+                                    'mobile_number': lead.get('mobile_number'),
+                                    'status': lead.get('status'),
+                                    'source': 'Walk In',
+                                    'created_at': lead.get('created_at'),
+                                    'follow_up_date': lead.get('next_followup_date'),
+                                    'last_remark': ''
+                                })
+                        
+                        # F2: second_call_date is empty, first_call_date is filled, all subsequent dates are empty
+                        elif level_num == 2:
+                            if (not is_call_date_empty(lead.get('first_call_date')) and
+                                is_call_date_empty(lead.get('second_call_date')) and
+                                is_call_date_empty(lead.get('third_call_date')) and
+                                is_call_date_empty(lead.get('fourth_call_date')) and
+                                is_call_date_empty(lead.get('fifth_call_date')) and
+                                is_call_date_empty(lead.get('sixth_call_date')) and
+                                is_call_date_empty(lead.get('seventh_call_date'))):
+                                leads.append({
+                                    'uid': lead.get('uid'),
+                                    'customer_name': lead.get('customer_name'),
+                                    'mobile_number': lead.get('mobile_number'),
+                                    'status': lead.get('status'),
+                                    'source': 'Walk In',
+                                    'created_at': lead.get('created_at'),
+                                    'follow_up_date': lead.get('next_followup_date'),
+                                    'last_remark': ''
+                                })
+                        
+                        # F3: third_call_date is empty, first and second are filled, all subsequent dates are empty
+                        elif level_num == 3:
+                            if (not is_call_date_empty(lead.get('first_call_date')) and
+                                not is_call_date_empty(lead.get('second_call_date')) and
+                                is_call_date_empty(lead.get('third_call_date')) and
+                                is_call_date_empty(lead.get('fourth_call_date')) and
+                                is_call_date_empty(lead.get('fifth_call_date')) and
+                                is_call_date_empty(lead.get('sixth_call_date')) and
+                                is_call_date_empty(lead.get('seventh_call_date'))):
+                                leads.append({
+                                    'uid': lead.get('uid'),
+                                    'customer_name': lead.get('customer_name'),
+                                    'mobile_number': lead.get('mobile_number'),
+                                    'status': lead.get('status'),
+                                    'source': 'Walk In',
+                                    'created_at': lead.get('created_at'),
+                                    'follow_up_date': lead.get('next_followup_date'),
+                                    'last_remark': ''
+                                })
+                        
+                        # F4: fourth_call_date is empty, first three are filled, all subsequent dates are empty
+                        elif level_num == 4:
+                            if (not is_call_date_empty(lead.get('first_call_date')) and
+                                not is_call_date_empty(lead.get('second_call_date')) and
+                                not is_call_date_empty(lead.get('third_call_date')) and
+                                is_call_date_empty(lead.get('fourth_call_date')) and
+                                is_call_date_empty(lead.get('fifth_call_date')) and
+                                is_call_date_empty(lead.get('sixth_call_date')) and
+                                is_call_date_empty(lead.get('seventh_call_date'))):
+                                leads.append({
+                                    'uid': lead.get('uid'),
+                                    'customer_name': lead.get('customer_name'),
+                                    'mobile_number': lead.get('mobile_number'),
+                                    'status': lead.get('status'),
+                                    'source': 'Walk In',
+                                    'created_at': lead.get('created_at'),
+                                    'follow_up_date': lead.get('next_followup_date'),
+                                    'last_remark': ''
+                                })
+                        
+                        # F5: fifth_call_date is empty, first four are filled, all subsequent dates are empty
+                        elif level_num == 5:
+                            if (not is_call_date_empty(lead.get('first_call_date')) and
+                                not is_call_date_empty(lead.get('second_call_date')) and
+                                not is_call_date_empty(lead.get('third_call_date')) and
+                                not is_call_date_empty(lead.get('fourth_call_date')) and
+                                is_call_date_empty(lead.get('fifth_call_date')) and
+                                is_call_date_empty(lead.get('sixth_call_date')) and
+                                is_call_date_empty(lead.get('seventh_call_date'))):
+                                leads.append({
+                                    'uid': lead.get('uid'),
+                                    'customer_name': lead.get('customer_name'),
+                                    'mobile_number': lead.get('mobile_number'),
+                                    'status': lead.get('status'),
+                                    'source': 'Walk In',
+                                    'created_at': lead.get('created_at'),
+                                    'follow_up_date': lead.get('next_followup_date'),
+                                    'last_remark': ''
+                                })
+                        
+                        # F6: sixth_call_date is empty, first five are filled, seventh date is empty
+                        elif level_num == 6:
+                            if (not is_call_date_empty(lead.get('first_call_date')) and
+                                not is_call_date_empty(lead.get('second_call_date')) and
+                                not is_call_date_empty(lead.get('third_call_date')) and
+                                not is_call_date_empty(lead.get('fourth_call_date')) and
+                                not is_call_date_empty(lead.get('fifth_call_date')) and
+                                is_call_date_empty(lead.get('sixth_call_date')) and
+                                is_call_date_empty(lead.get('seventh_call_date'))):
+                                leads.append({
+                                    'uid': lead.get('uid'),
+                                    'customer_name': lead.get('customer_name'),
+                                    'mobile_number': lead.get('mobile_number'),
+                                    'status': lead.get('status'),
+                                    'source': 'Walk In',
+                                    'created_at': lead.get('created_at'),
+                                    'follow_up_date': lead.get('next_followup_date'),
+                                    'last_remark': ''
+                                })
+                        
+                        # F7: seventh_call_date is empty, first six are filled
+                        elif level_num == 7:
+                            if (not is_call_date_empty(lead.get('first_call_date')) and
+                                not is_call_date_empty(lead.get('second_call_date')) and
+                                not is_call_date_empty(lead.get('third_call_date')) and
+                                not is_call_date_empty(lead.get('fourth_call_date')) and
+                                not is_call_date_empty(lead.get('fifth_call_date')) and
+                                not is_call_date_empty(lead.get('sixth_call_date')) and
+                                is_call_date_empty(lead.get('seventh_call_date'))):
+                                leads.append({
+                                    'uid': lead.get('uid'),
+                                    'customer_name': lead.get('customer_name'),
+                                    'mobile_number': lead.get('mobile_number'),
+                                    'status': lead.get('status'),
+                                    'source': 'Walk In',
+                                    'created_at': lead.get('created_at'),
+                                    'follow_up_date': lead.get('next_followup_date'),
+                                    'last_remark': ''
                             })
             except Exception as e:
                 print(f"Warning: Error fetching walkin_table data: {str(e)}")
