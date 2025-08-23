@@ -15769,12 +15769,21 @@ def api_transfer_cre_lead():
         
         # Update the lead in lead_master
         lead_result = supabase.table('lead_master').update({'cre_name': target_cre_name}).eq('uid', lead_uid).execute()
+        print(f"[DEBUG] CRE transfer: lead_master update result: {lead_result.data}")
         
         # Update the lead in ps_followup_master if it exists there
         ps_followup_result = supabase.table('ps_followup_master').update({'cre_name': target_cre_name}).eq('lead_uid', lead_uid).execute()
+        print(f"[DEBUG] CRE transfer: ps_followup_master update result: {ps_followup_result.data}")
         
         if lead_result.data or ps_followup_result.data:
-            return jsonify({'success': True, 'message': 'Lead transferred successfully'})
+            return jsonify({
+                'success': True, 
+                'message': 'Lead transferred successfully',
+                'details': {
+                    'lead_master_updated': len(lead_result.data) if lead_result.data else 0,
+                    'ps_followup_updated': len(ps_followup_result.data) if ps_followup_result.data else 0
+                }
+            })
         else:
             return jsonify({'success': False, 'message': 'Lead not found or transfer failed'})
             
@@ -15810,24 +15819,26 @@ def api_bulk_transfer_cre_leads():
         target_cre_name = cre_result.data[0].get('name')
         
         # First, get the total available pending leads from the source CRE
-        total_pending_result = supabase.table('lead_master').select('id').eq('cre_name', from_cre_name).eq('final_status', 'Pending').execute()
+        total_pending_result = supabase.table('lead_master').select('id, uid').eq('cre_name', from_cre_name).eq('final_status', 'Pending').execute()
         total_available = len(total_pending_result.data) if total_pending_result.data else 0
         
         if total_available < count:
             return jsonify({'success': False, 'message': f'Only {total_available} leads available, requested {count}'})
         
         # Get the specific leads to transfer (limit by count)
-        leads_to_transfer = supabase.table('lead_master').select('id').eq('cre_name', from_cre_name).eq('final_status', 'Pending').limit(count).execute()
+        leads_to_transfer = total_pending_result.data[:count]
         
-        if not leads_to_transfer.data:
-            return jsonify({'success': False, 'message': 'No leads found to transfer'})
+        # Extract both id and uid for proper updates
+        lead_ids = [lead['id'] for lead in leads_to_transfer]
+        lead_uids = [lead['uid'] for lead in leads_to_transfer]
         
-        # Update only the specified leads to the target CRE
-        lead_ids = [lead['id'] for lead in leads_to_transfer.data]
+        # Update lead_master table
         lead_result = supabase.table('lead_master').update({'cre_name': target_cre_name}).in_('id', lead_ids).execute()
+        print(f"[DEBUG] CRE bulk transfer: lead_master update result: {len(lead_result.data) if lead_result.data else 0} rows updated")
         
-        # Also update ps_followup_master for the same leads (if they exist there)
-        ps_followup_result = supabase.table('ps_followup_master').update({'cre_name': target_cre_name}).in_('id', lead_ids).execute()
+        # Update ps_followup_master table using lead_uid (correct foreign key)
+        ps_followup_result = supabase.table('ps_followup_master').update({'cre_name': target_cre_name}).in_('lead_uid', lead_uids).execute()
+        print(f"[DEBUG] CRE bulk transfer: ps_followup_master update result: {len(ps_followup_result.data) if ps_followup_result.data else 0} rows updated")
         
         # Count transferred leads
         transferred_count = len(lead_result.data) if lead_result.data else 0
@@ -15835,7 +15846,11 @@ def api_bulk_transfer_cre_leads():
         if transferred_count > 0:
             return jsonify({
                 'success': True, 
-                'message': f'Pending Lead Transfer Successful - {transferred_count} leads transferred from {from_cre_name} to {to_cre_name}'
+                'message': f'Pending Lead Transfer Successful - {transferred_count} leads transferred from {from_cre_name} to {to_cre_name}',
+                'details': {
+                    'lead_master_updated': len(lead_result.data) if lead_result.data else 0,
+                    'ps_followup_updated': len(ps_followup_result.data) if ps_followup_result.data else 0
+                }
             })
         else:
             return jsonify({'success': False, 'message': 'No leads were transferred'})
@@ -15924,14 +15939,23 @@ def api_transfer_ps_lead():
             'ps_name': new_ps_name,
             'ps_branch': new_ps.get('branch', '')
         }).eq('lead_uid', lead_uid).execute()
+        print(f"[DEBUG] PS transfer: ps_followup_master update result: {result.data}")
         
         # Also update ps_name in lead_master table to maintain consistency
         if result.data:
             lead_master_update = supabase.table('lead_master').update({
                 'ps_name': new_ps_name
             }).eq('uid', lead_uid).execute()
+            print(f"[DEBUG] PS transfer: lead_master update result: {lead_master_update.data}")
             
-            return jsonify({'success': True, 'message': 'Lead transferred successfully'})
+            return jsonify({
+                'success': True, 
+                'message': 'Lead transferred successfully',
+                'details': {
+                    'ps_followup_updated': len(result.data) if result.data else 0,
+                    'lead_master_updated': len(lead_master_update.data) if lead_master_update.data else 0
+                }
+            })
         else:
             return jsonify({'success': False, 'message': 'Lead not found or transfer failed'})
             
@@ -15989,26 +16013,30 @@ def api_bulk_transfer_ps_leads():
         # Transfer PS followup leads if count specified
         if ps_followup_count > 0:
             try:
-                # Get available PS followup leads
-                available_ps_leads = supabase.table('ps_followup_master').select('id').eq('ps_name', from_ps_name).eq('final_status', 'Pending').limit(ps_followup_count).execute()
+                # Get available PS followup leads with lead_uid for lead_master update
+                available_ps_leads = supabase.table('ps_followup_master').select('id, lead_uid').eq('ps_name', from_ps_name).eq('final_status', 'Pending').limit(ps_followup_count).execute()
                 
                 if available_ps_leads.data:
                     lead_ids = [lead['id'] for lead in available_ps_leads.data]
+                    lead_uids = [lead['lead_uid'] for lead in available_ps_leads.data]
                     actual_count = len(lead_ids)
                     
-                    # Update the leads
-                    supabase.table('ps_followup_master').update({
+                    # Update the leads in ps_followup_master
+                    ps_update_result = supabase.table('ps_followup_master').update({
                         'ps_name': to_ps_name,
                         'ps_branch': target_branch
                     }).in_('id', lead_ids).execute()
+                    print(f"[DEBUG] PS bulk transfer: ps_followup_master update result: {len(ps_update_result.data) if ps_update_result.data else 0} rows updated")
                     
                     transferred_counts['ps_followup'] = actual_count
                     total_transferred += actual_count
                     
-                    # Also update lead_master for consistency
-                    supabase.table('lead_master').update({
-                        'ps_name': to_ps_name
-                    }).in_('ps_name', from_ps_name).in_('id', lead_ids).execute()
+                    # Also update lead_master for consistency using lead_uid
+                    if lead_uids:
+                        lead_update_result = supabase.table('lead_master').update({
+                            'ps_name': to_ps_name
+                        }).in_('uid', lead_uids).execute()
+                        print(f"[DEBUG] PS bulk transfer: lead_master update result: {len(lead_update_result.data) if lead_update_result.data else 0} rows updated")
                     
             except Exception as e:
                 print(f"Error transferring PS followup leads: {str(e)}")
@@ -16123,6 +16151,49 @@ def debug_analytics_data():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/test_lead_transfer_consistency')
+@require_admin
+def test_lead_transfer_consistency():
+    """Test function to verify lead transfer consistency between lead_master and ps_followup_master"""
+    try:
+        # Get a sample lead to test
+        test_lead = supabase.table('lead_master').select('uid, cre_name, ps_name').eq('final_status', 'Pending').limit(1).execute()
+        
+        if not test_lead.data:
+            return jsonify({'error': 'No pending leads found for testing'})
+        
+        lead = test_lead.data[0]
+        lead_uid = lead['uid']
+        original_cre = lead.get('cre_name')
+        original_ps = lead.get('ps_name')
+        
+        # Check if this lead exists in ps_followup_master
+        ps_followup = supabase.table('ps_followup_master').select('*').eq('lead_uid', lead_uid).execute()
+        
+        test_results = {
+            'lead_uid': lead_uid,
+            'lead_master': {
+                'cre_name': original_cre,
+                'ps_name': original_ps
+            },
+            'ps_followup_exists': len(ps_followup.data) > 0,
+            'ps_followup_data': ps_followup.data[0] if ps_followup.data else None,
+            'consistency_check': {
+                'cre_names_match': original_cre == (ps_followup.data[0].get('cre_name') if ps_followup.data else None),
+                'ps_names_match': original_ps == (ps_followup.data[0].get('ps_name') if ps_followup.data else None)
+            }
+        }
+        
+        return jsonify({
+            'success': True,
+            'test_results': test_results,
+            'message': 'Lead transfer consistency test completed'
+        })
+        
+    except Exception as e:
+        print(f"Error in test_lead_transfer_consistency: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/debug_ps_users')
 @require_admin
@@ -16343,6 +16414,38 @@ def api_debug_walkin_data():
     except Exception as e:
         print(f"Error in api_debug_walkin_data: {str(e)}")
         return jsonify({'success': False, 'message': 'Error debugging walk-in data'})
+
+
+@app.route('/toggle_cre_status/<int:cre_id>', methods=['POST'])
+@require_admin
+def toggle_cre_status(cre_id):
+    try:
+        data = request.get_json()
+        active_status = data.get('active', True)
+
+        # Update CRE status
+        result = supabase.table('cre_users').update({
+            'is_active': active_status
+        }).eq('id', cre_id).execute()
+
+        if result.data:
+            # Log status change
+            auth_manager.log_audit_event(
+                user_id=session.get('user_id'),
+                user_type=session.get('user_type'),
+                action='CRE_STATUS_CHANGED',
+                resource='cre_users',
+                resource_id=str(cre_id),
+                details={'new_status': 'active' if active_status else 'inactive'}
+            )
+
+            return jsonify({'success': True, 'message': 'CRE status updated successfully'})
+        else:
+            return jsonify({'success': False, 'message': 'CRE not found'})
+
+    except Exception as e:
+        print(f"Error toggling CRE status: {e}")
+        return jsonify({'success': False, 'message': str(e)})
 
 
 if __name__ == '__main__':
