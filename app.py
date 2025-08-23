@@ -1871,45 +1871,81 @@ def bulk_unassign_leads():
 @require_admin
 def delete_cre(cre_id):
     try:
+        print(f"[DEBUG] delete_cre function called with cre_id: {cre_id}")
+        
         # Get the CRE details first
         cre_result = supabase.table('cre_users').select('*').eq('id', cre_id).execute()
+        print(f"[DEBUG] CRE query result: {cre_result}")
+        
         if not cre_result.data:
+            print(f"[DEBUG] No CRE found with id: {cre_id}")
             flash('CRE not found', 'error')
             return redirect(url_for('manage_cre'))
         
         cre = cre_result.data[0]
         cre_name = cre.get('name')
+        print(f"[DEBUG] Found CRE: {cre_name}")
+        
+        print(f"[DEBUG] Checking pending leads for CRE: {cre_name}")
         
         # Check if CRE has any pending leads in lead_master
+        try:
         pending_leads_result = supabase.table('lead_master').select('id').eq('cre_name', cre_name).eq('final_status', 'Pending').execute()
         pending_count = len(pending_leads_result.data) if pending_leads_result.data else 0
+            print(f"[DEBUG] lead_master pending count: {pending_count}")
+        except Exception as e:
+            print(f"[DEBUG] Error checking lead_master: {str(e)}")
+            pending_count = 0
         
         # Check if CRE has any pending leads in ps_followup_master
+        try:
         ps_pending_result = supabase.table('ps_followup_master').select('id').eq('cre_name', cre_name).eq('final_status', 'Pending').execute()
         ps_pending_count = len(ps_pending_result.data) if ps_pending_result.data else 0
+            print(f"[DEBUG] ps_followup_master pending count: {ps_pending_count}")
+        except Exception as e:
+            print(f"[DEBUG] Error checking ps_followup_master: {str(e)}")
+            ps_pending_count = 0
         
         total_pending = pending_count + ps_pending_count
+        print(f"[DEBUG] Total pending count: {total_pending}")
         
         if total_pending > 0:
+            print(f"[DEBUG] Blocking deletion - {total_pending} pending leads found")
             flash(f'Cannot delete CRE {cre_name}. They have {total_pending} pending leads ({pending_count} in lead_master, {ps_pending_count} in ps_followup). Please transfer or close these leads first.', 'error')
             return redirect(url_for('manage_cre'))
         
+        print(f"[DEBUG] No pending leads found, proceeding with deletion for CRE: {cre_name}")
+        
         # If no pending leads, proceed with deletion
         # Update leads assigned to this CRE to unassigned
+        try:
         supabase.table('lead_master').update({
             'cre_name': None,
             'assigned': 'No'
         }).eq('cre_name', cre_name).execute()
+            print(f"[DEBUG] Updated lead_master")
+        except Exception as e:
+            print(f"[DEBUG] Error updating lead_master: {str(e)}")
         
         # Update ps_followup_master leads
+        try:
         supabase.table('ps_followup_master').update({
             'cre_name': None
         }).eq('cre_name', cre_name).execute()
+            print(f"[DEBUG] Updated ps_followup_master")
+        except Exception as e:
+            print(f"[DEBUG] Error updating ps_followup_master: {str(e)}")
 
         # Delete the CRE user
+        try:
         supabase.table('cre_users').delete().eq('id', cre_id).execute()
+            print(f"[DEBUG] Deleted CRE user from cre_users table")
+        except Exception as e:
+            print(f"[DEBUG] Error deleting CRE user: {str(e)}")
+            raise e
 
         # Log CRE deletion
+        try:
         auth_manager.log_audit_event(
             user_id=session.get('user_id'),
             user_type=session.get('user_type'),
@@ -1918,11 +1954,18 @@ def delete_cre(cre_id):
             resource_id=str(cre_id),
             details={'cre_name': cre_name}
         )
+            print(f"[DEBUG] Logged audit event")
+        except Exception as e:
+            print(f"[DEBUG] Error logging audit event: {str(e)}")
 
         flash(f'CRE {cre_name} has been deleted successfully', 'success')
+        print(f"[DEBUG] CRE deletion completed successfully")
         
     except Exception as e:
-        print(f"Error deleting CRE: {str(e)}")
+        print(f"[DEBUG] Error deleting CRE: {str(e)}")
+        print(f"[DEBUG] Exception type: {type(e)}")
+        import traceback
+        print(f"[DEBUG] Full traceback: {traceback.format_exc()}")
         flash('Error deleting CRE', 'error')
 
     return redirect(url_for('manage_cre'))
@@ -1932,58 +1975,107 @@ def delete_cre(cre_id):
 @require_admin
 def delete_ps(ps_id):
     try:
+        print(f"[DEBUG] delete_ps function called with ps_id: {ps_id}")
+        
         # Get the PS details first
         ps_result = supabase.table('ps_users').select('*').eq('id', ps_id).execute()
+        print(f"[DEBUG] PS query result: {ps_result}")
+        
         if not ps_result.data:
+            print(f"[DEBUG] No PS found with id: {ps_id}")
             flash('PS not found', 'error')
             return redirect(url_for('manage_ps'))
         
         ps = ps_result.data[0]
         ps_name = ps.get('name')
+        print(f"[DEBUG] Found PS: {ps_name}")
+        
+        print(f"[DEBUG] Checking pending leads for PS: {ps_name}")
         
         # Check if PS has any pending leads in ps_followup_master
+        try:
         ps_pending_result = supabase.table('ps_followup_master').select('id').eq('ps_name', ps_name).eq('final_status', 'Pending').execute()
         ps_pending_count = len(ps_pending_result.data) if ps_pending_result.data else 0
+            print(f"[DEBUG] ps_followup_master pending count: {ps_pending_count}")
+        except Exception as e:
+            print(f"[DEBUG] Error checking ps_followup_master: {str(e)}")
+            ps_pending_count = 0
         
         # Check if PS has any pending leads in walkin_table
-        walkin_pending_result = supabase.table('walkin_table').select('id').eq('ps_assigned', ps_name).eq('status', 'Pending').execute()
+        try:
+            walkin_pending_result = supabase.table('walkin_table').select('id').eq('ps_assigned', ps_name).eq('status', 'pending').execute()
         walkin_pending_count = len(walkin_pending_result.data) if walkin_pending_result.data else 0
+            print(f"[DEBUG] walkin_table pending count: {walkin_pending_count}")
+        except Exception as e:
+            print(f"[DEBUG] Error checking walkin_table: {str(e)}")
+            walkin_pending_count = 0
         
         # Check if PS has any pending leads in activity_leads
+        try:
         activity_pending_result = supabase.table('activity_leads').select('id').eq('ps_name', ps_name).eq('final_status', 'Pending').execute()
         activity_pending_count = len(activity_pending_result.data) if activity_pending_result.data else 0
+            print(f"[DEBUG] activity_leads pending count: {activity_pending_count}")
+        except Exception as e:
+            print(f"[DEBUG] Error checking activity_leads: {str(e)}")
+            activity_pending_count = 0
         
         total_pending = ps_pending_count + walkin_pending_count + activity_pending_count
+        print(f"[DEBUG] Total pending count: {total_pending}")
         
         if total_pending > 0:
+            print(f"[DEBUG] Blocking deletion - {total_pending} pending leads found")
             flash(f'Cannot delete PS {ps_name}. They have {total_pending} pending leads ({ps_pending_count} in ps_followup, {walkin_pending_count} in walkin, {activity_pending_count} in activity). Please transfer or close these leads first.', 'error')
             return redirect(url_for('manage_ps'))
         
+        print(f"[DEBUG] No pending leads found, proceeding with deletion for PS: {ps_name}")
+        
         # If no pending leads, proceed with deletion
         # Update leads assigned to this PS to unassigned
+        try:
         supabase.table('lead_master').update({
             'ps_name': None
         }).eq('ps_name', ps_name).execute()
+            print(f"[DEBUG] Updated lead_master")
+        except Exception as e:
+            print(f"[DEBUG] Error updating lead_master: {str(e)}")
         
         # Update ps_followup_master leads
+        try:
         supabase.table('ps_followup_master').update({
             'ps_name': None
         }).eq('ps_name', ps_name).execute()
+            print(f"[DEBUG] Updated ps_followup_master")
+        except Exception as e:
+            print(f"[DEBUG] Error updating ps_followup_master: {str(e)}")
         
         # Update walkin_table leads
+        try:
         supabase.table('walkin_table').update({
             'ps_assigned': None
         }).eq('ps_assigned', ps_name).execute()
+            print(f"[DEBUG] Updated walkin_table")
+        except Exception as e:
+            print(f"[DEBUG] Error updating walkin_table: {str(e)}")
         
         # Update activity_leads
+        try:
         supabase.table('activity_leads').update({
             'ps_name': None
         }).eq('ps_name', ps_name).execute()
+            print(f"[DEBUG] Updated activity_leads")
+        except Exception as e:
+            print(f"[DEBUG] Error updating activity_leads: {str(e)}")
 
         # Delete the PS user
+        try:
         supabase.table('ps_users').delete().eq('id', ps_id).execute()
+            print(f"[DEBUG] Deleted PS user from ps_users table")
+        except Exception as e:
+            print(f"[DEBUG] Error deleting PS user: {str(e)}")
+            raise e
 
         # Log PS deletion
+        try:
         auth_manager.log_audit_event(
             user_id=session.get('user_id'),
             user_type=session.get('user_type'),
@@ -1992,11 +2084,18 @@ def delete_ps(ps_id):
             resource_id=str(ps_id),
             details={'ps_name': ps_name}
         )
+            print(f"[DEBUG] Logged audit event")
+        except Exception as e:
+            print(f"[DEBUG] Error logging audit event: {str(e)}")
 
         flash(f'PS {ps_name} has been deleted successfully', 'success')
+        print(f"[DEBUG] PS deletion completed successfully")
         
     except Exception as e:
-        print(f"Error deleting PS: {str(e)}")
+        print(f"[DEBUG] Error deleting PS: {str(e)}")
+        print(f"[DEBUG] Exception type: {type(e)}")
+        import traceback
+        print(f"[DEBUG] Full traceback: {traceback.format_exc()}")
         flash('Error deleting PS', 'error')
 
     return redirect(url_for('manage_ps'))
@@ -11384,10 +11483,10 @@ def api_ps_followup_summary():
                 query = query.lte('follow_up_date', f'{today} 23:59:59')
             else:
                 # For all pending leads: apply date filtering if dates are provided
-                if from_date:
-                    query = query.gte('ps_assigned_at', f'{from_date} 00:00:00')
-                if to_date:
-                    query = query.lte('ps_assigned_at', f'{to_date} 23:59:59')
+            if from_date:
+                query = query.gte('ps_assigned_at', f'{from_date} 00:00:00')
+            if to_date:
+                query = query.lte('ps_assigned_at', f'{to_date} 23:59:59')
             
             ps_followup_result = query.execute()
             
@@ -11497,10 +11596,10 @@ def api_ps_followup_summary():
                 query = query.lte('next_followup_date', f'{today} 23:59:59')
             else:
                 # For all pending leads: apply date filtering if dates are provided
-                if from_date:
-                    query = query.gte('created_at', f'{from_date} 00:00:00')
-                if to_date:
-                    query = query.lte('created_at', f'{to_date} 23:59:59')
+            if from_date:
+                query = query.gte('created_at', f'{from_date} 00:00:00')
+            if to_date:
+                query = query.lte('created_at', f'{to_date} 23:59:59')
             
             walkin_result = query.execute()
             
@@ -11698,14 +11797,14 @@ def api_ps_followup_leads():
                                 is_call_date_empty(lead.get('fifth_call_date')) and
                                 is_call_date_empty(lead.get('sixth_call_date')) and
                                 is_call_date_empty(lead.get('seventh_call_date'))):
-                                leads.append({
-                                    'uid': lead.get('lead_uid'),
-                                    'customer_name': lead.get('customer_name'),
-                                    'mobile_number': lead.get('customer_mobile_number'),
-                                    'status': lead.get('final_status'),
-                                    'source': lead.get('source'),
-                                    'ps_assigned_at': lead.get('ps_assigned_at'),
-                                    'follow_up_date': lead.get('follow_up_date'),
+                            leads.append({
+                                'uid': lead.get('lead_uid'),
+                                'customer_name': lead.get('customer_name'),
+                                'mobile_number': lead.get('customer_mobile_number'),
+                                'status': lead.get('final_status'),
+                                'source': lead.get('source'),
+                                'ps_assigned_at': lead.get('ps_assigned_at'),
+                                'follow_up_date': lead.get('follow_up_date'),
                                     'last_remark': ''
                                 })
                         
@@ -11872,14 +11971,14 @@ def api_ps_followup_leads():
                                 is_call_date_empty(lead.get('fifth_call_date')) and
                                 is_call_date_empty(lead.get('sixth_call_date')) and
                                 is_call_date_empty(lead.get('seventh_call_date'))):
-                                leads.append({
-                                    'uid': lead.get('uid'),
-                                    'customer_name': lead.get('customer_name'),
-                                    'mobile_number': lead.get('mobile_number'),
-                                    'status': lead.get('status'),
-                                    'source': 'Walk In',
-                                    'created_at': lead.get('created_at'),
-                                    'follow_up_date': lead.get('next_followup_date'),
+                            leads.append({
+                                'uid': lead.get('uid'),
+                                'customer_name': lead.get('customer_name'),
+                                'mobile_number': lead.get('mobile_number'),
+                                'status': lead.get('status'),
+                                'source': 'Walk In',
+                                'created_at': lead.get('created_at'),
+                                'follow_up_date': lead.get('next_followup_date'),
                                     'last_remark': ''
                                 })
                         
