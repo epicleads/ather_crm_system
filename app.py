@@ -1890,8 +1890,8 @@ def delete_cre(cre_id):
         
         # Check if CRE has any pending leads in lead_master
         try:
-        pending_leads_result = supabase.table('lead_master').select('id').eq('cre_name', cre_name).eq('final_status', 'Pending').execute()
-        pending_count = len(pending_leads_result.data) if pending_leads_result.data else 0
+            pending_leads_result = supabase.table('lead_master').select('id').eq('cre_name', cre_name).eq('final_status', 'Pending').execute()
+            pending_count = len(pending_leads_result.data) if pending_leads_result.data else 0
             print(f"[DEBUG] lead_master pending count: {pending_count}")
         except Exception as e:
             print(f"[DEBUG] Error checking lead_master: {str(e)}")
@@ -1899,8 +1899,8 @@ def delete_cre(cre_id):
         
         # Check if CRE has any pending leads in ps_followup_master
         try:
-        ps_pending_result = supabase.table('ps_followup_master').select('id').eq('cre_name', cre_name).eq('final_status', 'Pending').execute()
-        ps_pending_count = len(ps_pending_result.data) if ps_pending_result.data else 0
+            ps_pending_result = supabase.table('ps_followup_master').select('id').eq('cre_name', cre_name).eq('final_status', 'Pending').execute()
+            ps_pending_count = len(ps_pending_result.data) if ps_pending_result.data else 0
             print(f"[DEBUG] ps_followup_master pending count: {ps_pending_count}")
         except Exception as e:
             print(f"[DEBUG] Error checking ps_followup_master: {str(e)}")
@@ -1919,26 +1919,26 @@ def delete_cre(cre_id):
         # If no pending leads, proceed with deletion
         # Update leads assigned to this CRE to unassigned
         try:
-        supabase.table('lead_master').update({
-            'cre_name': None,
-            'assigned': 'No'
-        }).eq('cre_name', cre_name).execute()
+            supabase.table('lead_master').update({
+                'cre_name': None,
+                'assigned': 'No'
+            }).eq('cre_name', cre_name).execute()
             print(f"[DEBUG] Updated lead_master")
         except Exception as e:
             print(f"[DEBUG] Error updating lead_master: {str(e)}")
         
         # Update ps_followup_master leads
         try:
-        supabase.table('ps_followup_master').update({
-            'cre_name': None
-        }).eq('cre_name', cre_name).execute()
+            supabase.table('ps_followup_master').update({
+                'cre_name': None
+            }).eq('cre_name', cre_name).execute()
             print(f"[DEBUG] Updated ps_followup_master")
         except Exception as e:
             print(f"[DEBUG] Error updating ps_followup_master: {str(e)}")
 
         # Delete the CRE user
         try:
-        supabase.table('cre_users').delete().eq('id', cre_id).execute()
+            supabase.table('cre_users').delete().eq('id', cre_id).execute()
             print(f"[DEBUG] Deleted CRE user from cre_users table")
         except Exception as e:
             print(f"[DEBUG] Error deleting CRE user: {str(e)}")
@@ -1946,14 +1946,14 @@ def delete_cre(cre_id):
 
         # Log CRE deletion
         try:
-        auth_manager.log_audit_event(
-            user_id=session.get('user_id'),
-            user_type=session.get('user_type'),
-            action='CRE_DELETED',
-            resource='cre_users',
-            resource_id=str(cre_id),
-            details={'cre_name': cre_name}
-        )
+            auth_manager.log_audit_event(
+                user_id=session.get('user_id'),
+                user_type=session.get('user_type'),
+                action='CRE_DELETED',
+                resource='cre_users',
+                resource_id=str(cre_id),
+                details={'cre_name': cre_name}
+            )
             print(f"[DEBUG] Logged audit event")
         except Exception as e:
             print(f"[DEBUG] Error logging audit event: {str(e)}")
@@ -1994,8 +1994,8 @@ def delete_ps(ps_id):
         
         # Check if PS has any pending leads in ps_followup_master
         try:
-        ps_pending_result = supabase.table('ps_followup_master').select('id').eq('ps_name', ps_name).eq('final_status', 'Pending').execute()
-        ps_pending_count = len(ps_pending_result.data) if ps_pending_result.data else 0
+            ps_pending_result = supabase.table('ps_followup_master').select('id').eq('ps_name', ps_name).eq('final_status', 'Pending').execute()
+            ps_pending_count = len(ps_pending_result.data) if ps_pending_result.data else 0
             print(f"[DEBUG] ps_followup_master pending count: {ps_pending_count}")
         except Exception as e:
             print(f"[DEBUG] Error checking ps_followup_master: {str(e)}")
@@ -2004,7 +2004,7 @@ def delete_ps(ps_id):
         # Check if PS has any pending leads in walkin_table
         try:
             walkin_pending_result = supabase.table('walkin_table').select('id').eq('ps_assigned', ps_name).eq('status', 'pending').execute()
-        walkin_pending_count = len(walkin_pending_result.data) if walkin_pending_result.data else 0
+            walkin_pending_count = len(walkin_pending_result.data) if walkin_pending_result.data else 0
             print(f"[DEBUG] walkin_table pending count: {walkin_pending_count}")
         except Exception as e:
             print(f"[DEBUG] Error checking walkin_table: {str(e)}")
@@ -2012,8 +2012,8 @@ def delete_ps(ps_id):
         
         # Check if PS has any pending leads in activity_leads
         try:
-        activity_pending_result = supabase.table('activity_leads').select('id').eq('ps_name', ps_name).eq('final_status', 'Pending').execute()
-        activity_pending_count = len(activity_pending_result.data) if activity_pending_result.data else 0
+            activity_pending_result = supabase.table('activity_leads').select('id').eq('ps_name', ps_name).eq('final_status', 'Pending').execute()
+            activity_pending_count = len(activity_pending_result.data) if activity_pending_result.data else 0
             print(f"[DEBUG] activity_leads pending count: {activity_pending_count}")
         except Exception as e:
             print(f"[DEBUG] Error checking activity_leads: {str(e)}")
@@ -2032,43 +2032,43 @@ def delete_ps(ps_id):
         # If no pending leads, proceed with deletion
         # Update leads assigned to this PS to unassigned
         try:
-        supabase.table('lead_master').update({
-            'ps_name': None
-        }).eq('ps_name', ps_name).execute()
+            supabase.table('lead_master').update({
+                'ps_name': None
+            }).eq('ps_name', ps_name).execute()
             print(f"[DEBUG] Updated lead_master")
         except Exception as e:
             print(f"[DEBUG] Error updating lead_master: {str(e)}")
         
         # Update ps_followup_master leads
         try:
-        supabase.table('ps_followup_master').update({
-            'ps_name': None
-        }).eq('ps_name', ps_name).execute()
+            supabase.table('ps_followup_master').update({
+                'ps_name': None
+            }).eq('ps_name', ps_name).execute()
             print(f"[DEBUG] Updated ps_followup_master")
         except Exception as e:
             print(f"[DEBUG] Error updating ps_followup_master: {str(e)}")
         
         # Update walkin_table leads
         try:
-        supabase.table('walkin_table').update({
-            'ps_assigned': None
-        }).eq('ps_assigned', ps_name).execute()
+            supabase.table('walkin_table').update({
+                'ps_assigned': None
+            }).eq('ps_assigned', ps_name).execute()
             print(f"[DEBUG] Updated walkin_table")
         except Exception as e:
             print(f"[DEBUG] Error updating walkin_table: {str(e)}")
         
         # Update activity_leads
         try:
-        supabase.table('activity_leads').update({
-            'ps_name': None
-        }).eq('ps_name', ps_name).execute()
+            supabase.table('activity_leads').update({
+                'ps_name': None
+            }).eq('ps_name', ps_name).execute()
             print(f"[DEBUG] Updated activity_leads")
         except Exception as e:
             print(f"[DEBUG] Error updating activity_leads: {str(e)}")
 
         # Delete the PS user
         try:
-        supabase.table('ps_users').delete().eq('id', ps_id).execute()
+            supabase.table('ps_users').delete().eq('id', ps_id).execute()
             print(f"[DEBUG] Deleted PS user from ps_users table")
         except Exception as e:
             print(f"[DEBUG] Error deleting PS user: {str(e)}")
@@ -2076,14 +2076,14 @@ def delete_ps(ps_id):
 
         # Log PS deletion
         try:
-        auth_manager.log_audit_event(
-            user_id=session.get('user_id'),
-            user_type=session.get('user_type'),
-            action='PS_DELETED',
-            resource='ps_users',
-            resource_id=str(ps_id),
-            details={'ps_name': ps_name}
-        )
+            auth_manager.log_audit_event(
+                user_id=session.get('user_id'),
+                user_type=session.get('user_type'),
+                action='PS_DELETED',
+                resource='ps_users',
+                resource_id=str(ps_id),
+                details={'ps_name': ps_name}
+            )
             print(f"[DEBUG] Logged audit event")
         except Exception as e:
             print(f"[DEBUG] Error logging audit event: {str(e)}")
@@ -11483,10 +11483,10 @@ def api_ps_followup_summary():
                 query = query.lte('follow_up_date', f'{today} 23:59:59')
             else:
                 # For all pending leads: apply date filtering if dates are provided
-            if from_date:
-                query = query.gte('ps_assigned_at', f'{from_date} 00:00:00')
-            if to_date:
-                query = query.lte('ps_assigned_at', f'{to_date} 23:59:59')
+                if from_date:
+                    query = query.gte('ps_assigned_at', f'{from_date} 00:00:00')
+                if to_date:
+                    query = query.lte('ps_assigned_at', f'{to_date} 23:59:59')
             
             ps_followup_result = query.execute()
             
@@ -11596,10 +11596,10 @@ def api_ps_followup_summary():
                 query = query.lte('next_followup_date', f'{today} 23:59:59')
             else:
                 # For all pending leads: apply date filtering if dates are provided
-            if from_date:
-                query = query.gte('created_at', f'{from_date} 00:00:00')
-            if to_date:
-                query = query.lte('created_at', f'{to_date} 23:59:59')
+                if from_date:
+                    query = query.gte('created_at', f'{from_date} 00:00:00')
+                if to_date:
+                    query = query.lte('created_at', f'{to_date} 23:59:59')
             
             walkin_result = query.execute()
             
@@ -11797,14 +11797,14 @@ def api_ps_followup_leads():
                                 is_call_date_empty(lead.get('fifth_call_date')) and
                                 is_call_date_empty(lead.get('sixth_call_date')) and
                                 is_call_date_empty(lead.get('seventh_call_date'))):
-                            leads.append({
-                                'uid': lead.get('lead_uid'),
-                                'customer_name': lead.get('customer_name'),
-                                'mobile_number': lead.get('customer_mobile_number'),
-                                'status': lead.get('final_status'),
-                                'source': lead.get('source'),
-                                'ps_assigned_at': lead.get('ps_assigned_at'),
-                                'follow_up_date': lead.get('follow_up_date'),
+                                leads.append({
+                                    'uid': lead.get('lead_uid'),
+                                    'customer_name': lead.get('customer_name'),
+                                    'mobile_number': lead.get('customer_mobile_number'),
+                                    'status': lead.get('final_status'),
+                                    'source': lead.get('source'),
+                                    'ps_assigned_at': lead.get('ps_assigned_at'),
+                                    'follow_up_date': lead.get('follow_up_date'),
                                     'last_remark': ''
                                 })
                         
@@ -11971,14 +11971,14 @@ def api_ps_followup_leads():
                                 is_call_date_empty(lead.get('fifth_call_date')) and
                                 is_call_date_empty(lead.get('sixth_call_date')) and
                                 is_call_date_empty(lead.get('seventh_call_date'))):
-                            leads.append({
-                                'uid': lead.get('uid'),
-                                'customer_name': lead.get('customer_name'),
-                                'mobile_number': lead.get('mobile_number'),
-                                'status': lead.get('status'),
-                                'source': 'Walk In',
-                                'created_at': lead.get('created_at'),
-                                'follow_up_date': lead.get('next_followup_date'),
+                                leads.append({
+                                    'uid': lead.get('uid'),
+                                    'customer_name': lead.get('customer_name'),
+                                    'mobile_number': lead.get('mobile_number'),
+                                    'status': lead.get('status'),
+                                    'source': 'Walk In',
+                                    'created_at': lead.get('created_at'),
+                                    'follow_up_date': lead.get('next_followup_date'),
                                     'last_remark': ''
                                 })
                         
