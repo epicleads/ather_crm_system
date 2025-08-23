@@ -1549,7 +1549,8 @@ def add_cre():
 @app.route('/add_ps', methods=['GET', 'POST'])
 @require_admin
 def add_ps():
-    branches = get_system_branches()
+    branches = ['SOMAJIGUDA', 'ATTAPUR', 'BEGUMPET', 'KOMPALLY', 'MALAKPET', 'SRINAGAR COLONY', 'TOLICHOWKI',
+                'VANASTHALIPURAM']
 
     if request.method == 'POST':
         name = request.form.get('name', '').strip()
@@ -2695,7 +2696,7 @@ def check_duplicate_event_lead():
 @require_cre
 def add_lead():
     from datetime import datetime, date
-    branches = get_system_branches()
+    branches = ['SOMAJIGUDA', 'ATTAPUR', 'TOLICHOWKI', 'KOMPALLY', 'SRINAGAR COLONY', 'MALAKPET', 'VANASTHALIPURAM']
     ps_users = safe_get_data('ps_users')
     if request.method == 'POST':
         customer_name = request.form.get('customer_name', '').strip()
@@ -5062,7 +5063,8 @@ def add_cre():
 @app.route('/add_ps', methods=['GET', 'POST'])
 @require_admin
 def add_ps():
-    branches = get_system_branches()
+    branches = ['SOMAJIGUDA', 'ATTAPUR', 'BEGUMPET', 'KOMPALLY', 'MALAKPET', 'SRINAGAR COLONY', 'TOLICHOWKI',
+                'VANASTHALIPURAM']
 
     if request.method == 'POST':
         name = request.form.get('name', '').strip()
@@ -6208,7 +6210,7 @@ def check_duplicate_event_lead():
 @require_cre
 def add_lead():
     from datetime import datetime, date
-    branches = get_system_branches()
+    branches = ['SOMAJIGUDA', 'ATTAPUR', 'TOLICHOWKI', 'KOMPALLY', 'SRINAGAR COLONY', 'MALAKPET', 'VANASTHALIPURAM']
     ps_users = safe_get_data('ps_users')
     if request.method == 'POST':
         customer_name = request.form.get('customer_name', '').strip()
@@ -7069,7 +7071,7 @@ def update_lead(uid):
             '450 Apex STD'
         ]
 
-        branches = get_system_branches()
+        branches = ['SOMAJIGUDA', 'ATTAPUR', 'TOLICHOWKI', 'KOMPALLY', 'SRINAGAR COLONY', 'MALAKPET', 'VANASTHALIPURAM']
 
         lead_statuses = [
             'Busy on another Call', 'RNR', 'Call me Back', 'Interested',
@@ -8239,7 +8241,7 @@ def update_lead_optimized(uid):
             '450 Apex STD'
         ]
 
-        branches = get_system_branches()
+        branches = ['SOMAJIGUDA', 'ATTAPUR', 'TOLICHOWKI', 'KOMPALLY', 'SRINAGAR COLONY', 'MALAKPET', 'VANASTHALIPURAM']
 
         lead_statuses = [
             'Busy on another Call', 'RNR', 'Call me Back', 'Interested',
