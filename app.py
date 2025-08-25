@@ -2177,10 +2177,7 @@ def edit_ps(ps_id):
 @app.route('/manage_rec', methods=['GET', 'POST'])
 @require_admin
 def manage_rec():
-    branches = [
-        "KOMPALLY", "SOMAJIGUDA", "ATTAPUR", "MALAKPET",
-        "TOLICHOWKI", "VANASTHALIPURAM"
-    ]
+    branches = get_system_branches()
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '').strip()
@@ -5690,10 +5687,7 @@ def edit_ps(ps_id):
 @app.route('/manage_rec', methods=['GET', 'POST'])
 @require_admin
 def manage_rec():
-    branches = [
-        "KOMPALLY", "SOMAJIGUDA", "ATTAPUR", "MALAKPET",
-        "TOLICHOWKI", "VANASTHALIPURAM"
-    ]
+    branches = get_system_branches()
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '').strip()
@@ -13312,6 +13306,66 @@ def check_username():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/check_name')
+def check_name():
+    """Check if a full name already exists in the system"""
+    name = request.args.get('name', '').strip()
+    user_type = request.args.get('type', '').strip()
+    
+    if not name or not user_type:
+        return jsonify({'error': 'Missing name or user type'})
+    
+    try:
+        # Check in multiple user tables to avoid duplicate names across different roles
+        duplicate_found = False
+        existing_user = None
+        
+        # Check cre_users table
+        if user_type in ['cre', 'all']:
+            cre_result = supabase.table('cre_users').select('name, username, role').eq('name', name).execute()
+            if cre_result.data and len(cre_result.data) > 0:
+                duplicate_found = True
+                existing_user = cre_result.data[0]
+        
+        # Check ps_users table
+        if user_type in ['ps', 'all']:
+            ps_result = supabase.table('ps_users').select('name, username, role, branch').eq('name', name).execute()
+            if ps_result.data and len(ps_result.data) > 0:
+                duplicate_found = True
+                existing_user = ps_result.data[0]
+        
+        # Check rec_users table
+        if user_type in ['rec', 'all']:
+            rec_result = supabase.table('rec_users').select('name, username, role, branch').eq('name', name).execute()
+            if rec_result.data and len(rec_result.data) > 0:
+                duplicate_found = True
+                existing_user = rec_result.data[0]
+        
+        # Check Branch Head table
+        if user_type in ['branch_head', 'all']:
+            bh_result = supabase.table('Branch Head').select('Name, Username, Branch').eq('Name', name).execute()
+            if bh_result.data and len(bh_result.data) > 0:
+                duplicate_found = True
+                existing_user = bh_result.data[0]
+        
+        if duplicate_found:
+            return jsonify({
+                'exists': True,
+                'duplicate_type': 'name',
+                'existing_user': existing_user,
+                'message': f'User with name "{name}" already exists'
+            })
+        else:
+            return jsonify({
+                'exists': False,
+                'message': 'Name is available'
+            })
+        
+    except Exception as e:
+        print(f"Error checking name: {e}")
+        return jsonify({'error': 'Database error'})
+
 @app.route('/ps_analytics')
 @require_ps
 def ps_analytics():
@@ -13412,8 +13466,8 @@ def manage_branch_head():
     return render_template('manage_branch_head.html', branch_heads=branch_heads, branches=branches)
 
 def get_all_branches():
-    # Replace with a DB fetch if you have a branches table
-    return ['KOMPALLY', 'SOMAJIGUDA', 'ATTAPUR', 'MALAKPET', 'TOLICHOWKI', 'VANASTHALIPURAM']
+    # Use centralized branch management
+    return get_system_branches()
 
 def get_active_ps_users(branch):
     """Get active PS users for a specific branch"""
@@ -13983,10 +14037,7 @@ def add_walkin_lead():
         "450 X (2.9 kWh)", "450 X (3.7 kWh)", "450 X (2.9 kWh) Pro Pack", "450 X (3.7 kWh) Pro Pack",
         "450 Apex STD"
     ]
-    branches = [
-        "KOMPALLY", "SOMAJIGUDA", "ATTAPUR", "MALAKPET",
-        "TOLICHOWKI", "VANASTHALIPURAM"
-    ]
+    branches = get_system_branches()
     # Fetch PS users for all branches
     ps_users = supabase.table('ps_users').select('name,branch').execute().data or []
     ps_options = {}
