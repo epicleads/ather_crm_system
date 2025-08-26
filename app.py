@@ -14068,8 +14068,39 @@ def add_walkin_lead():
             
             if existing_walkin_leads:
                 print(f"📱 Found {len(existing_walkin_leads)} existing walkin leads")
-                flash('Lead with this phone number already exists as Walk-in!', 'error')
-                return render_template('add_walkin_lead.html', models=models, branches=branches, ps_options_json=ps_options_json, default_branch=branch)
+                # Add to duplicate leads table instead of redirecting
+                try:
+                    # Create duplicate record
+                    duplicate_data = {
+                        'uid': existing_walkin_leads[0].get('uid'),
+                        'customer_mobile_number': normalized_phone,
+                        'customer_name': customer_name,
+                        'original_lead_id': existing_walkin_leads[0].get('id'),
+                        'source1': 'Walk-in',
+                        'sub_source1': existing_walkin_leads[0].get('branch', 'N/A'),
+                        'date1': existing_walkin_leads[0].get('created_at', ''),
+                        'source2': 'Walk-in',
+                        'sub_source2': branch,
+                        'date2': datetime.now().strftime('%Y-%m-%d'),
+                        'duplicate_count': 2,
+                        'created_at': datetime.now().isoformat(),
+                        'updated_at': datetime.now().isoformat(),
+                        'original_table': 'walkin_table',
+                        'original_record_id': existing_walkin_leads[0].get('id')
+                    }
+                    
+                    # Initialize remaining slots as None
+                    for i in range(3, 11):
+                        duplicate_data[f'source{i}'] = None
+                        duplicate_data[f'sub_source{i}'] = None
+                        duplicate_data[f'date{i}'] = None
+                    
+                    supabase.table('duplicate_leads').insert(duplicate_data).execute()
+                    flash('Lead already exists as Walk-in. Added to duplicate leads table for admin review.', 'warning')
+                    return redirect(url_for('add_walkin_lead'))
+                except Exception as e:
+                    flash(f'Error adding to duplicates: {str(e)}', 'error')
+                    return render_template('add_walkin_lead.html', models=models, branches=branches, ps_options_json=ps_options_json, default_branch=branch)
             
             # 2. Check in activity_leads table
             activity_result = supabase.table('activity_leads').select('*').eq('customer_phone_number', normalized_phone).execute()
@@ -14092,8 +14123,39 @@ def add_walkin_lead():
                 )
                 
                 if exact_match:
-                    flash('Lead with this phone number already exists as Walk-in!', 'error')
-                    return render_template('add_walkin_lead.html', models=models, branches=branches, ps_options_json=ps_options_json, default_branch=branch)
+                    # Add to duplicate leads table instead of redirecting
+                    try:
+                        # Create duplicate record
+                        duplicate_data = {
+                            'uid': existing_leads[0].get('uid'),
+                            'customer_mobile_number': normalized_phone,
+                            'customer_name': customer_name,
+                            'original_lead_id': existing_leads[0].get('id'),
+                            'source1': existing_leads[0].get('source', 'Unknown'),
+                            'sub_source1': existing_leads[0].get('sub_source', 'N/A'),
+                            'date1': existing_leads[0].get('date', ''),
+                            'source2': 'Walk-in',
+                            'sub_source2': branch,
+                            'date2': datetime.now().strftime('%Y-%m-%d'),
+                            'duplicate_count': 2,
+                            'created_at': datetime.now().isoformat(),
+                            'updated_at': datetime.now().isoformat(),
+                            'original_table': 'lead_master',
+                            'original_record_id': existing_leads[0].get('id')
+                        }
+                        
+                        # Initialize remaining slots as None
+                        for i in range(3, 11):
+                            duplicate_data[f'source{i}'] = None
+                            duplicate_data[f'sub_source{i}'] = None
+                            duplicate_data[f'date{i}'] = None
+                        
+                        supabase.table('duplicate_leads').insert(duplicate_data).execute()
+                        flash('Lead already exists with different source. Added to duplicate leads table for admin review.', 'warning')
+                        return redirect(url_for('add_walkin_lead'))
+                    except Exception as e:
+                        flash(f'Error adding to duplicates: {str(e)}', 'error')
+                        return render_template('add_walkin_lead.html', models=models, branches=branches, ps_options_json=ps_options_json, default_branch=branch)
             
             # 4. Check in duplicate_leads
             duplicate_result = supabase.table('duplicate_leads').select('*').eq('customer_mobile_number', normalized_phone).execute()
@@ -14115,8 +14177,37 @@ def add_walkin_lead():
                         break
                 
                 if exact_match:
-                    flash('Lead with this phone number already exists as Walk-in in duplicates!', 'error')
-                    return render_template('add_walkin_lead.html', models=models, branches=branches, ps_options_json=ps_options_json, default_branch=branch)
+                    # Add to duplicate leads table instead of redirecting
+                    try:
+                        # Update existing duplicate record with new source
+                        duplicate_lead = duplicate_leads[0]
+                        
+                        # Find next available slot
+                        next_slot = None
+                        for i in range(1, 11):
+                            source_field = f'source{i}'
+                            if not duplicate_lead.get(source_field):
+                                next_slot = i
+                                break
+                        
+                        if next_slot:
+                            # Update the existing duplicate record
+                            update_data = {
+                                f'source{next_slot}': 'Walk-in',
+                                f'sub_source{next_slot}': branch,
+                                f'date{next_slot}': datetime.now().strftime('%Y-%m-%d'),
+                                'duplicate_count': duplicate_lead.get('duplicate_count', 1) + 1,
+                                'updated_at': datetime.now().isoformat()
+                            }
+                            supabase.table('duplicate_leads').update(update_data).eq('id', duplicate_lead['id']).execute()
+                            flash(f'Lead already exists in duplicates. Added new Walk-in source to slot {next_slot}.', 'warning')
+                        else:
+                            flash('Duplicate record is full (max 10 sources reached). Please contact admin.', 'error')
+                        
+                        return redirect(url_for('add_walkin_lead'))
+                    except Exception as e:
+                        flash(f'Error updating duplicate record: {str(e)}', 'error')
+                        return render_template('add_walkin_lead.html', models=models, branches=branches, ps_options_json=ps_options_json, default_branch=branch)
                     
         except Exception as e:
             print(f"❌ Error checking duplicates: {e}")
@@ -14183,8 +14274,8 @@ def add_walkin_lead():
                         duplicate_data[f'date{i}'] = None
                     
                     supabase.table('duplicate_leads').insert(duplicate_data).execute()
-                    flash(f'Lead added to duplicates with new source: Walk-in - {branch}', 'success')
-                    return redirect(url_for('add_walkin_lead'))
+                    flash(f'Lead added to duplicates with new source: Walk-in - {branch}. Redirecting to duplicate leads section.', 'success')
+                    return redirect(url_for('admin_duplicate_leads', uid=uid))
                 else:
                     flash('Error: Original lead not found for duplicate creation', 'error')
                     return render_template('add_walkin_lead.html', models=models, branches=branches, ps_options_json=ps_options_json, default_branch=branch)
