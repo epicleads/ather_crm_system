@@ -7529,9 +7529,9 @@ def ps_dashboard():
                         print(f"[DEBUG] Lead {lead.get('lead_uid')} excluded from fresh_leads due to lead_status: {lead_status}")
 
             # Add to today's followups if applicable (exclude Won/Lost and specific statuses)
-            # ONLY show leads where qualifying call is completed (first_call_date is NOT NULL)
+            # Show leads that need follow-up today (regardless of qualifying call status)
             follow_up_date = lead.get('follow_up_date')
-            if (follow_up_date and final_status == 'Pending' and lead.get('first_call_date') and
+            if (follow_up_date and final_status == 'Pending' and
                 (not lead_status or lead_status not in excluded_statuses)):
                 # Parse follow_up_date and check if it's <= today
                 try:
@@ -7545,13 +7545,26 @@ def ps_dashboard():
                         lead_dict['is_overdue'] = followup_date_parsed < datetime.now().date()
                         lead_dict['overdue_days'] = (datetime.now().date() - followup_date_parsed).days
                         todays_followups_regular.append(lead_dict)
-                        print(f"[DEBUG] Added to today's followups (qualifying call completed): {lead.get('lead_uid')}")
+                        print(f"[DEBUG] Added to today's followups: {lead.get('lead_uid')} - Follow-up date: {follow_up_date}, Parsed: {followup_date_parsed}, Today: {datetime.now().date()}, Overdue: {lead_dict['is_overdue']}")
+                    else:
+                        print(f"[DEBUG] Lead {lead.get('lead_uid')} NOT added - Follow-up date {followup_date_parsed} is in the future (Today: {datetime.now().date()})")
+                        print(f"[DEBUG] Date comparison: {followup_date_parsed} <= {datetime.now().date()} = {followup_date_parsed <= datetime.now().date()}")
+                        print(f"[DEBUG] Date types - followup_date_parsed: {type(followup_date_parsed)}, today: {type(datetime.now().date())}")
                 except (ValueError, TypeError):
                     # If date parsing fails, include the lead for manual review
                     lead_dict['is_overdue'] = False
                     lead_dict['overdue_days'] = 0
                     todays_followups_regular.append(lead_dict)
-                    print(f"[DEBUG] Added to today's followups (date parse failed, qualifying call completed): {lead.get('lead_uid')}")
+                    print(f"[DEBUG] Added to today's followups (date parse failed): {lead.get('lead_uid')} - Error: {e}")
+            else:
+                # Debug why lead is not being added
+                if follow_up_date and final_status == 'Pending':
+                    print(f"[DEBUG] Lead {lead.get('lead_uid')} NOT added to today's followups:")
+                    print(f"  - Has follow_up_date: {bool(follow_up_date)}")
+                    print(f"  - Lead status excluded: {lead_status in excluded_statuses if lead_status else False}")
+                    print(f"  - Lead status: {lead_status}")
+                    print(f"  - Final status: {final_status}")
+                    print(f"  - Follow-up date: {follow_up_date}")
 
 
 
@@ -7680,17 +7693,25 @@ def ps_dashboard():
                         print(f"[DEBUG] Event lead {lead_dict['lead_uid']} excluded from fresh_leads due to lead_status: {lead_status}")
 
             # Add event leads with today's ps_followup_date_ts to today's followups
-            # ONLY show leads where qualifying call is completed (ps_first_call_date is NOT NULL)
+            # Show leads that need follow-up today (regardless of qualifying call status)
             ps_followup_date_ts = lead.get('ps_followup_date_ts')
+            print(f"[DEBUG] Event lead {lead_dict['lead_uid']} - ps_followup_date_ts: {ps_followup_date_ts}, final_status: {final_status}, lead_status: {lead_status}")
             if (ps_followup_date_ts and
                 str(ps_followup_date_ts)[:10] == today_str and
                 final_status not in ['Won', 'Lost'] and
-                lead.get('ps_first_call_date') and  # Ensure qualifying call is completed
                 (not lead_status or lead_status not in excluded_statuses)):
                 # Set follow_up_date for template compatibility
                 lead_dict['follow_up_date'] = str(ps_followup_date_ts)
                 todays_followups_event.append(lead_dict)
-                print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to today's followups (qualifying call completed)")
+                print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to today's followups - Follow-up date: {ps_followup_date_ts}, Today string: {today_str}")
+            else:
+                if ps_followup_date_ts and final_status not in ['Won', 'Lost']:
+                    print(f"[DEBUG] Event lead {lead_dict['lead_uid']} NOT added to today's followups:")
+                    print(f"  - Has ps_followup_date_ts: {bool(ps_followup_date_ts)}")
+                    print(f"  - Date string comparison: {str(ps_followup_date_ts)[:10]} == {today_str} = {str(ps_followup_date_ts)[:10] == today_str}")
+                    print(f"  - Lead status excluded: {lead_status in excluded_statuses if lead_status else False}")
+                    print(f"  - Lead status: {lead_status}")
+                    print(f"  - Final status: {final_status}")
 
         print(f"[PERF] ps_dashboard: event leads processing took {time.time() - t3:.3f} seconds")
 
@@ -7741,8 +7762,9 @@ def ps_dashboard():
                 print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to lost_leads")
             elif final_status == 'Pending' or not final_status:
                 # Add to today's followups if next_followup_date is <= today
-                # ONLY show leads where qualifying call is completed (first_call_date is NOT NULL)
-                if next_followup_date and lead.get('first_call_date'):
+                # Show leads that need follow-up today (regardless of qualifying call status)
+                print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} - next_followup_date: {next_followup_date}")
+                if next_followup_date:
                     try:
                         if 'T' in str(next_followup_date):
                             followup_date_parsed = datetime.fromisoformat(str(next_followup_date).replace('Z', '+00:00')).date()
@@ -7755,20 +7777,21 @@ def ps_dashboard():
                             lead_dict['overdue_days'] = (datetime.now().date() - followup_date_parsed).days
                             lead_dict['follow_up_date'] = str(next_followup_date)
                             todays_followups_walkin.append(lead_dict)
-                            print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to today's followups (qualifying call completed)")
+                            print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to today's followups - Follow-up date: {next_followup_date}, Parsed: {followup_date_parsed}, Today: {datetime.now().date()}, Overdue: {lead_dict['is_overdue']}")
                     except (ValueError, TypeError):
                         # If date parsing fails, include the lead for manual review
                         lead_dict['is_overdue'] = False
                         lead_dict['overdue_days'] = 0
                         lead_dict['follow_up_date'] = str(next_followup_date)
                         todays_followups_walkin.append(lead_dict)
-                        print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to today's followups (date parse failed, qualifying call completed)")
+                        print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to today's followups (date parse failed)")
                 
                 # Add to pending leads if no first call has been made yet
-                first_call_date = lead.get('first_call_date')
+                if not next_followup_date:
+                    print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} NOT added to today's followups - missing next_followup_date")
                 # Get lead_status for walk-in leads (use status field or default to None)
                 lead_status = lead.get('status') or lead.get('lead_status')
-                print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} - first_call_date: {first_call_date}, lead_status: {lead_status}")
+                print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} - lead_status: {lead_status}")
                 
                 # For walk-in leads, check if any call dates exist
                 has_any_call = any(lead.get(f'{i}_call_date') for i in range(1, 8))
@@ -7843,6 +7866,15 @@ def ps_dashboard():
         # Merge today's followup lists
         todays_followups = todays_followups_regular + todays_followups_event + todays_followups_walkin
 
+        print(f"[DEBUG] Today's followups breakdown:")
+        print(f"  - Regular leads: {len(todays_followups_regular)}")
+        print(f"  - Event leads: {len(todays_followups_event)}")
+        print(f"  - Walk-in leads: {len(todays_followups_walkin)}")
+        print(f"  - Total: {len(todays_followups)}")
+        print(f"[DEBUG] Regular leads in today's followups: {[lead.get('lead_uid') for lead in todays_followups_regular]}")
+        print(f"[DEBUG] Event leads in today's followups: {[lead.get('lead_uid') for lead in todays_followups_event]}")
+        print(f"[DEBUG] Walk-in leads in today's followups: {[lead.get('lead_uid') for lead in todays_followups_walkin]}")
+
         print(f"[PERF] ps_dashboard: final processing took {time.time() - t5:.3f} seconds")
 
         t6 = time.time()
@@ -7878,7 +7910,22 @@ def ps_dashboard():
         print(f"[DEBUG] Lost leads being sent to template: {[lead.get('lead_uid') for lead in lost_leads]}")
         print(f"[DEBUG] Event leads being sent to template: {[lead.get('lead_uid') for lead in event_leads]}")
         print(f"[DEBUG] Walk-in leads count: {len(walkin_leads) if walkin_leads else 0}")
-        print(f"[DEBUG] Today's followups count: {len(todays_followups)}")
+        print(f"[DEBUG] Today's followups being sent to template: {[lead.get('lead_uid') for lead in todays_followups]}")
+        print(f"[DEBUG] Today's followups count being sent to template: {len(todays_followups)}")
+        print(f"[DEBUG] Today's followups breakdown:")
+        print(f"  - Regular leads: {len(todays_followups_regular)}")
+        print(f"  - Event leads: {len(todays_followups_event)}")
+        print(f"  - Walk-in leads: {len(todays_followups_walkin)}")
+        print(f"[DEBUG] Today's followups details:")
+        for i, lead in enumerate(todays_followups):
+            print(f"  {i+1}. {lead.get('lead_uid', 'N/A')} - {lead.get('customer_name', 'N/A')} - Follow-up: {lead.get('follow_up_date', 'N/A')}")
+        
+        # Debug date comparison issues
+        print(f"[DEBUG] Date comparison debug:")
+        print(f"  - date.today(): {date.today()}")
+        print(f"  - datetime.now().date(): {datetime.now().date()}")
+        print(f"  - today_str: {today_str if 'today_str' in locals() else 'Not defined'}")
+        
         print(f"[PERF] ps_dashboard TOTAL took {time.time() - start_time:.3f} seconds")
         
         # Add session data to template context for debugging
@@ -9018,7 +9065,7 @@ def analytics():
 
         # Branch performance
         branch_performance = []
-        branches = set([ps.get('branch') for ps in all_ps if ps.get('branch')])
+        branches = set([ps.get('branch') for ps in all_ps if ps.get('branch') and ps.get('branch') != 'TEST'])
         for branch in branches:
             branch_ps = [ps for ps in all_ps if ps.get('branch') == branch]
             ps_names = [ps['name'] for ps in branch_ps]
@@ -11211,7 +11258,8 @@ def activity_event():
                             'customer_phone_number': customer_phone,
                             'created_at': datetime.now().isoformat(),
                             'lead_category': lead_statuses[i] if i < len(lead_statuses) else 'WARM',
-                            'cre_assigned': cre_assigned
+                            'cre_assigned': cre_assigned,
+                            'final_status': 'Pending'
                         }
                         
                         # Insert into activity_leads
@@ -14972,9 +15020,9 @@ def api_branch_summary():
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
         
-        # Get all branches from ps_followup_master
+        # Get all branches from ps_followup_master (excluding TEST branch)
         branches_query = supabase.table('ps_followup_master').select('ps_branch').not_.is_('ps_branch', 'null').execute()
-        branches = list(set([row.get('ps_branch') for row in (branches_query.data or []) if row.get('ps_branch')]))
+        branches = list(set([row.get('ps_branch') for row in (branches_query.data or []) if row.get('ps_branch') and row.get('ps_branch') != 'TEST']))
         
         branch_summary = []
         
@@ -16149,11 +16197,11 @@ def api_transfer_options():
 def api_branches():
     """API to get all available branches"""
     try:
-        # Get unique branches from ps_users table
+        # Get unique branches from ps_users table (excluding TEST branch)
         ps_result = supabase.table('ps_users').select('branch').eq('is_active', True).execute()
         branches = []
         if ps_result.data:
-            branches = list(set([ps.get('branch', '').strip() for ps in ps_result.data if ps.get('branch', '').strip()]))
+            branches = list(set([ps.get('branch', '').strip() for ps in ps_result.data if ps.get('branch', '').strip() and ps.get('branch', '').strip() != 'TEST']))
             branches.sort()  # Sort alphabetically
         
         return jsonify({
@@ -16706,13 +16754,11 @@ def get_system_branches():
     return [
         'SOMAJIGUDA', 
         'ATTAPUR', 
-        'BEGUMPET', 
         'KOMPALLY', 
         'MALAKPET', 
         'SRINAGAR COLONY', 
         'TOLICHOWKI',
-        'VANASTHALIPURAM',
-        'TEST'  # New TEST branch for development/testing
+        'VANASTHALIPURAM'
     ]
 
 def get_branch_display_name(branch_code):
@@ -16720,15 +16766,45 @@ def get_branch_display_name(branch_code):
     branch_names = {
         'SOMAJIGUDA': 'Somajiguda',
         'ATTAPUR': 'Attapur',
-        'BEGUMPET': 'Begumpet',
         'KOMPALLY': 'Kompally',
         'MALAKPET': 'Malakpet',
         'SRINAGAR COLONY': 'Srinagar Colony',
         'TOLICHOWKI': 'Tolichowki',
-        'VANASTHALIPURAM': 'Vanasthalipuram',
-        'TEST': 'TEST Branch'
+        'VANASTHALIPURAM': 'Vanasthalipuram'
     }
     return branch_names.get(branch_code, branch_code)
+
+
+# =====================================================
+# ADMIN UTILITY ROUTES
+# =====================================================
+
+@app.route('/fix_event_leads_final_status')
+@require_admin
+def fix_event_leads_final_status():
+    """Fix existing event leads that have NULL final_status by setting them to 'Pending'"""
+    try:
+        # Find all event leads with NULL final_status
+        null_status_leads = supabase.table('activity_leads').select('activity_uid, customer_name, final_status').is_('final_status', 'null').execute()
+        
+        if not null_status_leads.data:
+            flash('No event leads with NULL final_status found.', 'info')
+            return redirect(url_for('admin_dashboard'))
+        
+        # Update all NULL final_status to 'Pending'
+        update_result = supabase.table('activity_leads').update({'final_status': 'Pending'}).is_('final_status', 'null').execute()
+        
+        updated_count = len(null_status_leads.data)
+        flash(f'Successfully updated {updated_count} event leads: NULL final_status → Pending', 'success')
+        
+        print(f"✅ Fixed {updated_count} event leads with NULL final_status")
+        
+        return redirect(url_for('admin_dashboard'))
+        
+    except Exception as e:
+        print(f"❌ Error fixing event leads final_status: {e}")
+        flash(f'Error fixing event leads: {str(e)}', 'error')
+        return redirect(url_for('admin_dashboard'))
 
 
 # =====================================================
