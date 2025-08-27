@@ -16742,7 +16742,6 @@ def get_system_branches():
     return [
         'SOMAJIGUDA', 
         'ATTAPUR', 
-        'BEGUMPET', 
         'KOMPALLY', 
         'MALAKPET', 
         'SRINAGAR COLONY', 
@@ -16755,7 +16754,6 @@ def get_branch_display_name(branch_code):
     branch_names = {
         'SOMAJIGUDA': 'Somajiguda',
         'ATTAPUR': 'Attapur',
-        'BEGUMPET': 'Begumpet',
         'KOMPALLY': 'Kompally',
         'MALAKPET': 'Malakpet',
         'SRINAGAR COLONY': 'Srinagar Colony',
