@@ -3491,6 +3491,10 @@ def cre_dashboard():
                 called_leads.append(lead)
             continue
 
+    # Sort won and lost leads by date in descending order
+    won_leads.sort(key=lambda x: x.get('won_timestamp', ''), reverse=True)
+    lost_leads.sort(key=lambda x: x.get('lost_timestamp', ''), reverse=True)
+    
     print(f"Won leads count: {len(won_leads)}")
     print(f"Lost leads count: {len(lost_leads)}")
     
@@ -13811,6 +13815,14 @@ def cre_dashboard_leads():
         
         # Select the appropriate list based on status
         leads_list = won_leads if status == 'won' else lost_leads
+        
+        # Sort leads by won/lost date in descending order
+        if status == 'won':
+            # Sort won leads by won_timestamp in descending order
+            leads_list.sort(key=lambda x: x.get('won_timestamp', ''), reverse=True)
+        else:
+            # Sort lost leads by lost_timestamp in descending order
+            leads_list.sort(key=lambda x: x.get('lost_timestamp', ''), reverse=True)
         
         # Render only the table HTML
         return render_template('cre_dashboard_leads_table.html', 
