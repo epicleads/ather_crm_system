@@ -3491,6 +3491,10 @@ def cre_dashboard():
                 called_leads.append(lead)
             continue
 
+    # Sort won and lost leads by date in descending order
+    won_leads.sort(key=lambda x: x.get('won_timestamp', ''), reverse=True)
+    lost_leads.sort(key=lambda x: x.get('lost_timestamp', ''), reverse=True)
+    
     print(f"Won leads count: {len(won_leads)}")
     print(f"Lost leads count: {len(lost_leads)}")
     
@@ -13860,6 +13864,14 @@ def cre_dashboard_leads():
         # Select the appropriate list based on status
         leads_list = won_leads if status == 'won' else lost_leads
         
+        # Sort leads by won/lost date in descending order
+        if status == 'won':
+            # Sort won leads by won_timestamp in descending order
+            leads_list.sort(key=lambda x: x.get('won_timestamp', ''), reverse=True)
+        else:
+            # Sort lost leads by lost_timestamp in descending order
+            leads_list.sort(key=lambda x: x.get('lost_timestamp', ''), reverse=True)
+        
         # Render only the table HTML
         return render_template('cre_dashboard_leads_table.html', 
                              leads_list=leads_list, 
@@ -16847,6 +16859,304 @@ def websocket_user_info():
             'success': False,
             'message': str(e)
         }), 500
+
+
+# =====================================================
+# EXTERNAL API ENDPOINTS - For external data submission
+# =====================================================
+
+@app.route('/api/submit_lead', methods=['POST'])
+def submit_external_lead():
+    """External API endpoint that uses the same logic as CRE users"""
+    try:
+        print(f"🔍 External lead submission requested")
+        
+        # Get JSON data from external system
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                'success': False,
+                'message': 'No data provided'
+            }), 400
+        
+        # Validate required fields (only name and phone are required)
+        required_fields = ['customer_name', 'customer_mobile_number']
+        missing_fields = [field for field in required_fields if not data.get(field)]
+        
+        if missing_fields:
+            return jsonify({
+                'success': False,
+                'message': f'Missing required fields: {", ".join(missing_fields)}'
+            }), 400
+        
+        # Use the EXACT same lead creation logic as CRE users
+        from datetime import datetime
+        
+        # Normalize phone number (same as CRE)
+        normalized_phone = ''.join(filter(str.isdigit, data['customer_mobile_number']))
+        
+        # Generate UID (handle missing source gracefully and ensure uniqueness)
+        source = data.get('source', 'External')
+        subsource = data.get('subsource', 'API')
+        src_initial = source[0].upper() if source else 'X'
+        name_part = ''.join(data['customer_name'].split()).upper()[:5]
+        phone_part = normalized_phone[-5:] if len(normalized_phone) >= 5 else normalized_phone
+        timestamp = datetime.now().strftime('%H%M%S')  # Add timestamp for uniqueness
+        uid = f"{src_initial}-{name_part}{phone_part}{timestamp}"
+        
+        # Prepare lead data (same structure as CRE)
+        lead_data = {
+            'uid': uid,
+            'date': datetime.now().strftime('%Y-%m-%d'),
+            'customer_name': data['customer_name'],
+            'customer_mobile_number': normalized_phone,
+            'source': source,
+            'sub_source': subsource,
+            'lead_status': data.get('lead_status', ''),
+            'lead_category': data.get('lead_category', ''),
+            'model_interested': data.get('model_interested', ''),
+            'branch': data.get('branch', 'Chennai'),  # Default to Chennai
+            'ps_name': data.get('ps_name'),
+            'final_status': data.get('final_status', 'Pending'),
+            'follow_up_date': data.get('follow_up_date'),
+            'assigned': 'No',  # External leads start unassigned
+            'created_at': datetime.now().isoformat(),
+            'updated_at': datetime.now().isoformat(),
+            'first_remark': data.get('remark', ''),
+            # 'external_source': 'API'  # Mark as external submission (column doesn't exist)
+        }
+        
+        print(f"🔍 Prepared lead data: {lead_data}")
+        
+        # Insert into database (same as CRE)
+        result = supabase.table('lead_master').insert(lead_data).execute()
+        
+        if result.data:
+            print(f"✅ Lead saved to database with UID: {uid}")
+            
+            # Send WebSocket notification (same as CRE)
+            if websocket_manager:
+                websocket_manager.broadcast_lead_update(uid, {
+                    'new_lead': {
+                        'uid': uid,
+                        'name': data['customer_name'],
+                        'source': data['source'],
+                        'timestamp': datetime.now().isoformat()
+                    }
+                })
+                print(f"🔔 WebSocket notification sent for new lead: {uid}")
+            
+            return jsonify({
+                'success': True,
+                'message': 'Lead submitted successfully',
+                'lead_id': uid,
+                'timestamp': datetime.now().isoformat()
+            }), 201
+        else:
+            print(f"❌ Failed to insert lead into database")
+            return jsonify({
+                'success': False,
+                'message': 'Failed to insert lead into database'
+            }), 500
+            
+    except Exception as e:
+        print(f"❌ Error submitting external lead: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'message': f'Internal server error: {str(e)}'
+        }), 500
+
+@app.route('/api/submit_contact', methods=['POST'])
+def submit_external_contact():
+    """External API endpoint for submitting contact forms"""
+    try:
+        print(f"🔍 External contact submission requested")
+        
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'success': False, 'message': 'No data provided'}), 400
+        
+        # Validate required fields
+        if not data.get('name') or not data.get('phone'):
+            return jsonify({
+                'success': False,
+                'message': 'Name and phone are required'
+            }), 400
+        
+        # Prepare contact data
+        contact_data = {
+            'name': data['name'],
+            'phone': data['phone'],
+            'email': data.get('email', ''),
+            'message': data.get('message', ''),
+            'source': data.get('source', 'External API'),
+            'submitted_at': datetime.now().isoformat(),
+            'status': 'New',
+            'branch': data.get('branch', 'Chennai')
+        }
+        
+        # Insert into contacts table (create if doesn't exist)
+        try:
+            result = supabase.table('contacts').insert(contact_data).execute()
+        except:
+            # If contacts table doesn't exist, create it
+            supabase.table('contacts').insert(contact_data).execute()
+            result = supabase.table('contacts').insert(contact_data).execute()
+        
+        if result.data:
+            print(f"✅ Contact saved to database")
+            return jsonify({
+                'success': True,
+                'message': 'Contact submitted successfully',
+                'timestamp': datetime.now().isoformat()
+            }), 201
+        else:
+            print(f"❌ Failed to save contact")
+            return jsonify({
+                'success': False,
+                'message': 'Failed to submit contact'
+            }), 500
+            
+    except Exception as e:
+        print(f"❌ Error submitting contact: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'message': f'Internal server error: {str(e)}'
+        }), 500
+
+@app.route('/api/submit_enquiry', methods=['POST'])
+def submit_external_enquiry():
+    """External API endpoint for submitting enquiries"""
+    try:
+        print(f"🔍 External enquiry submission requested")
+        
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'success': False, 'message': 'No data provided'}), 400
+        
+        # Validate required fields
+        required_fields = ['name', 'phone', 'enquiry_type']
+        missing_fields = [field for field in required_fields if not data.get(field)]
+        
+        if missing_fields:
+            return jsonify({
+                'success': False,
+                'message': f'Missing required fields: {", ".join(missing_fields)}'
+            }), 400
+        
+        # Prepare enquiry data
+        enquiry_data = {
+            'name': data['name'],
+            'phone': data['phone'],
+            'email': data.get('email', ''),
+            'enquiry_type': data['enquiry_type'],
+            'description': data.get('description', ''),
+            'source': data.get('source', 'External API'),
+            'priority': data.get('priority', 'Medium'),
+            'status': 'New',
+            'branch': data.get('branch', 'Chennai'),
+            'created_at': datetime.now().isoformat(),
+            'updated_at': datetime.now().isoformat()
+        }
+        
+        # Insert into enquiries table
+        result = supabase.table('enquiries').insert(enquiry_data).execute()
+        
+        if result.data:
+            print(f"✅ Enquiry saved to database")
+            return jsonify({
+                'success': True,
+                'message': 'Enquiry submitted successfully',
+                'timestamp': datetime.now().isoformat()
+            }), 201
+        else:
+            print(f"❌ Failed to save enquiry")
+            return jsonify({
+                'success': False,
+                'message': 'Failed to submit enquiry'
+            }), 500
+            
+    except Exception as e:
+        print(f"❌ Error submitting enquiry: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'message': f'Internal server error: {str(e)}'
+        }), 500
+
+# =====================================================
+# API DOCUMENTATION ENDPOINT
+# =====================================================
+
+@app.route('/api/docs', methods=['GET'])
+def api_documentation():
+    """API documentation for external developers"""
+    docs = {
+        'endpoints': {
+            'submit_lead': {
+                'url': '/api/submit_lead',
+                'method': 'POST',
+                'description': 'Submit a new lead from external systems',
+                'required_fields': ['customer_name', 'customer_mobile_number'],
+                'optional_fields': ['source', 'subsource', 'lead_status', 'lead_category', 'model_interested', 'branch', 'ps_name', 'final_status', 'follow_up_date', 'remark'],
+                'example': {
+                    'customer_name': 'John Doe',
+                    'customer_mobile_number': '+919876543210',
+                    'source': 'Website',
+                    'subsource': 'Contact Form',
+                    'branch': 'Chennai',
+                    'remark': 'Interested in CRM software'
+                }
+            },
+            'submit_contact': {
+                'url': '/api/submit_contact',
+                'method': 'POST',
+                'description': 'Submit contact form data',
+                'required_fields': ['name', 'phone'],
+                'optional_fields': ['email', 'message', 'source', 'branch'],
+                'example': {
+                    'name': 'Jane Smith',
+                    'phone': '+919876543211',
+                    'email': 'jane@example.com',
+                    'message': 'Interested in your services',
+                    'source': 'Contact Form',
+                    'branch': 'Chennai'
+                }
+            },
+            'submit_enquiry': {
+                'url': '/api/submit_enquiry',
+                'method': 'POST',
+                'description': 'Submit business enquiries',
+                'required_fields': ['name', 'phone', 'enquiry_type'],
+                'optional_fields': ['email', 'description', 'source', 'priority', 'branch'],
+                'example': {
+                    'name': 'Bob Wilson',
+                    'phone': '+919876543212',
+                    'email': 'bob@example.com',
+                    'enquiry_type': 'Product Demo',
+                    'description': 'Need demo of CRM features',
+                    'priority': 'High',
+                    'source': 'Sales Team',
+                    'branch': 'Chennai'
+                }
+            }
+        },
+        'authentication': 'No authentication required for these endpoints',
+        'rate_limiting': '100 requests per minute per IP',
+        'response_format': 'JSON',
+        'base_url': request.host_url.rstrip('/'),
+        'note': 'These endpoints use the same logic and validation as internal CRE users'
+    }
+    
+    return jsonify(docs)
 
 
 if __name__ == '__main__':
