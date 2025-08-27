@@ -1538,7 +1538,7 @@ def assign_leads_dynamic_action():
                                 'lead_uid': lead['uid'],
                                 'source': source,
                                 'assigned_at': datetime.now().isoformat(),
-                                'message': f'New lead {lead['uid']} assigned to you from {source}'
+                                'message': f'New lead {lead["uid"]} assigned to you from {source}'
                             }
                         )
                     
