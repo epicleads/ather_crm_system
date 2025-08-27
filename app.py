@@ -1545,7 +1545,7 @@ def assign_leads_dynamic_action():
                     if total_assigned % 100 == 0:
                         time.sleep(0.1)
                 except Exception as e:
-                    print(f"Error assigning lead {lead['uid']}: {e}")
+                    print(f"Error assigning lead {lead[''uid'']}: {e}")
 
         print(f"Total leads assigned: {total_assigned}")
         return jsonify({'success': True, 'message': f'Total {total_assigned} leads assigned successfully'})
