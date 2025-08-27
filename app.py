@@ -52,7 +52,19 @@ from werkzeug.security import generate_password_hash, check_password_hash
 load_dotenv()
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
+# Initialize Flask-SocketIO with better configuration
+socketio = SocketIO(
+    app, 
+    cors_allowed_origins="*",
+    async_mode='eventlet',
+    logger=True,
+    engineio_logger=True,
+    ping_timeout=60,
+    ping_interval=25,
+    max_http_buffer_size=1e8
+)
+
+# Routes moved to end of file for proper registration
 
 # Reduce Flask log noise
 import logging
@@ -129,6 +141,20 @@ except Exception as e:
 auth_manager = AuthManager(supabase)
 # Store auth_manager in app config instead of direct attribute
 app.config['AUTH_MANAGER'] = auth_manager
+
+# Initialize WebSocket Manager
+try:
+    from websocket_events import WebSocketManager
+    websocket_manager = WebSocketManager(socketio, supabase, auth_manager)
+    websocket_manager.register_events()
+    app.config['WEBSOCKET_MANAGER'] = websocket_manager
+    print("✅ WebSocket manager initialized successfully")
+    print(f"✅ WebSocket manager instance: {websocket_manager}")
+except Exception as e:
+    print(f"❌ Error initializing WebSocket manager: {e}")
+    import traceback
+    traceback.print_exc()
+    websocket_manager = None
 
 # Initialize rate limiter
 limiter = Limiter(
@@ -574,6 +600,18 @@ def track_cre_call_attempt(uid, cre_name, call_no, lead_status, call_was_recorde
         # Insert the attempt record
         insert_result = supabase.table('cre_call_attempt_history').insert(attempt_data).execute()
         print(f"Tracked call attempt: {uid} - {call_no} call, attempt {next_attempt}, status: {lead_status}")
+        
+        # Send WebSocket notification for real-time updates
+        if websocket_manager:
+            websocket_manager.broadcast_lead_update(uid, {
+                'call_attempt': {
+                    'call_no': call_no,
+                    'attempt': next_attempt,
+                    'status': lead_status,
+                    'cre_name': cre_name,
+                    'timestamp': datetime.now().isoformat()
+                }
+            })
 
         # --- TAT Calculation and Update ---
         if call_no == 'first' and next_attempt == 1:
@@ -667,6 +705,18 @@ def track_ps_call_attempt(uid, ps_name, call_no, lead_status, call_was_recorded=
         # Insert the attempt record
         supabase.table('ps_call_attempt_history').insert(attempt_data).execute()
         print(f"Tracked PS call attempt: {uid} - {call_no} call, attempt {next_attempt}, status: {lead_status}")
+        
+        # Send WebSocket notification for real-time updates
+        if websocket_manager:
+            websocket_manager.broadcast_lead_update(uid, {
+                'ps_call_attempt': {
+                    'call_no': call_no,
+                    'attempt': next_attempt,
+                    'status': lead_status,
+                    'ps_name': ps_name,
+                    'timestamp': datetime.now().isoformat()
+                }
+            })
     except Exception as e:
         print(f"Error tracking PS call attempt: {e}")
 
@@ -766,6 +816,8 @@ def fix_missing_timestamps():
         
     except Exception as e:
         print(f"Error fixing timestamps: {str(e)}")
+
+# Routes moved to after app initialization
 
 
 @app.route('/')
@@ -1103,6 +1155,8 @@ def security_settings():
 
     return render_template('security_settings.html', sessions=sessions, audit_logs=audit_logs)
 
+
+# WebSocket user info route moved to top of file to avoid conflicts with parameterized routes
 
 @app.route('/security_audit')
 @require_admin
@@ -1473,6 +1527,21 @@ def assign_leads_dynamic_action():
                     supabase.table('lead_master').update(update_data).eq('uid', lead['uid']).execute()
                     total_assigned += 1
                     print(f"Assigned lead {lead['uid']} to CRE {cre['name']} for source {source}")
+                    
+                    # Send WebSocket notification for real-time updates
+                    if websocket_manager:
+                        websocket_manager.notify_user(
+                            user_id=cre.get('id'),
+                            user_type='cre',
+                            event='lead_assigned_notification',
+                            data={
+                                'lead_uid': lead['uid'],
+                                'source': source,
+                                'assigned_at': datetime.now().isoformat(),
+                                'message': f'New lead {lead['uid']} assigned to you from {source}'
+                            }
+                        )
+                    
                     if total_assigned % 100 == 0:
                         time.sleep(0.1)
                 except Exception as e:
@@ -16620,6 +16689,60 @@ def get_branch_display_name(branch_code):
         'TEST': 'TEST Branch'
     }
     return branch_names.get(branch_code, branch_code)
+
+
+# =====================================================
+# WEBSOCKET ROUTES - Added at the end to ensure registration
+# =====================================================
+
+@app.route('/test_route')
+def test_route():
+    return "Test route working!"
+
+@app.route('/api/websocket_user_info')
+@require_auth()
+def websocket_user_info():
+    """Get user information for WebSocket authentication"""
+    try:
+        print(f"🔍 WebSocket user info requested - Session: {dict(session)}")
+        user_id = session.get('user_id')
+        user_type = session.get('user_type')
+        username = session.get('username')
+        
+        print(f"🔍 User info: ID={user_id}, Type={user_type}, Username={username}")
+        
+        # Get additional user info based on type
+        user_info = {
+            'user_id': user_id,
+            'user_type': user_type,
+            'username': username
+        }
+        
+        if user_type in ['ps', 'branch_head', 'rec']:
+            if user_type == 'ps':
+                user_data = supabase.table('ps_users').select('branch').eq('id', user_id).execute()
+            elif user_type == 'branch_head':
+                user_data = supabase.table('Branch Head').select('Branch').eq('id', user_id).execute()
+            elif user_type == 'rec':
+                user_data = supabase.table('rec_users').select('branch').eq('id', user_id).execute()
+            
+            if user_data.data:
+                user_info['branch'] = user_data.data[0].get('branch') or user_data.data[0].get('Branch')
+        
+        print(f"🔍 Returning user info: {user_info}")
+        return jsonify({
+            'success': True,
+            'user_info': user_info
+        })
+        
+    except Exception as e:
+        print(f"❌ Error getting WebSocket user info: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
 
 
 if __name__ == '__main__':
