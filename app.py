@@ -3508,14 +3508,25 @@ def cre_dashboard():
     # Get today's followups
     today = date.today()
     today_str = today.isoformat()
-    # Get all leads with follow-up date <= today, final_status = 'Pending', AND qualifying call completed (first_call_date IS NOT NULL)
+    # Get all leads with follow-up date <= today, final_status = 'Pending', qualifying call completed (first_call_date IS NOT NULL), 
+    # AND NOT qualifying call leads (must have follow-up call data beyond first call)
     todays_followups = []
     for lead in all_leads:
         follow_up_date = lead.get('follow_up_date')
         final_status = lead.get('final_status')
         has_first_call = lead.get('first_call_date') is not None
         
-        if follow_up_date and final_status == 'Pending' and has_first_call:
+        # Check if this is NOT just a qualifying call (must have follow-up call data)
+        has_followup_calls = any([
+            lead.get('second_call_date'),
+            lead.get('third_call_date'),
+            lead.get('fourth_call_date'),
+            lead.get('fifth_call_date'),
+            lead.get('sixth_call_date'),
+            lead.get('seventh_call_date')
+        ])
+        
+        if follow_up_date and final_status == 'Pending' and has_first_call and has_followup_calls:
             # Parse follow_up_date and check if it's <= today
             try:
                 if 'T' in str(follow_up_date):
@@ -7019,14 +7030,25 @@ def cre_dashboard():
     # Get today's followups
     today = date.today()
     today_str = today.isoformat()
-    # Get all leads with follow-up date <= today, final_status = 'Pending', AND qualifying call completed (first_call_date IS NOT NULL)
+    # Get all leads with follow-up date <= today, final_status = 'Pending', qualifying call completed (first_call_date IS NOT NULL), 
+    # AND NOT qualifying call leads (must have follow-up call data beyond first call)
     todays_followups = []
     for lead in all_leads:
         follow_up_date = lead.get('follow_up_date')
         final_status = lead.get('final_status')
         has_first_call = lead.get('first_call_date') is not None
         
-        if follow_up_date and final_status == 'Pending' and has_first_call:
+        # Check if this is NOT just a qualifying call (must have follow-up call data)
+        has_followup_calls = any([
+            lead.get('second_call_date'),
+            lead.get('third_call_date'),
+            lead.get('fourth_call_date'),
+            lead.get('fifth_call_date'),
+            lead.get('sixth_call_date'),
+            lead.get('seventh_call_date')
+        ])
+        
+        if follow_up_date and final_status == 'Pending' and has_first_call and has_followup_calls:
             # Parse follow_up_date and check if it's <= today
             try:
                 if 'T' in str(follow_up_date):
