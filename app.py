@@ -1887,11 +1887,11 @@ def delete_cre(cre_id):
         
         print(f"[DEBUG] Checking pending leads for CRE: {cre_name}")
         
-        # Check if CRE has any pending leads in lead_master
+        # Check if CRE has any pending leads in lead_master (only leads with completed qualifying calls)
         try:
-            pending_leads_result = supabase.table('lead_master').select('id').eq('cre_name', cre_name).eq('final_status', 'Pending').execute()
+            pending_leads_result = supabase.table('lead_master').select('id').eq('cre_name', cre_name).eq('final_status', 'Pending').not_.is_('first_call_date', 'null').execute()
             pending_count = len(pending_leads_result.data) if pending_leads_result.data else 0
-            print(f"[DEBUG] lead_master pending count: {pending_count}")
+            print(f"[DEBUG] lead_master pending count (qualifying call completed): {pending_count}")
         except Exception as e:
             print(f"[DEBUG] Error checking lead_master: {str(e)}")
             pending_count = 0
@@ -3404,8 +3404,8 @@ def cre_dashboard():
         if lead.get('ps_name'):
             assigned_to_ps.append(lead)
 
-        # Pending Leads: any lead with final_status == 'Pending'
-        if final_status == 'Pending':
+        # Pending Leads: only leads with final_status == 'Pending' AND qualifying call completed (first_call_date IS NOT NULL)
+        if final_status == 'Pending' and has_first_call:
             attended_leads.append(lead)
 
         # Untouched Leads (Fresh leads that are still pending)
@@ -3439,13 +3439,14 @@ def cre_dashboard():
     # Get today's followups
     today = date.today()
     today_str = today.isoformat()
-    # Get all leads with follow-up date <= today and final_status = 'Pending'
+    # Get all leads with follow-up date <= today, final_status = 'Pending', AND qualifying call completed (first_call_date IS NOT NULL)
     todays_followups = []
     for lead in all_leads:
         follow_up_date = lead.get('follow_up_date')
         final_status = lead.get('final_status')
+        has_first_call = lead.get('first_call_date') is not None
         
-        if follow_up_date and final_status == 'Pending':
+        if follow_up_date and final_status == 'Pending' and has_first_call:
             # Parse follow_up_date and check if it's <= today
             try:
                 if 'T' in str(follow_up_date):
@@ -5397,11 +5398,11 @@ def delete_cre(cre_id):
         
         print(f"[DEBUG] Checking pending leads for CRE: {cre_name}")
         
-        # Check if CRE has any pending leads in lead_master
+        # Check if CRE has any pending leads in lead_master (only leads with completed qualifying calls)
         try:
-            pending_leads_result = supabase.table('lead_master').select('id').eq('cre_name', cre_name).eq('final_status', 'Pending').execute()
+            pending_leads_result = supabase.table('lead_master').select('id').eq('cre_name', cre_name).eq('final_status', 'Pending').not_.is_('first_call_date', 'null').execute()
             pending_count = len(pending_leads_result.data) if pending_leads_result.data else 0
-            print(f"[DEBUG] lead_master pending count: {pending_count}")
+            print(f"[DEBUG] lead_master pending count (qualifying call completed): {pending_count}")
         except Exception as e:
             print(f"[DEBUG] Error checking lead_master: {str(e)}")
             pending_count = 0
@@ -6914,8 +6915,8 @@ def cre_dashboard():
         if lead.get('ps_name'):
             assigned_to_ps.append(lead)
 
-        # Pending Leads: any lead with final_status == 'Pending'
-        if final_status == 'Pending':
+        # Pending Leads: only leads with final_status == 'Pending' AND qualifying call completed (first_call_date IS NOT NULL)
+        if final_status == 'Pending' and has_first_call:
             attended_leads.append(lead)
 
         # Untouched Leads (Fresh leads that are still pending)
@@ -6949,13 +6950,14 @@ def cre_dashboard():
     # Get today's followups
     today = date.today()
     today_str = today.isoformat()
-    # Get all leads with follow-up date <= today and final_status = 'Pending'
+    # Get all leads with follow-up date <= today, final_status = 'Pending', AND qualifying call completed (first_call_date IS NOT NULL)
     todays_followups = []
     for lead in all_leads:
         follow_up_date = lead.get('follow_up_date')
         final_status = lead.get('final_status')
+        has_first_call = lead.get('first_call_date') is not None
         
-        if follow_up_date and final_status == 'Pending':
+        if follow_up_date and final_status == 'Pending' and has_first_call:
             # Parse follow_up_date and check if it's <= today
             try:
                 if 'T' in str(follow_up_date):
@@ -7432,8 +7434,9 @@ def ps_dashboard():
                         print(f"[DEBUG] Lead {lead.get('lead_uid')} excluded from fresh_leads due to lead_status: {lead_status}")
 
             # Add to today's followups if applicable (exclude Won/Lost and specific statuses)
+            # ONLY show leads where qualifying call is completed (first_call_date is NOT NULL)
             follow_up_date = lead.get('follow_up_date')
-            if (follow_up_date and final_status == 'Pending' and
+            if (follow_up_date and final_status == 'Pending' and lead.get('first_call_date') and
                 (not lead_status or lead_status not in excluded_statuses)):
                 # Parse follow_up_date and check if it's <= today
                 try:
@@ -7447,13 +7450,13 @@ def ps_dashboard():
                         lead_dict['is_overdue'] = followup_date_parsed < datetime.now().date()
                         lead_dict['overdue_days'] = (datetime.now().date() - followup_date_parsed).days
                         todays_followups_regular.append(lead_dict)
-                        print(f"[DEBUG] Added to today's followups: {lead.get('lead_uid')}")
+                        print(f"[DEBUG] Added to today's followups (qualifying call completed): {lead.get('lead_uid')}")
                 except (ValueError, TypeError):
                     # If date parsing fails, include the lead for manual review
                     lead_dict['is_overdue'] = False
                     lead_dict['overdue_days'] = 0
                     todays_followups_regular.append(lead_dict)
-                    print(f"[DEBUG] Added to today's followups (date parse failed): {lead.get('lead_uid')}")
+                    print(f"[DEBUG] Added to today's followups (date parse failed, qualifying call completed): {lead.get('lead_uid')}")
 
 
 
@@ -7582,15 +7585,17 @@ def ps_dashboard():
                         print(f"[DEBUG] Event lead {lead_dict['lead_uid']} excluded from fresh_leads due to lead_status: {lead_status}")
 
             # Add event leads with today's ps_followup_date_ts to today's followups
+            # ONLY show leads where qualifying call is completed (ps_first_call_date is NOT NULL)
             ps_followup_date_ts = lead.get('ps_followup_date_ts')
             if (ps_followup_date_ts and
                 str(ps_followup_date_ts)[:10] == today_str and
                 final_status not in ['Won', 'Lost'] and
+                lead.get('ps_first_call_date') and  # Ensure qualifying call is completed
                 (not lead_status or lead_status not in excluded_statuses)):
                 # Set follow_up_date for template compatibility
                 lead_dict['follow_up_date'] = str(ps_followup_date_ts)
                 todays_followups_event.append(lead_dict)
-                print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to today's followups")
+                print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to today's followups (qualifying call completed)")
 
         print(f"[PERF] ps_dashboard: event leads processing took {time.time() - t3:.3f} seconds")
 
@@ -7641,7 +7646,8 @@ def ps_dashboard():
                 print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to lost_leads")
             elif final_status == 'Pending' or not final_status:
                 # Add to today's followups if next_followup_date is <= today
-                if next_followup_date:
+                # ONLY show leads where qualifying call is completed (first_call_date is NOT NULL)
+                if next_followup_date and lead.get('first_call_date'):
                     try:
                         if 'T' in str(next_followup_date):
                             followup_date_parsed = datetime.fromisoformat(str(next_followup_date).replace('Z', '+00:00')).date()
@@ -7654,14 +7660,14 @@ def ps_dashboard():
                             lead_dict['overdue_days'] = (datetime.now().date() - followup_date_parsed).days
                             lead_dict['follow_up_date'] = str(next_followup_date)
                             todays_followups_walkin.append(lead_dict)
-                            print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to today's followups")
+                            print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to today's followups (qualifying call completed)")
                     except (ValueError, TypeError):
                         # If date parsing fails, include the lead for manual review
                         lead_dict['is_overdue'] = False
                         lead_dict['overdue_days'] = 0
                         lead_dict['follow_up_date'] = str(next_followup_date)
                         todays_followups_walkin.append(lead_dict)
-                        print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to today's followups (date parse failed)")
+                        print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to today's followups (date parse failed, qualifying call completed)")
                 
                 # Add to pending leads if no first call has been made yet
                 first_call_date = lead.get('first_call_date')
@@ -15752,8 +15758,8 @@ def api_ps_followup_leads():
 def api_cre_pending_leads():
     """API to get pending leads summary for CRE transfer from lead_master only"""
     try:
-        # Get all pending leads from lead_master grouped by CRE only
-        lead_result = supabase.table('lead_master').select('cre_name').eq('final_status', 'Pending').execute()
+        # Get all pending leads from lead_master grouped by CRE only (only leads with completed qualifying calls)
+        lead_result = supabase.table('lead_master').select('cre_name').eq('final_status', 'Pending').not_.is_('first_call_date', 'null').execute()
         lead_pending_leads = lead_result.data if lead_result.data else []
         
         # Group leads by CRE and count them from lead_master only

@@ -21,20 +21,21 @@
 <div class="card shadow">
     <div class="card-header">
         <h5>Lead Information</h5>
+        <small class="text-muted"><span class="text-danger">*</span> All fields are required</small>
     </div>
     <div class="card-body">
         <form method="POST" id="addLeadForm">
             <div class="row">
                 <div class="col-md-6">
                     <div class="mb-3">
-                        <label for="customer_name" class="form-label">Customer Name</label>
-                        <input type="text" class="form-control" id="customer_name" name="customer_name" required>
+                        <label for="customer_name" class="form-label">Customer Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control required-field" id="customer_name" name="customer_name" required>
                     </div>
                 </div>
                 <div class="col-md-6">
                     <div class="mb-3">
-                        <label for="customer_mobile_number" class="form-label">Mobile Number</label>
-                        <input type="text" class="form-control" id="customer_mobile_number" name="customer_mobile_number" required maxlength="15">
+                        <label for="customer_mobile_number" class="form-label">Mobile Number <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control required-field" id="customer_mobile_number" name="customer_mobile_number" required maxlength="15">
                     </div>
                 </div>
             </div>
@@ -42,7 +43,7 @@
                 <div class="col-md-6">
                     <div class="mb-3">
                         <label for="source" class="form-label">Source <span class="text-danger">*</span></label>
-                        <select class="form-select" id="source" name="source" required onchange="updateSubsource()">
+                        <select class="form-select required-field" id="source" name="source" required onchange="updateSubsource()">
                             <option value="">Select Source</option>
                             <option value="META">META</option>
                             <option value="GOOGLE">GOOGLE</option>
@@ -54,7 +55,7 @@
                 <div class="col-md-6">
                     <div class="mb-3">
                         <label for="subsource" class="form-label">Subsource <span class="text-danger">*</span></label>
-                        <select class="form-select" id="subsource" name="subsource" required>
+                        <select class="form-select required-field" id="subsource" name="subsource" required>
                             <option value="">Select Source First</option>
                         </select>
                     </div>
@@ -64,7 +65,7 @@
                 <div class="col-md-6">
                     <div class="mb-3">
                         <label for="lead_status" class="form-label">Lead Status <span class="text-danger">*</span></label>
-                        <select class="form-select" id="lead_status" name="lead_status" required>
+                        <select class="form-select required-field" id="lead_status" name="lead_status" required>
                             <option value="">Select Status</option>
                             <option value="Busy on another Call">Busy on another Call</option>
                             <option value="RNR">RNR</option>
@@ -82,8 +83,8 @@
                 </div>
                 <div class="col-md-6">
                     <div class="mb-3">
-                        <label for="lead_category" class="form-label">Lead Category</label>
-                        <select class="form-select" id="lead_category" name="lead_category">
+                        <label for="lead_category" class="form-label">Lead Category <span class="text-danger">*</span></label>
+                        <select class="form-select required-field" id="lead_category" name="lead_category" required>
                             <option value="">Select Category</option>
                             <option value="Hot">Hot</option>
                             <option value="Cold">Cold</option>
@@ -96,8 +97,8 @@
             <div class="row">
                 <div class="col-md-6">
                     <div class="mb-3">
-                        <label for="model_type" class="form-label">Model Type</label>
-                        <select class="form-select" id="model_type" onchange="updateModels()">
+                        <label for="model_type" class="form-label">Model Type <span class="text-danger">*</span></label>
+                        <select class="form-select required-field" id="model_type" name="model_type" onchange="updateModels()" required>
                             <option value="">Select Model Type</option>
                             <option value="rizta">Rizta</option>
                             <option value="450x">450X</option>
@@ -106,8 +107,8 @@
                 </div>
                 <div class="col-md-6">
                     <div class="mb-3">
-                        <label for="model_interested" class="form-label">Model Interested</label>
-                        <select class="form-select" id="model_interested" name="model_interested">
+                        <label for="model_interested" class="form-label">Model Interested <span class="text-danger">*</span></label>
+                        <select class="form-select required-field" id="model_interested" name="model_interested" required>
                             <option value="">Select Model</option>
                         </select>
                     </div>
@@ -116,8 +117,8 @@
             <div class="row">
                 <div class="col-md-6">
                     <div class="mb-3">
-                        <label for="branch" class="form-label">Branch</label>
-                        <select class="form-select" id="branch" name="branch" onchange="updatePS()">
+                        <label for="branch" class="form-label">Branch <span class="text-danger">*</span></label>
+                        <select class="form-select required-field" id="branch" name="branch" onchange="updatePS()" required>
                             <option value="">Select Branch</option>
                             {% for branch in branches %}
                             <option value="{{ branch }}">{{ branch }}</option>
@@ -127,8 +128,8 @@
                 </div>
                 <div class="col-md-6">
                     <div class="mb-3">
-                        <label for="ps_name" class="form-label">Product Specialist</label>
-                        <select class="form-select" id="ps_name" name="ps_name">
+                        <label for="ps_name" class="form-label">Product Specialist <span class="text-danger">*</span></label>
+                        <select class="form-select required-field" id="ps_name" name="ps_name" required>
                             <option value="">Select PS</option>
                             <option value="">Unassigned</option>
                         </select>
@@ -138,8 +139,9 @@
             <div class="row">
                 <div class="col-md-6">
                     <div class="mb-3">
-                        <label for="final_status" class="form-label">Final Status</label>
-                        <select class="form-select" id="final_status" name="final_status">
+                        <label for="final_status" class="form-label">Final Status <span class="text-danger">*</span></label>
+                        <select class="form-select required-field" id="final_status" name="final_status" required>
+                            <option value="">Select Final Status</option>
                             <option value="Pending">Pending</option>
                             <option value="Won">Won</option>
                             <option value="Lost">Lost</option>
@@ -159,8 +161,8 @@
             <div class="row">
                 <div class="col-md-12">
                     <div class="mb-3">
-                        <label for="remark" class="form-label">Remark</label>
-                        <textarea class="form-control" id="remark" name="remark" rows="3" placeholder="Enter any remarks..."></textarea>
+                        <label for="remark" class="form-label">Remark <span class="text-danger">*</span></label>
+                        <textarea class="form-control required-field" id="remark" name="remark" rows="3" placeholder="Enter any remarks..." required></textarea>
                     </div>
                 </div>
             </div>
@@ -168,7 +170,7 @@
                 <a href="{{ url_for('cre_dashboard') }}" class="btn btn-secondary me-md-2">
                     <i class="fas fa-arrow-left"></i> Back
                 </a>
-                <button type="submit" class="btn btn-success" onclick="return checkDuplicateLead(event)">
+                <button type="submit" class="btn btn-success">
                     <i class="fas fa-save"></i> Add Lead
                 </button>
             </div>
@@ -202,6 +204,36 @@
         </div>
     </div>
 </div>
+
+<style>
+.required-field {
+    border-left: 3px solid #dc3545;
+}
+
+.required-field:focus {
+    border-left: 3px solid #198754;
+    box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.25);
+}
+
+.form-label .text-danger {
+    font-weight: bold;
+}
+
+.is-invalid {
+    border-color: #dc3545 !important;
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important;
+}
+
+.is-invalid:focus {
+    border-color: #dc3545 !important;
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important;
+}
+
+.text-danger.small {
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+}
+</style>
 
 <script>
 // Model arrays
@@ -266,15 +298,89 @@ function normalizePhoneNumber(phone) {
 async function checkDuplicateLead(event) {
     event.preventDefault();
     
-    const phoneNumber = document.getElementById('customer_mobile_number').value;
+    // Validate all required fields first
+    const customerName = document.getElementById('customer_name').value.trim();
+    const phoneNumber = document.getElementById('customer_mobile_number').value.trim();
     const source = document.getElementById('source').value;
     const subsource = document.getElementById('subsource').value;
+    const leadStatus = document.getElementById('lead_status').value;
+    const leadCategory = document.getElementById('lead_category').value;
+    const modelType = document.getElementById('model_type').value;
+    const modelInterested = document.getElementById('model_interested').value;
+    const branch = document.getElementById('branch').value;
+    const psName = document.getElementById('ps_name').value;
+    const finalStatus = document.getElementById('final_status').value;
+    const followUpDate = document.getElementById('follow_up_date').value;
+    const remark = document.getElementById('remark').value.trim();
     
-    if (!phoneNumber || !source || !subsource) {
-        // If required fields are missing, let the form validation handle it
-        return true;
+    // Check all required fields
+    if (!customerName) {
+        showFieldError('customer_name', 'Please enter Customer Name');
+        return false;
     }
     
+    if (!phoneNumber) {
+        showFieldError('customer_mobile_number', 'Please enter Mobile Number');
+        return false;
+    }
+    
+    if (!source) {
+        showFieldError('source', 'Please select Source');
+        return false;
+    }
+    
+    if (!subsource) {
+        showFieldError('subsource', 'Please select Subsource');
+        return false;
+    }
+    
+    if (!leadStatus) {
+        showFieldError('lead_status', 'Please select Lead Status');
+        return false;
+    }
+    
+    if (!leadCategory) {
+        showFieldError('lead_category', 'Please select Lead Category');
+        return false;
+    }
+    
+    if (!modelType) {
+        showFieldError('model_type', 'Please select Model Type');
+        return false;
+    }
+    
+    if (!modelInterested) {
+        showFieldError('model_interested', 'Please select Model Interested');
+        return false;
+    }
+    
+    if (!branch) {
+        showFieldError('branch', 'Please select Branch');
+        return false;
+    }
+    
+    if (!psName) {
+        showFieldError('ps_name', 'Please select Product Specialist');
+        return false;
+    }
+    
+    if (!finalStatus) {
+        showFieldError('final_status', 'Please select Final Status');
+        return false;
+    }
+    
+    // Follow-up date is required when final status is Pending
+    if (finalStatus === 'Pending' && !followUpDate) {
+        showFieldError('follow_up_date', 'Please select Follow-up Date when Final Status is Pending');
+        return false;
+    }
+    
+    if (!remark) {
+        showFieldError('remark', 'Please enter Remark');
+        return false;
+    }
+    
+    // All fields are filled, now check for duplicates
     const normalizedPhone = normalizePhoneNumber(phoneNumber);
     
     try {
@@ -428,6 +534,87 @@ document.addEventListener('DOMContentLoaded', function() {
         finalStatusSelect.addEventListener('change', toggleFollowUpRequired);
         // Initial check
         toggleFollowUpRequired();
+    }
+
+    // Add form submit event listener for validation and duplicate checking
+    const addLeadForm = document.getElementById('addLeadForm');
+    if (addLeadForm) {
+        addLeadForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            checkDuplicateLead(e);
+        });
+    }
+
+    // Add required-field class to follow-up date input when it becomes required
+    function updateFollowUpDateRequired() {
+        const followUpDateInput = document.getElementById('follow_up_date');
+        const finalStatus = document.getElementById('final_status').value;
+        
+        if (finalStatus === 'Pending') {
+            followUpDateInput.classList.add('required-field');
+        } else {
+            followUpDateInput.classList.remove('required-field');
+        }
+    }
+
+    // Function to show field validation errors
+    function showFieldError(fieldId, message) {
+        const field = document.getElementById(fieldId);
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'text-danger mt-1 small';
+        errorDiv.id = fieldId + '_error';
+        errorDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + message;
+        
+        // Remove existing error if any
+        const existingError = document.getElementById(fieldId + '_error');
+        if (existingError) {
+            existingError.remove();
+        }
+        
+        // Add error message after the field
+        field.parentNode.appendChild(errorDiv);
+        field.classList.add('is-invalid');
+        
+        // Focus on the field
+        field.focus();
+    }
+
+    // Function to clear field validation errors
+    function clearFieldError(fieldId) {
+        const field = document.getElementById(fieldId);
+        const errorDiv = document.getElementById(fieldId + '_error');
+        
+        if (errorDiv) {
+            errorDiv.remove();
+        }
+        
+        field.classList.remove('is-invalid');
+    }
+
+    // Add input event listeners to clear errors when user starts typing
+    const requiredFields = ['customer_name', 'customer_mobile_number', 'source', 'subsource', 'lead_status', 'lead_category', 'model_type', 'model_interested', 'branch', 'ps_name', 'final_status', 'remark'];
+    
+    requiredFields.forEach(fieldId => {
+        const field = document.getElementById(fieldId);
+        if (field) {
+            field.addEventListener('input', function() {
+                clearFieldError(fieldId);
+            });
+            
+            field.addEventListener('change', function() {
+                clearFieldError(fieldId);
+            });
+        }
+    });
+
+    // Add event listener for final status change to update follow-up date styling
+    if (finalStatusSelect) {
+        finalStatusSelect.addEventListener('change', function() {
+            toggleFollowUpRequired();
+            updateFollowUpDateRequired();
+        });
+        // Initial check
+        updateFollowUpDateRequired();
     }
 });
 </script>
