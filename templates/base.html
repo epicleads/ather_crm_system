@@ -15,6 +15,8 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <!-- Lexend Font -->
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Socket.IO Client -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
     <style>
         :root {
@@ -822,5 +824,49 @@ fetchHotLeads();
     </script>
 
     {% block scripts %}{% endblock %}
+    
+    <!-- WebSocket Client Script -->
+    <script src="{{ url_for('static', filename='js/websocket_client.js') }}"></script>
+    
+    <!-- Initialize WebSocket with user info -->
+    <script>
+        // Get user info for WebSocket authentication
+        {% if session.user_id %}
+        (function() {
+            console.log('🔍 Fetching WebSocket user info...');
+            console.log('🔍 Session data:', {{ session | tojson }});
+            
+            fetch('/api/websocket_user_info')
+                .then(function(response) { 
+                    console.log('🔍 Response status:', response.status);
+                    if (!response.ok) {
+                        throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+                    }
+                    return response.json(); 
+                })
+                .then(function(data) {
+                    console.log('🔍 Received user info:', data);
+                    if (data.success) {
+                        window.crmUserInfo = data.user_info;
+                        console.log('🔍 Set crmUserInfo:', window.crmUserInfo);
+                        // Authenticate WebSocket if already connected
+                        if (window.crmWebSocket && window.crmWebSocket.isConnected) {
+                            window.crmWebSocket.authenticate(data.user_info);
+                        }
+                    } else {
+                        console.error('🔍 User info request failed:', data.message);
+                    }
+                })
+                .catch(function(error) {
+                    console.error('❌ Error fetching user info for WebSocket:', error);
+                    console.error('❌ Error details:', error.message);
+                });
+        })();
+        {% else %}
+        console.log('🔍 No user_id in session, skipping WebSocket user info fetch');
+        {% endif %}
+    </script>
+    
+
 </body>
 </html>
