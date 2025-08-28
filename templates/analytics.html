@@ -1011,6 +1011,9 @@
             <h5 style="color: var(--airbnb-red); font-weight: 600; margin-bottom: 1rem;">
                 <i class="fas fa-bullhorn" style="color: var(--airbnb-red);"></i> Campaign & Platform Lead Counts
             </h5>
+            <div class="mb-2" style="color: var(--airbnb-gray-500); font-size: 0.9rem; font-style: italic;">
+                <i class="fas fa-info-circle"></i> Note: Only campaigns with pending leads are displayed
+            </div>
             <form class="d-flex align-items-center mb-3" method="get" action="{{ url_for('analytics') }}">
                 <label for="campaign_start_date" class="me-2 mb-0">From:</label>
                 <input type="date" id="campaign_start_date" name="start_date" class="form-control form-control-sm me-2" value="{{ request.args.get('start_date', '') }}">
