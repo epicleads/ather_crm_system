@@ -819,6 +819,9 @@ def fix_missing_timestamps():
 
 # Routes moved to after app initialization
 
+# Import branch head decorator
+from auth import require_branch_head
+
 
 @app.route('/')
 def index():
@@ -7207,25 +7210,29 @@ def update_lead(uid):
             # Handle PS assignment and email notification
             ps_name = request.form.get('ps_name')
             if ps_name and ps_name != lead_data.get('ps_name'):
+                # Check if PS is active before assignment
+                ps_user = next((ps for ps in ps_users if ps['name'] == ps_name), None)
+                if not ps_user:
+                    flash(f'Product Specialist {ps_name} not found', 'error')
+                    return redirect(url_for('update_lead', uid=uid))
+                
+                if not ps_user.get('is_active', True):
+                    flash(f'Product Specialist {ps_name} is unavailable for today (inactive status)', 'error')
+                    return redirect(url_for('update_lead', uid=uid))
+                
                 update_data['ps_name'] = ps_name
                 update_data['assigned'] = 'Yes'
                 update_data['ps_assigned_at'] = datetime.now().isoformat()
 
-                # Get PS details for followup creation
-                ps_user = next((ps for ps in ps_users if ps['name'] == ps_name), None)
-                if ps_user:
-                    # Create PS followup record
-                    updated_lead_data = {**lead_data, **update_data}
-                    create_or_update_ps_followup(updated_lead_data, ps_name, ps_user['branch'])
+                # Create PS followup record
+                updated_lead_data = {**lead_data, **update_data}
+                create_or_update_ps_followup(updated_lead_data, ps_name, ps_user['branch'])
 
                 # Send email to PS
                 try:
-                    if ps_user:
-                        lead_data_for_email = {**lead_data, **update_data}
-                        socketio.start_background_task(send_email_to_ps, ps_user['email'], ps_user['name'], lead_data_for_email, session.get('cre_name'))
-                        flash(f'Lead assigned to {ps_name} and email notification sent', 'success')
-                    else:
-                        flash(f'Lead assigned to {ps_name}', 'success')
+                    lead_data_for_email = {**lead_data, **update_data}
+                    socketio.start_background_task(send_email_to_ps, ps_user['email'], ps_user['name'], lead_data_for_email, session.get('cre_name'))
+                    flash(f'Lead assigned to {ps_name} and email notification sent', 'success')
                 except Exception as e:
                     print(f"Error sending email: {e}")
                     flash(f'Lead assigned to {ps_name} (email notification failed)', 'warning')
@@ -9201,6 +9208,10 @@ def analytics():
         # Calculate conversion rates and format data
         campaign_platform_counts = []
         for key, data in campaign_platform_data.items():
+            # Filter out rows where pending leads count is 0
+            if data['pending'] == 0:
+                continue
+                
             conversion_rate = round((data['won'] / data['total_leads'] * 100) if data['total_leads'] > 0 else 0, 1)
             
             campaign_platform_counts.append({
@@ -17157,6 +17168,197 @@ def api_documentation():
     }
     
     return jsonify(docs)
+
+
+# =====================================================
+# PS MANAGEMENT API ENDPOINTS FOR BRANCH HEADS
+# =====================================================
+
+@app.route('/api/branch_add_ps', methods=['POST'])
+@require_branch_head
+def branch_add_ps():
+    """Add a new PS user to the branch"""
+    try:
+        data = request.get_json()
+        name = data.get('name', '').strip()
+        username = data.get('username', '').strip()
+        phone = data.get('phone', '').strip()
+        email = data.get('email', '').strip()
+        password = data.get('password', '').strip()
+        
+        if not all([name, username, phone, email, password]):
+            return jsonify({'success': False, 'message': 'All fields are required'})
+        
+        # Get current branch from session
+        branch = session.get('branch_head_branch')
+        
+        # Check if username already exists
+        existing_user = supabase.table('ps_users').select('id').eq('username', username).execute()
+        if existing_user.data:
+            return jsonify({'success': False, 'message': 'Username already exists'})
+        
+        # Hash the password
+        from werkzeug.security import generate_password_hash
+        password_hash = generate_password_hash(password)
+        
+        # Create PS user
+        ps_data = {
+            'name': name,
+            'username': username,
+            'phone': phone,
+            'email': email,
+            'password_hash': password_hash,
+            'branch': branch,
+            'role': 'ps',
+            'is_active': True,
+            'created_at': datetime.now().isoformat()
+        }
+        
+        result = supabase.table('ps_users').insert(ps_data).execute()
+        
+        if result.data:
+            # Log the action
+            auth_manager.log_audit_event(
+                user_id=session.get('user_id'),
+                user_type=session.get('user_type'),
+                action='PS_USER_CREATED',
+                resource='ps_users',
+                details={
+                    'ps_name': name,
+                    'ps_username': username,
+                    'branch': branch
+                }
+            )
+            
+            return jsonify({
+                'success': True,
+                'message': f'PS user {name} created successfully'
+            })
+        else:
+            return jsonify({'success': False, 'message': 'Failed to create PS user'})
+            
+    except Exception as e:
+        print(f"Error creating PS user: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+
+
+@app.route('/api/branch_toggle_ps_status/<int:ps_id>', methods=['POST'])
+@require_branch_head
+def branch_toggle_ps_status(ps_id):
+    """Toggle PS user active status"""
+    try:
+        data = request.get_json()
+        active = data.get('active', False)
+        
+        # Get current PS info for logging
+        ps_result = supabase.table('ps_users').select('name, branch').eq('id', ps_id).execute()
+        if not ps_result.data:
+            return jsonify({'success': False, 'message': 'PS user not found'})
+        
+        ps_info = ps_result.data[0]
+        current_branch = session.get('branch_head_branch')
+        
+        # Verify PS belongs to the branch head's branch
+        if ps_info['branch'] != current_branch:
+            return jsonify({'success': False, 'message': 'You can only manage PS users in your branch'})
+        
+        # Update the status
+        result = supabase.table('ps_users').update({'is_active': active}).eq('id', ps_id).execute()
+        
+        if result.data:
+            # Log the action
+            auth_manager.log_audit_event(
+                user_id=session.get('user_id'),
+                user_type=session.get('user_type'),
+                action='PS_STATUS_TOGGLE',
+                resource='ps_users',
+                details={
+                    'ps_id': ps_id,
+                    'ps_name': ps_info['name'],
+                    'branch': ps_info['branch'],
+                    'new_status': 'Active' if active else 'Inactive'
+                }
+            )
+            
+            return jsonify({
+                'success': True,
+                'message': f'PS user {"activated" if active else "deactivated"} successfully'
+            })
+        else:
+            return jsonify({'success': False, 'message': 'Failed to update PS status'})
+            
+    except Exception as e:
+        print(f"Error toggling PS status: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+
+
+@app.route('/api/branch_update_ps_info/<int:ps_id>', methods=['POST'])
+@require_branch_head
+def branch_update_ps_info(ps_id):
+    """Update PS user contact information"""
+    try:
+        data = request.get_json()
+        phone = data.get('phone', '').strip()
+        email = data.get('email', '').strip()
+        
+        if not all([phone, email]):
+            return jsonify({'success': False, 'message': 'Phone and email are required'})
+        
+        # Get current PS info for logging
+        ps_result = supabase.table('ps_users').select('name, branch, phone, email').eq('id', ps_id).execute()
+        if not ps_result.data:
+            return jsonify({'success': False, 'message': 'PS user not found'})
+        
+        ps_info = ps_result.data[0]
+        current_branch = session.get('branch_head_branch')
+        
+        # Verify PS belongs to the branch head's branch
+        if ps_info['branch'] != current_branch:
+            return jsonify({'success': False, 'message': 'You can only manage PS users in your branch'})
+        
+        # Update the information
+        result = supabase.table('ps_users').update({
+            'phone': phone,
+            'email': email
+        }).eq('id', ps_id).execute()
+        
+        if result.data:
+            # Log the action
+            auth_manager.log_audit_event(
+                user_id=session.get('user_id'),
+                user_type=session.get('user_type'),
+                action='PS_INFO_UPDATE',
+                resource='ps_users',
+                details={
+                    'ps_id': ps_id,
+                    'ps_name': ps_info['name'],
+                    'branch': ps_info['branch'],
+                    'old_phone': ps_info['phone'],
+                    'new_phone': phone,
+                    'old_email': ps_info['email'],
+                    'new_email': email
+                }
+            )
+            
+            return jsonify({
+                'success': True,
+                'message': 'PS contact information updated successfully'
+            })
+        else:
+            return jsonify({'success': False, 'message': 'Failed to update PS information'})
+            
+    except Exception as e:
+        print(f"Error updating PS info: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
 
 
 if __name__ == '__main__':

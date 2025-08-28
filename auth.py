@@ -734,3 +734,16 @@ def require_rec(f):
         return f(*args, **kwargs)
 
     return decorated_function
+
+
+def require_branch_head(f):
+    """Decorator to require Branch Head access"""
+
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if session.get('user_type') != 'branch_head':
+            flash('Branch Head access required', 'error')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+
+    return decorated_function

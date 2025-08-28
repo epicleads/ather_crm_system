@@ -221,6 +221,9 @@
                     <div class="invalid-feedback ps-error" style="display: none;">
                         Please select a Product Specialist
                     </div>
+                    <small class="form-text text-muted">
+                        <i class="fas fa-info-circle"></i> Only active PS users are shown in the dropdown
+                    </small>
                 </div>
             </div>
             <div class="col-md-6">
@@ -308,6 +311,9 @@
                 <div class="invalid-feedback ps-error" style="display: none;">
                     Please select a Product Specialist
                 </div>
+                <small class="form-text text-muted">
+                    <i class="fas fa-info-circle"></i> Only active PS users are shown in the dropdown
+                </small>
             </div>
         </div>
     </div>
@@ -498,7 +504,8 @@ const psUsers = [
     {% for ps in ps_users %}
     {
         name: "{{ ps.name }}",
-        branch: "{{ ps.branch }}"
+        branch: "{{ ps.branch }}",
+        is_active: {% if ps.is_active %}true{% else %}false{% endif %}
     }{% if not loop.last %},{% endif %}
     {% endfor %}
 ];
@@ -818,8 +825,8 @@ function updatePS() {
     // Clear existing options
     psSelect.innerHTML = '<option value="">Select PS</option><option value="">Unassigned</option>';
 
-    // Filter PS users by branch
-    const filteredPS = psUsers.filter(ps => ps.branch === selectedBranch);
+    // Filter PS users by branch and active status
+    const filteredPS = psUsers.filter(ps => ps.branch === selectedBranch && ps.is_active !== false);
 
     filteredPS.forEach(ps => {
         const option = document.createElement('option');
@@ -830,6 +837,14 @@ function updatePS() {
         }
         psSelect.appendChild(option);
     });
+    
+    // If current PS is inactive, show warning
+    if (currentValue && !filteredPS.find(ps => ps.name === currentValue)) {
+        const warningDiv = document.createElement('div');
+        warningDiv.className = 'alert alert-warning mt-2';
+        warningDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> <strong>Warning:</strong> Currently assigned PS "${currentValue}" is inactive and unavailable for today.`;
+        psSelect.parentNode.appendChild(warningDiv);
+    }
 }
 
 document.addEventListener('DOMContentLoaded', function() {
