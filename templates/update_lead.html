@@ -226,6 +226,9 @@
                     </small>
                 </div>
             </div>
+        </div>
+
+        <div class="row">
             <div class="col-md-6">
                 <div class="mb-3">
                     <label for="final_status" class="form-label">Final Status</label>
@@ -235,6 +238,31 @@
                         <option value="Lost">Lost</option>
                         <option value="Pending">Pending</option>
                     </select>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="form-label">Test Drive Status</div>
+                <div class="d-flex align-items-center">
+                    {% if test_drive_state.locked and test_drive_state.value %}
+                        <span class="badge bg-success me-2">
+                            <i class="fas fa-lock me-1"></i>Test Drive Done - Locked
+                        </span>
+                        <small class="text-muted">Updated by: {{ test_drive_state.updated_by }}</small>
+                    {% elif test_drive_state.locked and not test_drive_state.value %}
+                        <span class="badge bg-warning me-2">
+                            <i class="fas fa-lock me-1"></i>Test Drive Not Done - Locked
+                        </span>
+                        <small class="text-muted">Updated by: {{ test_drive_state.updated_by }}</small>
+                    {% else %}
+                        <div class="mb-3">
+                            <label for="test_drive_done" class="form-label">Test Drive Done? <span class="text-danger">*</span></label>
+                            <select class="form-select" id="test_drive_done" name="test_drive_done" required>
+                                <option value="">Select</option>
+                                <option value="Yes" {% if test_drive_state.value %}selected{% endif %}>Yes</option>
+                                <option value="No" {% if not test_drive_state.value and test_drive_state.value is not none %}selected{% endif %}>No</option>
+                            </select>
+                        </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -314,6 +342,31 @@
                 <small class="form-text text-muted">
                     <i class="fas fa-info-circle"></i> Only active PS users are shown in the dropdown
                 </small>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="form-label">Test Drive Status</div>
+            <div class="d-flex align-items-center">
+                {% if test_drive_state.locked and test_drive_state.value %}
+                    <span class="badge bg-success me-2">
+                        <i class="fas fa-lock me-1"></i>Test Drive Done - Locked
+                    </span>
+                    <small class="text-muted">Updated by: {{ test_drive_state.updated_by }}</small>
+                {% elif test_drive_state.locked and not test_drive_state.value %}
+                    <span class="badge bg-warning me-2">
+                        <i class="fas fa-lock me-1"></i>Test Drive Not Done - Locked
+                    </span>
+                    <small class="text-muted">Updated by: {{ test_drive_state.updated_by }}</small>
+                {% else %}
+                    <div class="mb-3">
+                        <label for="test_drive_done" class="form-label">Test Drive Done? <span class="text-danger">*</span></label>
+                        <select class="form-select" id="test_drive_done" name="test_drive_done" required>
+                            <option value="">Select</option>
+                            <option value="Yes" {% if test_drive_state.value %}selected{% endif %}>Yes</option>
+                            <option value="No" {% if not test_drive_state.value and test_drive_state.value is not none %}selected{% endif %}>No</option>
+                        </select>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>
