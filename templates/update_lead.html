@@ -648,14 +648,17 @@ function handleLeadStatusChange() {
                 if (finalStatus) {
                     finalStatus.value = 'Lost';
                 }
-                // Set default follow-up date to 1 week from now if not already set
-                if (followupDate && !followupDate.value) {
-                    const oneWeekFromNow = new Date();
-                    oneWeekFromNow.setDate(oneWeekFromNow.getDate() + 7);
-                    followupDate.value = oneWeekFromNow.toISOString().slice(0, 16);
+                // Hide follow-up section for non-interested statuses
+                // No follow-up date needed when customer is not interested
+                if (followupSection) {
+                    followupSection.style.display = 'none';
                 }
-                // Validate Branch and PS fields (hide required indicators)
-                validateBranchPS();
+                if (followupDate) {
+                    followupDate.required = false;
+                    followupDate.value = ''; // Clear the value
+                }
+                // No PS validation needed for non-interested statuses
+                // PS assignment is only relevant when customer shows interest
                 break;
 
             case 'Call Disconnected':
@@ -778,8 +781,15 @@ function handleLeadStatusChange() {
                 if (finalStatus) {
                     finalStatus.value = 'Lost';
                 }
-                // Validate Branch and PS fields (hide required indicators)
-                validateBranchPS();
+                // Hide follow-up section for non-interested statuses
+                if (followupSection) {
+                    followupSection.style.display = 'none';
+                }
+                if (followupDate) {
+                    followupDate.required = false;
+                    followupDate.value = ''; // Clear the value
+                }
+                // No PS validation needed for non-interested statuses
                 break;
 
             default:
@@ -1026,7 +1036,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
 
-            // For negative responses, validate call details
+            // For negative responses, validate call details only
+            // No follow-up date validation needed for non-interested statuses
             if ((leadStatus === 'Not Interested' || leadStatus === 'Did Not Inquire' || leadStatus === 'Lost to Competition' || leadStatus === 'Lost to Co Dealer' || leadStatus === 'Wrong Number')) {
                 if (callDate && !callDate.value) {
                     e.preventDefault();
@@ -1140,6 +1151,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Validate all required fields for Interested status
     function validateBranchPS() {
         const leadStatus = document.getElementById('lead_status').value;
+        
+        // Only perform PS validation when lead status is "Interested"
+        // Skip validation for all other statuses to prevent unnecessary errors
+        if (leadStatus !== 'Interested') {
+            return;
+        }
+        
         const leadCategoryField = document.getElementById('lead_category');
         const modelTypeField = document.getElementById('model_type');
         const modelInterestedField = document.getElementById('model_interested');
@@ -1160,13 +1178,12 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const submitBtn = document.querySelector('button[type="submit"]');
         
-        if (leadStatus === 'Interested') {
-            // Show required indicators
-            if (categoryRequired) categoryRequired.style.display = 'inline';
-            if (modelTypeRequired) modelTypeRequired.style.display = 'inline';
-            if (modelInterestedRequired) modelInterestedRequired.style.display = 'inline';
-            if (branchRequired) branchRequired.style.display = 'inline';
-            if (psRequired) psRequired.style.display = 'inline';
+        // Show required indicators
+        if (categoryRequired) categoryRequired.style.display = 'inline';
+        if (modelTypeRequired) modelTypeRequired.style.display = 'inline';
+        if (modelInterestedRequired) modelInterestedRequired.style.display = 'inline';
+        if (branchRequired) branchRequired.style.display = 'inline';
+        if (psRequired) psRequired.style.display = 'inline';
             
             // Validate Lead Category
             if (leadCategoryField && !leadCategoryField.value) {
@@ -1229,33 +1246,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     submitBtn.classList.add('btn-primary');
                 }
             }
-        } else {
-            // Hide required indicators and errors for non-Interested status
-            if (categoryRequired) categoryRequired.style.display = 'none';
-            if (modelTypeRequired) modelTypeRequired.style.display = 'none';
-            if (modelInterestedRequired) modelInterestedRequired.style.display = 'none';
-            if (branchRequired) branchRequired.style.display = 'none';
-            if (psRequired) psRequired.style.display = 'none';
-            
-            if (categoryError) categoryError.style.display = 'none';
-            if (modelTypeError) modelTypeError.style.display = 'none';
-            if (modelInterestedError) modelInterestedError.style.display = 'none';
-            if (branchError) branchError.style.display = 'none';
-            if (psError) psError.style.display = 'none';
-            
-            if (leadCategoryField) leadCategoryField.classList.remove('is-invalid');
-            if (modelTypeField) modelTypeField.classList.remove('is-invalid');
-            if (modelInterestedField) modelInterestedField.classList.remove('is-invalid');
-            if (branchField) branchField.classList.remove('is-invalid');
-            if (psField) psField.classList.remove('is-invalid');
-            
-            // Enable submit button for non-Interested status
-            if (submitBtn) {
-                submitBtn.disabled = false;
-                submitBtn.classList.remove('btn-secondary');
-                submitBtn.classList.add('btn-primary');
-            }
-        }
+
     }
     
     if (finalStatus) {
