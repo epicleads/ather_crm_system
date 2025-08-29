@@ -2942,8 +2942,8 @@ def add_lead():
             flash('Please fill all required fields', 'error')
             return render_template('add_lead.html', branches=branches, ps_users=ps_users)
         
-        # Validate follow_up_date is required when final_status is Pending
-        if final_status == 'Pending' and not follow_up_date:
+        # Validate follow_up_date is required when final_status is Pending (relaxed for RNR)
+        if final_status == 'Pending' and not follow_up_date and lead_status != 'RNR':
             flash('Follow-up date is required when final status is Pending', 'error')
             return render_template('add_lead.html', branches=branches, ps_users=ps_users)
         
@@ -3028,7 +3028,7 @@ def add_lead():
             'updated_at': datetime.now().isoformat(),
             'first_remark': remark,
             'cre_name': cre_name,
-            'first_call_date': date_now
+            'first_call_date': None if lead_status in ['RNR', 'Call me Back'] else date_now
         }
         try:
             # If this is a duplicate with new source, add to duplicate_leads table
@@ -3158,8 +3158,8 @@ def add_lead_optimized():
                 'message': 'Please fill all required fields'
             })
         
-        # Validate follow_up_date is required when final_status is Pending
-        if final_status == 'Pending' and not follow_up_date:
+        # Validate follow_up_date is required when final_status is Pending (relaxed for RNR)
+        if final_status == 'Pending' and not follow_up_date and lead_status != 'RNR':
             return jsonify({
                 'success': False,
                 'message': 'Follow-up date is required when final status is Pending'
@@ -3192,7 +3192,7 @@ def add_lead_optimized():
             'updated_at': datetime.now().isoformat(),
             'first_remark': remark,
             'cre_name': cre_name,
-            'first_call_date': date_now
+            'first_call_date': None if lead_status in ['RNR', 'Call me Back'] else date_now
         }
         
         # Get PS branch if PS is assigned
@@ -3670,25 +3670,14 @@ def cre_dashboard():
     # Get today's followups
     today = date.today()
     today_str = today.isoformat()
-    # Get all leads with follow-up date <= today, final_status = 'Pending', qualifying call completed (first_call_date IS NOT NULL), 
-    # AND NOT qualifying call leads (must have follow-up call data beyond first call)
+    # Get all leads with follow-up date <= today, final_status = 'Pending', qualifying call completed (first_call_date IS NOT NULL)
     todays_followups = []
     for lead in all_leads:
         follow_up_date = lead.get('follow_up_date')
         final_status = lead.get('final_status')
         has_first_call = lead.get('first_call_date') is not None
         
-        # Check if this is NOT just a qualifying call (must have follow-up call data)
-        has_followup_calls = any([
-            lead.get('second_call_date'),
-            lead.get('third_call_date'),
-            lead.get('fourth_call_date'),
-            lead.get('fifth_call_date'),
-            lead.get('sixth_call_date'),
-            lead.get('seventh_call_date')
-        ])
-        
-        if follow_up_date and final_status == 'Pending' and has_first_call and has_followup_calls:
+        if follow_up_date and final_status == 'Pending' and has_first_call:
             # Parse follow_up_date and check if it's <= today
             try:
                 if 'T' in str(follow_up_date):
@@ -6468,8 +6457,8 @@ def add_lead():
             flash('Please fill all required fields', 'error')
             return render_template('add_lead.html', branches=branches, ps_users=ps_users)
         
-        # Validate follow_up_date is required when final_status is Pending
-        if final_status == 'Pending' and not follow_up_date:
+        # Validate follow_up_date is required when final_status is Pending (relaxed for RNR)
+        if final_status == 'Pending' and not follow_up_date and lead_status != 'RNR':
             flash('Follow-up date is required when final status is Pending', 'error')
             return render_template('add_lead.html', branches=branches, ps_users=ps_users)
         
@@ -6554,7 +6543,7 @@ def add_lead():
             'updated_at': datetime.now().isoformat(),
             'first_remark': remark,
             'cre_name': cre_name,
-            'first_call_date': date_now
+            'first_call_date': None if lead_status in ['RNR', 'Call me Back'] else date_now
         }
         try:
             # If this is a duplicate with new source, add to duplicate_leads table
@@ -6684,8 +6673,8 @@ def add_lead_optimized():
                 'message': 'Please fill all required fields'
             })
         
-        # Validate follow_up_date is required when final_status is Pending
-        if final_status == 'Pending' and not follow_up_date:
+        # Validate follow_up_date is required when final_status is Pending (relaxed for RNR)
+        if final_status == 'Pending' and not follow_up_date and lead_status != 'RNR':
             return jsonify({
                 'success': False,
                 'message': 'Follow-up date is required when final status is Pending'
@@ -6718,7 +6707,7 @@ def add_lead_optimized():
             'updated_at': datetime.now().isoformat(),
             'first_remark': remark,
             'cre_name': cre_name,
-            'first_call_date': date_now
+            'first_call_date': None if lead_status in ['RNR', 'Call me Back'] else date_now
         }
         
         # Get PS branch if PS is assigned
@@ -7192,25 +7181,14 @@ def cre_dashboard():
     # Get today's followups
     today = date.today()
     today_str = today.isoformat()
-    # Get all leads with follow-up date <= today, final_status = 'Pending', qualifying call completed (first_call_date IS NOT NULL), 
-    # AND NOT qualifying call leads (must have follow-up call data beyond first call)
+    # Get all leads with follow-up date <= today, final_status = 'Pending', qualifying call completed (first_call_date IS NOT NULL)
     todays_followups = []
     for lead in all_leads:
         follow_up_date = lead.get('follow_up_date')
         final_status = lead.get('final_status')
         has_first_call = lead.get('first_call_date') is not None
         
-        # Check if this is NOT just a qualifying call (must have follow-up call data)
-        has_followup_calls = any([
-            lead.get('second_call_date'),
-            lead.get('third_call_date'),
-            lead.get('fourth_call_date'),
-            lead.get('fifth_call_date'),
-            lead.get('sixth_call_date'),
-            lead.get('seventh_call_date')
-        ])
-        
-        if follow_up_date and final_status == 'Pending' and has_first_call and has_followup_calls:
+        if follow_up_date and final_status == 'Pending' and has_first_call:
             # Parse follow_up_date and check if it's <= today
             try:
                 if 'T' in str(follow_up_date):
@@ -7402,6 +7380,13 @@ def update_lead(uid):
                     update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 elif final_status == 'Lost':
                     update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+            # If lead status is RNR or Call me Back, ensure first_call_date is NULL
+            if lead_status in ['RNR', 'Call me Back']:
+                update_data['first_call_date'] = None
+                # Also relax follow_up_date if final_status Pending
+                if update_data.get('final_status', lead_data.get('final_status')) == 'Pending':
+                    update_data['follow_up_date'] = update_data.get('follow_up_date') or None
 
             # Handle call dates and remarks - record for all statuses including RNR
             if request.form.get('call_date') and call_remark:
