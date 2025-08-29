@@ -2787,8 +2787,8 @@ def add_lead():
             flash('Please fill all required fields', 'error')
             return render_template('add_lead.html', branches=branches, ps_users=ps_users)
         
-        # Validate follow_up_date is required when final_status is Pending
-        if final_status == 'Pending' and not follow_up_date:
+        # Validate follow_up_date is required when final_status is Pending (relaxed for RNR)
+        if final_status == 'Pending' and not follow_up_date and lead_status != 'RNR':
             flash('Follow-up date is required when final status is Pending', 'error')
             return render_template('add_lead.html', branches=branches, ps_users=ps_users)
         
@@ -2873,7 +2873,7 @@ def add_lead():
             'updated_at': datetime.now().isoformat(),
             'first_remark': remark,
             'cre_name': cre_name,
-            'first_call_date': date_now
+            'first_call_date': None if lead_status in ['RNR', 'Call me Back'] else date_now
         }
         try:
             # If this is a duplicate with new source, add to duplicate_leads table
@@ -3003,8 +3003,8 @@ def add_lead_optimized():
                 'message': 'Please fill all required fields'
             })
         
-        # Validate follow_up_date is required when final_status is Pending
-        if final_status == 'Pending' and not follow_up_date:
+        # Validate follow_up_date is required when final_status is Pending (relaxed for RNR)
+        if final_status == 'Pending' and not follow_up_date and lead_status != 'RNR':
             return jsonify({
                 'success': False,
                 'message': 'Follow-up date is required when final status is Pending'
@@ -3037,7 +3037,7 @@ def add_lead_optimized():
             'updated_at': datetime.now().isoformat(),
             'first_remark': remark,
             'cre_name': cre_name,
-            'first_call_date': date_now
+            'first_call_date': None if lead_status in ['RNR', 'Call me Back'] else date_now
         }
         
         # Get PS branch if PS is assigned
@@ -6313,8 +6313,8 @@ def add_lead():
             flash('Please fill all required fields', 'error')
             return render_template('add_lead.html', branches=branches, ps_users=ps_users)
         
-        # Validate follow_up_date is required when final_status is Pending
-        if final_status == 'Pending' and not follow_up_date:
+        # Validate follow_up_date is required when final_status is Pending (relaxed for RNR)
+        if final_status == 'Pending' and not follow_up_date and lead_status != 'RNR':
             flash('Follow-up date is required when final status is Pending', 'error')
             return render_template('add_lead.html', branches=branches, ps_users=ps_users)
         
@@ -6399,7 +6399,7 @@ def add_lead():
             'updated_at': datetime.now().isoformat(),
             'first_remark': remark,
             'cre_name': cre_name,
-            'first_call_date': date_now
+            'first_call_date': None if lead_status in ['RNR', 'Call me Back'] else date_now
         }
         try:
             # If this is a duplicate with new source, add to duplicate_leads table
@@ -6529,8 +6529,8 @@ def add_lead_optimized():
                 'message': 'Please fill all required fields'
             })
         
-        # Validate follow_up_date is required when final_status is Pending
-        if final_status == 'Pending' and not follow_up_date:
+        # Validate follow_up_date is required when final_status is Pending (relaxed for RNR)
+        if final_status == 'Pending' and not follow_up_date and lead_status != 'RNR':
             return jsonify({
                 'success': False,
                 'message': 'Follow-up date is required when final status is Pending'
@@ -6563,7 +6563,7 @@ def add_lead_optimized():
             'updated_at': datetime.now().isoformat(),
             'first_remark': remark,
             'cre_name': cre_name,
-            'first_call_date': date_now
+            'first_call_date': None if lead_status in ['RNR', 'Call me Back'] else date_now
         }
         
         # Get PS branch if PS is assigned
@@ -7247,6 +7247,13 @@ def update_lead(uid):
                     update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 elif final_status == 'Lost':
                     update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+            # If lead status is RNR or Call me Back, ensure first_call_date is NULL
+            if lead_status in ['RNR', 'Call me Back']:
+                update_data['first_call_date'] = None
+                # Also relax follow_up_date if final_status Pending
+                if update_data.get('final_status', lead_data.get('final_status')) == 'Pending':
+                    update_data['follow_up_date'] = update_data.get('follow_up_date') or None
 
             # Handle call dates and remarks - record for all statuses including RNR
             if request.form.get('call_date') and call_remark:

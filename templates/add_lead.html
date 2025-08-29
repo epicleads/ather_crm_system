@@ -264,14 +264,7 @@ const sourceSubsourceMap = {
     'OEM': ['Web', 'Tele', 'Affiliate Bikewale', 'Affiliate Bikedekho', 'Affiliate 91 Wheels']
 };
 
-const psUsers = [
-    {% for ps in ps_users %}
-    {
-        name: "{{ ps.name }}",
-        branch: "{{ ps.branch }}"
-    }{% if not loop.last %},{% endif %}
-    {% endfor %}
-];
+const psUsers = JSON.parse('{{ ps_users|tojson|safe }}');
 
 function updateSubsource() {
     const sourceSelect = document.getElementById('source');
@@ -314,6 +307,10 @@ async function checkDuplicateLead(event) {
     const followUpDate = document.getElementById('follow_up_date').value;
     const remark = document.getElementById('remark').value.trim();
     
+    // Determine relaxed validation for certain lead statuses
+    const relaxedStatuses = ['RNR', 'Call me Back'];
+    const isRelaxed = relaxedStatuses.includes(leadStatus);
+
     // Check all required fields
     if (!customerName) {
         showFieldError('customer_name', 'Please enter Customer Name');
@@ -335,32 +332,33 @@ async function checkDuplicateLead(event) {
         return false;
     }
     
+    // Lead Status itself must be selected unless relaxed is triggered by it (i.e., still selected)
     if (!leadStatus) {
         showFieldError('lead_status', 'Please select Lead Status');
         return false;
     }
-    
-    if (!leadCategory) {
+
+    if (!isRelaxed && !leadCategory) {
         showFieldError('lead_category', 'Please select Lead Category');
         return false;
     }
     
-    if (!modelType) {
+    if (!isRelaxed && !modelType) {
         showFieldError('model_type', 'Please select Model Type');
         return false;
     }
     
-    if (!modelInterested) {
+    if (!isRelaxed && !modelInterested) {
         showFieldError('model_interested', 'Please select Model Interested');
         return false;
     }
     
-    if (!branch) {
+    if (!isRelaxed && !branch) {
         showFieldError('branch', 'Please select Branch');
         return false;
     }
     
-    if (!psName) {
+    if (!isRelaxed && !psName) {
         showFieldError('ps_name', 'Please select Product Specialist');
         return false;
     }
@@ -371,7 +369,7 @@ async function checkDuplicateLead(event) {
     }
     
     // Follow-up date is required when final status is Pending
-    if (finalStatus === 'Pending' && !followUpDate) {
+    if (finalStatus === 'Pending' && !followUpDate && leadStatus !== 'RNR') {
         showFieldError('follow_up_date', 'Please select Follow-up Date when Final Status is Pending');
         return false;
     }
@@ -513,7 +511,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function toggleFollowUpRequired() {
         const selectedFinalStatus = finalStatusSelect.value;
-        if (selectedFinalStatus === 'Pending') {
+        const currentLeadStatus = document.getElementById('lead_status').value;
+        const relaxFollowUp = currentLeadStatus === 'RNR';
+        if (selectedFinalStatus === 'Pending' && !relaxFollowUp) {
             followUpRequiredSpan.style.display = 'inline-block';
             followUpHelpText.style.display = 'block';
             // Add required attribute to the input field
@@ -550,8 +550,9 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateFollowUpDateRequired() {
         const followUpDateInput = document.getElementById('follow_up_date');
         const finalStatus = document.getElementById('final_status').value;
-        
-        if (finalStatus === 'Pending') {
+        const leadStatusVal = document.getElementById('lead_status').value;
+        const relaxFollowUp = leadStatusVal === 'RNR';
+        if (finalStatus === 'Pending' && !relaxFollowUp) {
             followUpDateInput.classList.add('required-field');
         } else {
             followUpDateInput.classList.remove('required-field');
@@ -616,6 +617,34 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         // Initial check
         updateFollowUpDateRequired();
+    }
+
+    // Toggle required attributes for fields based on lead_status
+    const leadStatusSelect = document.getElementById('lead_status');
+    function toggleConditionalRequirements() {
+        const statusVal = leadStatusSelect.value;
+        const isRelaxedNow = ['RNR', 'Call me Back'].includes(statusVal);
+        const fieldsToToggle = [
+            'lead_category', 'model_type', 'model_interested', 'branch', 'ps_name'
+        ];
+        fieldsToToggle.forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (isRelaxedNow) {
+                el.removeAttribute('required');
+                el.classList.remove('required-field');
+            } else {
+                el.setAttribute('required', 'required');
+                el.classList.add('required-field');
+            }
+        });
+        // Also re-evaluate follow-up date requirement
+        toggleFollowUpRequired();
+        updateFollowUpDateRequired();
+    }
+    if (leadStatusSelect) {
+        leadStatusSelect.addEventListener('change', toggleConditionalRequirements);
+        toggleConditionalRequirements();
     }
 });
 </script>
