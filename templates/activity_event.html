@@ -187,6 +187,17 @@ document.getElementById('addCustomerLead').addEventListener('click', function() 
     });
     newRow.querySelector('.remove-lead-row').style.display = 'block';
     container.appendChild(newRow);
+    
+    // Add duplicate checking to the new phone input field
+    const newPhoneInput = newRow.querySelector('input[name="customer_phone_number[]"]');
+    if (newPhoneInput) {
+        newPhoneInput.addEventListener('blur', function() {
+            const phoneNumber = this.value.trim();
+            if (phoneNumber) {
+                checkDuplicateOnBlur(phoneNumber, this);
+            }
+        });
+    }
 });
 
 document.getElementById('customerLeads').addEventListener('click', function(e) {
@@ -199,6 +210,12 @@ document.getElementById('customerLeads').addEventListener('click', function(e) {
 function normalizePhoneNumber(phone) {
     // Remove all non-digit characters
     return phone.replace(/\D/g, '');
+}
+
+function getLast10Digits(phone) {
+    // Get last 10 digits for duplicate checking (handles +91, 91, etc.)
+    const normalized = normalizePhoneNumber(phone);
+    return normalized.slice(-10);
 }
 
 async function checkDuplicateEventLeads(event) {
@@ -218,6 +235,12 @@ async function checkDuplicateEventLeads(event) {
         
         if (phoneNumber && customerName) {
             const normalizedPhone = normalizePhoneNumber(phoneNumber);
+            const last10Digits = getLast10Digits(phoneNumber);
+            
+            console.log('🔍 Duplicate check details:');
+            console.log(`  - Original phone: ${phoneNumber}`);
+            console.log(`  - Normalized: ${normalizedPhone}`);
+            console.log(`  - Last 10 digits: ${last10Digits}`);
             
             try {
                 const response = await fetch('/check_duplicate_event_lead', {
@@ -226,21 +249,22 @@ async function checkDuplicateEventLeads(event) {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        phone_number: normalizedPhone
+                        phone_number: last10Digits // Send last 10 digits for better duplicate detection
                     })
                 });
                 
                 const result = await response.json();
                 
-                if (result.is_duplicate) {
-                    if (result.duplicate_type === 'exact_match') {
-                        duplicates.push({
-                            phone: phoneNumber,
-                            name: customerName,
-                            type: 'exact_match',
-                            message: result.message,
-                            source: result.source
-                        });
+                                    if (result.is_duplicate) {
+                        if (result.duplicate_type === 'exact_match') {
+                            duplicates.push({
+                                phone: phoneNumber,
+                                name: customerName,
+                                type: 'exact_match',
+                                message: result.message,
+                                source: result.source,
+                                existing_lead: result.existing_lead
+                            });
                     } else {
                         // This is a duplicate with new source - can be added
                         validLeads.push({
@@ -292,6 +316,97 @@ async function checkDuplicateEventLeads(event) {
                     <small>${duplicate.message}</small>
                 </div>
             `;
+            
+            // Add detailed duplicate information if available
+            if (duplicate.existing_lead) {
+                detailsHtml += `
+                    <div class="alert alert-info">
+                        <strong>Existing Lead Details:</strong><br>
+                        <strong>Customer Name:</strong> ${duplicate.existing_lead.customer_name}<br>
+                        <strong>Assigned CRE:</strong> ${duplicate.existing_lead.cre_name || 'Unassigned'}<br>
+                        <strong>Status:</strong> ${duplicate.existing_lead.lead_status || 'N/A'}<br>
+                        <strong>Final Status:</strong> ${duplicate.existing_lead.final_status || 'N/A'}
+                    </div>
+                `;
+                
+                // Add CRE assigned timestamp if available
+                if (duplicate.existing_lead.cre_assigned_timestamp && duplicate.existing_lead.cre_assigned_timestamp !== 'null') {
+                    try {
+                        const creTimestamp = new Date(duplicate.existing_lead.cre_assigned_timestamp);
+                        if (!isNaN(creTimestamp.getTime())) {
+                            const istTimestamp = new Date(creTimestamp.getTime() + (5.5 * 60 * 60 * 1000)); // Add 5:30 hours
+                            const formattedCreTime = istTimestamp.toLocaleString('en-IN', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit',
+                                timeZone: 'Asia/Kolkata'
+                            });
+                            
+                            detailsHtml += `
+                                <div class="alert alert-primary">
+                                    <strong>CRE Assigned:</strong> ${formattedCreTime}
+                                </div>
+                            `;
+                        }
+                    } catch (error) {
+                        console.log('Error formatting CRE timestamp:', error);
+                    }
+                }
+                
+                // Add Won/Lost timestamp if final status is Won or Lost
+                if (duplicate.existing_lead.final_status === 'Won' && duplicate.existing_lead.won_timestamp && duplicate.existing_lead.won_timestamp !== 'null') {
+                    try {
+                        const wonTimestamp = new Date(duplicate.existing_lead.won_timestamp);
+                        if (!isNaN(wonTimestamp.getTime())) {
+                            const istWonTime = new Date(wonTimestamp.getTime() + (5.5 * 60 * 60 * 1000)); // Add 5:30 hours
+                            const formattedWonTime = istWonTime.toLocaleString('en-IN', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit',
+                                timeZone: 'Asia/Kolkata'
+                            });
+                            
+                            detailsHtml += `
+                                <div class="alert alert-success">
+                                    <strong>Won Timestamp:</strong> ${formattedWonTime}
+                                </div>
+                            `;
+                        }
+                    } catch (error) {
+                        console.log('Error formatting Won timestamp:', error);
+                    }
+                } else if (duplicate.existing_lead.final_status === 'Lost' && duplicate.existing_lead.lost_timestamp && duplicate.existing_lead.lost_timestamp !== 'null') {
+                    try {
+                        const lostTimestamp = new Date(duplicate.existing_lead.lost_timestamp);
+                        if (!isNaN(lostTimestamp.getTime())) {
+                            const istLostTime = new Date(lostTimestamp.getTime() + (5.5 * 60 * 60 * 1000)); // Add 5:30 hours
+                            const formattedLostTime = istLostTime.toLocaleString('en-IN', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit',
+                                timeZone: 'Asia/Kolkata'
+                            });
+                            
+                            detailsHtml += `
+                                <div class="alert alert-danger">
+                                    <strong>Lost Timestamp:</strong> ${formattedLostTime}
+                                </div>
+                            `;
+                        }
+                    } catch (error) {
+                        console.log('Error formatting Lost timestamp:', error);
+                    }
+                }
+            }
         });
         
         if (validLeads.length > 0) {
@@ -339,12 +454,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 checkDuplicateOnBlur(phoneNumber, this);
             }
         });
+        
+        // Clear feedback when user starts typing
+        input.addEventListener('input', function() {
+            this.classList.remove('is-invalid', 'is-valid', 'is-warning');
+            const feedbackDiv = this.parentNode.querySelector('.duplicate-feedback');
+            if (feedbackDiv) {
+                feedbackDiv.remove();
+            }
+        });
     });
 });
 
 // Function to check duplicates on blur without submitting form
 async function checkDuplicateOnBlur(phoneNumber, inputElement) {
     const normalizedPhone = normalizePhoneNumber(phoneNumber);
+    const last10Digits = getLast10Digits(phoneNumber);
     
     try {
         const response = await fetch('/check_duplicate_event_lead', {
@@ -353,7 +478,7 @@ async function checkDuplicateOnBlur(phoneNumber, inputElement) {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                phone_number: normalizedPhone
+                phone_number: last10Digits // Use last 10 digits for better duplicate detection
             })
         });
         
@@ -363,7 +488,7 @@ async function checkDuplicateOnBlur(phoneNumber, inputElement) {
             if (result.duplicate_type === 'exact_match') {
                 // Show error feedback
                 inputElement.classList.add('is-invalid');
-                inputElement.classList.remove('is-valid');
+                inputElement.classList.remove('is-valid', 'is-warning');
                 
                 // Add feedback below the input
                 let feedbackDiv = inputElement.parentNode.querySelector('.duplicate-feedback');
@@ -373,10 +498,16 @@ async function checkDuplicateOnBlur(phoneNumber, inputElement) {
                     inputElement.parentNode.appendChild(feedbackDiv);
                 }
                 
+                let feedbackMessage = `<i class="fas fa-exclamation-triangle me-1"></i><strong>Duplicate Found!</strong> ${result.message}`;
+                
+                // Add more details if available
+                if (result.existing_lead) {
+                    feedbackMessage += `<br><small>Existing: ${result.existing_lead.customer_name} - ${result.existing_lead.lead_status || 'N/A'} - ${result.existing_lead.final_status || 'N/A'}</small>`;
+                }
+                
                 feedbackDiv.innerHTML = `
                     <div class="alert alert-danger alert-sm">
-                        <i class="fas fa-exclamation-triangle me-1"></i>
-                        <strong>Duplicate Found!</strong> ${result.message}
+                        ${feedbackMessage}
                     </div>
                 `;
             } else {
@@ -391,10 +522,16 @@ async function checkDuplicateOnBlur(phoneNumber, inputElement) {
                     inputElement.parentNode.appendChild(feedbackDiv);
                 }
                 
+                let feedbackMessage = `<i class="fas fa-info-circle me-1"></i><strong>Existing Lead Found!</strong> ${result.message}`;
+                
+                // Add more details if available
+                if (result.existing_lead) {
+                    feedbackMessage += `<br><small>Existing: ${result.existing_lead.customer_name} - ${result.existing_lead.lead_status || 'N/A'} - ${result.existing_lead.final_status || 'N/A'}</small>`;
+                }
+                
                 feedbackDiv.innerHTML = `
                     <div class="alert alert-warning alert-sm">
-                        <i class="fas fa-info-circle me-1"></i>
-                        <strong>Existing Lead Found!</strong> ${result.message}
+                        ${feedbackMessage}
                     </div>
                 `;
             }

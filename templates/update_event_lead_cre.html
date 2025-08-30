@@ -185,7 +185,7 @@
                 </div>
                 <div class="col-md-4">
                     <div class="mb-3">
-                        <label class="form-label">Test Drive Done?
+                        <label for="test_drive_done" class="form-label">Test Drive Done?
                             {% if not test_drive_state.locked %}<span class="text-danger">*</span>{% endif %}
                         </label>
                         {% if test_drive_state.locked and test_drive_state.value %}
@@ -205,8 +205,8 @@
                         {% else %}
                             <select class="form-select" id="test_drive_done" name="test_drive_done" required>
                                 <option value="">Select</option>
-                                <option value="Yes" {% if lead.test_drive_done == 'Yes' %}selected{% endif %}>Yes</option>
-                                <option value="No" {% if lead.test_drive_done == 'No' %}selected{% endif %}>No</option>
+                                <option value="Yes" {% if test_drive_state.value %}selected{% endif %}>Yes</option>
+                                <option value="No" {% if not test_drive_state.value and test_drive_state.value is not none %}selected{% endif %}>No</option>
                             </select>
                         {% endif %}
                     </div>
