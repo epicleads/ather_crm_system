@@ -95,7 +95,7 @@ def is_valid_uid(uid):
 # Unified Test Drive management
 # ==============================
 def get_test_drive_state(lead_uid: str) -> dict:
-    """Return current test drive state for a lead from alltestdrive table.
+    """Return current test drive state for a lead from alltest_drive table.
     Structure: { value: bool, locked: bool, updated_at: str, updated_by: str }
     Fallbacks to False/Unlocked if not present.
     """
@@ -105,23 +105,24 @@ def get_test_drive_state(lead_uid: str) -> dict:
         merged_updated_at = None
         merged_updated_by = ''
 
-        # 1) alltestdrive (most recent) - only if table exists
+        # 1) alltest_drive (most recent) - only if table exists
         at_row = None
         try:
-            result = supabase.table('alltestdrive').select('*').eq('lead_uid', lead_uid).order('updated_at', desc=True).limit(1).execute()
+            result = supabase.table('alltest_drive').select('*').eq('original_id', lead_uid).order('updated_at', desc=True).limit(1).execute()
             if result.data:
                 at_row = result.data[0]
         except Exception as _ea:
-            print(f"[WARN] alltestdrive lookup failed for {lead_uid}: {_ea}")
+            print(f"[WARN] alltest_drive lookup failed for {lead_uid}: {_ea}")
             # Table might not exist, continue without it
 
         if at_row:
-            at_value = bool(at_row.get('value'))
-            at_locked = bool(at_row.get('locked'))
+            # Map the alltest_drive table fields to our expected structure
+            at_value = bool(at_row.get('test_drive_done') == 'Yes' or at_row.get('test_drive_done') == 'True')
+            at_locked = bool(at_row.get('test_drive_done') == 'Yes' or at_row.get('test_drive_done') == 'True')  # Yes is treated as locked
             merged_value = at_value
-            merged_locked = at_locked or at_value  # ensure Yes is treated as locked
+            merged_locked = at_locked
             merged_updated_at = at_row.get('updated_at')
-            merged_updated_by = at_row.get('updated_by') or at_row.get('actor') or ''
+            merged_updated_by = at_row.get('cre_name') or at_row.get('ps_name') or ''
 
         # 2) ps_followup_master
         ps_row = None
@@ -249,21 +250,36 @@ def set_test_drive_state(lead_uid: str, actor_role: str, actor_name: str, new_va
         if value_to_store:
             locked = True
 
-        # Upsert into alltestdrive (only if table exists)
+        # Upsert into alltest_drive (only if table exists)
         try:
+            # Map the data to match your alltest_drive table schema
             payload = {
-                'lead_uid': lead_uid,
-                'value': value_to_store,
-                'locked': locked,
+                'source_table': 'activity_leads' if 'AC-' in lead_uid else 'lead_master',
+                'original_id': lead_uid,
+                'test_drive_done': 'Yes' if value_to_store else 'No',
                 'updated_at': datetime.now().isoformat(),
-                'updated_by': actor_name,
-                'actor': actor_role
+                'cre_name': actor_name if actor_role == 'cre' else None,
+                'ps_name': actor_name if actor_role == 'ps' else None
             }
-            supabase.table('alltestdrive').insert(payload).execute()
-            print(f"[DEBUG] Successfully inserted into alltestdrive: {payload}")
+            
+            # Try to insert first
+            try:
+                supabase.table('alltest_drive').insert(payload).execute()
+                print(f"[DEBUG] Successfully inserted into alltest_drive: {payload}")
+            except Exception as insert_error:
+                # If insert fails, try to update existing record
+                print(f"[DEBUG] Insert failed, trying update: {insert_error}")
+                update_result = supabase.table('alltest_drive').update({
+                    'test_drive_done': 'Yes' if value_to_store else 'No',
+                    'updated_at': datetime.now().isoformat(),
+                    'cre_name': actor_name if actor_role == 'cre' else None,
+                    'ps_name': actor_name if actor_role == 'ps' else None
+                }).eq('original_id', lead_uid).execute()
+                print(f"[DEBUG] Update result: {update_result.data}")
+                
         except Exception as _e:
-            print(f"[WARN] alltestdrive table doesn't exist or insert failed: {_e}")
-            # Continue without alltestdrive table
+            print(f"[WARN] alltest_drive table doesn't exist or insert/update failed: {_e}")
+            # Continue without alltest_drive table
 
         # Propagate to lead_master, ps_followup_master, and activity_leads for this lead if available
         try:
@@ -333,7 +349,7 @@ def set_test_drive_state(lead_uid: str, actor_role: str, actor_name: str, new_va
                 user_id=session.get('user_id'),
                 user_type=session.get('user_type'),
                 action='TEST_DRIVE_UPDATE',
-                resource='alltestdrive',
+                resource='alltest_drive',
                 resource_id=lead_uid,
                 details={'value': value_to_store, 'locked': locked, 'actor_role': actor_role}
             )
@@ -378,6 +394,14 @@ def debug_test_drive(lead_uid):
         except Exception as e:
             print(f"[DEBUG] lead_master check failed: {e}")
         
+        # Check alltest_drive table
+        at_result = None
+        try:
+            at_result = supabase.table('alltest_drive').select('*').eq('original_id', lead_uid).execute()
+            print(f"[DEBUG] alltest_drive result: {at_result.data}")
+        except Exception as e:
+            print(f"[DEBUG] alltest_drive check failed: {e}")
+        
         # Get test drive state
         test_drive_state = get_test_drive_state(lead_uid)
         print(f"[DEBUG] Final test drive state: {test_drive_state}")
@@ -388,11 +412,43 @@ def debug_test_drive(lead_uid):
             'ps_followup_master_by_uid': ps_result.data,
             'ps_followup_master_by_phone': ps_phone_result.data if ps_phone_result else None,
             'lead_master': lm_result.data if lm_result else None,
+            'alltest_drive': at_result.data if at_result else None,
             'final_state': test_drive_state
         }
         
     except Exception as e:
         print(f"[ERROR] Debug route failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return {'error': str(e)}
+
+
+# Debug route to check alltest_drive table directly
+@app.route('/debug/alltest_drive')
+def debug_alltest_drive():
+    """Debug route to check alltest_drive table contents"""
+    try:
+        print(f"[DEBUG] Checking alltest_drive table contents")
+        
+        # Get all records from alltest_drive table
+        result = supabase.table('alltest_drive').select('*').order('updated_at', desc=True).limit(10).execute()
+        print(f"[DEBUG] alltest_drive table result: {result.data}")
+        
+        # Get table structure
+        structure_result = supabase.table('alltest_drive').select('*').limit(1).execute()
+        columns = []
+        if structure_result.data:
+            columns = list(structure_result.data[0].keys())
+        
+        return {
+            'table_name': 'alltest_drive',
+            'columns': columns,
+            'recent_records': result.data,
+            'total_records': len(result.data) if result.data else 0
+        }
+        
+    except Exception as e:
+        print(f"[ERROR] Debug alltest_drive route failed: {e}")
         import traceback
         traceback.print_exc()
         return {'error': str(e)}
