@@ -158,6 +158,16 @@
                         </div>
                     </div>
                 </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="test_drive_done" class="form-label">Test Drive Done?</label>
+                        <select class="form-select" id="test_drive_done" name="test_drive_done">
+                            <option value="">Select</option>
+                            <option value="No">No</option>
+                            <option value="Yes">Yes</option>
+                        </select>
+                    </div>
+                </div>
             </div>
             <div class="row">
                 <div class="col-md-12">
@@ -289,6 +299,12 @@ function normalizePhoneNumber(phone) {
     return phone.replace(/\D/g, '');
 }
 
+function getLast10Digits(phone) {
+    // Get last 10 digits for duplicate checking (handles +91, 91, etc.)
+    const normalized = normalizePhoneNumber(phone);
+    return normalized.slice(-10);
+}
+
 async function checkDuplicateLead(event) {
     event.preventDefault();
     
@@ -381,6 +397,12 @@ async function checkDuplicateLead(event) {
     
     // All fields are filled, now check for duplicates
     const normalizedPhone = normalizePhoneNumber(phoneNumber);
+    const last10Digits = getLast10Digits(phoneNumber);
+    
+    console.log('🔍 Duplicate check details:');
+    console.log(`  - Original phone: ${phoneNumber}`);
+    console.log(`  - Normalized: ${normalizedPhone}`);
+    console.log(`  - Last 10 digits: ${last10Digits}`);
     
     try {
         const response = await fetch('/check_duplicate_lead', {
@@ -389,7 +411,7 @@ async function checkDuplicateLead(event) {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                phone_number: normalizedPhone,
+                phone_number: last10Digits, // Send last 10 digits for better duplicate detection
                 source: source,
                 subsource: subsource
             })
@@ -413,9 +435,88 @@ async function checkDuplicateLead(event) {
                     <strong>UID:</strong> ${result.existing_lead.uid}<br>
                     <strong>Customer Name:</strong> ${result.existing_lead.customer_name}<br>
                     <strong>Assigned CRE:</strong> ${result.existing_lead.cre_name || 'Unassigned'}<br>
-                    <strong>Status:</strong> ${result.existing_lead.lead_status || 'N/A'}
+                    <strong>Status:</strong> ${result.existing_lead.lead_status || 'N/A'}<br>
+                    <strong>Final Status:</strong> ${result.existing_lead.final_status || 'N/A'}
                 </div>
             `;
+            
+            // Add CRE assigned timestamp if available
+            if (result.existing_lead.cre_assigned_timestamp && result.existing_lead.cre_assigned_timestamp !== 'null') {
+                try {
+                    const creTimestamp = new Date(result.existing_lead.cre_assigned_timestamp);
+                    if (!isNaN(creTimestamp.getTime())) {
+                        const istTimestamp = new Date(creTimestamp.getTime() + (5.5 * 60 * 60 * 1000)); // Add 5:30 hours
+                        const formattedCreTime = istTimestamp.toLocaleString('en-IN', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                            timeZone: 'Asia/Kolkata'
+                        });
+                        
+                        detailsHtml += `
+                            <div class="alert alert-primary">
+                                <strong>CRE Assigned:</strong> ${formattedCreTime}
+                            </div>
+                        `;
+                    }
+                } catch (error) {
+                    console.log('Error formatting CRE timestamp:', error);
+                }
+            }
+            
+            // Add Won/Lost timestamp if final status is Won or Lost
+            if (result.existing_lead.final_status === 'Won' && result.existing_lead.won_timestamp && result.existing_lead.won_timestamp !== 'null') {
+                try {
+                    const wonTimestamp = new Date(result.existing_lead.won_timestamp);
+                    if (!isNaN(wonTimestamp.getTime())) {
+                        const istWonTime = new Date(wonTimestamp.getTime() + (5.5 * 60 * 60 * 1000)); // Add 5:30 hours
+                        const formattedWonTime = istWonTime.toLocaleString('en-IN', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                            timeZone: 'Asia/Kolkata'
+                        });
+                        
+                        detailsHtml += `
+                            <div class="alert alert-success">
+                                <strong>Won Timestamp:</strong> ${formattedWonTime}
+                            </div>
+                        `;
+                    }
+                } catch (error) {
+                    console.log('Error formatting Won timestamp:', error);
+                }
+            } else if (result.existing_lead.final_status === 'Lost' && result.existing_lead.lost_timestamp && result.existing_lead.lost_timestamp !== 'null') {
+                try {
+                    const lostTimestamp = new Date(result.existing_lead.lost_timestamp);
+                    if (!isNaN(lostTimestamp.getTime())) {
+                        const istLostTime = new Date(lostTimestamp.getTime() + (5.5 * 60 * 60 * 1000)); // Add 5:30 hours
+                        const formattedLostTime = istLostTime.toLocaleString('en-IN', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                            timeZone: 'Asia/Kolkata'
+                        });
+                        
+                        detailsHtml += `
+                            <div class="alert alert-danger">
+                                <strong>Lost Timestamp:</strong> ${formattedLostTime}
+                            </div>
+                        `;
+                    }
+                } catch (error) {
+                    console.log('Error formatting Lost timestamp:', error);
+                }
+            }
             
             if (result.existing_sources && result.existing_sources.length > 0) {
                 detailsHtml += `
