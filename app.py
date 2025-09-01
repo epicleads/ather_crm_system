@@ -13150,10 +13150,17 @@ def cre_analytics_data():
             from_date_obj = parse_date_input(from_date_str)
             to_date_obj = parse_date_input(to_date_str)
             
+            print(f"DEBUG: Date filter - from_date_str: {from_date_str}, to_date_str: {to_date_str}")
+            print(f"DEBUG: Date filter - from_date_obj: {from_date_obj}, to_date_obj: {to_date_obj}")
+            print(f"DEBUG: Date filter - target_date: {target_date}, target_date_obj: {target_date_obj}")
+            
             if not from_date_obj or not to_date_obj:
+                print(f"DEBUG: Invalid date format, including all")
                 return True  # Invalid date format, include all
             
-            return from_date_obj <= target_date_obj <= to_date_obj
+            result = from_date_obj <= target_date_obj <= to_date_obj
+            print(f"DEBUG: Date filter result: {result}")
+            return result
         
         # Get filtered leaderboard for all active CREs
         def get_filtered_all_cre_leaderboard():
@@ -13284,6 +13291,75 @@ def cre_analytics_data():
                 platform_data[platform]['conversion_rate'] = round(conversion_rate, 2)
             return platform_data
         
+        # Get leads assigned by category for all CREs
+        def get_leads_assigned_by_category():
+            category_data = {}
+            
+            print(f"DEBUG: active_cre_users count: {len(active_cre_users)}")
+            print(f"DEBUG: all_leads count: {len(all_leads)}")
+            print(f"DEBUG: Sample all_leads: {all_leads[:3] if len(all_leads) > 0 else 'No leads'}")
+            
+            # Initialize data structure for all active CREs
+            for cre in active_cre_users:
+                cre_name = cre.get('name')
+                if cre_name:
+                    category_data[cre_name] = {
+                        'hot': 0,
+                        'cold': 0,
+                        'warm': 0,
+                        'not_interested': 0,
+                        'not_set': 0
+                    }
+            
+            print(f"DEBUG: Initialized category_data for CREs: {list(category_data.keys())}")
+            print(f"DEBUG: Sample active_cre_users: {active_cre_users[:3] if len(active_cre_users) > 0 else 'No active CRE users'}")
+            
+            # Process leads and count by category
+            processed_leads = 0
+            filtered_leads = 0
+            for lead in all_leads:
+                processed_leads += 1
+                cre_name = lead.get('cre_name')
+                # Handle None values safely
+                lead_category_raw = lead.get('lead_category')
+                lead_category = lead_category_raw.lower() if lead_category_raw else ''
+                
+                if processed_leads <= 5:  # Debug first 5 leads
+                    print(f"DEBUG: Lead {processed_leads}: cre_name={cre_name}, lead_category={lead_category}, cre_assigned_at={lead.get('cre_assigned_at')}")
+                
+                if cre_name in category_data and lead.get('cre_assigned_at'):
+                    # Check if lead is within date filter
+                    assigned_date = parse_timestamp(lead.get('cre_assigned_at'))
+                    if is_within_date_filter(assigned_date):
+                        filtered_leads += 1
+                        # Map lead categories to our table columns
+                        if lead_category in ['hot']:
+                            category_data[cre_name]['hot'] += 1
+                        elif lead_category in ['cold']:
+                            category_data[cre_name]['cold'] += 1
+                        elif lead_category in ['warm']:
+                            category_data[cre_name]['warm'] += 1
+                        elif lead_category in ['not interested', 'not_interested']:
+                            category_data[cre_name]['not_interested'] += 1
+                        elif lead_category in ['not set', 'not_set', ''] or not lead_category:
+                            category_data[cre_name]['not_set'] += 1
+                    else:
+                        if processed_leads <= 5:  # Debug first 5 leads
+                            print(f"DEBUG: Lead {processed_leads} filtered out by date: assigned_date={assigned_date}")
+                else:
+                    if processed_leads <= 5:  # Debug first 5 leads
+                        if cre_name not in category_data:
+                            print(f"DEBUG: Lead {processed_leads} skipped - cre_name '{cre_name}' not in active CREs")
+                        if not lead.get('cre_assigned_at'):
+                            print(f"DEBUG: Lead {processed_leads} skipped - no cre_assigned_at")
+            
+            print(f"DEBUG: Processed {processed_leads} leads, filtered {filtered_leads} leads")
+            print(f"DEBUG: Final category_data: {category_data}")
+            return category_data
+        
+        leads_category_data = get_leads_assigned_by_category()
+        print(f"DEBUG: Final response leads_assigned_by_category: {leads_category_data}")
+        
         return jsonify({
             'success': True,
             'from_date': from_date_str,
@@ -13291,7 +13367,8 @@ def cre_analytics_data():
             'top_5_leaderboard': get_filtered_all_cre_leaderboard()[:5],
             'cre_platform_conversion': get_filtered_cre_platform_conversion(),
             'cre_platform_conversion_live': get_cre_platform_conversion_live(),
-            'cre_overall_stats': get_filtered_cre_overall_stats()
+            'cre_overall_stats': get_filtered_cre_overall_stats(),
+            'leads_assigned_by_category': leads_category_data
         })
         
     except Exception as e:
