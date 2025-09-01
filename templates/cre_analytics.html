@@ -327,6 +327,37 @@
     </div>
 </div>
 
+<!-- Leads Assigned to CRE by Category Table -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card analytics-card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-list-alt"></i> Leads Assigned to CRE by Category</h5>
+                <small class="text-white-50">Filtered by CRE assignment date range (cre_assigned_at)</small>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>CRE Name</th>
+                                <th>Hot</th>
+                                <th>Cold</th>
+                                <th>Warm</th>
+                                <th>Not Interested</th>
+                                <th>Not Set</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leads-category-table-body">
+                            <!-- Data will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const fromDate = document.getElementById('fromDate');
@@ -380,6 +411,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
+    // Load initial data when page loads
+    updateAnalytics('', '');
+    
     function updateAnalytics(fromDateValue, toDateValue) {
         // Show loading state
         showLoadingState();
@@ -389,14 +423,21 @@ document.addEventListener('DOMContentLoaded', function() {
         if (fromDateValue) params.append('from_date', fromDateValue);
         if (toDateValue) params.append('to_date', toDateValue);
         
+        console.log('Making request with params:', params.toString());
+        
         // Make AJAX call
         fetch(`/cre_analytics_data?${params}`)
             .then(response => response.json())
             .then(data => {
+                console.log('Full response data:', data);
                 if (data.success) {
+                    console.log('leads_assigned_by_category data:', data.leads_assigned_by_category);
+                    console.log('Type of leads_assigned_by_category:', typeof data.leads_assigned_by_category);
+                    console.log('Keys in leads_assigned_by_category:', Object.keys(data.leads_assigned_by_category || {}));
                     updateOverallStats(data.cre_overall_stats);
                     updateLeaderboard(data.top_5_leaderboard);
                     updateConversionTable(data.cre_platform_conversion, data.cre_platform_conversion_live);
+                    updateLeadsCategoryTable(data.leads_assigned_by_category);
                     hideLoadingState();
                 } else {
                     console.error('Error loading analytics data:', data.error);
@@ -513,6 +554,43 @@ document.addEventListener('DOMContentLoaded', function() {
                 `;
             });
             tableBody.innerHTML = html;
+        }
+    }
+
+    function updateLeadsCategoryTable(leadsByCategory) {
+        console.log('updateLeadsCategoryTable called with data:', leadsByCategory);
+        console.log('Data type:', typeof leadsByCategory);
+        console.log('Is null?', leadsByCategory === null);
+        console.log('Is undefined?', leadsByCategory === undefined);
+        
+        if (!leadsByCategory) {
+            console.error('leadsByCategory is falsy!');
+            return;
+        }
+        
+        const tableBody = document.getElementById('leads-category-table-body');
+        console.log('Table body element:', tableBody);
+        if (tableBody) {
+            let html = '';
+            console.log('Processing leadsByCategory entries:', Object.entries(leadsByCategory));
+            Object.entries(leadsByCategory).forEach(([cre_name, category_data]) => {
+                console.log('Processing CRE:', cre_name, 'with data:', category_data);
+                html += `
+                    <tr>
+                        <td><strong>${cre_name}</strong></td>
+                        <td>${category_data.hot || 0}</td>
+                        <td>${category_data.cold || 0}</td>
+                        <td>${category_data.warm || 0}</td>
+                        <td>${category_data.not_interested || 0}</td>
+                        <td>${category_data.not_set || 0}</td>
+                    </tr>
+                `;
+            });
+            console.log('Generated HTML:', html);
+            tableBody.innerHTML = html;
+            console.log('Table updated with HTML');
+        } else {
+            console.error('Table body element not found!');
         }
     }
 });
