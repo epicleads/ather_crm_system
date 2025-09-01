@@ -118,6 +118,24 @@
     border-color: #ffc107 !important;
     box-shadow: 0 0 0 0.2rem rgba(255, 193, 7, 0.25) !important;
   }
+  
+  .is-invalid {
+    border-color: #dc3545 !important;
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important;
+  }
+  
+  .is-valid {
+    border-color: #28a745 !important;
+    box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25) !important;
+  }
+  
+  .invalid-feedback {
+    display: block;
+    width: 100%;
+    margin-top: 0.25rem;
+    font-size: 0.875em;
+    color: #dc3545;
+  }
 </style>
 
 <div class="hero-header">
@@ -264,7 +282,7 @@
 
             <!-- Submit Button -->
             <div class="text-center mt-4">
-              <button type="submit" class="btn btn-submit btn-lg" onclick="return checkDuplicateWalkinLead(event)">
+              <button type="submit" class="btn btn-submit btn-lg" id="submit-btn" onclick="return validateAndSubmitForm(event)">
                 <i class="fas fa-plus-circle me-2"></i>Add Walk-in Lead
               </button>
             </div>
@@ -509,6 +527,94 @@
       console.error('Error checking duplicate lead:', error);
       // Don't show error feedback on blur, just log it
     }
+  }
+
+  // Form validation function
+  function validateAndSubmitForm(event) {
+    event.preventDefault();
+    
+    // Get all required field values
+    const customerName = document.querySelector('input[name="customer_name"]').value.trim();
+    const mobileNumber = document.querySelector('input[name="mobile_number"]').value.trim();
+    const modelInterested = document.querySelector('select[name="model_interested"]').value;
+    const branch = document.querySelector('select[name="branch"]').value;
+    const psAssigned = document.querySelector('select[name="ps_assigned"]').value;
+    
+    // Clear previous validation states
+    document.querySelectorAll('.form-control, .form-select').forEach(function(input) {
+      input.classList.remove('is-invalid');
+    });
+    
+    let isValid = true;
+    let errorMessage = '';
+    
+    // Validate Customer Name
+    if (!customerName) {
+      document.querySelector('input[name="customer_name"]').classList.add('is-invalid');
+      errorMessage = 'Customer Name is required.';
+      document.querySelector('input[name="customer_name"]').focus();
+      isValid = false;
+    }
+    
+    // Validate Mobile Number
+    if (!mobileNumber) {
+      document.querySelector('input[name="mobile_number"]').classList.add('is-invalid');
+      if (!errorMessage) {
+        errorMessage = 'Mobile Number is required.';
+        document.querySelector('input[name="mobile_number"]').focus();
+      }
+      isValid = false;
+    }
+    
+    // Validate Model Interested
+    if (!modelInterested) {
+      document.querySelector('select[name="model_interested"]').classList.add('is-invalid');
+      if (!errorMessage) {
+        errorMessage = 'Model Interested is required.';
+        document.querySelector('select[name="model_interested"]').focus();
+      }
+      isValid = false;
+    }
+    
+    // Validate Branch
+    if (!branch) {
+      document.querySelector('select[name="branch"]').classList.add('is-invalid');
+      if (!errorMessage) {
+        errorMessage = 'Branch is required.';
+        document.querySelector('select[name="branch"]').focus();
+      }
+      isValid = false;
+    }
+    
+    // Validate PS Assigned
+    if (!psAssigned) {
+      document.querySelector('select[name="ps_assigned"]').classList.add('is-invalid');
+      if (!errorMessage) {
+        errorMessage = 'PS Assigned is required.';
+        document.querySelector('select[name="ps_assigned"]').focus();
+      }
+      isValid = false;
+    }
+    
+    // Additional validation: Check if PS dropdown has valid options
+    const psSelect = document.querySelector('select[name="ps_assigned"]');
+    if (psSelect.options.length <= 1) {
+      document.querySelector('select[name="ps_assigned"]').classList.add('is-invalid');
+      if (!errorMessage) {
+        errorMessage = 'Please select a branch first to load available PS options.';
+        document.querySelector('select[name="branch"]').focus();
+      }
+      isValid = false;
+    }
+    
+    // Show error message if validation fails
+    if (!isValid) {
+      alert('Please fill in all required fields:\n' + errorMessage);
+      return false;
+    }
+    
+    // If validation passes, check for duplicates
+    return checkDuplicateWalkinLead(event);
   }
 </script>
 {% endblock %} 

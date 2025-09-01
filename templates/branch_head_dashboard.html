@@ -1351,6 +1351,11 @@
                         <i class="fas fa-file-export me-2"></i>Export Leads
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link" id="manage-ps-tab" data-bs-toggle="tab" href="#manage-ps" role="tab">
+                        <i class="fas fa-user-cog me-2"></i>Manage PS
+                    </a>
+                </li>
             </ul>
         </div>
     </div>
@@ -1476,13 +1481,20 @@
                     </h5>
                 </div>
                 <div class="card-body">
-                    <!-- Date Filter for PS Follow-up Summary -->
+                    <!-- Date Filter and Mode Selection for PS Follow-up Summary -->
                     <div class="row mb-3">
-                        <div class="col-md-3">
+                        <div class="col-md-2">
+                            <label for="psFollowupMode" class="form-label fw-semibold">Mode:</label>
+                            <select id="psFollowupMode" class="form-select" onchange="updateModeInfo();">
+                                <option value="all_pending">All Pending Leads</option>
+                                <option value="today_missed">Today's & Missed Followup</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
                             <label for="psFollowupFromDate" class="form-label fw-semibold">From Date:</label>
                             <input type="date" id="psFollowupFromDate" class="form-control" placeholder="DD/MM/YYYY">
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <label for="psFollowupToDate" class="form-label fw-semibold">To Date:</label>
                             <input type="date" id="psFollowupToDate" class="form-control" placeholder="DD/MM/YYYY">
                         </div>
@@ -1497,7 +1509,7 @@
                         <div class="col-md-3 d-flex align-items-end">
                             <small class="text-muted">
                                 <i class="fas fa-info-circle me-1"></i>
-                                CRE: ps_assigned_at | Walk-in: created_at
+                                <span id="psFollowupModeInfo">Mode 1: All pending leads</span>
                             </small>
                         </div>
                     </div>
@@ -1539,7 +1551,10 @@
                                 </tr>
                             </thead>
                             <tbody id="psFollowupTableBody">
-                                <tr><td colspan="15" class="text-center">Loading...</td></tr>
+                                <tr><td colspan="15" class="text-center text-muted">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    Please select mode and date range, then click Apply Filter to view data
+                                </td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1757,7 +1772,7 @@
                                     {% endfor %}
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <label for="freshLeadsStatusSelect" class="fw-semibold small">Final Status:</label>
                                 <select id="freshLeadsStatusSelect" class="form-select form-select-sm">
                                     <option value="">-- All Statuses --</option>
@@ -1766,10 +1781,19 @@
                                     <option value="Lost">Lost</option>
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
+                                <label for="freshLeadsSourceSelect" class="fw-semibold small">Lead Source:</label>
+                                <select id="freshLeadsSourceSelect" class="form-select form-select-sm">
+                                    <option value="">-- All Sources --</option>
+                                    <option value="cre">CRE Assigned Leads</option>
+                                    <option value="walkin">Walk-in Leads</option>
+                                    <option value="event">Event Leads</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
                                 <label for="freshLeadsDateFilter" class="fw-semibold small">Date Filter:</label>
                                 <select id="freshLeadsDateFilter" class="form-select form-select-sm">
-                                    <option value="">-- All Time --</option>
+                                    <option value="">-- Select Date Range --</option>
                                     <option value="today">Today</option>
                                     <option value="date_range">Date Range</option>
                                 </select>
@@ -1824,9 +1848,9 @@
                                 </tr>
                             </thead>
                             <tbody id="freshLeadsTableBody">
-                                <tr><td colspan="10" class="text-center py-2">
-                                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-                                    Loading leads...
+                                <tr><td colspan="10" class="text-center py-2 text-muted">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    Please select a date range and click Apply to view leads
                                 </td></tr>
                             </tbody>
                         </table>
@@ -1909,7 +1933,68 @@
                                 </tr>
                             </thead>
                             <tbody id="freshLeadsSectionTableBody">
-                                <tr><td colspan="10" class="text-center py-2">Loading...</td></tr>
+                                <tr><td colspan="10" class="text-center py-2 text-muted">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    Please select a date range and click Apply to view leads
+                                </td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Manage PS Tab -->
+        <div class="tab-pane fade" id="manage-ps" role="tabpanel">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-user-cog me-2"></i>Manage Product Specialists
+                        </h5>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="managePSTable">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Username</th>
+                                    <th>Phone</th>
+                                    <th>Email</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="managePSTableBody">
+                                {% for ps in ps_users %}
+                                <tr data-ps-id="{{ ps.id }}">
+                                    <td>{{ ps.name }}</td>
+                                    <td>{{ ps.username }}</td>
+                                    <td>{{ ps.phone }}</td>
+                                    <td>{{ ps.email }}</td>
+                                    <td>
+                                        <span class="badge {% if ps.is_active %}bg-success{% else %}bg-danger{% endif %}">
+                                            {% if ps.is_active %}Active{% else %}Inactive{% endif %}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button class="btn btn-outline-primary btn-sm" onclick="editPS({{ ps.id }}, '{{ ps.phone }}', '{{ ps.email }}')" title="Edit Contact Info">
+                                                <i class="fas fa-edit me-1"></i>Edit Contact
+                                            </button>
+                                            <button class="btn btn-outline-{% if ps.is_active %}warning{% else %}success{% endif %} btn-sm" onclick="togglePSStatus({{ ps.id }}, {{ ps.is_active|lower }})" title="{% if ps.is_active %}Deactivate{% else %}Activate{% endif %} PS">
+                                                {% if ps.is_active %}
+                                                    <i class="fas fa-pause me-1"></i>Deactivate
+                                                {% else %}
+                                                    <i class="fas fa-play me-1"></i>Activate
+                                                {% endif %}
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
                             </tbody>
                         </table>
                     </div>
@@ -2010,8 +2095,9 @@
                                 </tr>
                             </thead>
                             <tbody id="followupLeadsTableBody">
-                                <tr><td colspan="11" class="text-center py-2">
-                                    <i class="fas fa-spinner fa-spin me-2"></i>Loading today's and past follow-ups...
+                                <tr><td colspan="11" class="text-center py-2 text-muted">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    Please select a date range and click Apply to view leads
                                 </td></tr>
                             </tbody>
                         </table>
@@ -2116,6 +2202,41 @@
     </div>
 </div>
 
+
+
+<!-- Edit PS Modal -->
+<div class="modal fade" id="editPSModal" tabindex="-1" aria-labelledby="editPSModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="editPSModalLabel">
+                    <i class="fas fa-user-edit me-2"></i>Edit PS Contact Information
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="editPSForm">
+                <div class="modal-body">
+                    <input type="hidden" id="editPSId" name="id">
+                    <div class="mb-3">
+                        <label for="editPSPhone" class="form-label">Phone Number *</label>
+                        <input type="tel" class="form-control" id="editPSPhone" name="phone" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editPSEmail" class="form-label">Email *</label>
+                        <input type="email" class="form-control" id="editPSEmail" name="email" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fas fa-save me-1"></i>Update Contact Info
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
     // Configuration for sections
 const sectionConfig = {
@@ -2156,6 +2277,145 @@ const sectionConfig = {
             columns: ['uid', 'customer_name', 'customer_mobile_number', 'source', 'lead_category', 'lead_status', 'ps_name', 'created_at', 'ps_assigned_at', 'follow_up_date', 'call_history']
         }
     };
+
+    // Set default dates for PS follow-up (1st of current month to today) - GLOBAL SCOPE
+    function setDefaultMonthToDateDates() {
+        console.log(`[DEBUG] setDefaultMonthToDateDates() function called at ${new Date().toISOString()}`);
+        const today = new Date();
+        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        
+        // Format dates as YYYY-MM-DD
+        const fromDate = firstDayOfMonth.toISOString().split('T')[0];
+        const toDate = today.toISOString().split('T')[0];
+        
+        // Set PS Follow-up Summary dates
+        const psFromDate = document.getElementById('psFollowupFromDate');
+        const psToDate = document.getElementById('psFollowupToDate');
+        if (psFromDate && psToDate) {
+            psFromDate.value = fromDate;
+            psToDate.value = toDate;
+            console.log(`[DEBUG] Set PS Follow-up dates: ${fromDate} to ${toDate}`);
+        } else {
+            console.log(`[DEBUG] PS Follow-up date elements not found`);
+        }
+        
+        // Set All Leads section dates
+        const freshLeadsDateFrom = document.getElementById('freshLeadsDateFrom');
+        const freshLeadsDateTo = document.getElementById('freshLeadsDateTo');
+        const freshLeadsDateFilter = document.getElementById('freshLeadsDateFilter');
+        if (freshLeadsDateFrom && freshLeadsDateTo) {
+            freshLeadsDateFrom.value = fromDate;
+            freshLeadsDateTo.value = toDate;
+            // Set date filter to date_range mode
+            if (freshLeadsDateFilter) {
+                freshLeadsDateFilter.value = 'date_range';
+                // Show the date range inputs
+                const dateRangeRow = document.getElementById('dateRangeRow');
+                if (dateRangeRow) {
+                    dateRangeRow.style.display = 'flex';
+                }
+            }
+            console.log(`[DEBUG] Set All Leads dates: ${fromDate} to ${toDate}`);
+        } else {
+            console.log(`[DEBUG] All Leads date elements not found`);
+        }
+        
+        // Set Fresh Leads section dates
+        const freshLeadsSectionDateFrom = document.getElementById('freshLeadsSectionDateFrom');
+        const freshLeadsSectionDateTo = document.getElementById('freshLeadsSectionDateTo');
+        const freshLeadsSectionDateFilter = document.getElementById('freshLeadsSectionDateFilter');
+        if (freshLeadsSectionDateFrom && freshLeadsSectionDateTo) {
+            freshLeadsSectionDateFrom.value = fromDate;
+            freshLeadsSectionDateTo.value = toDate;
+            // Set date filter to date_range mode
+            if (freshLeadsSectionDateFilter) {
+                freshLeadsSectionDateFilter.value = 'date_range';
+                // Show the date range inputs
+                const freshLeadsSectionDateRangeRow = document.getElementById('freshLeadsSectionDateRangeRow');
+                if (freshLeadsSectionDateRangeRow) {
+                    freshLeadsSectionDateRangeRow.style.display = 'flex';
+                }
+            }
+            console.log(`[DEBUG] Set Fresh Leads dates: ${fromDate} to ${toDate}`);
+        } else {
+            console.log(`[DEBUG] Fresh Leads date elements not found`);
+        }
+        
+        // Set Followup Leads section dates
+        const followupLeadsDateFrom = document.getElementById('followupLeadsDateFrom');
+        const followupLeadsDateTo = document.getElementById('followupLeadsDateTo');
+        const followupLeadsDateFilter = document.getElementById('followupLeadsDateFilter');
+        if (followupLeadsDateFrom && followupLeadsDateTo) {
+            followupLeadsDateFrom.value = fromDate;
+            followupLeadsDateTo.value = toDate;
+            // Set date filter to date_range mode
+            if (followupLeadsDateFilter) {
+                followupLeadsDateFilter.value = 'date_range';
+                // Show the date range inputs
+                const followupDateRangeRow = document.getElementById('followupDateRangeRow');
+                if (followupDateRangeRow) {
+                    followupDateRangeRow.style.display = 'flex';
+                }
+            }
+            console.log(`[DEBUG] Set Followup Leads dates: ${fromDate} to ${toDate}`);
+        } else {
+            console.log(`[DEBUG] Followup Leads date elements not found`);
+        }
+        
+        console.log(`[DEBUG] Set default dates: ${fromDate} to ${toDate}`);
+        console.log(`[DEBUG] Default month-to-date dates set successfully`);
+        
+        // Debug: Log the actual values set in the DOM
+        console.log(`[DEBUG] Current date values in DOM:`);
+        console.log(`[DEBUG] PS Follow-up From: ${document.getElementById('psFollowupFromDate')?.value || 'NOT SET'}`);
+        console.log(`[DEBUG] PS Follow-up To: ${document.getElementById('psFollowupToDate')?.value || 'NOT SET'}`);
+        console.log(`[DEBUG] All Leads From: ${document.getElementById('freshLeadsDateFrom')?.value || 'NOT SET'}`);
+        console.log(`[DEBUG] All Leads To: ${document.getElementById('freshLeadsDateTo')?.value || 'NOT SET'}`);
+        console.log(`[DEBUG] Fresh Leads From: ${document.getElementById('freshLeadsSectionDateFrom')?.value || 'NOT SET'}`);
+        console.log(`[DEBUG] Fresh Leads To: ${document.getElementById('freshLeadsSectionDateTo')?.value || 'NOT SET'}`);
+        console.log(`[DEBUG] Followup Leads From: ${document.getElementById('followupLeadsDateFrom')?.value || 'NOT SET'}`);
+        console.log(`[DEBUG] Followup Leads To: ${document.getElementById('followupLeadsDateTo')?.value || 'NOT SET'}`);
+        
+        // Automatically load data for all sections after setting default dates
+        console.log(`[DEBUG] Auto-loading data for all sections...`);
+        
+        // Use setTimeout to ensure functions are available and DOM is fully ready
+        setTimeout(() => {
+            // Load PS Follow-up Summary data
+            if (typeof loadPSFollowupSummaryData === 'function') {
+                console.log(`[DEBUG] Loading PS Follow-up Summary data...`);
+                loadPSFollowupSummaryData();
+            } else {
+                console.log(`[DEBUG] loadPSFollowupSummaryData function not available yet`);
+            }
+            
+            // Load All Leads data
+            if (typeof loadSection === 'function') {
+                console.log(`[DEBUG] Loading All Leads data...`);
+                loadSection('fresh_leads');
+            } else {
+                console.log(`[DEBUG] loadSection function not available yet`);
+            }
+            
+            // Load Fresh Leads data
+            if (typeof loadSection === 'function') {
+                console.log(`[DEBUG] Loading Fresh Leads data...`);
+                loadSection('fresh_leads_section');
+            } else {
+                console.log(`[DEBUG] loadSection function not available yet`);
+            }
+            
+            // Load Followup Leads data
+            if (typeof loadSection === 'function') {
+                console.log(`[DEBUG] Loading Followup Leads data...`);
+                loadSection('followup_leads');
+            } else {
+                console.log(`[DEBUG] loadSection function not available yet`);
+            }
+            
+            console.log(`[DEBUG] Auto-loading completed`);
+        }, 500); // 500ms delay to ensure functions are available
+    }
 
     // OPTIMIZED: Load section data with improved performance and server-side filtering
     function loadSection(section) {
@@ -2204,6 +2464,13 @@ const sectionConfig = {
             };
             start_date = formatDate(today);
             end_date = formatDate(today);
+        }
+        
+        // For All Leads section, require date selection
+        if (section === 'fresh_leads' && !date_filter && !start_date && !end_date) {
+            const tbody = document.getElementById(config.tbody);
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">Please select a date range to view leads</td></tr>';
+            return;
         }
         
         // Make API call with filter parameters and timeout
@@ -3045,14 +3312,30 @@ function loadWalkinLeadsData() {
         });
 }
 
+// Update mode info display
+function updateModeInfo() {
+    const mode = document.getElementById('psFollowupMode').value;
+    const modeInfo = document.getElementById('psFollowupModeInfo');
+    
+    if (mode === 'today_missed') {
+        modeInfo.textContent = "Mode 2: Today's & missed followup (follow_up_date ≤ today)";
+        modeInfo.className = 'text-warning fw-semibold';
+    } else {
+        modeInfo.textContent = "Mode 1: All pending leads";
+        modeInfo.className = 'text-muted';
+    }
+}
+
 // Load PS Follow-up Summary Data
 function loadPSFollowupSummaryData() {
-    // Get date filter values
+    // Get mode and date filter values
+    const mode = document.getElementById('psFollowupMode').value;
     const fromDate = document.getElementById('psFollowupFromDate').value;
     const toDate = document.getElementById('psFollowupToDate').value;
     
     // Build query parameters
     const params = new URLSearchParams();
+    params.append('mode', mode);
     if (fromDate) params.append('from_date', fromDate);
     if (toDate) params.append('to_date', toDate);
     
@@ -3188,7 +3471,21 @@ function toggleInlineLeadDetails(psName, level, source, anchorRow) {
     const tbody = detailsCell.querySelector('#inlineLeadsBody');
     tbody.innerHTML = `<tr><td colspan="9" class="text-center"><i class=\"fas fa-spinner fa-spin\"></i> Loading...</td></tr>`;
 
-    fetch(`/api/ps_followup_leads?ps_name=${encodeURIComponent(psName)}&level=${level}&source=${source}`)
+    // Get current mode and date filter values to pass to the API
+    const mode = document.getElementById('psFollowupMode').value;
+    const fromDate = document.getElementById('psFollowupFromDate').value;
+    const toDate = document.getElementById('psFollowupToDate').value;
+    
+    // Build query parameters including mode and date filters
+    const params = new URLSearchParams();
+    params.append('ps_name', psName);
+    params.append('level', level);
+    params.append('source', source);
+    params.append('mode', mode);
+    if (fromDate) params.append('from_date', fromDate);
+    if (toDate) params.append('to_date', toDate);
+    
+    fetch(`/api/ps_followup_leads?${params.toString()}`)
         .then(r => r.json())
         .then(data => {
             if (!(data.success && data.leads && data.leads.length)) {
@@ -3711,9 +4008,6 @@ function toggleCallHistoryInline(btn) {
             }
             
             // PS Follow-up Summary Filter Event Listeners
-            // Set default dates for PS follow-up (01-07-2025 to 21-08-2025)
-            document.getElementById('psFollowupFromDate').value = '2025-07-01';
-            document.getElementById('psFollowupToDate').value = '2025-08-21';
             
             // Apply PS follow-up filter button
             const applyPsFollowupFilter = document.getElementById('psFollowupApplyFilter');
@@ -3723,14 +4017,19 @@ function toggleCallHistoryInline(btn) {
                 });
             }
             
+            // Initialize mode info display
+            updateModeInfo();
+            
             // Reset PS follow-up filter button
             const resetPsFollowupFilter = document.getElementById('psFollowupResetFilter');
             if (resetPsFollowupFilter) {
                 resetPsFollowupFilter.addEventListener('click', function() {
-                    // Reset to default dates (01-07-2025 to 21-08-2025)
-                    document.getElementById('psFollowupFromDate').value = '2025-07-01';
-                    document.getElementById('psFollowupToDate').value = '2025-08-21';
+                    // Reset mode to default
+                    document.getElementById('psFollowupMode').value = 'all_pending';
+                    // Reset to default month-to-date dates
+                    setDefaultMonthToDateDates();
                     
+                    updateModeInfo();
                     loadPSFollowupSummaryData();
                 });
             }
@@ -3743,11 +4042,11 @@ function toggleCallHistoryInline(btn) {
         document.getElementById('exportWalkinLeads').addEventListener('click', () => exportLeadsData('Walkin'));
         document.getElementById('exportEventLeads').addEventListener('click', () => exportLeadsData('Event'));
         
-        // Set default dates (last 30 days)
+        // Set default dates (month-to-date)
         const today = new Date();
-        const thirtyDaysAgo = new Date(today.getTime() - (30 * 24 * 60 * 60 * 1000));
+        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
         
-        document.getElementById('exportDateFrom').value = thirtyDaysAgo.toISOString().split('T')[0];
+        document.getElementById('exportDateFrom').value = firstDayOfMonth.toISOString().split('T')[0];
         document.getElementById('exportDateTo').value = today.toISOString().split('T')[0];
     });
 
@@ -3759,6 +4058,12 @@ function toggleCallHistoryInline(btn) {
         // Load dynamic sources
         console.log('[DEBUG] Loading dynamic sources...');
         loadDynamicSources();
+        
+        // Set default month-to-date dates for all sections with a delay to ensure DOM is ready
+        console.log('[DEBUG] Setting default month-to-date dates...');
+        setTimeout(() => {
+            setDefaultMonthToDateDates();
+        }, 200); // Small delay to ensure DOM is fully ready
         
         // Load analytics data by default with timeout
         setTimeout(() => {
@@ -3927,6 +4232,45 @@ function toggleCallHistoryInline(btn) {
             }
         }
         
+        // Date filter change handler for All Leads
+        const dateFilterSelect = document.getElementById('freshLeadsDateFilter');
+        if (dateFilterSelect) {
+            dateFilterSelect.addEventListener('change', function() {
+                const dateRangeRow = document.getElementById('dateRangeRow');
+                if (this.value === 'date_range') {
+                    dateRangeRow.style.display = 'flex';
+                } else {
+                    dateRangeRow.style.display = 'none';
+                }
+            });
+        }
+        
+        // Date filter change handler for Fresh Leads Section
+        const freshLeadsSectionDateFilter = document.getElementById('freshLeadsSectionDateFilter');
+        if (freshLeadsSectionDateFilter) {
+            freshLeadsSectionDateFilter.addEventListener('change', function() {
+                const dateRangeRow = document.getElementById('freshLeadsSectionDateRangeRow');
+                if (this.value === 'date_range') {
+                    dateRangeRow.style.display = 'flex';
+                } else {
+                    dateRangeRow.style.display = 'none';
+                }
+            });
+        }
+        
+        // Date filter change handler for Followup Leads
+        const followupLeadsDateFilter = document.getElementById('followupLeadsDateFilter');
+        if (followupLeadsDateFilter) {
+            followupLeadsDateFilter.addEventListener('change', function() {
+                const followupDateRangeRow = document.getElementById('followupDateRangeRow');
+                if (this.value === 'date_range') {
+                    followupDateRangeRow.style.display = 'flex';
+                } else {
+                    followupDateRangeRow.style.display = 'none';
+                }
+            });
+        }
+        
         // Apply filter button for All Leads
         const applyButton = document.getElementById('freshLeadsApplyFiltersBtn');
         if (applyButton) {
@@ -3953,8 +4297,9 @@ function toggleCallHistoryInline(btn) {
                 if (sourceSelect) sourceSelect.value = '';
                 if (statusSelect) statusSelect.value = '';
                 if (dateFilterSelect) dateFilterSelect.value = '';
-                if (dateFromInput) dateFromInput.value = '';
-                if (dateToInput) dateToInput.value = '';
+                
+                // Reset to default month-to-date dates
+                setDefaultMonthToDateDates();
                 
                 // Hide date range containers
                 const dateRangeRow = document.getElementById('dateRangeRow');
@@ -3987,8 +4332,9 @@ function toggleCallHistoryInline(btn) {
                 
                 if (psSelect) psSelect.value = '';
                 if (dateFilterSelect) dateFilterSelect.value = '';
-                if (dateFromInput) dateFromInput.value = '';
-                if (dateToInput) dateToInput.value = '';
+                
+                // Reset to default month-to-date dates
+                setDefaultMonthToDateDates();
                 
                 // Hide date range containers
                 const dateRangeRow = document.getElementById('freshLeadsSectionDateRangeRow');
@@ -4039,9 +4385,10 @@ function toggleCallHistoryInline(btn) {
                 
                 if (psSelect) psSelect.value = '';
                 if (dateFilterSelect) dateFilterSelect.value = '';
-                if (dateFromInput) dateFromInput.value = '';
-                if (dateToInput) dateToInput.value = '';
                 if (searchInput) searchInput.value = '';
+                
+                // Reset to default month-to-date dates
+                setDefaultMonthToDateDates();
                 
                 // Hide date range containers
                 const followupDateRangeRow = document.getElementById('followupDateRangeRow');
@@ -4053,21 +4400,16 @@ function toggleCallHistoryInline(btn) {
         }
     });
 
-    // Tab change event
+    // Tab change event - No automatic data loading
     document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
         tab.addEventListener('shown.bs.tab', function(e) {
             const targetId = e.target.getAttribute('href').substring(1);
-            if (targetId === 'fresh') {
-                loadSection('fresh_leads');
-            } else if (targetId === 'fresh-leads') {
-                loadSection('fresh_leads_section');
-            } else if (targetId === 'followup') {
-                loadSection('followup_leads');
-            } else if (targetId === 'analytics') {
+            if (targetId === 'analytics') {
                 loadAnalyticsDataWithFilter();
             } else if (targetId === 'call-history-analytics') {
                 loadCallHistoryAnalytics();
             }
+            // Note: All Leads, Fresh Leads, and Followup Leads sections require manual filter application
         });
 });
 
@@ -4639,5 +4981,123 @@ function updateStatusSummaryCards(feedbackData, totals) {
     
     summaryContainer.innerHTML = summaryHTML;
 }
+
+// PS Management Functions
+function editPS(psId, phone, email) {
+    document.getElementById('editPSId').value = psId;
+    document.getElementById('editPSPhone').value = phone;
+    document.getElementById('editPSEmail').value = email;
+    
+    const editModal = new bootstrap.Modal(document.getElementById('editPSModal'));
+    editModal.show();
+}
+
+function togglePSStatus(psId, currentStatus) {
+    const newStatus = !currentStatus;
+    const statusText = newStatus ? 'activate' : 'deactivate';
+    
+    if (confirm(`Are you sure you want to ${statusText} this PS user?`)) {
+        fetch(`/api/branch_toggle_ps_status/${psId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ active: newStatus })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update the UI
+                const row = document.querySelector(`tr[data-ps-id="${psId}"]`);
+                if (row) {
+                    const statusCell = row.querySelector('td:nth-child(5)');
+                    const toggleBtn = row.querySelector('button:nth-child(2)');
+                    
+                    if (newStatus) {
+                        statusCell.innerHTML = '<span class="badge bg-success">Active</span>';
+                        toggleBtn.className = 'btn btn-outline-warning btn-sm';
+                        toggleBtn.innerHTML = '<i class="fas fa-pause"></i>';
+                        toggleBtn.onclick = () => togglePSStatus(psId, true);
+                    } else {
+                        statusCell.innerHTML = '<span class="badge bg-danger">Inactive</span>';
+                        toggleBtn.className = 'btn btn-outline-success btn-sm';
+                        toggleBtn.innerHTML = '<i class="fas fa-play"></i>';
+                        toggleBtn.onclick = () => togglePSStatus(psId, false);
+                    }
+                }
+                
+                // Show success message
+                showAlert('success', data.message);
+            } else {
+                showAlert('danger', data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showAlert('danger', 'An error occurred while updating PS status');
+        });
+    }
+}
+
+function showAlert(type, message) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    const container = document.querySelector('.container-main');
+    container.insertBefore(alertDiv, container.firstChild);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+
+// Form event handlers
+document.addEventListener('DOMContentLoaded', function() {
+    // Edit PS form handler
+    const editPSForm = document.getElementById('editPSForm');
+    if (editPSForm) {
+        editPSForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(editPSForm);
+            const psId = formData.get('id');
+            const data = {
+                phone: formData.get('phone'),
+                email: formData.get('email')
+            };
+            
+            fetch(`/api/branch_update_ps_info/${psId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    showAlert('success', result.message);
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('editPSModal'));
+                    modal.hide();
+                    // Reload the page to refresh the PS list
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showAlert('danger', result.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showAlert('danger', 'An error occurred while updating PS');
+            });
+        });
+    }
+});
 </script>
 {% endblock %} 

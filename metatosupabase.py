@@ -4,6 +4,7 @@ from supabase import create_client
 from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Set, Optional, Tuple
+import pandas as pd
 
 # Environment setup
 load_dotenv()
@@ -147,6 +148,30 @@ def is_duplicate_source(existing_record, new_source, new_sub_source):
             return True
     
     return False
+
+def insert_lead_safely(supabase, lead_data):
+    """Insert lead with duplicate check at database level"""
+    try:
+        # First, check if this exact combination already exists
+        existing = supabase.table("lead_master").select("id").eq(
+            "customer_mobile_number", lead_data['customer_mobile_number']
+        ).eq("source", lead_data['source']).eq("sub_source", lead_data['sub_source']).execute()
+        
+        if existing.data:
+            print(f"⚠️ Database-level duplicate detected: {lead_data['customer_mobile_number']} | {lead_data['source']} | {lead_data['sub_source']}")
+            return False
+        
+        # Insert if no duplicate found
+        supabase.table("lead_master").insert(lead_data).execute()
+        return True
+        
+    except Exception as e:
+        if "duplicate key" in str(e).lower() or "unique constraint" in str(e).lower():
+            print(f"🛡️ Database constraint prevented duplicate: {lead_data['customer_mobile_number']}")
+            return False
+        else:
+            print(f"❌ Database error: {e}")
+            return False
 
 class MetaAPIOptimized:
     def __init__(self, page_token: str, max_workers: int = 5):
@@ -366,7 +391,7 @@ def preview_field_names_optimized():
     print("🧾 ALL FIELDS:", ", ".join(sorted(global_set)), "\n")
 
 def sync_to_db_optimized():
-    """Enhanced sync with duplicate handling logic"""
+    """Enhanced sync with proper intra-batch duplicate handling"""
     print(f"🔄 Meta API sync starting with duplicate handling...")
     print(f"🎯 Source: META | Sub-source: Meta")
     print(f"🎯 Each lead processed individually - duplicate handling active")
@@ -397,14 +422,35 @@ def sync_to_db_optimized():
     
     print(f"\n📊 Collected {len(all_new_leads)} leads from Meta")
     
-    # Convert to DataFrame for processing
-    import pandas as pd
-    df_processed = pd.DataFrame(all_new_leads)
+    # STEP 1: Remove intra-batch duplicates (same phone + same source/sub_source)
+    seen_combinations = set()
+    deduplicated_leads = []
+    intra_batch_duplicates = 0
     
-    # Check existing records in both tables
+    for lead in all_new_leads:
+        phone = lead['customer_mobile_number']
+        source = lead['source']
+        sub_source = lead['sub_source']
+        combination = (phone, source, sub_source)
+        
+        if combination in seen_combinations:
+            print(f"🔄 Removing intra-batch duplicate: {phone} | Source: {source} | Sub-source: {sub_source}")
+            intra_batch_duplicates += 1
+            continue
+        
+        seen_combinations.add(combination)
+        deduplicated_leads.append(lead)
+    
+    if intra_batch_duplicates > 0:
+        print(f"🧹 Removed {intra_batch_duplicates} intra-batch duplicates")
+    
+    # Convert to DataFrame for processing
+    df_processed = pd.DataFrame(deduplicated_leads)
+    
+    # STEP 2: Check existing records in both tables
     master_records, duplicate_records = check_existing_leads(supabase, df_processed)
     
-    # Process each lead
+    # STEP 3: Process each lead
     new_leads = []
     updated_duplicates = 0
     skipped_duplicates = 0
@@ -457,60 +503,61 @@ def sync_to_db_optimized():
             # Completely new lead - add to new_leads list
             new_leads.append(row)
     
-    # Process new leads
+    # STEP 4: Process new leads ONE BY ONE to prevent race conditions
+    successful_inserts = 0
+    failed_inserts = 0
+    
     if not new_leads:
         print("✅ No new leads to insert.")
     else:
-        df_new = pd.DataFrame(new_leads)
-        print(f"🆕 Found {len(df_new)} new leads to insert")
+        print(f"🆕 Found {len(new_leads)} new leads to insert")
         
-        # Generate UIDs for new leads
+        # Process each new lead individually
         sequence = get_next_sequence_number(supabase)
-        uids = []
         
-        for _, row in df_new.iterrows():
-            new_uid = generate_uid(row['source'], row['customer_mobile_number'], sequence)
-            uids.append(new_uid)
-            sequence += 1
-        
-        df_new['uid'] = uids
-        
-        # Select final columns
-        final_cols = ['uid', 'date', 'customer_name', 'customer_mobile_number', 'source', 'sub_source', 'campaign',
-                      'cre_name', 'lead_category', 'model_interested', 'branch', 'ps_name',
-                      'assigned', 'lead_status', 'follow_up_date',
-                      'first_call_date', 'first_remark', 'second_call_date', 'second_remark',
-                      'third_call_date', 'third_remark', 'fourth_call_date', 'fourth_remark',
-                      'fifth_call_date', 'fifth_remark', 'sixth_call_date', 'sixth_remark',
-                      'seventh_call_date', 'seventh_remark', 'final_status',
-                      'created_at', 'updated_at']
-        df_new = df_new[final_cols]
-        
-        # Insert new leads
-        successful_inserts = 0
-        failed_inserts = 0
-        
-        for row in df_new.to_dict(orient="records"):
+        for lead in new_leads:
             try:
-                supabase.table("lead_master").insert(row).execute()
-                print(f"✅ Inserted new lead: {row['uid']} | Phone: {row['customer_mobile_number']} | Campaign: {row['campaign']}")
-                successful_inserts += 1
+                # Generate UID for this lead
+                new_uid = generate_uid(lead['source'], lead['customer_mobile_number'], sequence)
+                lead['uid'] = new_uid
+                
+                # Final columns check
+                final_cols = ['uid', 'date', 'customer_name', 'customer_mobile_number', 'source', 'sub_source', 'campaign',
+                              'cre_name', 'lead_category', 'model_interested', 'branch', 'ps_name',
+                              'assigned', 'lead_status', 'follow_up_date',
+                              'first_call_date', 'first_remark', 'second_call_date', 'second_remark',
+                              'third_call_date', 'third_remark', 'fourth_call_date', 'fourth_remark',
+                              'fifth_call_date', 'fifth_remark', 'sixth_call_date', 'sixth_remark',
+                              'seventh_call_date', 'seventh_remark', 'final_status',
+                              'created_at', 'updated_at']
+                
+                # Create final lead dict with only required columns
+                final_lead = {col: lead.get(col) for col in final_cols}
+                
+                # Insert individual lead safely
+                if insert_lead_safely(supabase, final_lead):
+                    print(f"✅ Inserted new lead: {new_uid} | Phone: {lead['customer_mobile_number']} | Campaign: {lead['campaign']}")
+                    successful_inserts += 1
+                else:
+                    failed_inserts += 1
+                
+                sequence += 1
+                
             except Exception as e:
-                print(f"❌ Failed to insert {row['uid']} | Phone: {row['customer_mobile_number']}: {e}")
+                print(f"❌ Failed to insert Phone: {lead['customer_mobile_number']}: {e}")
                 failed_inserts += 1
-        
-        print(f"✅ Successfully inserted new leads: {successful_inserts}")
-        print(f"❌ Failed insertions: {failed_inserts}")
     
     # Summary
     print(f"\n📊 SUMMARY:")
-    print(f"✅ New leads inserted: {len(new_leads) if new_leads else 0}")
+    print(f"🧹 Intra-batch duplicates removed: {intra_batch_duplicates}")
+    print(f"✅ New leads inserted: {successful_inserts}")
+    print(f"❌ Failed insertions: {failed_inserts}")
     print(f"🔄 Duplicate records updated/created: {updated_duplicates}")
     print(f"⚠️ Skipped exact duplicates: {skipped_duplicates}")
-    print(f"📱 Total records processed: {len(df_processed)}")
+    print(f"📱 Total records processed: {len(all_new_leads)}")
     print(f"🎯 Source: META | Sub-source: Meta")
     print(f"📊 Each lead processed individually with duplicate handling")
-    print(f"🔄 Duplicates with other sources (Google, BTL, etc.) handled via duplicate_leads table")
+    print(f"🔄 Duplicates with other sources handled via duplicate_leads table")
 
 # Compatibility functions
 def preview_field_names():

@@ -2025,9 +2025,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function updatePendingLeadsCount() {
-        const visibleRows = document.querySelectorAll('.pending-lead-row[style=""], .pending-lead-row:not([style*="display: none"])');
+        const visibleRows = document.querySelectorAll('#pendingLeadsTable tbody tr:not([style*="display: none"])');
         if (pendingLeadsCount) {
             pendingLeadsCount.textContent = visibleRows.length;
+        }
+        
+        // Also update the section title if it exists
+        const sectionTitle = document.querySelector('#pendingLeadsTable').closest('.card').querySelector('.card-header h5');
+        if (sectionTitle) {
+            let titleText = `Pending Leads (${visibleRows.length})`;
+            if (activeCategoryFilter) {
+                titleText += ` - Filtered by: ${activeCategoryFilter}`;
+            }
+            sectionTitle.innerHTML = titleText;
         }
     }
 
@@ -2461,21 +2471,50 @@ categoryToggles.forEach(toggle => {
 
 function filterPendingLeadsByCategory() {
     const tableRows = document.querySelectorAll('#pendingLeadsTable tbody tr');
+    let visibleCount = 0;
     
     tableRows.forEach(row => {
         const categoryCell = row.querySelector('td:nth-child(7)'); // Category column
         if (categoryCell) {
             const categoryText = categoryCell.textContent.trim();
+            const categoryBadge = categoryCell.querySelector('.badge');
             
-            if (!activeCategoryFilter || categoryText.includes(activeCategoryFilter)) {
+            // Get the actual category text from the badge or cell
+            let actualCategory = '';
+            if (categoryBadge) {
+                actualCategory = categoryBadge.textContent.trim();
+            } else {
+                actualCategory = categoryText;
+            }
+            
+            // Check if row should be visible based on category filter
+            let shouldShow = true;
+            if (activeCategoryFilter) {
+                shouldShow = actualCategory === activeCategoryFilter;
+            }
+            
+            // Apply visibility
+            if (shouldShow) {
                 row.style.display = '';
+                visibleCount++;
             } else {
                 row.style.display = 'none';
             }
         }
     });
     
+    // Update the count display
     updatePendingLeadsCount();
+    
+    // Update the section title to show filtered count
+    const sectionTitle = document.querySelector('#pendingLeadsTable').closest('.card').querySelector('.card-header h5');
+    if (sectionTitle) {
+        if (activeCategoryFilter) {
+            sectionTitle.innerHTML = `Pending Leads (${visibleCount}) - Filtered by: ${activeCategoryFilter}`;
+        } else {
+            sectionTitle.innerHTML = `Pending Leads (${visibleCount})`;
+        }
+    }
 }
 
 // Update the existing search function to work with category filter
@@ -2487,6 +2526,7 @@ function setupPendingSearch() {
     function performSearch() {
         const searchTerm = searchInput.value.toLowerCase();
         const tableRows = document.querySelectorAll('#pendingLeadsTable tbody tr');
+        let visibleCount = 0;
         
         tableRows.forEach(row => {
             const searchData = row.getAttribute('data-search');
@@ -2498,18 +2538,40 @@ function setupPendingSearch() {
             // Check category filter
             let shouldShowByCategory = true;
             if (activeCategoryFilter && categoryCell) {
-                const categoryText = categoryCell.textContent.trim();
-                shouldShowByCategory = categoryText.includes(activeCategoryFilter);
+                const categoryBadge = categoryCell.querySelector('.badge');
+                let actualCategory = '';
+                if (categoryBadge) {
+                    actualCategory = categoryBadge.textContent.trim();
+                } else {
+                    actualCategory = categoryCell.textContent.trim();
+                }
+                shouldShowByCategory = actualCategory === activeCategoryFilter;
             }
             
+            // Show row only if it passes both filters
             if (shouldShowBySearch && shouldShowByCategory) {
                 row.style.display = '';
+                visibleCount++;
             } else {
                 row.style.display = 'none';
             }
         });
         
+        // Update the count display
         updatePendingLeadsCount();
+        
+        // Update the section title to show filtered count
+        const sectionTitle = document.querySelector('#pendingLeadsTable').closest('.card').querySelector('.card-header h5');
+        if (sectionTitle) {
+            let titleText = `Pending Leads (${visibleCount})`;
+            if (activeCategoryFilter) {
+                titleText += ` - Filtered by: ${activeCategoryFilter}`;
+            }
+            if (searchTerm) {
+                titleText += ` - Search: "${searchTerm}"`;
+            }
+            sectionTitle.innerHTML = titleText;
+        }
     }
     
     function clearSearch() {

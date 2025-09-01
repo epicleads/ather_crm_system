@@ -141,8 +141,8 @@
     <div id="followup-section" class="row" style="display: none;">
         <div class="col-md-6">
             <div class="mb-3">
-                <label for="follow_up_date_first" class="form-label">Follow-up Date <span class="text-danger">*</span></label>
-                <input type="datetime-local" class="form-control" id="follow_up_date_first" name="follow_up_date_first" value="{{ lead.follow_up_date[:16] if lead.follow_up_date else '' }}">
+                <label for="follow_up_date" class="form-label">Follow-up Date <span class="text-danger">*</span></label>
+                <input type="datetime-local" class="form-control" id="follow_up_date" name="follow_up_date" value="{{ lead.follow_up_date[:16] if lead.follow_up_date else '' }}">
             </div>
         </div>
     </div>
@@ -154,24 +154,30 @@
         <div class="row">
             <div class="col-md-6">
                 <div class="mb-3">
-                    <label for="lead_category" class="form-label">Lead Category</label>
-                    <select class="form-select" id="lead_category" name="lead_category">
+                    <label for="lead_category" class="form-label">Lead Category <span class="text-danger category-required" style="display: none;">*</span></label>
+                    <select class="form-select" id="lead_category" name="lead_category" onchange="validateBranchPS();">
                         <option value="{{ lead.lead_category or '' }}">{{ lead.lead_category or 'Select Category' }}</option>
                         <option value="Hot">Hot</option>
                         <option value="Cold">Cold</option>
                         <option value="Warm">Warm</option>
                         <option value="Not Interested">Not Interested</option>
                     </select>
+                    <div class="invalid-feedback category-error" style="display: none;">
+                        Please select a Lead Category
+                    </div>
                 </div>
             </div>
             <div class="col-md-6">
                 <div class="mb-3">
-                    <label for="model_type" class="form-label">Model Type</label>
-                    <select class="form-select" id="model_type" onchange="updateModels()">
+                    <label for="model_type" class="form-label">Model Type <span class="text-danger model-type-required" style="display: none;">*</span></label>
+                    <select class="form-select" id="model_type" onchange="updateModels(); validateBranchPS();">
                         <option value="">Select Model Type</option>
                         <option value="rizta">Rizta</option>
                         <option value="450x">450X</option>
                     </select>
+                    <div class="invalid-feedback model-type-error" style="display: none;">
+                        Please select a Model Type
+                    </div>
                 </div>
             </div>
         </div>
@@ -179,21 +185,27 @@
         <div class="row">
             <div class="col-md-6">
                 <div class="mb-3">
-                    <label for="model_interested" class="form-label">Model Interested</label>
-                    <select class="form-select" id="model_interested" name="model_interested">
+                    <label for="model_interested" class="form-label">Model Interested <span class="text-danger model-interested-required" style="display: none;">*</span></label>
+                    <select class="form-select" id="model_interested" name="model_interested" onchange="validateBranchPS();">
                         <option value="{{ lead.model_interested or '' }}">{{ lead.model_interested or 'Select Model' }}</option>
                     </select>
+                    <div class="invalid-feedback model-interested-error" style="display: none;">
+                        Please select a Model Interested
+                    </div>
                 </div>
             </div>
             <div class="col-md-6">
                 <div class="mb-3">
-                    <label for="branch" class="form-label">Branch</label>
-                    <select class="form-select" id="branch" name="branch" onchange="updatePS()">
+                    <label for="branch" class="form-label">Branch <span class="text-danger branch-required" style="display: none;">*</span></label>
+                    <select class="form-select" id="branch" name="branch" onchange="updatePS(); validateBranchPS();">
                         <option value="{{ lead.branch or '' }}">{{ lead.branch or 'Select Branch' }}</option>
                         {% for branch in branches %}
                         <option value="{{ branch }}">{{ branch }}</option>
                         {% endfor %}
                     </select>
+                    <div class="invalid-feedback branch-error" style="display: none;">
+                        Please select a Branch
+                    </div>
                 </div>
             </div>
         </div>
@@ -201,13 +213,22 @@
         <div class="row">
             <div class="col-md-6">
                 <div class="mb-3">
-                    <label for="ps_name" class="form-label">Product Specialist</label>
-                    <select class="form-select" id="ps_name" name="ps_name">
+                    <label for="ps_name" class="form-label">Product Specialist <span class="text-danger ps-required" style="display: none;">*</span></label>
+                    <select class="form-select" id="ps_name" name="ps_name" onchange="validateBranchPS();">
                         <option value="{{ lead.ps_name or '' }}">{{ lead.ps_name or 'Select PS' }}</option>
                         <option value="">Unassigned</option>
                     </select>
+                    <div class="invalid-feedback ps-error" style="display: none;">
+                        Please select a Product Specialist
+                    </div>
+                    <small class="form-text text-muted">
+                        <i class="fas fa-info-circle"></i> Only active PS users are shown in the dropdown
+                    </small>
                 </div>
             </div>
+        </div>
+
+        <div class="row">
             <div class="col-md-6">
                 <div class="mb-3">
                     <label for="final_status" class="form-label">Final Status</label>
@@ -219,6 +240,31 @@
                     </select>
                 </div>
             </div>
+            <div class="col-md-6">
+                <div class="form-label">Test Drive Status</div>
+                <div class="d-flex align-items-center">
+                    {% if test_drive_state.locked and test_drive_state.value %}
+                        <span class="badge bg-success me-2">
+                            <i class="fas fa-lock me-1"></i>Test Drive Done - Locked
+                        </span>
+                        <small class="text-muted">Updated by: {{ test_drive_state.updated_by }}</small>
+                    {% elif test_drive_state.locked and not test_drive_state.value %}
+                        <span class="badge bg-warning me-2">
+                            <i class="fas fa-lock me-1"></i>Test Drive Not Done - Locked
+                        </span>
+                        <small class="text-muted">Updated by: {{ test_drive_state.updated_by }}</small>
+                    {% else %}
+                        <div class="mb-3">
+                            <label for="test_drive_done" class="form-label">Test Drive Done? <span class="text-danger">*</span></label>
+                            <select class="form-select" id="test_drive_done" name="test_drive_done" required>
+                                <option value="">Select</option>
+                                <option value="Yes" {% if test_drive_state.value %}selected{% endif %}>Yes</option>
+                                <option value="No" {% if not test_drive_state.value and test_drive_state.value is not none %}selected{% endif %}>No</option>
+                            </select>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
         </div>
     </div>
     {% else %}
@@ -226,24 +272,30 @@
     <div class="row">
         <div class="col-md-6">
             <div class="mb-3">
-                <label for="lead_category" class="form-label">Lead Category</label>
-                <select class="form-select" id="lead_category" name="lead_category">
+                <label for="lead_category" class="form-label">Lead Category <span class="text-danger category-required" style="display: none;">*</span></label>
+                <select class="form-select" id="lead_category" name="lead_category" onchange="validateBranchPS();">
                     <option value="{{ lead.lead_category or '' }}">{{ lead.lead_category or 'Select Category' }}</option>
                     <option value="Hot">Hot</option>
                     <option value="Cold">Cold</option>
                     <option value="Warm">Warm</option>
                     <option value="Not Interested">Not Interested</option>
                 </select>
+                <div class="invalid-feedback category-error" style="display: none;">
+                    Please select a Lead Category
+                </div>
             </div>
         </div>
         <div class="col-md-6">
             <div class="mb-3">
-                <label for="model_type" class="form-label">Model Type</label>
-                <select class="form-select" id="model_type" onchange="updateModels()">
+                <label for="model_type" class="form-label">Model Type <span class="text-danger model-type-required" style="display: none;">*</span></label>
+                <select class="form-select" id="model_type" onchange="updateModels(); validateBranchPS();">
                     <option value="">Select Model Type</option>
                     <option value="rizta">Rizta</option>
                     <option value="450x">450X</option>
                 </select>
+                <div class="invalid-feedback model-type-error" style="display: none;">
+                    Please select a Model Type
+                </div>
             </div>
         </div>
     </div>
@@ -251,21 +303,27 @@
     <div class="row">
         <div class="col-md-6">
             <div class="mb-3">
-                <label for="model_interested" class="form-label">Model Interested</label>
-                <select class="form-select" id="model_interested" name="model_interested">
+                <label for="model_interested" class="form-label">Model Interested <span class="text-danger model-interested-required" style="display: none;">*</span></label>
+                <select class="form-select" id="model_interested" name="model_interested" onchange="validateBranchPS();">
                     <option value="{{ lead.model_interested or '' }}">{{ lead.model_interested or 'Select Model' }}</option>
                 </select>
+                <div class="invalid-feedback model-interested-error" style="display: none;">
+                    Please select a Model Interested
+                </div>
             </div>
         </div>
         <div class="col-md-6">
             <div class="mb-3">
-                <label for="branch" class="form-label">Branch</label>
-                <select class="form-select" id="branch" name="branch" onchange="updatePS()">
+                <label for="branch" class="form-label">Branch <span class="text-danger branch-required" style="display: none;">*</span></label>
+                <select class="form-select" id="branch" name="branch" onchange="updatePS(); validateBranchPS();">
                     <option value="{{ lead.branch or '' }}">{{ lead.branch or 'Select Branch' }}</option>
                     {% for branch in branches %}
                     <option value="{{ branch }}">{{ branch }}</option>
                     {% endfor %}
                 </select>
+                <div class="invalid-feedback branch-error" style="display: none;">
+                    Please select a Branch
+                </div>
             </div>
         </div>
     </div>
@@ -273,11 +331,42 @@
     <div class="row">
         <div class="col-md-6">
             <div class="mb-3">
-                <label for="ps_name" class="form-label">Product Specialist</label>
-                <select class="form-select" id="ps_name" name="ps_name">
+                <label for="ps_name" class="form-label">Product Specialist <span class="text-danger ps-required" style="display: none;">*</span></label>
+                <select class="form-select" id="ps_name" name="ps_name" onchange="validateBranchPS();">
                     <option value="{{ lead.ps_name or '' }}">{{ lead.ps_name or 'Select PS' }}</option>
                     <option value="">Unassigned</option>
                 </select>
+                <div class="invalid-feedback ps-error" style="display: none;">
+                    Please select a Product Specialist
+                </div>
+                <small class="form-text text-muted">
+                    <i class="fas fa-info-circle"></i> Only active PS users are shown in the dropdown
+                </small>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="form-label">Test Drive Status</div>
+            <div class="d-flex align-items-center">
+                {% if test_drive_state.locked and test_drive_state.value %}
+                    <span class="badge bg-success me-2">
+                        <i class="fas fa-lock me-1"></i>Test Drive Done - Locked
+                    </span>
+                    <small class="text-muted">Updated by: {{ test_drive_state.updated_by }}</small>
+                {% elif test_drive_state.locked and not test_drive_state.value %}
+                    <span class="badge bg-warning me-2">
+                        <i class="fas fa-lock me-1"></i>Test Drive Not Done - Locked
+                    </span>
+                    <small class="text-muted">Updated by: {{ test_drive_state.updated_by }}</small>
+                {% else %}
+                    <div class="mb-3">
+                        <label for="test_drive_done" class="form-label">Test Drive Done? <span class="text-danger">*</span></label>
+                        <select class="form-select" id="test_drive_done" name="test_drive_done" required>
+                            <option value="">Select</option>
+                            <option value="Yes" {% if test_drive_state.value %}selected{% endif %}>Yes</option>
+                            <option value="No" {% if not test_drive_state.value and test_drive_state.value is not none %}selected{% endif %}>No</option>
+                        </select>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -333,8 +422,8 @@
                     </div>
                     <div class="col-md-6">
                         <div class="mb-3">
-                            <label for="follow_up_date_nth" class="form-label">Follow-up Date</label>
-                            <input type="datetime-local" class="form-control" id="follow_up_date_nth" name="follow_up_date_nth" value="{{ lead.follow_up_date[:16] if lead.follow_up_date else '' }}">
+                            <label for="follow_up_date" class="form-label">Follow-up Date</label>
+                            <input type="datetime-local" class="form-control" id="follow_up_date" name="follow_up_date" value="{{ lead.follow_up_date[:16] if lead.follow_up_date else '' }}">
                         </div>
                     </div>
                 </div>
@@ -468,7 +557,8 @@ const psUsers = [
     {% for ps in ps_users %}
     {
         name: "{{ ps.name }}",
-        branch: "{{ ps.branch }}"
+        branch: "{{ ps.branch }}",
+        is_active: {% if ps.is_active %}true{% else %}false{% endif %}
     }{% if not loop.last %},{% endif %}
     {% endfor %}
 ];
@@ -482,7 +572,7 @@ function handleLeadStatusChange() {
     const callDetailsSection = document.getElementById('call-details-section');
     const extendedOptions = document.getElementById('extended-options');
     const shouldRecordCall = document.getElementById('should_record_call');
-    const followupDate = document.getElementById('follow_up_date_first') || document.getElementById('follow_up_date_nth');
+    const followupDate = document.getElementById('follow_up_date');
     const callDate = document.getElementById('call_date');
     const callRemark = document.getElementById('call_remark');
     const finalStatus = document.getElementById('final_status');
@@ -509,10 +599,28 @@ function handleLeadStatusChange() {
         switch(leadStatus) {
             case 'Busy on another Call':
             case 'RNR':
-            case 'Call me Back':
                 // For these statuses, NO call is recorded - lead stays fresh
+                // NO follow-up date shown for RNR and Busy on another Call
+                // Explicitly set shouldRecordCall to false to ensure no call is recorded
+                shouldRecordCall.value = 'false';
+                // Clear call date and remark fields to prevent them from being submitted
+                if (callDate) callDate.value = '';
+                if (callRemark) callRemark.value = '';
+                // Hide follow-up section and remove any date restrictions for RNR
+                if (followupSection) {
+                    followupSection.style.display = 'none';
+                }
+                                if (followupDate) {
+                    followupDate.removeAttribute('min');
+                    followupDate.removeAttribute('max');
+                    followupDate.required = false;
+                    followupDate.value = ''; // Clear the value to prevent validation issues
+                }
+                break;
+                
+            case 'Call me Back':
                 // Only show follow-up date for "Call me Back"
-                if (leadStatus === 'Call me Back' && followupSection) {
+                if (followupSection) {
                     followupSection.style.display = 'block';
                     if (followupDate) followupDate.required = true;
                 }
@@ -522,7 +630,7 @@ function handleLeadStatusChange() {
                 if (callDate) callDate.value = '';
                 if (callRemark) callRemark.value = '';
                 break;
-
+                
             case 'Interested':
                 // Show follow-up date and all extended options, record call
                 if (followupSection) {
@@ -538,13 +646,35 @@ function handleLeadStatusChange() {
                     if (callRemark) callRemark.required = true;
                 }
                 shouldRecordCall.value = 'true';
-
+                
+                // Make all required fields required for Interested status
+                const leadCategoryField = document.getElementById('lead_category');
+                const modelTypeField = document.getElementById('model_type');
+                const modelInterestedField = document.getElementById('model_interested');
+                const branchField = document.getElementById('branch');
+                const psField = document.getElementById('ps_name');
+                
+                if (leadCategoryField) leadCategoryField.required = true;
+                if (modelTypeField) modelTypeField.required = true;
+                if (modelInterestedField) modelInterestedField.required = true;
+                if (branchField) branchField.required = true;
+                if (psField) psField.required = true;
+                
+                // Validate all required fields
+                validateBranchPS();
+                
                 // Set default values
                 if (callDate && !callDate.value) {
                     callDate.value = new Date().toISOString().split('T')[0];
                 }
                 if (callRemark && !callRemark.value.trim()) {
                     callRemark.value = `Customer showed interest`;
+                }
+                // Set default follow-up date to 3 days from now if not already set
+                if (followupDate && !followupDate.value) {
+                    const threeDaysFromNow = new Date();
+                    threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
+                    followupDate.value = threeDaysFromNow.toISOString().slice(0, 16);
                 }
                 break;
 
@@ -571,6 +701,17 @@ function handleLeadStatusChange() {
                 if (finalStatus) {
                     finalStatus.value = 'Lost';
                 }
+                // Hide follow-up section for non-interested statuses
+                // No follow-up date needed when customer is not interested
+                if (followupSection) {
+                    followupSection.style.display = 'none';
+                }
+                if (followupDate) {
+                    followupDate.required = false;
+                    followupDate.value = ''; // Clear the value
+                }
+                // No PS validation needed for non-interested statuses
+                // PS assignment is only relevant when customer shows interest
                 break;
 
             case 'Call Disconnected':
@@ -596,10 +737,28 @@ function handleLeadStatusChange() {
             case 'Call not Connected':
             case 'Busy on another Call':
             case 'RNR':
-            case 'Call me Back':
                 // For these statuses, NO call is recorded - lead stays fresh
+                // NO follow-up date shown for RNR and Busy on another Call
+                // Explicitly set shouldRecordCall to false to ensure no call is recorded
+                shouldRecordCall.value = 'false';
+                // Clear call date and remark fields to prevent them from being submitted
+                if (callDate) callDate.value = '';
+                if (callRemark) callRemark.value = '';
+                // Hide follow-up section and remove any date restrictions for RNR
+                if (followupSection) {
+                    followupSection.style.display = 'none';
+                }
+                if (followupDate) {
+                    followupDate.removeAttribute('min');
+                    followupDate.removeAttribute('max');
+                    followupDate.required = false;
+                    followupDate.value = ''; // Clear the value to prevent validation issues
+                }
+                break;
+                
+            case 'Call me Back':
                 // Only show follow-up date for "Call me Back"
-                if (leadStatus === 'Call me Back' && followupSection) {
+                if (followupSection) {
                     followupSection.style.display = 'block';
                     if (followupDate) followupDate.required = true;
                 }
@@ -628,6 +787,8 @@ function handleLeadStatusChange() {
                 if (finalStatus) {
                     finalStatus.value = 'Won';
                 }
+                // Validate Branch and PS fields (hide required indicators)
+                validateBranchPS();
                 break;
 
             case 'Discount Issue':
@@ -648,6 +809,8 @@ function handleLeadStatusChange() {
                 if (callRemark && !callRemark.value.trim()) {
                     callRemark.value = `Customer status: ${leadStatus}`;
                 }
+                // Validate Branch and PS fields (hide required indicators)
+                validateBranchPS();
                 break;
 
             case 'Not Interested':
@@ -671,6 +834,15 @@ function handleLeadStatusChange() {
                 if (finalStatus) {
                     finalStatus.value = 'Lost';
                 }
+                // Hide follow-up section for non-interested statuses
+                if (followupSection) {
+                    followupSection.style.display = 'none';
+                }
+                if (followupDate) {
+                    followupDate.required = false;
+                    followupDate.value = ''; // Clear the value
+                }
+                // No PS validation needed for non-interested statuses
                 break;
 
             default:
@@ -716,8 +888,8 @@ function updatePS() {
     // Clear existing options
     psSelect.innerHTML = '<option value="">Select PS</option><option value="">Unassigned</option>';
 
-    // Filter PS users by branch
-    const filteredPS = psUsers.filter(ps => ps.branch === selectedBranch);
+    // Filter PS users by branch and active status
+    const filteredPS = psUsers.filter(ps => ps.branch === selectedBranch && ps.is_active !== false);
 
     filteredPS.forEach(ps => {
         const option = document.createElement('option');
@@ -728,12 +900,20 @@ function updatePS() {
         }
         psSelect.appendChild(option);
     });
+    
+    // If current PS is inactive, show warning
+    if (currentValue && !filteredPS.find(ps => ps.name === currentValue)) {
+        const warningDiv = document.createElement('div');
+        warningDiv.className = 'alert alert-warning mt-2';
+        warningDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> <strong>Warning:</strong> Currently assigned PS "${currentValue}" is inactive and unavailable for today.`;
+        psSelect.parentNode.appendChild(warningDiv);
+    }
 }
 
 document.addEventListener('DOMContentLoaded', function() {
     // Set minimum date for follow-up and call date to today
     const today = new Date().toISOString().slice(0, 16);
-    const followUpDate = document.getElementById('follow_up_date_first') || document.getElementById('follow_up_date_nth');
+    const followUpDate = document.getElementById('follow_up_date');
     const callDate = document.getElementById('call_date');
 
     if (followUpDate) {
@@ -770,10 +950,53 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize form state based on current lead status
     handleLeadStatusChange();
 
+    // Initialize all required fields validation state
+    validateBranchPS();
+
+    // Add real-time validation for all required fields
+    const leadCategoryField = document.getElementById('lead_category');
+    const modelTypeField = document.getElementById('model_type');
+    const modelInterestedField = document.getElementById('model_interested');
+    const branchField = document.getElementById('branch');
+    const psField = document.getElementById('ps_name');
+    
+    if (leadCategoryField) {
+        leadCategoryField.addEventListener('change', validateBranchPS);
+    }
+    if (modelTypeField) {
+        modelTypeField.addEventListener('change', validateBranchPS);
+    }
+    if (modelInterestedField) {
+        modelInterestedField.addEventListener('change', validateBranchPS);
+    }
+    if (branchField) {
+        branchField.addEventListener('change', validateBranchPS);
+    }
+    if (psField) {
+        psField.addEventListener('change', validateBranchPS);
+    }
+
+    // Ensure follow-up date field is properly initialized
+    if (followUpDate) {
+        console.log('Initial follow-up date value:', followUpDate.value);
+        // If there's a value, ensure it's in the correct format
+        if (followUpDate.value) {
+            try {
+                const dateValue = new Date(followUpDate.value);
+                if (!isNaN(dateValue.getTime())) {
+                    followUpDate.value = dateValue.toISOString().slice(0, 16);
+                    console.log('Follow-up date initialized to:', followUpDate.value);
+                }
+            } catch (error) {
+                console.error('Error initializing follow-up date:', error);
+            }
+        }
+    }
+
             // Form validation and submission
         document.getElementById('leadUpdateForm').addEventListener('submit', function(e) {
             const leadStatus = document.getElementById('lead_status').value;
-            const followupDate = document.getElementById('follow_up_date_first') || document.getElementById('follow_up_date_nth');
+            const followupDate = document.getElementById('follow_up_date');
             const callDate = document.getElementById('call_date');
             const callRemark = document.getElementById('call_remark');
             const shouldRecordCall = document.getElementById('should_record_call').value;
@@ -802,7 +1025,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // For "Call Disconnected", no additional validation needed
             // This will only update lead_status, no call recorded (lead stays fresh)
 
-            // For "Interested", validate follow-up date and call details
+            // For "Interested", validate follow-up date, call details, and required fields
             if (leadStatus === 'Interested') {
                 if (followupDate && !followupDate.value) {
                     e.preventDefault();
@@ -822,9 +1045,52 @@ document.addEventListener('DOMContentLoaded', function() {
                     callRemark.focus();
                     return false;
                 }
+                
+                // Validate all required fields for Interested status
+                const leadCategoryField = document.getElementById('lead_category');
+                const modelTypeField = document.getElementById('model_type');
+                const modelInterestedField = document.getElementById('model_interested');
+                const branchField = document.getElementById('branch');
+                const psField = document.getElementById('ps_name');
+                
+                if (leadCategoryField && !leadCategoryField.value) {
+                    e.preventDefault();
+                    alert('Please select a Lead Category');
+                    leadCategoryField.focus();
+                    return false;
+                }
+                
+                if (modelTypeField && !modelTypeField.value) {
+                    e.preventDefault();
+                    alert('Please select a Model Type');
+                    modelTypeField.focus();
+                    return false;
+                }
+                
+                if (modelInterestedField && !modelInterestedField.value) {
+                    e.preventDefault();
+                    alert('Please select a Model Interested');
+                    modelInterestedField.focus();
+                    return false;
+                }
+                
+                if (branchField && !branchField.value) {
+                    e.preventDefault();
+                    alert('Please select a Branch');
+                    branchField.focus();
+                    return false;
+                }
+                
+                if (psField && !psField.value) {
+                    e.preventDefault();
+                    alert('Please select a Product Specialist');
+                    psField.focus();
+                    return false;
+                }
             }
 
-            // For negative responses, validate call details
+            // For negative responses, validate call details only
+            // No follow-up date validation needed for non-interested statuses
             if ((leadStatus === 'Not Interested' || leadStatus === 'Did Not Inquire' || leadStatus === 'Lost to Competition' || leadStatus === 'Lost to Co Dealer' || leadStatus === 'Wrong Number')) {
                 if (callDate && !callDate.value) {
                     e.preventDefault();
@@ -855,7 +1121,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     callDate.focus();
                     return false;
                 }
-
                 if (callRemark && !callRemark.value.trim()) {
                     e.preventDefault();
                     alert('Please enter the Call Remark');
@@ -865,8 +1130,50 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        // Show loading state
+        // Ensure follow-up date is properly formatted before submission
+        if (followupDate && followupDate.value) {
+            try {
+                const dateValue = new Date(followupDate.value);
+                if (isNaN(dateValue.getTime())) {
+                    e.preventDefault();
+                    alert('Please enter a valid follow-up date');
+                    followupDate.focus();
+                    return false;
+                }
+                // Ensure the date is in the correct format
+                followupDate.value = dateValue.toISOString().slice(0, 16);
+                console.log('Follow-up date formatted:', followupDate.value);
+            } catch (error) {
+                console.error('Error formatting follow-up date:', error);
+            }
+        }
+
+        // Debug: Log form data before submission
+        console.log('Form submission - Lead Status:', leadStatus);
+        console.log('Form submission - Follow-up Date:', followupDate ? followupDate.value : 'No follow-up date field');
+        console.log('Form submission - Should Record Call:', shouldRecordCall);
+
+        // Check if submit button should be disabled for Interested status
         const submitBtn = this.querySelector('button[type="submit"]');
+        if (leadStatus === 'Interested') {
+            const leadCategoryField = document.getElementById('lead_category');
+            const modelTypeField = document.getElementById('model_type');
+            const modelInterestedField = document.getElementById('model_interested');
+            const branchField = document.getElementById('branch');
+            const psField = document.getElementById('ps_name');
+            
+            if ((leadCategoryField && !leadCategoryField.value) || 
+                (modelTypeField && !modelTypeField.value) || 
+                (modelInterestedField && !modelInterestedField.value) ||
+                (branchField && !branchField.value) || 
+                (psField && !psField.value)) {
+                e.preventDefault();
+                alert('Please fill in all required fields (Lead Category, Model Type, Model Interested, Branch, and Product Specialist) before proceeding.');
+                return false;
+            }
+        }
+
+        // Show loading state
         const originalText = submitBtn.innerHTML;
         submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Updating...';
         submitBtn.disabled = true;
@@ -880,7 +1187,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Toggle follow-up date requirement based on final status
     const finalStatus = document.getElementById('final_status');
-    const followupDate = document.getElementById('follow_up_date_first') || document.getElementById('follow_up_date_nth');
+    const followupDate = document.getElementById('follow_up_date');
     
     function toggleFollowUpRequired() {
         if (finalStatus && followupDate) {
@@ -892,6 +1199,107 @@ document.addEventListener('DOMContentLoaded', function() {
                 followupDate.disabled = false;
             }
         }
+    }
+    
+    // Validate all required fields for Interested status
+    function validateBranchPS() {
+        const leadStatus = document.getElementById('lead_status').value;
+        
+        // Only perform PS validation when lead status is "Interested"
+        // Skip validation for all other statuses to prevent unnecessary errors
+        if (leadStatus !== 'Interested') {
+            return;
+        }
+        
+        const leadCategoryField = document.getElementById('lead_category');
+        const modelTypeField = document.getElementById('model_type');
+        const modelInterestedField = document.getElementById('model_interested');
+        const branchField = document.getElementById('branch');
+        const psField = document.getElementById('ps_name');
+        
+        const categoryRequired = document.querySelector('.category-required');
+        const modelTypeRequired = document.querySelector('.model-type-required');
+        const modelInterestedRequired = document.querySelector('.model-interested-required');
+        const branchRequired = document.querySelector('.branch-required');
+        const psRequired = document.querySelector('.ps-required');
+        
+        const categoryError = document.querySelector('.category-error');
+        const modelTypeError = document.querySelector('.model-type-error');
+        const modelInterestedError = document.querySelector('.model-interested-error');
+        const branchError = document.querySelector('.branch-error');
+        const psError = document.querySelector('.ps-error');
+        
+        const submitBtn = document.querySelector('button[type="submit"]');
+        
+        // Show required indicators
+        if (categoryRequired) categoryRequired.style.display = 'inline';
+        if (modelTypeRequired) modelTypeRequired.style.display = 'inline';
+        if (modelInterestedRequired) modelInterestedRequired.style.display = 'inline';
+        if (branchRequired) branchRequired.style.display = 'inline';
+        if (psRequired) psRequired.style.display = 'inline';
+            
+            // Validate Lead Category
+            if (leadCategoryField && !leadCategoryField.value) {
+                leadCategoryField.classList.add('is-invalid');
+                if (categoryError) categoryError.style.display = 'block';
+            } else {
+                leadCategoryField.classList.remove('is-invalid');
+                if (categoryError) categoryError.style.display = 'none';
+            }
+            
+            // Validate Model Type
+            if (modelTypeField && !modelTypeField.value) {
+                modelTypeField.classList.add('is-invalid');
+                if (modelTypeError) modelTypeError.style.display = 'block';
+            } else {
+                modelTypeField.classList.remove('is-invalid');
+                if (modelTypeError) modelTypeError.style.display = 'none';
+            }
+            
+            // Validate Model Interested
+            if (modelInterestedField && !modelInterestedField.value) {
+                modelInterestedField.classList.add('is-invalid');
+                if (modelInterestedError) modelInterestedError.style.display = 'block';
+            } else {
+                modelInterestedField.classList.remove('is-invalid');
+                if (modelInterestedError) modelInterestedError.style.display = 'none';
+            }
+            
+            // Validate Branch
+            if (branchField && !branchField.value) {
+                branchField.classList.add('is-invalid');
+                if (branchError) branchError.style.display = 'block';
+            } else {
+                branchField.classList.remove('is-invalid');
+                if (branchError) branchError.style.display = 'none';
+            }
+            
+            // Validate PS
+            if (psField && !psField.value) {
+                psField.classList.add('is-invalid');
+                if (psError) psError.style.display = 'block';
+            } else {
+                psField.classList.remove('is-invalid');
+                if (psError) psError.style.display = 'none';
+            }
+            
+            // Enable/disable submit button based on validation
+            if (submitBtn) {
+                if ((leadCategoryField && !leadCategoryField.value) || 
+                    (modelTypeField && !modelTypeField.value) || 
+                    (modelInterestedField && !modelInterestedField.value) ||
+                    (branchField && !branchField.value) || 
+                    (psField && !psField.value)) {
+                    submitBtn.disabled = true;
+                    submitBtn.classList.add('btn-secondary');
+                    submitBtn.classList.remove('btn-primary');
+                } else {
+                    submitBtn.disabled = false;
+                    submitBtn.classList.remove('btn-secondary');
+                    submitBtn.classList.add('btn-primary');
+                }
+            }
+
     }
     
     if (finalStatus) {

@@ -57,12 +57,22 @@
 <div class="row g-3 mb-4">
     <div class="col-md-2">
         <div class="stats-card bg-primary text-white p-3 rounded h-100">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h4 class="mb-1 text-white">{{ fresh_leads|length }}</h4>
-                    <small class="text-white">Fresh Leads</small>
+            <div class="d-flex flex-column h-100">
+                <div class="mb-2">
+                    <h6 class="mb-1 fw-bold text-white">Fresh Leads</h6>
+                    <div class="fs-4 fw-bold text-white">{{ total_fresh_leads }}</div>
                 </div>
-                <i class="fas fa-clock fa-2x text-white"></i>
+                <div class="d-flex justify-content-between mt-auto">
+                    <div class="flex-fill mx-1 rounded p-2" style="background: #d4edda; color: #155724;">
+                        <div class="fw-semibold">{{ untouched_count }}</div>
+                    </div>
+                    <div class="flex-fill mx-1 rounded p-2" style="background: #ffe5b4; color: #b26a00;">
+                        <div class="fw-semibold">{{ called_count }}</div>
+                    </div>
+                    <div class="flex-fill mx-1 rounded p-2" style="background: #fff3cd; color: #856404;">
+                        <div class="fw-semibold">{{ follow_up_count }}</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -174,7 +184,7 @@
                     </button>
                 </div>
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="mb-0">Fresh Leads ({{ fresh_leads|length }})</h5>
+                    <h5 class="mb-0">Fresh Leads ({{ total_fresh_leads }})</h5>
                     <div class="d-flex gap-2">
                         <div class="input-group" style="max-width: 300px;">
                             <input type="text" class="form-control" id="freshLeadSearchInput" placeholder="Search by UID, name, mobile...">
@@ -188,79 +198,255 @@
                     </div>
                 </div>
 
+                <!-- Fresh Leads Subsection Navigation -->
+                <ul class="nav nav-tabs mb-3" id="freshLeadsSubTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="untouched-leads-tab" data-bs-toggle="tab" data-bs-target="#untouched-leads" type="button" role="tab" aria-controls="untouched-leads" aria-selected="true">
+                            Untouched <span class="badge bg-secondary">{{ untouched_count }}</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="called-leads-tab" data-bs-toggle="tab" data-bs-target="#called-leads" type="button" role="tab" aria-controls="called-leads" aria-selected="false">
+                            Called <span class="badge bg-secondary">{{ called_count }}</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="follow-up-leads-tab" data-bs-toggle="tab" data-bs-target="#follow-up-leads" type="button" role="tab" aria-controls="follow-up-leads" aria-selected="false">
+                            Follow Up <span class="badge bg-warning">{{ follow_up_count }}</span>
+                        </button>
+                    </li>
+                </ul>
+                <div class="tab-content" id="freshLeadsSubTabContent">
+                    <!-- Untouched Leads Table -->
+                    <div class="tab-pane fade show active" id="untouched-leads" role="tabpanel" aria-labelledby="untouched-leads-tab">
+                        {% if untouched_leads %}
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover" id="untouchedLeadsTable">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Action</th>
+                                        <th>Lead Status</th>
+                                        <th>Customer Name</th>
+                                        <th>Mobile</th>
+                                        <th>Source</th>
+                                        <th>CRE Name</th>
+                                        <th>Category</th>
+                                        <th>Model Interested</th>
+                                        <th>Created Date</th>
+                                        <th>UID</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for lead in untouched_leads %}
+                                    <tr class="untouched-lead-row" data-created="{{ (lead.ps_assigned_at[:10] if lead.ps_assigned_at else lead.created_at[:10] if lead.created_at else '') }}"
+                                        data-search="{{ ((lead.lead_uid or '') + ' ' + (lead.customer_name or '') + ' ' + (lead.customer_mobile_number or '') + ' ' + (lead.source or '') + ' ' + (lead.cre_name or ''))|lower }}">
+                                        <td>
+                                            {% if lead.activity_uid %}
+                                                <a href="{{ url_for('update_event_lead', activity_uid=lead.activity_uid, return_tab='fresh-leads') }}" class="btn btn-sm btn-outline-primary">
+                                                    <i class="fas fa-edit"></i> Update
+                                                </a>
+                                            {% elif lead.is_walkin %}
+                                                <a href="{{ url_for('update_walkin_lead', walkin_id=lead.walkin_id) }}" class="btn btn-sm btn-outline-primary">
+                                                    <i class="fas fa-edit"></i> Update
+                                                </a>
+                                            {% else %}
+                                                <a href="{{ url_for('update_ps_lead', uid=lead.lead_uid, return_tab='fresh-leads') }}" class="btn btn-sm btn-outline-primary">
+                                                    <i class="fas fa-edit"></i> Update
+                                                </a>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if lead.lead_status %}
+                                                <span class="badge bg-info">{{ lead.lead_status }}</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">Not Set</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ lead.customer_name }}</td>
+                                        <td>{{ lead.customer_mobile_number }}</td>
+                                        <td><span class="badge bg-secondary">{{ lead.source or 'N/A' }}</span></td>
+                                        <td>{{ lead.cre_name }}</td>
+                                        <td>
+                                            {% if lead.lead_category and lead.lead_category|lower == 'hot' %}
+                                                <span class="badge bg-danger">{{ lead.lead_category }}</span>
+                                            {% elif lead.lead_category and lead.lead_category|lower == 'warm' %}
+                                                <span class="badge bg-warning">{{ lead.lead_category }}</span>
+                                            {% elif lead.lead_category and lead.lead_category|lower == 'cold' %}
+                                                <span class="badge bg-info">{{ lead.lead_category }}</span>
+                                            {% else %}
+                                                <span class="badge bg-dark">{{ lead.lead_category or 'Not Set' }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ lead.model_interested or 'Not specified' }}</td>
+                                        <td>{{ (lead.ps_assigned_at[:10] if lead.ps_assigned_at else lead.created_at[:10] if lead.created_at else 'N/A') }}</td>
+                                        <td><span class="badge bg-primary">{{ lead.lead_uid }}</span></td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-clock fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">No untouched leads</h5>
+                            <p class="text-muted">All assigned leads have been attended</p>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Called Leads Table -->
+                    <div class="tab-pane fade" id="called-leads" role="tabpanel" aria-labelledby="called-leads-tab">
+                        {% if called_leads %}
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover" id="calledLeadsTable">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Action</th>
+                                        <th>Lead Status</th>
+                                        <th>Customer Name</th>
+                                        <th>Mobile</th>
+                                        <th>Source</th>
+                                        <th>CRE Name</th>
+                                        <th>Category</th>
+                                        <th>Model Interested</th>
+                                        <th>Created Date</th>
+                                        <th>UID</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for lead in called_leads %}
+                                    <tr class="called-lead-row" data-created="{{ (lead.ps_assigned_at[:10] if lead.ps_assigned_at else lead.created_at[:10] if lead.created_at else '') }}"
+                                        data-search="{{ ((lead.lead_uid or '') + ' ' + (lead.customer_name or '') + ' ' + (lead.customer_mobile_number or '') + ' ' + (lead.source or '') + ' ' + (lead.cre_name or ''))|lower }}">
+                                        <td>
+                                            {% if lead.activity_uid %}
+                                                <a href="{{ url_for('update_event_lead', activity_uid=lead.activity_uid, return_tab='fresh-leads') }}" class="btn btn-sm btn-outline-primary">
+                                                    <i class="fas fa-edit"></i> Update
+                                                </a>
+                                            {% elif lead.is_walkin %}
+                                                <a href="{{ url_for('update_walkin_lead', walkin_id=lead.walkin_id) }}" class="btn btn-sm btn-outline-primary">
+                                                    <i class="fas fa-edit"></i> Update
+                                                </a>
+                                            {% else %}
+                                                <a href="{{ url_for('update_ps_lead', uid=lead.lead_uid, return_tab='fresh-leads') }}" class="btn btn-sm btn-outline-primary">
+                                                    <i class="fas fa-edit"></i> Update
+                                                </a>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if lead.lead_status %}
+                                                <span class="badge bg-info">{{ lead.lead_status }}</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">Not Set</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ lead.customer_name }}</td>
+                                        <td>{{ lead.customer_mobile_number }}</td>
+                                        <td><span class="badge bg-secondary">{{ lead.source or 'N/A' }}</span></td>
+                                        <td>{{ lead.cre_name }}</td>
+                                        <td>
+                                            {% if lead.lead_category and lead.lead_category|lower == 'hot' %}
+                                                <span class="badge bg-danger">{{ lead.lead_category }}</span>
+                                            {% elif lead.lead_category and lead.lead_category|lower == 'warm' %}
+                                                <span class="badge bg-warning">{{ lead.lead_category }}</span>
+                                            {% elif lead.lead_category and lead.lead_category|lower == 'cold' %}
+                                                <span class="badge bg-info">{{ lead.lead_category }}</span>
+                                            {% else %}
+                                                <span class="badge bg-dark">{{ lead.lead_category or 'Not Set' }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ lead.model_interested or 'Not specified' }}</td>
+                                        <td>{{ (lead.ps_assigned_at[:10] if lead.ps_assigned_at else lead.created_at[:10] if lead.created_at else 'N/A') }}</td>
+                                        <td><span class="badge bg-primary">{{ lead.lead_uid }}</span></td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-phone fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">No called leads</h5>
+                            <p class="text-muted">No leads have been called yet</p>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Follow Up Leads Table -->
+                    <div class="tab-pane fade" id="follow-up-leads" role="tabpanel" aria-labelledby="follow-up-leads-tab">
+                        {% if follow_up_leads %}
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover" id="followUpLeadsTable">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Action</th>
+                                        <th>Lead Status</th>
+                                        <th>Customer Name</th>
+                                        <th>Mobile</th>
+                                        <th>Source</th>
+                                        <th>CRE Name</th>
+                                        <th>Category</th>
+                                        <th>Model Interested</th>
+                                        <th>Created Date</th>
+                                        <th>UID</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for lead in follow_up_leads %}
+                                    <tr class="follow-up-lead-row" data-created="{{ (lead.ps_assigned_at[:10] if lead.ps_assigned_at else lead.created_at[:10] if lead.created_at else '') }}"
+                                        data-search="{{ ((lead.lead_uid or '') + ' ' + (lead.customer_name or '') + ' ' + (lead.customer_mobile_number or '') + ' ' + (lead.source or '') + ' ' + (lead.cre_name or ''))|lower }}">
+                                        <td>
+                                            {% if lead.activity_uid %}
+                                                <a href="{{ url_for('update_event_lead', activity_uid=lead.activity_uid, return_tab='fresh-leads') }}" class="btn btn-sm btn-outline-primary">
+                                                    <i class="fas fa-edit"></i> Update
+                                                </a>
+                                            {% elif lead.is_walkin %}
+                                                <a href="{{ url_for('update_walkin_lead', walkin_id=lead.walkin_id) }}" class="btn btn-sm btn-outline-primary">
+                                                    <i class="fas fa-edit"></i> Update
+                                                </a>
+                                            {% else %}
+                                                <a href="{{ url_for('update_ps_lead', uid=lead.lead_uid, return_tab='fresh-leads') }}" class="btn btn-sm btn-outline-primary">
+                                                    <i class="fas fa-edit"></i> Update
+                                                </a>
+                                            {% endif %}
+                                        </td>
+                                        <td><span class="badge bg-warning">{{ lead.lead_status }}</span></td>
+                                        <td>{{ lead.customer_name }}</td>
+                                        <td>{{ lead.customer_mobile_number }}</td>
+                                        <td><span class="badge bg-secondary">{{ lead.source or 'N/A' }}</span></td>
+                                        <td>{{ lead.cre_name }}</td>
+                                        <td>
+                                            {% if lead.lead_category and lead.lead_category|lower == 'hot' %}
+                                                <span class="badge bg-danger">{{ lead.lead_category }}</span>
+                                            {% elif lead.lead_category and lead.lead_category|lower == 'warm' %}
+                                                <span class="badge bg-warning">{{ lead.lead_category }}</span>
+                                            {% elif lead.lead_category and lead.lead_category|lower == 'cold' %}
+                                                <span class="badge bg-info">{{ lead.lead_category }}</span>
+                                            {% else %}
+                                                <span class="badge bg-dark">{{ lead.lead_category or 'Not Set' }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ lead.model_interested or 'Not specified' }}</td>
+                                        <td>{{ (lead.ps_assigned_at[:10] if lead.assigned_at else lead.created_at[:10] if lead.created_at else 'N/A') }}</td>
+                                        <td><span class="badge bg-primary">{{ lead.lead_uid }}</span></td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-calendar-check fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">No follow-up leads</h5>
+                            <p class="text-muted">No leads require follow-up</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
                 {% if fresh_leads %}
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover" id="freshLeadsTable">
-                        <thead class="table-dark">
-                            <tr>
-                                <th>Action</th>
-                                <th>Lead Status</th>
-                                <th>Customer Name</th>
-                                <th>Mobile</th>
-                                <th>Source</th>
-                                <th>CRE Name</th>
-                                <th>Category</th>
-                                <th>Model Interested</th>
-                                <th>Created Date</th>
-                                <th>UID</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for lead in fresh_leads %}
-                            <tr class="fresh-lead-row" data-created="{{ (lead.ps_assigned_at[:10] if lead.ps_assigned_at else lead.created_at[:10] if lead.created_at else '') }}"
-                                data-search="{{ ((lead.lead_uid or '') + ' ' + (lead.customer_name or '') + ' ' + (lead.customer_mobile_number or '') + ' ' + (lead.source or '') + ' ' + (lead.cre_name or ''))|lower }}">
-                                <td>
-                                    {% if lead.activity_uid %}
-                                        <a href="{{ url_for('update_event_lead', activity_uid=lead.activity_uid, return_tab='fresh-leads') }}" class="btn btn-sm btn-outline-primary">
-                                            <i class="fas fa-edit"></i> Update
-                                        </a>
-                                    {% elif lead.is_walkin %}
-                                        <a href="{{ url_for('update_walkin_lead', walkin_id=lead.walkin_id) }}" class="btn btn-sm btn-outline-primary">
-                                            <i class="fas fa-edit"></i> Update
-                                        </a>
-                                    {% else %}
-                                        <a href="{{ url_for('update_ps_lead', uid=lead.lead_uid, return_tab='fresh-leads') }}" class="btn btn-sm btn-outline-primary">
-                                            <i class="fas fa-edit"></i> Update
-                                        </a>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if lead.lead_status %}
-                                        <span class="badge bg-info">{{ lead.lead_status }}</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">Not Set</span>
-                                    {% endif %}
-                                </td>
-                                <td>{{ lead.customer_name }}</td>
-                                <td>{{ lead.customer_mobile_number }}</td>
-                                <td><span class="badge bg-secondary">{{ lead.source or 'N/A' }}</span></td>
-                                <td>{{ lead.cre_name }}</td>
-                                <td>
-                                    {% if lead.lead_category and lead.lead_category|lower == 'hot' %}
-                                        <span class="badge bg-danger">{{ lead.lead_category }}</span>
-                                    {% elif lead.lead_category and lead.lead_category|lower == 'warm' %}
-                                        <span class="badge bg-warning">{{ lead.lead_category }}</span>
-                                    {% elif lead.lead_category and lead.lead_category|lower == 'cold' %}
-                                        <span class="badge bg-info">{{ lead.lead_category }}</span>
-                                    {% else %}
-                                        <span class="badge bg-dark">{{ lead.lead_category or 'Not Set' }}</span>
-                                    {% endif %}
-                                </td>
-                                <td>{{ lead.model_interested or 'Not specified' }}</td>
-                                <td>{{ (lead.ps_assigned_at[:10] if lead.ps_assigned_at else lead.created_at[:10] if lead.created_at else 'N/A') }}</td>
-                                <td><span class="badge bg-primary">{{ lead.lead_uid }}</span></td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <div class="text-center py-5">
-                    <i class="fas fa-clock fa-3x text-muted mb-3"></i>
-                    <h5 class="text-muted">No fresh leads</h5>
-                    <p class="text-muted">All assigned leads have been attended</p>
-                </div>
+                <!-- This section is now handled by the three subsections above -->
                 {% endif %}
+
             </div>
 
             <!-- Today's Follow-ups Tab -->
@@ -735,6 +921,16 @@
     box-shadow: 0 4px 8px rgba(0,0,0,0.2);
 }
 
+/* Fresh Leads card specific styling */
+.stats-card.bg-primary .flex-fill {
+    transition: all 0.2s ease;
+}
+
+.stats-card.bg-primary .flex-fill:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
 .nav-tabs .nav-link {
     color: var(--ather-text);
 }
@@ -964,70 +1160,87 @@ document.addEventListener('DOMContentLoaded', function() {
             // if (freshEndDate) freshEndDate.value = today;
         }
         
-        // Function to filter fresh leads by date range
+        // Function to filter fresh leads by date range across all subsections
         function filterFreshLeadsByDate() {
-            const tableRows = document.querySelectorAll('#freshLeadsTable tbody tr');
+            const untouchedRows = document.querySelectorAll('#untouchedLeadsTable tbody tr');
+            const calledRows = document.querySelectorAll('#calledLeadsTable tbody tr');
+            const followUpRows = document.querySelectorAll('#followUpLeadsTable tbody tr');
+            
             const startDate = freshStartDate ? freshStartDate.value : '';
             const endDate = freshEndDate ? freshEndDate.value : '';
             
             console.log('Filtering fresh leads by date:', { startDate, endDate });
-            console.log('Total rows to filter:', tableRows.length);
+            console.log('Total rows to filter:', untouchedRows.length + calledRows.length + followUpRows.length);
             
             if (!startDate && !endDate) {
                 // Show all rows if no date filter
-                tableRows.forEach(row => {
-                    row.style.display = '';
+                [untouchedRows, calledRows, followUpRows].forEach(rows => {
+                    rows.forEach(row => {
+                        row.style.display = '';
+                    });
                 });
                 updateFreshLeadsCount();
                 return;
             }
             
-            let visibleCount = 0;
-            tableRows.forEach((row, index) => {
-                const createdDate = row.getAttribute('data-created');
-                console.log(`Row ${index} created date:`, createdDate);
+            let totalVisibleCount = 0;
+            
+            // Filter each subsection
+            [untouchedRows, calledRows, followUpRows].forEach((rows, subsectionIndex) => {
+                const subsectionName = ['untouched', 'called', 'follow-up'][subsectionIndex];
+                let subsectionVisibleCount = 0;
                 
-                if (!createdDate || createdDate === 'N/A') {
-                    console.log(`Row ${index}: No valid date, hiding row`);
-                    row.style.display = 'none';
-                    return;
-                }
-                
-                let shouldShow = true;
-                
-                try {
-                    if (startDate && endDate) {
-                        // Date range filter
-                        const rowDate = new Date(createdDate + 'T00:00:00');
-                        const start = new Date(startDate + 'T00:00:00');
-                        const end = new Date(endDate + 'T23:59:59');
-                        
-                        shouldShow = rowDate >= start && rowDate <= end;
-                        console.log(`Row ${index} date range check:`, { rowDate, start, end, shouldShow });
-                    } else if (startDate) {
-                        // Only start date
-                        const rowDate = new Date(createdDate + 'T00:00:00');
-                        const start = new Date(startDate + 'T00:00:00');
-                        shouldShow = rowDate >= start;
-                        console.log(`Row ${index} start date check:`, { rowDate, start, shouldShow });
-                    } else if (endDate) {
-                        // Only end date
-                        const rowDate = new Date(createdDate + 'T00:00:00');
-                        const end = new Date(endDate + 'T23:59:59');
-                        shouldShow = rowDate <= end;
-                        console.log(`Row ${index} end date check:`, { rowDate, end, shouldShow });
+                rows.forEach((row, index) => {
+                    const createdDate = row.getAttribute('data-created');
+                    console.log(`${subsectionName} row ${index} created date:`, createdDate);
+                    
+                    if (!createdDate || createdDate === 'N/A') {
+                        console.log(`${subsectionName} row ${index}: No valid date, hiding row`);
+                        row.style.display = 'none';
+                        return;
                     }
-                } catch (error) {
-                    console.error('Error parsing date:', createdDate, error);
-                    shouldShow = false;
-                }
+                    
+                    let shouldShow = true;
+                    
+                    try {
+                        if (startDate && endDate) {
+                            // Date range filter
+                            const rowDate = new Date(createdDate + 'T00:00:00');
+                            const start = new Date(startDate + 'T00:00:00');
+                            const end = new Date(endDate + 'T23:59:59');
+                            
+                            shouldShow = rowDate >= start && rowDate <= end;
+                            console.log(`${subsectionName} row ${index} date range check:`, { rowDate, start, end, shouldShow });
+                        } else if (startDate) {
+                            // Only start date
+                            const rowDate = new Date(createdDate + 'T00:00:00');
+                            const start = new Date(startDate + 'T00:00:00');
+                            shouldShow = rowDate >= start;
+                            console.log(`${subsectionName} row ${index} start date check:`, { rowDate, start, shouldShow });
+                        } else if (endDate) {
+                            // Only end date
+                            const rowDate = new Date(createdDate + 'T00:00:00');
+                            const end = new Date(endDate + 'T23:59:59');
+                            shouldShow = rowDate <= end;
+                            console.log(`${subsectionName} row ${index} end date check:`, { rowDate, end, shouldShow });
+                        }
+                    } catch (error) {
+                        console.error('Error parsing date:', createdDate, error);
+                        shouldShow = false;
+                    }
+                    
+                    row.style.display = shouldShow ? '' : 'none';
+                    if (shouldShow) {
+                        subsectionVisibleCount++;
+                        totalVisibleCount++;
+                    }
+                    console.log(`${subsectionName} row ${index}: ${shouldShow ? 'SHOWING' : 'HIDING'}`);
+                });
                 
-                row.style.display = shouldShow ? '' : 'none';
-                if (shouldShow) visibleCount++;
-                console.log(`Row ${index}: ${shouldShow ? 'SHOWING' : 'HIDING'}`);
+                console.log(`${subsectionName} visible count:`, subsectionVisibleCount);
             });
             
-            console.log('Visible fresh leads count:', visibleCount);
+            console.log('Total visible fresh leads count:', totalVisibleCount);
             updateFreshLeadsCount();
         }
         
@@ -1182,6 +1395,26 @@ document.addEventListener('DOMContentLoaded', function() {
 
         function performSearch() {
             const searchTerm = searchInput.value.toLowerCase().trim();
+            
+            // Special handling for fresh leads search across all subsections
+            if (tableId === 'untouchedLeadsTable') {
+                const untouchedRows = document.querySelectorAll('#untouchedLeadsTable tbody tr');
+                const calledRows = document.querySelectorAll('#calledLeadsTable tbody tr');
+                const followUpRows = document.querySelectorAll('#followUpLeadsTable tbody tr');
+                
+                // Search across all three tables
+                [untouchedRows, calledRows, followUpRows].forEach(rows => {
+                    rows.forEach(row => {
+                        const searchData = row.getAttribute('data-search') || '';
+                        const shouldShow = searchData.includes(searchTerm) || searchTerm === '';
+                        row.style.display = shouldShow ? '' : 'none';
+                    });
+                });
+                
+                updateFreshLeadsCount();
+                return;
+            }
+            
             const tableRows = document.querySelectorAll(`#${tableId} tbody tr`);
 
             tableRows.forEach(row => {
@@ -1222,11 +1455,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 updatePendingLeadsCount();
             }
             
-            // Update count for fresh leads
-            if (tableId === 'freshLeadsTable') {
-                updateFreshLeadsCount();
-            }
-            
 
         }
 
@@ -1249,23 +1477,42 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Setup search for all tabs
-    setupSearch('freshLeadSearchInput', 'freshLeadSearchButton', 'freshLeadClearButton', 'freshLeadsTable');
+    setupSearch('freshLeadSearchInput', 'freshLeadSearchButton', 'freshLeadClearButton', 'untouchedLeadsTable');
     setupSearch('followupSearchInput', 'followupSearchButton', 'followupClearButton', 'followupTable');
     setupSearch('pendingSearchInput', 'pendingSearchButton', 'pendingClearButton', 'pendingLeadsTable');
     setupSearch('wonLostLeadSearchInput', 'wonLostLeadSearchButton', 'wonLostLeadClearButton', 'wonLostLeadsTable');
     setupSearch('eventLeadSearchInput', 'eventLeadSearchButton', 'eventLeadClearButton', 'eventLeadsTable');
     setupSearch('walkinLeadSearchInput', 'walkinLeadSearchButton', 'walkinLeadClearButton', 'walkinLeadsTable');
     
-    // Function to update fresh leads count
+    // Function to update fresh leads count across all subsections
     function updateFreshLeadsCount() {
-        const tableRows = document.querySelectorAll('#freshLeadsTable tbody tr');
-        let visibleCount = 0;
+        const untouchedRows = document.querySelectorAll('#untouchedLeadsTable tbody tr');
+        const calledRows = document.querySelectorAll('#calledLeadsTable tbody tr');
+        const followUpRows = document.querySelectorAll('#followUpLeadsTable tbody tr');
         
-        tableRows.forEach(row => {
+        let untouchedVisibleCount = 0;
+        let calledVisibleCount = 0;
+        let followUpVisibleCount = 0;
+        
+        untouchedRows.forEach(row => {
             if (row.style.display !== 'none') {
-                visibleCount++;
+                untouchedVisibleCount++;
             }
         });
+        
+        calledRows.forEach(row => {
+            if (row.style.display !== 'none') {
+                calledVisibleCount++;
+            }
+        });
+        
+        followUpRows.forEach(row => {
+            if (row.style.display !== 'none') {
+                followUpVisibleCount++;
+            }
+        });
+        
+        const totalVisibleCount = untouchedVisibleCount + calledVisibleCount + followUpVisibleCount;
         
         // Update the count display
         const countElement = document.querySelector('#fresh-leads h5');
@@ -1282,16 +1529,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 } else if (endDate) {
                     filterText = ` - Until: ${endDate}`;
                 }
-                countElement.textContent = `Fresh Leads (${visibleCount})${filterText}`;
+                countElement.textContent = `Fresh Leads (${totalVisibleCount})${filterText}`;
             } else {
-                countElement.textContent = `Fresh Leads (${visibleCount})`;
+                countElement.textContent = `Fresh Leads (${totalVisibleCount})`;
             }
         }
+        
+        // Update subsection counts
+        const untouchedBadge = document.querySelector('#untouched-leads-tab .badge');
+        const calledBadge = document.querySelector('#called-leads-tab .badge');
+        const followUpBadge = document.querySelector('#follow-up-leads-tab .badge');
+        
+        if (untouchedBadge) untouchedBadge.textContent = untouchedVisibleCount;
+        if (calledBadge) calledBadge.textContent = calledVisibleCount;
+        if (followUpBadge) followUpBadge.textContent = followUpVisibleCount;
         
         // Also update the stats card
         const statsCard = document.querySelector('.stats-card h4');
         if (statsCard) {
-            statsCard.textContent = visibleCount;
+            statsCard.textContent = totalVisibleCount;
         }
     }
     

@@ -16,6 +16,12 @@
                             <div class="mb-3">
                                 <label for="name" class="form-label">Full Name</label>
                                 <input type="text" class="form-control" id="name" name="name" required>
+                                <div id="name-feedback" class="mt-1"></div>
+                                <div id="name-spinner" class="mt-1" style="display: none;">
+                                    <small class="text-muted">
+                                        <i class="fas fa-spinner fa-spin"></i> Checking availability...
+                                    </small>
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -68,11 +74,16 @@ document.addEventListener('DOMContentLoaded', function() {
     const usernameInput = document.getElementById('username');
     const usernameFeedback = document.getElementById('username-feedback');
     const usernameSpinner = document.getElementById('username-spinner');
+    const nameInput = document.getElementById('name');
+    const nameFeedback = document.getElementById('name-feedback');
+    const nameSpinner = document.getElementById('name-spinner');
     const submitBtn = document.getElementById('submit-btn');
     
     let checkTimeout;
     let isUsernameAvailable = false;
+    let isNameAvailable = false;
     
+    // Username availability checking
     usernameInput.addEventListener('input', function() {
         const username = this.value.trim();
         
@@ -104,6 +115,38 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 500);
     });
     
+    // Name availability checking
+    nameInput.addEventListener('input', function() {
+        const name = this.value.trim();
+        
+        // Clear previous timeout
+        clearTimeout(checkTimeout);
+        
+        // Clear feedback
+        nameFeedback.innerHTML = '';
+        nameSpinner.style.display = 'none';
+        
+        // Reset submit button
+        submitBtn.disabled = false;
+        isNameAvailable = false;
+        
+        if (name.length < 2) {
+            if (name.length > 0) {
+                nameFeedback.innerHTML = '<small class="text-warning"><i class="fas fa-exclamation-triangle"></i> Name must be at least 2 characters</small>';
+                submitBtn.disabled = true;
+            }
+            return;
+        }
+        
+        // Show loading spinner
+        nameSpinner.style.display = 'block';
+        
+        // Debounce the API call
+        checkTimeout = setTimeout(() => {
+            checkNameAvailability(name);
+        }, 500);
+    });
+    
     function checkUsernameAvailability(username) {
         fetch(`/check_username?username=${encodeURIComponent(username)}&type=cre`)
             .then(response => response.json())
@@ -112,28 +155,71 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.exists === false) {
                     usernameFeedback.innerHTML = '<small class="text-success"><i class="fas fa-check-circle"></i> Username is available</small>';
                     isUsernameAvailable = true;
-                    submitBtn.disabled = false;
+                    updateSubmitButton();
                 } else if (data.exists === true) {
                     usernameFeedback.innerHTML = '<small class="text-danger"><i class="fas fa-times-circle"></i> Username is already taken</small>';
                     isUsernameAvailable = false;
-                    submitBtn.disabled = true;
+                    updateSubmitButton();
                 } else {
                     usernameFeedback.innerHTML = '<small class="text-warning"><i class="fas fa-exclamation-triangle"></i> Error checking username</small>';
                     isUsernameAvailable = false;
-                    submitBtn.disabled = true;
+                    updateSubmitButton();
                 }
             })
             .catch(error => {
                 console.error('Error checking username:', error);
                 usernameSpinner.style.display = 'none';
                 usernameFeedback.innerHTML = '<small class="text-warning"><i class="fas fa-exclamation-triangle"></i> Error checking username</small>';
-                submitBtn.disabled = true;
+                isUsernameAvailable = false;
+                updateSubmitButton();
             });
     }
     
-    // Prevent form submission if username is not available
+    function checkNameAvailability(name) {
+        fetch(`/check_name?name=${encodeURIComponent(name)}&type=cre`)
+            .then(response => response.json())
+            .then(data => {
+                nameSpinner.style.display = 'none';
+                if (data.exists === false) {
+                    nameFeedback.innerHTML = '<small class="text-success"><i class="fas fa-check-circle"></i> Name is available</small>';
+                    isNameAvailable = true;
+                    updateSubmitButton();
+                } else if (data.exists === true) {
+                    const existingUser = data.existing_user;
+                    let message = `Name is already taken by ${existingUser.username}`;
+                    if (existingUser.role) {
+                        message += ` (${existingUser.role.toUpperCase()})`;
+                    }
+                    if (existingUser.branch) {
+                        message += ` at ${existingUser.branch}`;
+                    }
+                    nameFeedback.innerHTML = `<small class="text-danger"><i class="fas fa-times-circle"></i> ${message}</small>`;
+                    isNameAvailable = false;
+                    updateSubmitButton();
+                } else {
+                    nameFeedback.innerHTML = '<small class="text-warning"><i class="fas fa-exclamation-triangle"></i> Error checking name</small>';
+                    isNameAvailable = false;
+                    updateSubmitButton();
+                }
+            })
+            .catch(error => {
+                console.error('Error checking name:', error);
+                nameSpinner.style.display = 'none';
+                nameFeedback.innerHTML = '<small class="text-warning"><i class="fas fa-exclamation-triangle"></i> Error checking name</small>';
+                isNameAvailable = false;
+                updateSubmitButton();
+            });
+    }
+    
+    function updateSubmitButton() {
+        // Only enable submit button if both username and name are available
+        submitBtn.disabled = !(isUsernameAvailable && isNameAvailable);
+    }
+    
+    // Prevent form submission if username or name is not available
     document.querySelector('form').addEventListener('submit', function(e) {
         const username = usernameInput.value.trim();
+        const name = nameInput.value.trim();
         
         if (username.length < 3) {
             e.preventDefault();
@@ -141,9 +227,21 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
+        if (name.length < 2) {
+            e.preventDefault();
+            alert('Name must be at least 2 characters long');
+            return;
+        }
+        
         if (!isUsernameAvailable) {
             e.preventDefault();
             alert('Please choose an available username');
+            return;
+        }
+        
+        if (!isNameAvailable) {
+            e.preventDefault();
+            alert('Please choose an available name');
             return;
         }
     });
