@@ -332,7 +332,7 @@
     <div class="col-12">
         <div class="card analytics-card">
             <div class="card-header bg-info text-white">
-                <h5 class="mb-0"><i class="fas fa-list-alt"></i> Leads Assigned to CRE by Category</h5>
+                <h5 class="mb-0"><i class="fas fa-list-alt"></i> My Leads by Category</h5>
                 <small class="text-white-50">Filtered by CRE assignment date range (cre_assigned_at)</small>
             </div>
             <div class="card-body">
@@ -340,12 +340,8 @@
                     <table class="table table-striped">
                         <thead>
                             <tr>
-                                <th>CRE Name</th>
-                                <th>Hot</th>
-                                <th>Cold</th>
-                                <th>Warm</th>
-                                <th>Not Interested</th>
-                                <th>Not Set</th>
+                                <th>Lead Category</th>
+                                <th>Count</th>
                             </tr>
                         </thead>
                         <tbody id="leads-category-table-body">
@@ -572,20 +568,38 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('Table body element:', tableBody);
         if (tableBody) {
             let html = '';
-            console.log('Processing leadsByCategory entries:', Object.entries(leadsByCategory));
-            Object.entries(leadsByCategory).forEach(([cre_name, category_data]) => {
-                console.log('Processing CRE:', cre_name, 'with data:', category_data);
-                html += `
-                    <tr>
-                        <td><strong>${cre_name}</strong></td>
-                        <td>${category_data.hot || 0}</td>
-                        <td>${category_data.cold || 0}</td>
-                        <td>${category_data.warm || 0}</td>
-                        <td>${category_data.not_interested || 0}</td>
-                        <td>${category_data.not_set || 0}</td>
-                    </tr>
-                `;
-            });
+            
+            // Get current CRE name from the page
+            const currentCreName = '{{ analytics.current_cre }}';
+            console.log('Current CRE name:', currentCreName);
+            
+            // Get data for current CRE only
+            const currentCreData = leadsByCategory[currentCreName];
+            console.log('Current CRE data:', currentCreData);
+            
+            if (currentCreData) {
+                // Create rows for each category
+                const categories = [
+                    { key: 'hot', label: 'Hot' },
+                    { key: 'cold', label: 'Cold' },
+                    { key: 'warm', label: 'Warm' },
+                    { key: 'not_interested', label: 'Not Interested' },
+                    { key: 'not_set', label: 'Not Set' }
+                ];
+                
+                categories.forEach(category => {
+                    const count = currentCreData[category.key] || 0;
+                    html += `
+                        <tr>
+                            <td><strong>${category.label}</strong></td>
+                            <td><span class="badge bg-primary">${count}</span></td>
+                        </tr>
+                    `;
+                });
+            } else {
+                html = '<tr><td colspan="2" class="text-center text-muted">No data available for current CRE</td></tr>';
+            }
+            
             console.log('Generated HTML:', html);
             tableBody.innerHTML = html;
             console.log('Table updated with HTML');
