@@ -231,6 +231,55 @@
     </div>
 </div>
 
+<!-- Summary Metrics Table -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card analytics-card">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Summary Metrics</h5>
+                <small class="text-white-50">Comprehensive overview of your performance metrics</small>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Metric</th>
+                                <th>Total Leads</th>
+                                <th>Hot Leads</th>
+                                <th>FTD Assigned</th>
+                                <th>MTD Assigned</th>
+                                <th>FTD Retails</th>
+                                <th>MTD Retails</th>
+                            </tr>
+                        </thead>
+                        <tbody id="summary-metrics-table-body">
+                            <tr>
+                                <td><strong>Count</strong></td>
+                                <td><span class="badge bg-primary" id="total-leads-count">-</span></td>
+                                <td><span class="badge bg-danger" id="hot-leads-count">-</span></td>
+                                <td><span class="badge bg-info" id="ftd-assigned-count">-</span></td>
+                                <td><span class="badge bg-warning" id="mtd-assigned-count">-</span></td>
+                                <td><span class="badge bg-success" id="ftd-retails-count">-</span></td>
+                                <td><span class="badge bg-success" id="mtd-retails-count">-</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Description</strong></td>
+                                <td><small class="text-muted">Total leads assigned to you</small></td>
+                                <td><small class="text-muted">Hot + Pending leads</small></td>
+                                <td><small class="text-muted">Today's assigned leads</small></td>
+                                <td><small class="text-muted">Current month assigned</small></td>
+                                <td><small class="text-muted">Today's won cases</small></td>
+                                <td><small class="text-muted">Current month won cases</small></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Platform-wise Performance Table -->
 <div class="row mb-5">
     <div class="col-12">
@@ -434,6 +483,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     updateLeaderboard(data.top_5_leaderboard);
                     updateConversionTable(data.cre_platform_conversion, data.cre_platform_conversion_live);
                     updateLeadsCategoryTable(data.leads_assigned_by_category);
+                    updateSummaryMetrics(data.summary_metrics); // Assuming summary_metrics is part of the data
                     hideLoadingState();
                 } else {
                     console.error('Error loading analytics data:', data.error);
@@ -605,6 +655,32 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Table updated with HTML');
         } else {
             console.error('Table body element not found!');
+        }
+    }
+
+    function updateSummaryMetrics(summaryData) {
+        console.log('updateSummaryMetrics called with data:', summaryData);
+        if (summaryData) {
+            // Update all count values in the horizontal table
+            document.getElementById('total-leads-count').textContent = summaryData.total_leads || '-';
+            document.getElementById('hot-leads-count').textContent = summaryData.hot_leads || '-';
+            document.getElementById('ftd-assigned-count').textContent = summaryData.ftd_assigned || '-';
+            document.getElementById('mtd-assigned-count').textContent = summaryData.mtd_assigned || '-';
+            document.getElementById('ftd-retails-count').textContent = summaryData.ftd_retails || '-';
+            document.getElementById('mtd-retails-count').textContent = summaryData.mtd_retails || '-';
+            
+            console.log('Summary metrics updated successfully');
+        } else {
+            console.error('Summary metrics data is falsy!');
+            // Set default values when no data is provided
+            const elements = [
+                'total-leads-count', 'hot-leads-count', 'ftd-assigned-count',
+                'mtd-assigned-count', 'ftd-retails-count', 'mtd-retails-count'
+            ];
+            elements.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) element.textContent = '-';
+            });
         }
     }
 });
