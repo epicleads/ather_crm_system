@@ -13109,11 +13109,18 @@ def cre_analytics_data():
         
         # Get current CRE name from session
         current_cre = session.get('cre_name')
+        print(f"DEBUG: Session CRE name: '{current_cre}'")
+        print(f"DEBUG: Session data: {dict(session)}")
         
         # Get all leads data
         all_leads = safe_get_data('lead_master')
         cre_users = safe_get_data('cre_users')
         active_cre_users = [cre for cre in cre_users if cre.get('is_active', True)]
+        
+        # Debug: Check available CRE names in data
+        unique_cre_names = set(lead.get('cre_name') for lead in all_leads if lead.get('cre_name'))
+        print(f"DEBUG: Available CRE names in database: {sorted(unique_cre_names)}")
+        print(f"DEBUG: Active CRE users: {[cre.get('name') for cre in active_cre_users]}")
         
         # Helper function to parse timestamps
         def parse_timestamp(timestamp_str):
@@ -13360,6 +13367,99 @@ def cre_analytics_data():
         leads_category_data = get_leads_assigned_by_category()
         print(f"DEBUG: Final response leads_assigned_by_category: {leads_category_data}")
         
+        # Get summary metrics for current CRE
+        def get_summary_metrics():
+            cre_leads = [lead for lead in all_leads if lead.get('cre_name') == current_cre]
+            print(f"DEBUG: Current CRE: {current_cre}")
+            print(f"DEBUG: Total leads in database: {len(all_leads)}")
+            print(f"DEBUG: Leads for current CRE: {len(cre_leads)}")
+            
+            # Debug: Show sample lead data
+            if cre_leads:
+                sample_lead = cre_leads[0]
+                print(f"DEBUG: Sample lead data: {sample_lead}")
+                print(f"DEBUG: Sample lead_status: '{sample_lead.get('lead_status')}'")
+                print(f"DEBUG: Sample lead_category: '{sample_lead.get('lead_category')}'")
+                print(f"DEBUG: Sample final_status: '{sample_lead.get('final_status')}'")
+                print(f"DEBUG: Sample cre_name: '{sample_lead.get('cre_name')}'")
+            
+            # Total leads assigned to current CRE
+            total_leads = len([lead for lead in cre_leads if lead.get('cre_assigned_at')])
+            
+            # Hot leads (lead_category = 'Hot' AND final_status = 'Pending')
+            hot_leads = 0
+            for lead in cre_leads:
+                lead_category = lead.get('lead_category')
+                final_status = lead.get('final_status')
+                if lead_category == 'Hot' and final_status == 'Pending':
+                    hot_leads += 1
+                    print(f"DEBUG: Found Hot+Pending lead: {lead.get('customer_name')} - lead_category: {lead_category}, final_status: {final_status}")
+            
+            print(f"DEBUG: Total cre_leads for {current_cre}: {len(cre_leads)}")
+            print(f"DEBUG: Hot leads count: {hot_leads}")
+            
+            # FTD Assigned (Today's leads assigned using cre_assigned_at timestamp)
+            ftd_assigned = 0
+            today = datetime.now().date()
+            for lead in cre_leads:
+                if lead.get('cre_assigned_at'):
+                    assigned_date = parse_timestamp(lead.get('cre_assigned_at'))
+                    if assigned_date and assigned_date.date() == today:
+                        ftd_assigned += 1
+            
+            # MTD Assigned (Current ongoing month leads assigned)
+            mtd_assigned = 0
+            current_month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            current_month_end = (current_month_start.replace(day=1) + timedelta(days=32)).replace(day=1) - timedelta(seconds=1)
+            
+            for lead in cre_leads:
+                if lead.get('cre_assigned_at'):
+                    assigned_date = parse_timestamp(lead.get('cre_assigned_at'))
+                    if assigned_date and current_month_start <= assigned_date <= current_month_end:
+                        mtd_assigned += 1
+            
+            # FTD Retails (Today's retails using won_timestamp = today date)
+            ftd_retails = 0
+            for lead in cre_leads:
+                if lead.get('final_status') == 'Won' and lead.get('won_timestamp'):
+                    won_date = parse_timestamp(lead.get('won_timestamp'))
+                    if won_date and won_date.date() == today:
+                        ftd_retails += 1
+                        print(f"DEBUG: Found today's retail: {lead.get('customer_name')} - won_timestamp: {lead.get('won_timestamp')}")
+            
+            # MTD Retails (Ongoing month retails using won_timestamp = ongoing month)
+            mtd_retails = 0
+            for lead in cre_leads:
+                if lead.get('final_status') == 'Won' and lead.get('won_timestamp'):
+                    won_date = parse_timestamp(lead.get('won_timestamp'))
+                    if won_date and current_month_start <= won_date <= current_month_end:
+                        mtd_retails += 1
+                        print(f"DEBUG: Found current month retail: {lead.get('customer_name')} - won_timestamp: {lead.get('won_timestamp')}")
+            
+            print(f"DEBUG: Today's date: {today}")
+            print(f"DEBUG: Current month range: {current_month_start.date()} to {current_month_end.date()}")
+            print(f"DEBUG: FTD retails count: {ftd_retails}")
+            print(f"DEBUG: MTD retails count: {mtd_retails}")
+            
+            print(f"DEBUG: Summary metrics calculation:")
+            print(f"DEBUG: - Total leads: {total_leads}")
+            print(f"DEBUG: - Hot leads (Hot + Pending): {hot_leads}")
+            print(f"DEBUG: - FTD Assigned (today): {ftd_assigned}")
+            print(f"DEBUG: - MTD Assigned (current month): {mtd_assigned}")
+            print(f"DEBUG: - FTD Retails (today): {ftd_retails}")
+            print(f"DEBUG: - MTD Retails (current month): {mtd_retails}")
+            
+            return {
+                'total_leads': total_leads,
+                'hot_leads': hot_leads,
+                'ftd_assigned': ftd_assigned,
+                'mtd_assigned': mtd_assigned,
+                'ftd_retails': ftd_retails,
+                'mtd_retails': mtd_retails
+            }
+        
+        summary_metrics = get_summary_metrics()
+        
         return jsonify({
             'success': True,
             'from_date': from_date_str,
@@ -13368,7 +13468,8 @@ def cre_analytics_data():
             'cre_platform_conversion': get_filtered_cre_platform_conversion(),
             'cre_platform_conversion_live': get_cre_platform_conversion_live(),
             'cre_overall_stats': get_filtered_cre_overall_stats(),
-            'leads_assigned_by_category': leads_category_data
+            'leads_assigned_by_category': leads_category_data,
+            'summary_metrics': summary_metrics
         })
         
     except Exception as e:
