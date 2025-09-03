@@ -11966,6 +11966,54 @@ def cre_call_attempt_history_json(uid):
     except Exception as e:
         return jsonify({'success': False, 'message': str(e), 'history': []})
 
+@app.route('/api/cre_call_stats_batch', methods=['POST'])
+@require_auth(['cre', 'admin'])
+def cre_call_stats_batch():
+    """Return call attempt statistics for multiple leads (for CRE dashboard inline display)"""
+    try:
+        data = request.get_json()
+        uids = data.get('uids', [])
+        
+        print(f"API called with UIDs: {uids}")
+        
+        if not uids:
+            return jsonify({'success': True, 'stats': {}})
+        
+        # Get call attempt history for all UIDs in one query
+        history_result = supabase.table('cre_call_attempt_history').select('uid,status').in_('uid', uids).execute()
+        history = history_result.data if history_result.data else []
+        
+        print(f"Found {len(history)} call history records")
+        
+        # Calculate statistics for each UID
+        stats = {}
+        for uid in uids:
+            uid_history = [h for h in history if h.get('uid') == uid]
+            
+            total_calls = len(uid_history)
+            rnr_count = len([h for h in uid_history if h.get('status') == 'RNR'])
+            busy_count = len([h for h in uid_history if h.get('status') == 'Busy on another Call'])
+            call_me_back_count = len([h for h in uid_history if h.get('status') == 'Call me Back'])
+            call_not_connected_count = len([h for h in uid_history if h.get('status') == 'Call not Connected'])
+            connected_count = len([h for h in uid_history if h.get('status') == 'Connected'])
+            
+            stats[uid] = {
+                'total_calls': total_calls,
+                'rnr_calls': rnr_count,
+                'busy_calls': busy_count,
+                'call_me_back': call_me_back_count,
+                'call_not_connected': call_not_connected_count,
+                'connected_calls': connected_count
+            }
+            
+            print(f"UID {uid}: {total_calls} total calls, {rnr_count} RNR, {busy_count} busy, {call_me_back_count} callback, {call_not_connected_count} not connected, {connected_count} connected")
+        
+        print(f"Returning stats for {len(stats)} UIDs")
+        return jsonify({'success': True, 'stats': stats})
+    except Exception as e:
+        print(f"Error in cre_call_stats_batch: {str(e)}")
+        return jsonify({'success': False, 'message': str(e), 'stats': {}})
+
 
 @app.route('/ps_call_attempt_history_json/<uid>')
 @require_auth(['ps', 'admin'])
