@@ -13431,22 +13431,50 @@ def cre_analytics_data():
                 print(f"DEBUG: Sample final_status: '{sample_lead.get('final_status')}'")
                 print(f"DEBUG: Sample cre_name: '{sample_lead.get('cre_name')}'")
             
-            # Total leads assigned to current CRE
-            total_leads = len([lead for lead in cre_leads if lead.get('cre_assigned_at')])
+            # Parse date filters
+            from_date = None
+            to_date = None
+            if from_date_str:
+                from_date = datetime.strptime(from_date_str, '%Y-%m-%d').date()
+            if to_date_str:
+                to_date = datetime.strptime(to_date_str, '%Y-%m-%d').date()
             
-            # Hot leads (lead_category = 'Hot' AND final_status = 'Pending')
+            # Total leads assigned to current CRE (DATE FILTERED based on cre_assigned_at)
+            total_leads = 0
+            for lead in cre_leads:
+                if lead.get('cre_assigned_at'):
+                    assigned_date = parse_timestamp(lead.get('cre_assigned_at'))
+                    if assigned_date:
+                        assigned_date_only = assigned_date.date()
+                        # Apply date filter if provided
+                        if from_date and assigned_date_only < from_date:
+                            continue
+                        if to_date and assigned_date_only > to_date:
+                            continue
+                        total_leads += 1
+            
+            # Hot leads (lead_category = 'Hot') (DATE FILTERED based on cre_assigned_at)
             hot_leads = 0
             for lead in cre_leads:
                 lead_category = lead.get('lead_category')
-                final_status = lead.get('final_status')
-                if lead_category == 'Hot' and final_status == 'Pending':
-                    hot_leads += 1
-                    print(f"DEBUG: Found Hot+Pending lead: {lead.get('customer_name')} - lead_category: {lead_category}, final_status: {final_status}")
+                if lead_category == 'Hot':
+                    # Apply date filter based on cre_assigned_at
+                    if lead.get('cre_assigned_at'):
+                        assigned_date = parse_timestamp(lead.get('cre_assigned_at'))
+                        if assigned_date:
+                            assigned_date_only = assigned_date.date()
+                            # Apply date filter if provided
+                            if from_date and assigned_date_only < from_date:
+                                continue
+                            if to_date and assigned_date_only > to_date:
+                                continue
+                            hot_leads += 1
+                            print(f"DEBUG: Found Hot lead: {lead.get('customer_name')} - lead_category: {lead_category}")
             
             print(f"DEBUG: Total cre_leads for {current_cre}: {len(cre_leads)}")
             print(f"DEBUG: Hot leads count: {hot_leads}")
             
-            # FTD Assigned (Today's leads assigned using cre_assigned_at timestamp)
+            # FTD Assigned (Today's leads assigned using cre_assigned_at timestamp) - INDEPENDENT OF DATE FILTER
             ftd_assigned = 0
             today = datetime.now().date()
             for lead in cre_leads:
@@ -13455,7 +13483,7 @@ def cre_analytics_data():
                     if assigned_date and assigned_date.date() == today:
                         ftd_assigned += 1
             
-            # MTD Assigned (Current ongoing month leads assigned)
+            # MTD Assigned (Current ongoing month leads assigned) - INDEPENDENT OF DATE FILTER
             mtd_assigned = 0
             current_month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             current_month_end = (current_month_start.replace(day=1) + timedelta(days=32)).replace(day=1) - timedelta(seconds=1)
@@ -13466,7 +13494,7 @@ def cre_analytics_data():
                     if assigned_date and current_month_start <= assigned_date <= current_month_end:
                         mtd_assigned += 1
             
-            # FTD Retails (Today's retails using won_timestamp = today date)
+            # FTD Retails (Today's retails using won_timestamp = today date) - INDEPENDENT OF DATE FILTER
             ftd_retails = 0
             for lead in cre_leads:
                 if lead.get('final_status') == 'Won' and lead.get('won_timestamp'):
@@ -13475,7 +13503,7 @@ def cre_analytics_data():
                         ftd_retails += 1
                         print(f"DEBUG: Found today's retail: {lead.get('customer_name')} - won_timestamp: {lead.get('won_timestamp')}")
             
-            # MTD Retails (Ongoing month retails using won_timestamp = ongoing month)
+            # MTD Retails (Ongoing month retails using won_timestamp = ongoing month) - INDEPENDENT OF DATE FILTER
             mtd_retails = 0
             for lead in cre_leads:
                 if lead.get('final_status') == 'Won' and lead.get('won_timestamp'):
@@ -13484,18 +13512,35 @@ def cre_analytics_data():
                         mtd_retails += 1
                         print(f"DEBUG: Found current month retail: {lead.get('customer_name')} - won_timestamp: {lead.get('won_timestamp')}")
             
+            # Total Retails (All won cases for current CRE) - DATE FILTERED based on won_timestamp
+            total_retails = 0
+            for lead in cre_leads:
+                if lead.get('final_status') == 'Won' and lead.get('won_timestamp'):
+                    won_date = parse_timestamp(lead.get('won_timestamp'))
+                    if won_date:
+                        won_date_only = won_date.date()
+                        # Apply date filter if provided
+                        if from_date and won_date_only < from_date:
+                            continue
+                        if to_date and won_date_only > to_date:
+                            continue
+                        total_retails += 1
+                        print(f"DEBUG: Found retail (date filtered): {lead.get('customer_name')} - won_timestamp: {lead.get('won_timestamp')}")
+            
             print(f"DEBUG: Today's date: {today}")
             print(f"DEBUG: Current month range: {current_month_start.date()} to {current_month_end.date()}")
             print(f"DEBUG: FTD retails count: {ftd_retails}")
             print(f"DEBUG: MTD retails count: {mtd_retails}")
+            print(f"DEBUG: Total retails count (date filtered): {total_retails}")
             
             print(f"DEBUG: Summary metrics calculation:")
-            print(f"DEBUG: - Total leads: {total_leads}")
-            print(f"DEBUG: - Hot leads (Hot + Pending): {hot_leads}")
-            print(f"DEBUG: - FTD Assigned (today): {ftd_assigned}")
-            print(f"DEBUG: - MTD Assigned (current month): {mtd_assigned}")
-            print(f"DEBUG: - FTD Retails (today): {ftd_retails}")
-            print(f"DEBUG: - MTD Retails (current month): {mtd_retails}")
+            print(f"DEBUG: - Total leads (date filtered): {total_leads}")
+            print(f"DEBUG: - Hot leads (date filtered): {hot_leads}")
+            print(f"DEBUG: - FTD Assigned (today, independent): {ftd_assigned}")
+            print(f"DEBUG: - MTD Assigned (current month, independent): {mtd_assigned}")
+            print(f"DEBUG: - FTD Retails (today, independent): {ftd_retails}")
+            print(f"DEBUG: - MTD Retails (current month, independent): {mtd_retails}")
+            print(f"DEBUG: - Total Retails (date filtered): {total_retails}")
             
             return {
                 'total_leads': total_leads,
@@ -13503,7 +13548,8 @@ def cre_analytics_data():
                 'ftd_assigned': ftd_assigned,
                 'mtd_assigned': mtd_assigned,
                 'ftd_retails': ftd_retails,
-                'mtd_retails': mtd_retails
+                'mtd_retails': mtd_retails,
+                'total_retails': total_retails
             }
         
         summary_metrics = get_summary_metrics()
@@ -18110,6 +18156,119 @@ def branch_update_ps_info(ps_id):
             
     except Exception as e:
         print(f"Error updating PS info: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+
+
+@app.route('/get_branch_list')
+@require_admin
+def get_branch_list():
+    """Get list of all branches for dropdown"""
+    try:
+        # Get all unique branches from ps_users table
+        result = supabase.table('ps_users').select('branch').execute()
+        
+        if not result.data:
+            return jsonify({
+                'success': True,
+                'branch_list': []
+            })
+        
+        # Extract unique branches
+        branches = list(set([ps['branch'] for ps in result.data if ps.get('branch') and ps['branch'] != 'TEST']))
+        branches.sort()
+        
+        branch_list = [{'name': branch} for branch in branches]
+        
+        return jsonify({
+            'success': True,
+            'branch_list': branch_list
+        })
+        
+    except Exception as e:
+        print(f"Error getting branch list: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+
+
+@app.route('/api/ps_performance_analytics')
+@require_admin
+def api_ps_performance_analytics():
+    """Get PS performance analytics data for analytics dashboard"""
+    try:
+        # Get filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        branch_filter = request.args.get('branch')
+        
+        # Build query for ps_followup_master
+        query = supabase.table('ps_followup_master').select('ps_name, ps_branch, ps_assigned_at, lead_status')
+        
+        # Apply date filters
+        if start_date:
+            query = query.gte('ps_assigned_at', start_date)
+        if end_date:
+            query = query.lte('ps_assigned_at', end_date)
+        
+        # Apply branch filter
+        if branch_filter:
+            query = query.eq('ps_branch', branch_filter)
+        
+        result = query.execute()
+        
+        if not result.data:
+            return jsonify({
+                'success': True,
+                'data': []
+            })
+        
+        # Process data to calculate performance metrics
+        ps_performance = {}
+        for lead in result.data:
+            ps_name = lead.get('ps_name')
+            branch = lead.get('ps_branch')
+            
+            if not ps_name:
+                continue
+            
+            if ps_name not in ps_performance:
+                ps_performance[ps_name] = {
+                    'ps_name': ps_name,
+                    'branch': branch,
+                    'leads_assigned': 0,
+                    'leads_contacted': 0
+                }
+            
+            ps_performance[ps_name]['leads_assigned'] += 1
+            if lead.get('lead_status'):
+                ps_performance[ps_name]['leads_contacted'] += 1
+        
+        # Calculate gap and format result
+        result_data = []
+        for ps_name, stats in ps_performance.items():
+            gap = stats['leads_assigned'] - stats['leads_contacted']
+            result_data.append({
+                'ps_name': stats['ps_name'],
+                'branch': stats['branch'],
+                'leads_assigned': stats['leads_assigned'],
+                'leads_contacted': stats['leads_contacted'],
+                'gap': gap
+            })
+        
+        # Sort by leads assigned (descending)
+        result_data.sort(key=lambda x: x['leads_assigned'], reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'data': result_data
+        })
+        
+    except Exception as e:
+        print(f"Error in ps_performance_analytics API: {e}")
         return jsonify({
             'success': False,
             'message': f'Error: {str(e)}'
