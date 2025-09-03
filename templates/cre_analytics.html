@@ -247,6 +247,7 @@
                                 <th>Metric</th>
                                 <th>Total Leads</th>
                                 <th>Hot Leads</th>
+                                <th>Total Retails</th>
                                 <th>FTD Assigned</th>
                                 <th>MTD Assigned</th>
                                 <th>FTD Retails</th>
@@ -258,6 +259,7 @@
                                 <td><strong>Count</strong></td>
                                 <td><span class="badge bg-primary" id="total-leads-count">-</span></td>
                                 <td><span class="badge bg-danger" id="hot-leads-count">-</span></td>
+                                <td><span class="badge bg-success" id="total-retails-count">-</span></td>
                                 <td><span class="badge bg-info" id="ftd-assigned-count">-</span></td>
                                 <td><span class="badge bg-warning" id="mtd-assigned-count">-</span></td>
                                 <td><span class="badge bg-success" id="ftd-retails-count">-</span></td>
@@ -265,8 +267,9 @@
                             </tr>
                             <tr>
                                 <td><strong>Description</strong></td>
-                                <td><small class="text-muted">Total leads assigned to you</small></td>
-                                <td><small class="text-muted">Hot + Pending leads</small></td>
+                                <td><small class="text-muted">Total leads assigned to you (date filtered)</small></td>
+                                <td><small class="text-muted">Hot leads (date filtered)</small></td>
+                                <td><small class="text-muted">All won cases (date filtered)</small></td>
                                 <td><small class="text-muted">Today's assigned leads</small></td>
                                 <td><small class="text-muted">Current month assigned</small></td>
                                 <td><small class="text-muted">Today's won cases</small></td>
@@ -664,6 +667,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Update all count values in the horizontal table
             document.getElementById('total-leads-count').textContent = summaryData.total_leads || '-';
             document.getElementById('hot-leads-count').textContent = summaryData.hot_leads || '-';
+            document.getElementById('total-retails-count').textContent = summaryData.total_retails || '-';
             document.getElementById('ftd-assigned-count').textContent = summaryData.ftd_assigned || '-';
             document.getElementById('mtd-assigned-count').textContent = summaryData.mtd_assigned || '-';
             document.getElementById('ftd-retails-count').textContent = summaryData.ftd_retails || '-';
@@ -674,7 +678,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Summary metrics data is falsy!');
             // Set default values when no data is provided
             const elements = [
-                'total-leads-count', 'hot-leads-count', 'ftd-assigned-count',
+                'total-leads-count', 'hot-leads-count', 'total-retails-count', 'ftd-assigned-count',
                 'mtd-assigned-count', 'ftd-retails-count', 'mtd-retails-count'
             ];
             elements.forEach(id => {

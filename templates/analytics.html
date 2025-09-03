@@ -837,6 +837,38 @@
         .untouched-link:hover .badge {
             box-shadow: 0 4px 8px rgba(25, 118, 210, 0.3);
         }
+
+        /* PS Performance Table Scrollable Container */
+        .ps-performance-container {
+            position: relative;
+            background: var(--airbnb-white);
+            box-shadow: var(--airbnb-shadow);
+        }
+        
+        .ps-performance-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .ps-performance-container::-webkit-scrollbar-track {
+            background: var(--airbnb-gray-100);
+            border-radius: 4px;
+        }
+        
+        .ps-performance-container::-webkit-scrollbar-thumb {
+            background: var(--airbnb-gray-400);
+            border-radius: 4px;
+        }
+        
+        .ps-performance-container::-webkit-scrollbar-thumb:hover {
+            background: var(--airbnb-gray-500);
+        }
+        
+        .ps-performance-container .sticky-top {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: #343a40 !important;
+        }
     </style>
 </head>
 <body>
@@ -1231,6 +1263,46 @@
             </div>
         </div>
 
+        <!-- Product Specialist Performance Table -->
+        <div class="table-container mt-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 style="color: var(--airbnb-gray-700); font-weight: 600; margin-bottom: 0;">
+                    <i class="fas fa-users" style="color: var(--airbnb-red);"></i> Product Specialist Performance
+                </h5>
+                <form class="d-flex align-items-center" id="ps-performance-date-form" onsubmit="return false;">
+                    <label for="ps_branch_filter" class="me-2 mb-0">Branch:</label>
+                    <select id="ps_branch_filter" class="form-select form-select-sm me-2" style="width: auto;">
+                        <option value="">All Branches</option>
+                        <!-- Branch options will be populated dynamically -->
+                    </select>
+                    <label for="ps_start_date" class="me-2 mb-0">From:</label>
+                    <input type="date" id="ps_start_date" name="start_date" class="form-control form-control-sm me-2">
+                    <label for="ps_end_date" class="me-2 mb-0">To:</label>
+                    <input type="date" id="ps_end_date" name="end_date" class="form-control form-control-sm me-2">
+                    <button type="button" class="btn btn-primary btn-sm" onclick="fetchPSPerformance()">Apply</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm ms-2" onclick="resetPSPerformance()">Reset</button>
+                </form>
+            </div>
+            <div class="ps-performance-container" style="max-height: 500px; overflow-y: auto; border: 1px solid var(--airbnb-gray-200); border-radius: var(--airbnb-border-radius);">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover mb-0" id="ps-performance-table">
+                        <thead class="table-dark sticky-top">
+                            <tr>
+                                <th>Product Specialist</th>
+                                <th>Branch</th>
+                                <th>Leads Assigned (ps_assigned_at)</th>
+                                <th>Leads Contacted (lead_status not null)</th>
+                                <th>Gap (Assigned - Contacted)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ps-performance-tbody">
+                            <tr><td colspan="5" class="text-center">Loading PS performance data...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
         <!-- Additional Analytics -->
         <div class="row">
             <div class="col-md-6">
@@ -1516,6 +1588,128 @@
                 <span class='metric-number'>${val}</span>
                 <span class='metric-percent'>${pct}%</span>
             </div>`;
+        }
+
+        // Function to populate Branch dropdown for PS Performance
+        function populateBranchDropdown() {
+            console.log('Fetching branch list for PS performance...');
+            fetch('/get_branch_list')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log('Branch list received:', data.branch_list);
+                        const dropdown = document.getElementById('ps_branch_filter');
+                        // Clear existing options except the first one
+                        while (dropdown.options.length > 1) {
+                            dropdown.remove(1);
+                        }
+                        
+                        // Add branch options
+                        data.branch_list.forEach(branch => {
+                            const option = document.createElement('option');
+                            option.value = branch.name;
+                            option.textContent = branch.name;
+                            dropdown.appendChild(option);
+                        });
+                    } else {
+                        console.error('Failed to fetch branch list:', data.message);
+                    }
+                })
+                .catch(err => {
+                    console.error('Error fetching branch list:', err);
+                    // Add error handling UI
+                    const dropdown = document.getElementById('ps_branch_filter');
+                    const option = document.createElement('option');
+                    option.value = '';
+                    option.textContent = 'Error loading branches';
+                    option.disabled = true;
+                    dropdown.appendChild(option);
+                });
+        }
+
+        // Function to fetch PS Performance data
+        function fetchPSPerformance() {
+            const startDate = document.getElementById('ps_start_date').value;
+            const endDate = document.getElementById('ps_end_date').value;
+            const branchFilter = document.getElementById('ps_branch_filter').value;
+            
+            // Show loading spinner
+            document.getElementById('ps-performance-tbody').innerHTML = `
+                <tr>
+                    <td colspan="5" class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Loading PS performance data...</p>
+                    </td>
+                </tr>
+            `;
+            
+            // Build query parameters
+            let params = new URLSearchParams();
+            if (startDate) params.append('start_date', startDate);
+            if (endDate) params.append('end_date', endDate);
+            if (branchFilter) params.append('branch', branchFilter);
+            
+            fetch(`/api/ps_performance_analytics?${params.toString()}`)
+                .then(response => response.json())
+                .then(res => {
+                    if (!res.success) {
+                        document.getElementById('ps-performance-tbody').innerHTML = `<tr><td colspan='5' class='text-center'>${res.message}</td></tr>`;
+                        return;
+                    }
+                    console.log("PS performance data received:", res.data);
+                    updatePSPerformanceTable(res.data);
+                })
+                .catch(err => {
+                    document.getElementById('ps-performance-tbody').innerHTML = `<tr><td colspan='5' class='text-center'>Error loading PS performance data</td></tr>`;
+                    console.error("Error fetching PS performance data:", err);
+                });
+        }
+
+        // Function to update PS Performance table
+        function updatePSPerformanceTable(data) {
+            if (!data || !Array.isArray(data)) {
+                document.getElementById('ps-performance-tbody').innerHTML = `
+                    <tr>
+                        <td colspan="5" class="text-center">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i> No PS performance data available
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            let html = '';
+            data.forEach(ps => {
+                html += `<tr>
+                    <td><strong>${ps.ps_name}</strong></td>
+                    <td><span class="badge" style="background: var(--airbnb-blue);">${ps.branch || 'N/A'}</span></td>
+                    <td><span class="badge" style="background: var(--airbnb-red);">${ps.leads_assigned || 0}</span></td>
+                    <td><span class="badge" style="background: var(--airbnb-green);">${ps.leads_contacted || 0}</span></td>
+                    <td>
+                        <span class="badge ${ps.gap > 0 ? 'bg-warning' : 'bg-success'}">
+                            ${ps.gap || 0}
+                        </span>
+                    </td>
+                </tr>`;
+            });
+            
+            if (html === '') {
+                html = `<tr><td colspan="5" class="text-center">No PS performance data found for the selected criteria</td></tr>`;
+            }
+            
+            document.getElementById('ps-performance-tbody').innerHTML = html;
+        }
+
+        // Reset function for PS Performance
+        function resetPSPerformance() {
+            document.getElementById('ps_start_date').value = '';
+            document.getElementById('ps_end_date').value = '';
+            document.getElementById('ps_branch_filter').value = '';
+            fetchPSPerformance();
         }
 
         // Function to populate CRE dropdown
@@ -2065,9 +2259,11 @@
 
         document.addEventListener('DOMContentLoaded', function() {
             populateCreDropdown();
+            populateBranchDropdown();
             fetchSourceAnalysis();
             fetchCreAnalysis();
             fetchBranchSummary();
+            fetchPSPerformance();
             
             // Date filter validation and enhancement
             const dateFilterForm = document.getElementById('dateFilterForm');
@@ -2110,6 +2306,9 @@
             // Auto-refresh charts when dates change (optional)
             startDateInput.addEventListener('change', function() {
                 if (startDateInput.value && endDateInput.value) {
+                    // Sync with PS performance date filters
+                    document.getElementById('ps_start_date').value = startDateInput.value;
+                    document.getElementById('ps_end_date').value = endDateInput.value;
                     // Optionally auto-refresh charts here
                     // refreshChartsWithNewDates();
                 }
@@ -2117,6 +2316,9 @@
             
             endDateInput.addEventListener('change', function() {
                 if (startDateInput.value && endDateInput.value) {
+                    // Sync with PS performance date filters
+                    document.getElementById('ps_start_date').value = startDateInput.value;
+                    document.getElementById('ps_end_date').value = endDateInput.value;
                     // Optionally auto-refresh charts here
                     // refreshChartsWithNewDates();
                 }
