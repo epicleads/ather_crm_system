@@ -7525,7 +7525,7 @@ def update_lead(uid):
         lead_statuses = [
             'Busy on another Call', 'RNR', 'Call me Back', 'Interested',
             'Not Interested', 'Did Not Inquire', 'Lost to Competition',
-            'Lost to Co Dealer', 'Call Disconnected', 'Wrong Number'
+            'Lost to Co Dealer', 'Call Disconnected', 'Wrong Number', 'Out of Station'
         ]
 
         if request.method == 'POST':
@@ -7536,7 +7536,7 @@ def update_lead(uid):
 
             # Lock follow_up_date and set final_status for certain statuses
             lock_statuses = ['Booked', 'Retailed']
-            lost_statuses = ['Not Interested', 'Lost to Codealer', 'Lost to Competition']
+            lost_statuses = ['Not Interested', 'Lost to Codealer', 'Lost to Competition', 'Out of Station']
             if lead_status in lock_statuses:
                 update_data['lead_status'] = lead_status
                 update_data['follow_up_date'] = follow_up_date or lead_data.get('follow_up_date')
@@ -7545,6 +7545,14 @@ def update_lead(uid):
                 update_data['lead_status'] = lead_status
                 update_data['follow_up_date'] = follow_up_date or lead_data.get('follow_up_date')
                 update_data['final_status'] = 'Lost'
+                
+                # Handle Out of Station specific logic
+                if lead_status == 'Out of Station':
+                    out_of_station_location = request.form.get('out_of_station_location', '').strip()
+                    if not out_of_station_location:
+                        flash('Location is required when lead status is "Out of Station"', 'error')
+                        return redirect(url_for('update_lead', uid=uid, return_tab=return_tab))
+                    update_data['out_of_station_location'] = out_of_station_location
             else:
                 if lead_status:
                     update_data['lead_status'] = lead_status
@@ -8795,7 +8803,7 @@ def update_lead_optimized(uid):
         lead_statuses = [
             'Busy on another Call', 'RNR', 'Call me Back', 'Interested',
             'Not Interested', 'Did Not Inquire', 'Lost to Competition',
-            'Lost to Co Dealer', 'Call Disconnected', 'Wrong Number'
+            'Lost to Co Dealer', 'Call Disconnected', 'Wrong Number', 'Out of Station'
         ]
 
         if request.method == 'POST':
@@ -8809,7 +8817,7 @@ def update_lead_optimized(uid):
 
             # Lock follow_up_date and set final_status for certain statuses
             lock_statuses = ['Booked', 'Retailed']
-            lost_statuses = ['Not Interested', 'Lost to Codealer', 'Lost to Competition']
+            lost_statuses = ['Not Interested', 'Lost to Codealer', 'Lost to Competition', 'Out of Station']
 
             if lead_status in lock_statuses:
                 update_data['lead_status'] = lead_status
@@ -8819,6 +8827,14 @@ def update_lead_optimized(uid):
                 update_data['lead_status'] = lead_status
                 update_data['follow_up_date'] = follow_up_date or lead_data.get('follow_up_date')
                 update_data['final_status'] = 'Lost'
+                
+                # Handle Out of Station specific logic
+                if lead_status == 'Out of Station':
+                    out_of_station_location = request.form.get('out_of_station_location', '').strip()
+                    if not out_of_station_location:
+                        flash('Location is required when lead status is "Out of Station"', 'error')
+                        return redirect(url_for('update_lead_optimized', uid=uid, return_tab=return_tab))
+                    update_data['out_of_station_location'] = out_of_station_location
             else:
                 if lead_status:
                     update_data['lead_status'] = lead_status
@@ -12652,6 +12668,7 @@ def download_lead_master():
             ('branch', 'Branch'),
             ('ps_name', 'PS Name'),
             ('lead_status', 'Lead Status'),
+            ('out_of_station_location', 'Out of Station Location'),
             ('first_call_date', 'First Call Date'),
             ('first_call_remark', 'First Call Remark'),
             ('second_call_date', 'Second Call Date'),

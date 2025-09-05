@@ -394,6 +394,20 @@
                         </div>
                     </div>
                 </div>
+                
+                <!-- Out of Station Location Field (only visible when Out of Station is selected) -->
+                <div id="out-of-station-location-section" class="row" style="display: none;">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="out_of_station_location" class="form-label fw-semibold">Location <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control border-2" id="out_of_station_location" name="out_of_station_location" 
+                                   placeholder="Enter the location where the customer is currently out of station..." 
+                                   value="{{ lead.out_of_station_location or '' }}" 
+                                   style="font-size: 1rem;">
+                            <small class="form-text text-muted">This field is required when lead status is "Out of Station"</small>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Lead Status, Follow-up Date, and Final Status for nth calls (not first call) -->
                 {% if next_call != 'first' %}
@@ -723,6 +737,44 @@ function handleLeadStatusChange() {
                 if (callRemark) callRemark.value = '';
                 break;
 
+            case 'Out of Station':
+                // Show call details, location field, record call and set final status to Lost
+                if (callDetailsSection) {
+                    callDetailsSection.style.display = 'block';
+                    if (callDate) callDate.required = true;
+                    if (callRemark) callRemark.required = true;
+                }
+                // Show location field
+                const locationSection = document.getElementById('out-of-station-location-section');
+                if (locationSection) {
+                    locationSection.style.display = 'block';
+                }
+                const locationField = document.getElementById('out_of_station_location');
+                if (locationField) {
+                    locationField.required = true;
+                }
+                shouldRecordCall.value = 'true';
+
+                // Set default values
+                if (callDate && !callDate.value) {
+                    callDate.value = new Date().toISOString().split('T')[0];
+                }
+                if (callRemark && !callRemark.value.trim()) {
+                    callRemark.value = `Customer is out of station`;
+                }
+                if (finalStatus) {
+                    finalStatus.value = 'Lost';
+                }
+                // Hide follow-up section for out of station
+                if (followupSection) {
+                    followupSection.style.display = 'none';
+                }
+                if (followupDate) {
+                    followupDate.required = false;
+                    followupDate.value = '';
+                }
+                break;
+
             default:
                 // No status selected
                 break;
@@ -843,6 +895,42 @@ function handleLeadStatusChange() {
                     followupDate.value = ''; // Clear the value
                 }
                 // No PS validation needed for non-interested statuses
+                break;
+
+            case 'Out of Station':
+                // Show call details, location field, record call and set final status to Lost
+                if (callDetailsSection) callDetailsSection.style.display = 'block';
+                if (callDate) callDate.required = true;
+                if (callRemark) callRemark.required = true;
+                // Show location field
+                const locationSection = document.getElementById('out-of-station-location-section');
+                if (locationSection) {
+                    locationSection.style.display = 'block';
+                }
+                const locationField = document.getElementById('out_of_station_location');
+                if (locationField) {
+                    locationField.required = true;
+                }
+                shouldRecordCall.value = 'true';
+
+                // Set default values
+                if (callDate && !callDate.value) {
+                    callDate.value = new Date().toISOString().split('T')[0];
+                }
+                if (callRemark && !callRemark.value.trim()) {
+                    callRemark.value = `Customer is out of station`;
+                }
+                if (finalStatus) {
+                    finalStatus.value = 'Lost';
+                }
+                // Hide follow-up section for out of station
+                if (followupSection) {
+                    followupSection.style.display = 'none';
+                }
+                if (followupDate) {
+                    followupDate.required = false;
+                    followupDate.value = '';
+                }
                 break;
 
             default:
@@ -1114,7 +1202,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return false;
             }
 
-            if ((leadStatus === 'Retailed' || leadStatus === 'Booked' || leadStatus === 'Discount Issue' || leadStatus === 'Delayed' || leadStatus === 'Test Drive' || leadStatus === 'Talked to PS' || leadStatus === 'Lost to Competition' || leadStatus === 'Finance Rejected' || leadStatus === 'Dropped')) {
+            if ((leadStatus === 'Retailed' || leadStatus === 'Booked' || leadStatus === 'Discount Issue' || leadStatus === 'Delayed' || leadStatus === 'Test Drive' || leadStatus === 'Talked to PS' || leadStatus === 'Lost to Competition' || leadStatus === 'Finance Rejected' || leadStatus === 'Dropped' || leadStatus === 'Out of Station')) {
                 if (callDate && !callDate.value) {
                     e.preventDefault();
                     alert('Please select the Call Date');
@@ -1126,6 +1214,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     alert('Please enter the Call Remark');
                     callRemark.focus();
                     return false;
+                }
+                
+                // Validate location field for Out of Station status
+                if (leadStatus === 'Out of Station') {
+                    const locationField = document.getElementById('out_of_station_location');
+                    if (locationField && !locationField.value.trim()) {
+                        e.preventDefault();
+                        alert('Please enter the location where the customer is out of station');
+                        locationField.focus();
+                        return false;
+                    }
                 }
             }
         }
