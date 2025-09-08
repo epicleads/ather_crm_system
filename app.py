@@ -8814,14 +8814,14 @@ def update_ps_lead(uid):
                 # Check test drive state and validate
                 test_drive_state = get_test_drive_state(uid)
                 if test_drive_state['locked']:
-                    flash('Test Drive status is locked and cannot be changed.', 'error')
-                    return redirect(url_for('update_ps_lead', uid=uid, return_tab=return_tab))
-                
-                # Test Drive Done is now required
-                if not test_drive_done:
-                    flash('Test Drive Done field is required', 'error')
-                    return redirect(url_for('update_ps_lead', uid=uid, return_tab=return_tab))
-                update_data['test_drive_done'] = test_drive_done
+                    # Skip test drive validation when status is locked
+                    pass
+                else:
+                    # Test Drive Done is now required only when not locked
+                    if not test_drive_done:
+                        flash('Test Drive Done field is required', 'error')
+                        return redirect(url_for('update_ps_lead', uid=uid, return_tab=return_tab))
+                    update_data['test_drive_done'] = test_drive_done
                 if request.form.get('follow_up_date'):
                     update_data['follow_up_date'] = follow_up_date
                 if request.form.get('final_status'):
@@ -13960,22 +13960,24 @@ def update_event_lead(activity_uid):
             # Check test drive state and validate
             test_drive_state = get_test_drive_state(activity_uid)
             if test_drive_state['locked']:
-                flash('Test Drive status is locked and cannot be changed.', 'error')
-                redirect_url = url_for('update_event_lead', activity_uid=activity_uid, return_tab=return_tab)
-                return redirect(redirect_url)
-            
-            # Test Drive Done is now required
-            if not test_drive_done:
-                flash('Test Drive Done field is required', 'error')
-                redirect_url = url_for('update_event_lead', activity_uid=activity_uid, return_tab=return_tab)
-                return redirect(redirect_url)
-            # Convert string values to boolean for the database
-            if test_drive_done == 'Yes':
-                update_data['test_drive_done'] = True
-            elif test_drive_done == 'No':
-                update_data['test_drive_done'] = False
+                # Skip test drive validation when status is locked
+                pass
             else:
-                update_data['test_drive_done'] = test_drive_done
+                # Test Drive Done is now required only when not locked
+                if not test_drive_done:
+                    flash('Test Drive Done field is required', 'error')
+                    redirect_url = url_for('update_event_lead', activity_uid=activity_uid, return_tab=return_tab)
+                    return redirect(redirect_url)
+            # Convert string values to boolean for the database
+            if test_drive_done == 'Yes' or test_drive_done == 'true' or test_drive_done == True:
+                update_data['test_drive_done'] = True
+            elif test_drive_done == 'No' or test_drive_done == 'false' or test_drive_done == False:
+                update_data['test_drive_done'] = False
+            elif test_drive_done == '' or test_drive_done is None:
+                # Skip updating test_drive_done when empty or None to avoid PostgreSQL error
+                pass
+            else:
+                update_data['test_drive_done'] = None
             if customer_location:
                 update_data['customer_location'] = customer_location
             if ps_followup_date_ts:
@@ -14193,8 +14195,8 @@ def update_event_lead_cre(activity_uid):
             # Check test drive state and validate
             test_drive_state = get_test_drive_state(activity_uid)
             if test_drive_state['locked']:
-                flash('Test Drive status is locked and cannot be changed.', 'error')
-                return redirect(url_for('update_event_lead_cre', activity_uid=activity_uid, return_tab=return_tab))
+                # Skip test drive validation when status is locked
+                pass
             
             if test_drive_done:
                 # Convert string values to boolean for the database
