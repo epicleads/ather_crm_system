@@ -16,13 +16,13 @@ jobs:
           python-version: '3.11'
       - name: Install dependencies
         run: pip install -r requirements.txt
-      # - name: Run knowlaritytosupabase.py (COMMENTED OUT)
-      #   env:
-      #     SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      #     SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-      #     KNOW_SR_KEY: ${{ secrets.KNOW_SR_KEY }}
-      #     KNOW_X_API_KEY: ${{ secrets.KNOW_X_API_KEY }}
-      #   run: python knowlaritytosupabase.py
+      - name: Run knowlaritytosupabase.py (COMMENTED OUT)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          KNOW_SR_KEY: ${{ secrets.KNOW_SR_KEY }}
+          KNOW_X_API_KEY: ${{ secrets.KNOW_X_API_KEY }}
+        run: python knowlaritytosupabase.py
       - name: Run metatosupabase.py
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
