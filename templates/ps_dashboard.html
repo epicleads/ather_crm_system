@@ -55,7 +55,7 @@
 
 <!-- Quick Stats -->
 <div class="row g-3 mb-4">
-    <div class="col-md-2">
+    <div class="col-md-2" id="fresh-leads-stats">
         <div class="stats-card bg-primary text-white p-3 rounded h-100">
             <div class="d-flex flex-column h-100">
                 <div class="mb-2">
@@ -1544,10 +1544,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (calledBadge) calledBadge.textContent = calledVisibleCount;
         if (followUpBadge) followUpBadge.textContent = followUpVisibleCount;
         
-        // Also update the stats card
-        const statsCard = document.querySelector('.stats-card h4');
-        if (statsCard) {
-            statsCard.textContent = totalVisibleCount;
+        // Also update the fresh leads stats card (not the today's follow-ups card)
+        const freshLeadsStatsCard = document.querySelector('#fresh-leads-stats .fs-4.fw-bold.text-white');
+        if (freshLeadsStatsCard) {
+            freshLeadsStatsCard.textContent = totalVisibleCount;
         }
     }
     
