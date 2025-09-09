@@ -1,40 +1,91 @@
 name: Daily Script Runner
+
 on:
   schedule:
-    - cron: '*/5 * * * *'  # Every 5 minutes - For all scripts except Salesforce
+    - cron: '*/5 * * * *'  # Every 5 minutes
   workflow_dispatch:
 
 jobs:
-  run-scripts:
+  # PRIORITY JOB: Knowlarity Script
+  run-knowlarity-script:
     runs-on: ubuntu-latest
+    
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
-      
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
+          
       - name: Install dependencies
-        run: pip install -r requirements.txt
-      
-      - name: Run knowlaritytosupabase.py
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          
+      - name: FORCE RUN Knowlarity Script
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           KNOW_SR_KEY: ${{ secrets.KNOW_SR_KEY }}
           KNOW_X_API_KEY: ${{ secrets.KNOW_X_API_KEY }}
-        run: python knowlaritytosupabase.py
-      
-      - name: Run metatosupabase.py
+        run: |
+          echo "🎯 FORCING KNOWLARITY SCRIPT EXECUTION"
+          echo "Time: $(date)"
+          echo "=========================================="
+          
+          # Verify file exists
+          if [ ! -f "knowlaritytosupabase.py" ]; then
+            echo "❌ CRITICAL ERROR: knowlaritytosupabase.py not found!"
+            ls -la
+            exit 1
+          fi
+          
+          echo "📝 Executing knowlaritytosupabase.py..."
+          python -u knowlaritytosupabase.py
+          
+          echo "=========================================="
+          echo "✅ KNOWLARITY SCRIPT EXECUTION COMPLETED"
+
+  # SECONDARY JOB: Meta Script (runs independently)
+  run-meta-script:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          
+      - name: Run Meta Script
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           META_PAGE_ACCESS_TOKEN: ${{ secrets.META_PAGE_ACCESS_TOKEN }}
           PAGE_ID: ${{ secrets.PAGE_ID }}
-        run: python metatosupabase.py
+        run: |
+          echo "📱 Running Meta script..."
+          echo "Time: $(date)"
+          echo "=========================================="
+          
+          if [ ! -f "metatosupabase.py" ]; then
+            echo "❌ ERROR: metatosupabase.py not found!"
+            exit 1
+          fi
+          
+          python -u metatosupabase.py
+          echo "✅ Meta script completed"
 
+  
   # Salesforce job - kept commented for future use
   # run-salesforce-script:
   #   runs-on: ubuntu-latest
