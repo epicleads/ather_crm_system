@@ -350,6 +350,107 @@ def map_lead_with_source(raw: dict, campaign_name: str) -> Optional[dict]:
         "final_status": "Pending", "created_at": now_iso, "updated_at": now_iso
     }
 
+def preview_all_forms_with_details():
+    """Preview ALL forms with complete details - regardless of lead activity"""
+    print(f"\n📝 COMPLETE FORM INVENTORY - ALL FORMS")
+    print("=" * 60)
+    
+    # Get all forms
+    forms = meta_api.get_forms_with_campaign_info_safe()
+    print(f"📊 Total Forms Found: {len(forms)}")
+    print("=" * 60)
+    
+    # Get leads for all forms
+    all_form_leads = meta_api.get_form_leads_parallel([f['id'] for f in forms])
+    
+    forms_with_recent_leads = 0
+    forms_without_recent_leads = 0
+    total_leads_24h = 0
+    
+    for i, form in enumerate(forms, 1):
+        form_id = form['id']
+        form_name = form['name']
+        form_status = form.get('status', 'Unknown')
+        campaign_name = form['campaign_name']
+        leads = all_form_leads.get(form_id, [])
+        
+        print(f"\n{i}. FORM DETAILS:")
+        print(f"   📄 Form Name: {form_name}")
+        print(f"   🆔 Form ID: {form_id}")
+        print(f"   📊 Campaign: {campaign_name}")
+        print(f"   📈 Status: {form_status}")
+        print(f"   🎯 Source: META | Sub-source: Meta")
+        
+        # Analyze leads
+        total_leads = len(leads)
+        recent_leads = 0
+        local_fields = set()
+        
+        for lead in leads:
+            if meta_api._is_within_past_24_hours(lead.get("created_time", "")):
+                recent_leads += 1
+                total_leads_24h += 1
+                for fd in lead.get("field_data", []):
+                    field_name = fd["name"]
+                    local_fields.add(field_name)
+        
+        print(f"   📊 Total Leads (All Time): {total_leads}")
+        print(f"   🕐 Leads (Past 24h): {recent_leads}")
+        
+        if local_fields:
+            print(f"   📝 Field Names: {', '.join(sorted(local_fields))}")
+            forms_with_recent_leads += 1
+        else:
+            if total_leads > 0:
+                print(f"   📝 No recent leads, but form has {total_leads} historical leads")
+            else:
+                print(f"   📝 No leads found (form might be new or inactive)")
+            forms_without_recent_leads += 1
+        
+        print("   " + "-" * 50)
+    
+    # Summary
+    print(f"\n📊 SUMMARY:")
+    print(f"🧾 Total Forms: {len(forms)}")
+    print(f"✅ Forms with Recent Leads (24h): {forms_with_recent_leads}")
+    print(f"⚠️ Forms without Recent Leads: {forms_without_recent_leads}")
+    print(f"📱 Total Recent Leads (24h): {total_leads_24h}")
+    print("=" * 60)
+
+def preview_forms_summary_table():
+    """Show a clean table summary of all forms"""
+    print(f"\n📋 FORMS SUMMARY TABLE")
+    print("=" * 100)
+    
+    forms = meta_api.get_forms_with_campaign_info_safe()
+    all_form_leads = meta_api.get_form_leads_parallel([f['id'] for f in forms])
+    
+    # Header
+    print(f"{'#':<3} {'Form Name':<30} {'Campaign':<25} {'Status':<10} {'Recent':<8} {'Total':<8}")
+    print("-" * 100)
+    
+    total_recent = 0
+    total_all_time = 0
+    
+    for i, form in enumerate(forms, 1):
+        form_id = form['id']
+        form_name = form['name'][:29] + "..." if len(form['name']) > 32 else form['name']
+        campaign_name = form['campaign_name'][:24] + "..." if len(form['campaign_name']) > 27 else form['campaign_name']
+        form_status = form.get('status', 'Unknown')
+        leads = all_form_leads.get(form_id, [])
+        
+        total_leads = len(leads)
+        recent_leads = sum(1 for lead in leads if meta_api._is_within_past_24_hours(lead.get("created_time", "")))
+        
+        total_recent += recent_leads
+        total_all_time += total_leads
+        
+        print(f"{i:<3} {form_name:<30} {campaign_name:<25} {form_status:<10} {recent_leads:<8} {total_leads:<8}")
+    
+    print("-" * 100)
+    print(f"{'TOTAL':<59} {total_recent:<8} {total_all_time:<8}")
+    print("=" * 100)
+
 def preview_field_names_optimized():
     """Preview field names with campaign info"""
     print(f"\n📝 Enhanced field-name preview for PAST 24 HOURS")
@@ -567,5 +668,20 @@ def sync_to_db():
     sync_to_db_optimized()
 
 if __name__ == "__main__":
+    print("🔍 COMPREHENSIVE FORM ANALYSIS")
+    print("=" * 60)
+    
+    # Show all forms with complete details
+    preview_all_forms_with_details()
+    
+    # Show summary table
+    preview_forms_summary_table()
+    
+    # Original field preview (only forms with recent leads)
     preview_field_names()
+    
+    # Proceed with sync
+    print("\n" + "=" * 60)
+    print("🔄 STARTING SYNC PROCESS")
+    print("=" * 60)
     sync_to_db()

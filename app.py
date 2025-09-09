@@ -72,6 +72,8 @@ ALLOWED_CORS_ORIGINS = {
     'http://raamather.com',
     'https://epicleads.in',
     'http://epicleads.in',
+    'https://raamather.netlify.app',
+    'http://raamather.netlify.app',
     'http://localhost:3000',
     'https://localhost:3000',
     'http://127.0.0.1:3000',
