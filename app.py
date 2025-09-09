@@ -16293,10 +16293,10 @@ def lead_transfer():
 def api_ps_followup_summary():
     """API to get PS Follow-up Summary for branch head dashboard with date filtering and new logic based on call dates only"""
     try:
-        # Get branch from session
-        branch = session.get('branch_head_branch')
+        # Get branch from session or request parameter (for analytics cross-branch support)
+        branch = request.args.get('branch') or session.get('branch_head_branch')
         if not branch:
-            return jsonify({'success': False, 'message': 'Branch not found in session'})
+            return jsonify({'success': False, 'message': 'Branch not found in session or request'})
         
         # Get date filter parameters from request
         from_date = request.args.get('from_date')
@@ -16304,7 +16304,8 @@ def api_ps_followup_summary():
         mode = request.args.get('mode', 'all_pending')
         
         # Debug logging
-        print(f"DEBUG: PS Follow-up Summary API called with - from_date: {from_date}, to_date: {to_date}, mode: {mode}")
+        print(f"DEBUG: PS Follow-up Summary API called with - branch: {branch}, from_date: {from_date}, to_date: {to_date}, mode: {mode}")
+        print(f"DEBUG: Branch source - request param: {request.args.get('branch')}, session: {session.get('branch_head_branch')}")
         
         # Get all PS users for this branch
         ps_users_result = supabase.table('ps_users').select('name').eq('branch', branch).eq('is_active', True).execute()
@@ -16551,6 +16552,14 @@ def api_ps_followup_summary():
         except Exception as e:
             print(f"Warning: Error fetching walkin_table data: {str(e)}")
         
+        # Debug logging for counts
+        print(f"DEBUG: Final PS Summary for branch {branch}:")
+        for ps_name, summary in ps_summary.items():
+            total_cre = sum(summary[f'F{i}']['ps_followup'] for i in range(1, 8))
+            total_walkin = sum(summary[f'F{i}']['walkin'] for i in range(1, 8))
+            if total_cre > 0 or total_walkin > 0:
+                print(f"  {ps_name}: CRE={total_cre}, Walkin={total_walkin}")
+
         # Format the data for display with sub-columns
         formatted_summary = []
         for ps_name, summary in ps_summary.items():
@@ -16574,6 +16583,455 @@ def api_ps_followup_summary():
         print(f"Error in api_ps_followup_summary: {str(e)}")
         return jsonify({'success': False, 'message': f'Error fetching PS follow-up summary: {str(e)}'})
 
+@app.route('/api/ps_followup_summary_for_analytics')
+def api_ps_followup_summary_for_analytics():
+    """API to get PS Follow-up Summary for analytics dashboard - reusing exact same logic as branch head dashboard"""
+    try:
+        # Get branch from query parameter instead of session
+        branch = request.args.get('branch')
+        if not branch:
+            return jsonify({'success': False, 'message': 'Branch parameter required'})
+        
+        # Get date filter parameters from request
+        from_date = request.args.get('from_date')
+        to_date = request.args.get('to_date')
+        mode = request.args.get('mode', 'all_pending')
+        
+        # Debug logging
+        print(f"DEBUG: Analytics PS Follow-up Summary API called with - branch: {branch}, from_date: {from_date}, to_date: {to_date}, mode: {mode}")
+        
+        # Get all PS users for this branch
+        ps_users_result = supabase.table('ps_users').select('name').eq('branch', branch).eq('is_active', True).execute()
+        ps_users = [ps['name'] for ps in (ps_users_result.data or [])]
+        
+        ps_summary = {}
+        
+        # Initialize summary for each PS with sub-columns
+        for ps_name in ps_users:
+            ps_summary[ps_name] = {
+                'ps_name': ps_name,
+                'F1': {'ps_followup': 0, 'walkin': 0, 'total': 0},
+                'F2': {'ps_followup': 0, 'walkin': 0, 'total': 0},
+                'F3': {'ps_followup': 0, 'walkin': 0, 'total': 0},
+                'F4': {'ps_followup': 0, 'walkin': 0, 'total': 0},
+                'F5': {'ps_followup': 0, 'walkin': 0, 'total': 0},
+                'F6': {'ps_followup': 0, 'walkin': 0, 'total': 0},
+                'F7': {'ps_followup': 0, 'walkin': 0, 'total': 0}
+            }
+        
+        # Use the exact same logic as the original API
+        # Query ps_followup_master table - only final_status = 'Pending' with date filtering on ps_assigned_at
+        try:
+            query = supabase.table('ps_followup_master').select(
+                'lead_uid, ps_name, final_status, ps_assigned_at, follow_up_date, '
+                'first_call_date, second_call_date, third_call_date, fourth_call_date, '
+                'fifth_call_date, sixth_call_date, seventh_call_date'
+            ).eq('ps_branch', branch).eq('final_status', 'Pending')
+            
+            # Apply mode-specific filtering
+            if mode == 'today_missed':
+                # For today's and missed followup: follow_up_date <= today
+                from datetime import datetime
+                today = datetime.now().strftime('%Y-%m-%d')
+                query = query.lte('follow_up_date', f'{today} 23:59:59')
+            else:
+                # For all pending leads: apply date filtering if dates are provided
+                if from_date:
+                    query = query.gte('ps_assigned_at', f'{from_date} 00:00:00')
+                if to_date:
+                    query = query.lte('ps_assigned_at', f'{to_date} 23:59:59')
+            
+            ps_followup_result = query.execute()
+            
+            if ps_followup_result.data:
+                for lead in ps_followup_result.data:
+                    ps_name = lead.get('ps_name')
+                    if ps_name not in ps_summary:
+                        continue
+                    
+                    # Helper function to check if a call date is empty/null
+                    def is_call_date_empty(call_date):
+                        return not call_date or call_date == '' or call_date is None
+                    
+                    # F1: first_call_date is empty, all other call dates are also empty
+                    if (is_call_date_empty(lead.get('first_call_date')) and
+                        is_call_date_empty(lead.get('second_call_date')) and
+                        is_call_date_empty(lead.get('third_call_date')) and
+                        is_call_date_empty(lead.get('fourth_call_date')) and
+                        is_call_date_empty(lead.get('fifth_call_date')) and
+                        is_call_date_empty(lead.get('sixth_call_date')) and
+                        is_call_date_empty(lead.get('seventh_call_date'))):
+                        ps_summary[ps_name]['F1']['ps_followup'] += 1
+                        ps_summary[ps_name]['F1']['total'] += 1
+                    
+                    # F2: second_call_date is empty, first_call_date is filled, all subsequent dates are empty
+                    elif (not is_call_date_empty(lead.get('first_call_date')) and
+                          is_call_date_empty(lead.get('second_call_date')) and
+                          is_call_date_empty(lead.get('third_call_date')) and
+                          is_call_date_empty(lead.get('fourth_call_date')) and
+                          is_call_date_empty(lead.get('fifth_call_date')) and
+                          is_call_date_empty(lead.get('sixth_call_date')) and
+                          is_call_date_empty(lead.get('seventh_call_date'))):
+                        ps_summary[ps_name]['F2']['ps_followup'] += 1
+                        ps_summary[ps_name]['F2']['total'] += 1
+                    
+                    # Continue same pattern for F3-F7...
+                    elif (not is_call_date_empty(lead.get('first_call_date')) and
+                          not is_call_date_empty(lead.get('second_call_date')) and
+                          is_call_date_empty(lead.get('third_call_date')) and
+                          is_call_date_empty(lead.get('fourth_call_date')) and
+                          is_call_date_empty(lead.get('fifth_call_date')) and
+                          is_call_date_empty(lead.get('sixth_call_date')) and
+                          is_call_date_empty(lead.get('seventh_call_date'))):
+                        ps_summary[ps_name]['F3']['ps_followup'] += 1
+                        ps_summary[ps_name]['F3']['total'] += 1
+                    
+                    elif (not is_call_date_empty(lead.get('first_call_date')) and
+                          not is_call_date_empty(lead.get('second_call_date')) and
+                          not is_call_date_empty(lead.get('third_call_date')) and
+                          is_call_date_empty(lead.get('fourth_call_date')) and
+                          is_call_date_empty(lead.get('fifth_call_date')) and
+                          is_call_date_empty(lead.get('sixth_call_date')) and
+                          is_call_date_empty(lead.get('seventh_call_date'))):
+                        ps_summary[ps_name]['F4']['ps_followup'] += 1
+                        ps_summary[ps_name]['F4']['total'] += 1
+                    
+                    elif (not is_call_date_empty(lead.get('first_call_date')) and
+                          not is_call_date_empty(lead.get('second_call_date')) and
+                          not is_call_date_empty(lead.get('third_call_date')) and
+                          not is_call_date_empty(lead.get('fourth_call_date')) and
+                          is_call_date_empty(lead.get('fifth_call_date')) and
+                          is_call_date_empty(lead.get('sixth_call_date')) and
+                          is_call_date_empty(lead.get('seventh_call_date'))):
+                        ps_summary[ps_name]['F5']['ps_followup'] += 1
+                        ps_summary[ps_name]['F5']['total'] += 1
+                    
+                    elif (not is_call_date_empty(lead.get('first_call_date')) and
+                          not is_call_date_empty(lead.get('second_call_date')) and
+                          not is_call_date_empty(lead.get('third_call_date')) and
+                          not is_call_date_empty(lead.get('fourth_call_date')) and
+                          not is_call_date_empty(lead.get('fifth_call_date')) and
+                          is_call_date_empty(lead.get('sixth_call_date')) and
+                          is_call_date_empty(lead.get('seventh_call_date'))):
+                        ps_summary[ps_name]['F6']['ps_followup'] += 1
+                        ps_summary[ps_name]['F6']['total'] += 1
+                    
+                    elif (not is_call_date_empty(lead.get('first_call_date')) and
+                          not is_call_date_empty(lead.get('second_call_date')) and
+                          not is_call_date_empty(lead.get('third_call_date')) and
+                          not is_call_date_empty(lead.get('fourth_call_date')) and
+                          not is_call_date_empty(lead.get('fifth_call_date')) and
+                          not is_call_date_empty(lead.get('sixth_call_date')) and
+                          is_call_date_empty(lead.get('seventh_call_date'))):
+                        ps_summary[ps_name]['F7']['ps_followup'] += 1
+                        ps_summary[ps_name]['F7']['total'] += 1
+        except Exception as e:
+            print(f"Error processing ps_followup_master: {e}")
+        
+        # Process walkin_table data with same logic as original branch dashboard
+        try:
+            query = supabase.table('walkin_table').select(
+                'uid, ps_assigned, status, created_at, next_followup_date, '
+                'first_call_date, second_call_date, third_call_date, fourth_call_date, '
+                'fifth_call_date, sixth_call_date, seventh_call_date'
+            ).eq('branch', branch).eq('status', 'Pending')
+            
+            # Apply mode-specific filtering
+            if mode == 'today_missed':
+                from datetime import datetime
+                today = datetime.now().strftime('%Y-%m-%d')
+                query = query.lte('next_followup_date', f'{today} 23:59:59')
+            else:
+                if from_date:
+                    query = query.gte('created_at', f'{from_date} 00:00:00')
+                if to_date:
+                    query = query.lte('created_at', f'{to_date} 23:59:59')
+            
+            walkin_result = query.execute()
+            
+            if walkin_result.data:
+                for lead in walkin_result.data:
+                    ps_name = lead.get('ps_assigned')
+                    if ps_name not in ps_summary:
+                        continue
+                    
+                    def is_call_date_empty(call_date):
+                        return not call_date or call_date == '' or call_date is None
+                    
+                    # Same F1-F7 logic for walkin data using call_date fields
+                    if (is_call_date_empty(lead.get('first_call_date')) and
+                        is_call_date_empty(lead.get('second_call_date')) and
+                        is_call_date_empty(lead.get('third_call_date')) and
+                        is_call_date_empty(lead.get('fourth_call_date')) and
+                        is_call_date_empty(lead.get('fifth_call_date')) and
+                        is_call_date_empty(lead.get('sixth_call_date')) and
+                        is_call_date_empty(lead.get('seventh_call_date'))):
+                        ps_summary[ps_name]['F1']['walkin'] += 1
+                        ps_summary[ps_name]['F1']['total'] += 1
+                    
+                    elif (not is_call_date_empty(lead.get('first_call_date')) and
+                          is_call_date_empty(lead.get('second_call_date')) and
+                          is_call_date_empty(lead.get('third_call_date')) and
+                          is_call_date_empty(lead.get('fourth_call_date')) and
+                          is_call_date_empty(lead.get('fifth_call_date')) and
+                          is_call_date_empty(lead.get('sixth_call_date')) and
+                          is_call_date_empty(lead.get('seventh_call_date'))):
+                        ps_summary[ps_name]['F2']['walkin'] += 1
+                        ps_summary[ps_name]['F2']['total'] += 1
+                    
+                    # Continue for F3-F7...
+                    elif (not is_call_date_empty(lead.get('first_call_date')) and
+                          not is_call_date_empty(lead.get('second_call_date')) and
+                          is_call_date_empty(lead.get('third_call_date')) and
+                          is_call_date_empty(lead.get('fourth_call_date')) and
+                          is_call_date_empty(lead.get('fifth_call_date')) and
+                          is_call_date_empty(lead.get('sixth_call_date')) and
+                          is_call_date_empty(lead.get('seventh_call_date'))):
+                        ps_summary[ps_name]['F3']['walkin'] += 1
+                        ps_summary[ps_name]['F3']['total'] += 1
+                    
+                    elif (not is_call_date_empty(lead.get('first_call_date')) and
+                          not is_call_date_empty(lead.get('second_call_date')) and
+                          not is_call_date_empty(lead.get('third_call_date')) and
+                          is_call_date_empty(lead.get('fourth_call_date')) and
+                          is_call_date_empty(lead.get('fifth_call_date')) and
+                          is_call_date_empty(lead.get('sixth_call_date')) and
+                          is_call_date_empty(lead.get('seventh_call_date'))):
+                        ps_summary[ps_name]['F4']['walkin'] += 1
+                        ps_summary[ps_name]['F4']['total'] += 1
+                    
+                    elif (not is_call_date_empty(lead.get('first_call_date')) and
+                          not is_call_date_empty(lead.get('second_call_date')) and
+                          not is_call_date_empty(lead.get('third_call_date')) and
+                          not is_call_date_empty(lead.get('fourth_call_date')) and
+                          is_call_date_empty(lead.get('fifth_call_date')) and
+                          is_call_date_empty(lead.get('sixth_call_date')) and
+                          is_call_date_empty(lead.get('seventh_call_date'))):
+                        ps_summary[ps_name]['F5']['walkin'] += 1
+                        ps_summary[ps_name]['F5']['total'] += 1
+                    
+                    elif (not is_call_date_empty(lead.get('first_call_date')) and
+                          not is_call_date_empty(lead.get('second_call_date')) and
+                          not is_call_date_empty(lead.get('third_call_date')) and
+                          not is_call_date_empty(lead.get('fourth_call_date')) and
+                          not is_call_date_empty(lead.get('fifth_call_date')) and
+                          is_call_date_empty(lead.get('sixth_call_date')) and
+                          is_call_date_empty(lead.get('seventh_call_date'))):
+                        ps_summary[ps_name]['F6']['walkin'] += 1
+                        ps_summary[ps_name]['F6']['total'] += 1
+                    
+                    elif (not is_call_date_empty(lead.get('first_call_date')) and
+                          not is_call_date_empty(lead.get('second_call_date')) and
+                          not is_call_date_empty(lead.get('third_call_date')) and
+                          not is_call_date_empty(lead.get('fourth_call_date')) and
+                          not is_call_date_empty(lead.get('fifth_call_date')) and
+                          not is_call_date_empty(lead.get('sixth_call_date')) and
+                          is_call_date_empty(lead.get('seventh_call_date'))):
+                        ps_summary[ps_name]['F7']['walkin'] += 1
+                        ps_summary[ps_name]['F7']['total'] += 1
+        except Exception as e:
+            print(f"Error processing walkin_table: {e}")
+        
+        # Format the response data
+        formatted_summary = []
+        for ps_name, data in ps_summary.items():
+            formatted_summary.append(data)
+        
+        # Sort by PS name
+        formatted_summary.sort(key=lambda x: x['ps_name'])
+        
+        return jsonify({
+            'success': True,
+            'data': formatted_summary
+        })
+        
+    except Exception as e:
+        print(f"Error in api_ps_followup_summary_for_analytics: {str(e)}")
+        return jsonify({'success': False, 'message': f'Error fetching PS follow-up summary: {str(e)}'})
+
+@app.route('/api/analytics_ps_followup_summary')
+def api_analytics_ps_followup_summary():
+    """API to get PS Follow-up Summary for analytics dashboard with data from all branches"""
+    try:
+        # Get filter parameters from request
+        from_date = request.args.get('from_date')
+        to_date = request.args.get('to_date')
+        mode = request.args.get('mode', 'all_pending')
+        branch_filter = request.args.get('branch_filter')
+        
+        # Debug logging
+        print(f"DEBUG: Analytics PS Follow-up Summary API called with - from_date: {from_date}, to_date: {to_date}, mode: {mode}, branch_filter: {branch_filter}")
+        
+        # Get all PS users (across all branches or filtered by branch)
+        if branch_filter:
+            ps_users_result = supabase.table('ps_users').select('name, branch').eq('branch', branch_filter).eq('is_active', True).execute()
+        else:
+            ps_users_result = supabase.table('ps_users').select('name, branch').eq('is_active', True).execute()
+        
+        ps_users = ps_users_result.data or []
+        ps_summary = {}
+        
+        # Initialize summary for each PS with sub-columns and branch info
+        for ps_user in ps_users:
+            ps_name = ps_user['name']
+            branch = ps_user['branch']
+            ps_summary[ps_name] = {
+                'ps_name': ps_name,
+                'branch': branch,
+                'F1': {'ps_followup': 0, 'walkin': 0, 'total': 0},
+                'F2': {'ps_followup': 0, 'walkin': 0, 'total': 0},
+                'F3': {'ps_followup': 0, 'walkin': 0, 'total': 0},
+                'F4': {'ps_followup': 0, 'walkin': 0, 'total': 0},
+                'F5': {'ps_followup': 0, 'walkin': 0, 'total': 0},
+                'F6': {'ps_followup': 0, 'walkin': 0, 'total': 0},
+                'F7': {'ps_followup': 0, 'walkin': 0, 'total': 0}
+            }
+        
+        # Query ps_followup_master table - only final_status = 'Pending' with date filtering
+        try:
+            query = supabase.table('ps_followup_master').select(
+                'lead_uid, ps_name, ps_branch, final_status, ps_assigned_at, follow_up_date, '
+                'first_call_date, second_call_date, third_call_date, fourth_call_date, '
+                'fifth_call_date, sixth_call_date, seventh_call_date'
+            ).eq('final_status', 'Pending')
+            
+            # Apply branch filter if specified
+            if branch_filter:
+                query = query.eq('ps_branch', branch_filter)
+            
+            # Apply mode-specific filtering
+            if mode == 'today_missed':
+                # For today's and missed followup: follow_up_date <= today
+                from datetime import datetime
+                today = datetime.now().strftime('%Y-%m-%d')
+                query = query.lte('follow_up_date', f'{today} 23:59:59')
+            
+            # Apply date range filtering on ps_assigned_at
+            if from_date and to_date:
+                query = query.gte('ps_assigned_at', f'{from_date} 00:00:00').lte('ps_assigned_at', f'{to_date} 23:59:59')
+            elif from_date:
+                query = query.gte('ps_assigned_at', f'{from_date} 00:00:00')
+            elif to_date:
+                query = query.lte('ps_assigned_at', f'{to_date} 23:59:59')
+            
+            ps_followup_result = query.execute()
+            ps_followup_data = ps_followup_result.data or []
+            
+            print(f"DEBUG: Found {len(ps_followup_data)} PS followup records")
+        except Exception as e:
+            print(f"ERROR: Failed to query ps_followup_master: {e}")
+            ps_followup_data = []
+        
+        # Query walkin_master table - only final_status = 'Pending' with date filtering
+        try:
+            query = supabase.table('walkin_master').select(
+                'walkin_id, ps_assigned, ps_branch, final_status, ps_assigned_at, followup_date, '
+                'first_followup_date, second_followup_date, third_followup_date, '
+                'fourth_followup_date, fifth_followup_date, sixth_followup_date, seventh_followup_date'
+            ).eq('final_status', 'Pending').not_.is_('ps_assigned', 'null')
+            
+            # Apply branch filter if specified
+            if branch_filter:
+                query = query.eq('ps_branch', branch_filter)
+            
+            # Apply mode-specific filtering
+            if mode == 'today_missed':
+                # For today's and missed followup: followup_date <= today
+                from datetime import datetime
+                today = datetime.now().strftime('%Y-%m-%d')
+                query = query.lte('followup_date', f'{today} 23:59:59')
+            
+            # Apply date range filtering on ps_assigned_at
+            if from_date and to_date:
+                query = query.gte('ps_assigned_at', f'{from_date} 00:00:00').lte('ps_assigned_at', f'{to_date} 23:59:59')
+            elif from_date:
+                query = query.gte('ps_assigned_at', f'{from_date} 00:00:00')
+            elif to_date:
+                query = query.lte('ps_assigned_at', f'{to_date} 23:59:59')
+            
+            walkin_result = query.execute()
+            walkin_data = walkin_result.data or []
+            
+            print(f"DEBUG: Found {len(walkin_data)} Walkin records with PS assigned")
+        except Exception as e:
+            print(f"ERROR: Failed to query walkin_master: {e}")
+            walkin_data = []
+        
+        # Process PS followup data
+        for record in ps_followup_data:
+            ps_name = record.get('ps_name')
+            if ps_name not in ps_summary:
+                continue
+            
+            # Determine follow-up level based on call dates
+            call_dates = [
+                record.get('first_call_date'),
+                record.get('second_call_date'),
+                record.get('third_call_date'),
+                record.get('fourth_call_date'),
+                record.get('fifth_call_date'),
+                record.get('sixth_call_date'),
+                record.get('seventh_call_date')
+            ]
+            
+            # Count non-null call dates to determine current follow-up level
+            completed_calls = len([date for date in call_dates if date is not None and date.strip() != ''])
+            
+            # Next follow-up level (F1 to F7)
+            next_followup_level = f'F{completed_calls + 1}'
+            
+            if next_followup_level in ps_summary[ps_name]:
+                ps_summary[ps_name][next_followup_level]['ps_followup'] += 1
+                ps_summary[ps_name][next_followup_level]['total'] += 1
+        
+        # Process Walkin data
+        for record in walkin_data:
+            ps_name = record.get('ps_assigned')
+            if ps_name not in ps_summary:
+                continue
+            
+            # Determine follow-up level based on followup dates
+            followup_dates = [
+                record.get('first_followup_date'),
+                record.get('second_followup_date'),
+                record.get('third_followup_date'),
+                record.get('fourth_followup_date'),
+                record.get('fifth_followup_date'),
+                record.get('sixth_followup_date'),
+                record.get('seventh_followup_date')
+            ]
+            
+            # Count non-null followup dates to determine current follow-up level
+            completed_followups = len([date for date in followup_dates if date is not None and date.strip() != ''])
+            
+            # Next follow-up level (F1 to F7)
+            next_followup_level = f'F{completed_followups + 1}'
+            
+            if next_followup_level in ps_summary[ps_name]:
+                ps_summary[ps_name][next_followup_level]['walkin'] += 1
+                ps_summary[ps_name][next_followup_level]['total'] += 1
+        
+        # Format the response data
+        formatted_summary = []
+        for ps_name, data in ps_summary.items():
+            # Only include PS with at least some follow-up data
+            has_data = any(data[f'F{i}']['total'] > 0 for i in range(1, 8))
+            if has_data or not branch_filter:  # Show all PS when no branch filter, only PS with data when filtered
+                formatted_summary.append(data)
+        
+        # Sort by branch and then by PS name
+        formatted_summary.sort(key=lambda x: (x['branch'], x['ps_name']))
+        
+        print(f"DEBUG: Returning {len(formatted_summary)} PS entries")
+        return jsonify({
+            'success': True,
+            'data': formatted_summary
+        })
+        
+    except Exception as e:
+        print(f"Error in api_analytics_ps_followup_summary: {str(e)}")
+        return jsonify({'success': False, 'message': f'Error fetching PS follow-up summary: {str(e)}'})
+
 @app.route('/api/ps_followup_leads')
 def api_ps_followup_leads():
     """API to get lead details for PS Follow-up Summary table clicks"""
@@ -16583,14 +17041,18 @@ def api_ps_followup_leads():
         level = request.args.get('level')  # F1, F2, F3, etc.
         source = request.args.get('source')  # 'cre' or 'walkin'
         mode = request.args.get('mode', 'all_pending')  # Default to 'all_pending'
-        branch = session.get('branch_head_branch')
+        # Support both branch head dashboard (session) and analytics (request parameter)
+        branch = request.args.get('branch') or session.get('branch_head_branch')
         
         if not all([ps_name, level, source, branch]):
-            return jsonify({'success': False, 'message': 'Missing required parameters'})
+            return jsonify({'success': False, 'message': f'Missing required parameters - ps_name: {ps_name}, level: {level}, source: {source}, branch: {branch}'})
         
         # Get date filter parameters from request to match the summary filtering
         from_date = request.args.get('from_date')
         to_date = request.args.get('to_date')
+        
+        # Debug logging
+        print(f"DEBUG: PS Follow-up Leads API - ps_name: {ps_name}, level: {level}, source: {source}, branch: {branch}, mode: {mode}, from_date: {from_date}, to_date: {to_date}")
         
         leads = []
         
@@ -16942,6 +17404,8 @@ def api_ps_followup_leads():
             except Exception as e:
                 print(f"Warning: Error fetching walkin_table data: {str(e)}")
         
+        print(f"DEBUG: PS Follow-up Leads API returning {len(leads)} leads")
+        
         return jsonify({
             'success': True,
             'leads': leads
@@ -16950,6 +17414,225 @@ def api_ps_followup_leads():
     except Exception as e:
         print(f"Error in api_ps_followup_leads: {str(e)}")
         return jsonify({'success': False, 'message': f'Error fetching lead details: {str(e)}'})
+
+@app.route('/api/ps_followup_leads_for_analytics')
+def api_ps_followup_leads_for_analytics():
+    """API to get lead details for PS Follow-up Summary table clicks in analytics dashboard"""
+    try:
+        # Get parameters
+        ps_name = request.args.get('ps_name')
+        level = request.args.get('level')  # F1, F2, F3, etc.
+        source = request.args.get('source')  # 'cre' or 'walkin'
+        mode = request.args.get('mode', 'all_pending')  
+        branch = request.args.get('branch')
+        
+        if not all([ps_name, level, source, branch]):
+            return jsonify({'success': False, 'message': 'Missing required parameters'})
+        
+        # Get date filter parameters from request to match the summary filtering
+        from_date = request.args.get('from_date')
+        to_date = request.args.get('to_date')
+        
+        # Debug logging
+        print(f"DEBUG: Analytics PS Follow-up Leads API called with - ps_name: {ps_name}, level: {level}, source: {source}, branch: {branch}, mode: {mode}")
+        
+        leads = []
+        
+        # Extract the follow-up number from level (F1 -> 1, F2 -> 2, etc.)
+        try:
+            followup_num = int(level[1:])  # Remove 'F' and convert to int
+        except:
+            return jsonify({'success': False, 'message': 'Invalid level format'})
+        
+        if source == 'cre':
+            # Query ps_followup_master table - optimized for token usage
+            query = supabase.table('ps_followup_master').select(
+                'lead_uid, customer_name, customer_mobile_number, source, lead_category, '
+                'model_interested, ps_assigned_at, follow_up_date, final_status, '
+                'first_call_date, second_call_date, third_call_date, fourth_call_date, '
+                'fifth_call_date, sixth_call_date, seventh_call_date'
+            ).eq('ps_branch', branch).eq('ps_name', ps_name).eq('final_status', 'Pending')
+            
+            # Apply mode-specific filtering
+            if mode == 'today_missed':
+                from datetime import datetime
+                today = datetime.now().strftime('%Y-%m-%d')
+                query = query.lte('follow_up_date', f'{today} 23:59:59')
+            else:
+                # Apply date filtering if dates are provided
+                if from_date:
+                    query = query.gte('ps_assigned_at', f'{from_date} 00:00:00')
+                if to_date:
+                    query = query.lte('ps_assigned_at', f'{to_date} 23:59:59')
+            
+            result = query.execute()
+            
+            if result.data:
+                for lead in result.data:
+                    # Helper function to check if a call date is empty/null
+                    def is_call_date_empty(call_date):
+                        return not call_date or call_date == '' or call_date is None
+                    
+                    # Determine if this lead belongs to the requested follow-up level
+                    call_dates = [
+                        lead.get('first_call_date'),
+                        lead.get('second_call_date'),
+                        lead.get('third_call_date'),
+                        lead.get('fourth_call_date'),
+                        lead.get('fifth_call_date'),
+                        lead.get('sixth_call_date'),
+                        lead.get('seventh_call_date')
+                    ]
+                    
+                    # Check if this lead matches the specific follow-up level
+                    matches_level = False
+                    
+                    if followup_num == 1:
+                        matches_level = all(is_call_date_empty(date) for date in call_dates)
+                    else:
+                        # For F2-F7, check if exactly (followup_num - 1) calls are completed
+                        completed_calls = sum(1 for date in call_dates[:followup_num-1] if not is_call_date_empty(date))
+                        remaining_calls_empty = all(is_call_date_empty(date) for date in call_dates[followup_num-1:])
+                        matches_level = (completed_calls == followup_num - 1) and remaining_calls_empty
+                    
+                    if matches_level:
+                        leads.append(lead)
+        
+        elif source == 'walkin':
+            # Query walkin_table - optimized for token usage
+            query = supabase.table('walkin_table').select(
+                'uid, customer_name, customer_mobile, lead_category, '
+                'interested_model, created_at, next_followup_date, status, '
+                'first_call_date, second_call_date, third_call_date, '
+                'fourth_call_date, fifth_call_date, sixth_call_date, seventh_call_date'
+            ).eq('branch', branch).eq('ps_assigned', ps_name).eq('status', 'Pending')
+            
+            # Apply mode-specific filtering
+            if mode == 'today_missed':
+                from datetime import datetime
+                today = datetime.now().strftime('%Y-%m-%d')
+                query = query.lte('next_followup_date', f'{today} 23:59:59')
+            else:
+                if from_date:
+                    query = query.gte('created_at', f'{from_date} 00:00:00')
+                if to_date:
+                    query = query.lte('created_at', f'{to_date} 23:59:59')
+            
+            result = query.execute()
+            
+            if result.data:
+                for lead in result.data:
+                    def is_call_date_empty(call_date):
+                        return not call_date or call_date == '' or call_date is None
+                    
+                    # Same logic for walkin call dates (using call_date fields like summary API)
+                    call_dates = [
+                        lead.get('first_call_date'),
+                        lead.get('second_call_date'),
+                        lead.get('third_call_date'),
+                        lead.get('fourth_call_date'),
+                        lead.get('fifth_call_date'),
+                        lead.get('sixth_call_date'),
+                        lead.get('seventh_call_date')
+                    ]
+                    
+                    matches_level = False
+                    
+                    if followup_num == 1:
+                        matches_level = all(is_call_date_empty(date) for date in call_dates)
+                    else:
+                        completed_calls = sum(1 for date in call_dates[:followup_num-1] if not is_call_date_empty(date))
+                        remaining_calls_empty = all(is_call_date_empty(date) for date in call_dates[followup_num-1:])
+                        matches_level = (completed_calls == followup_num - 1) and remaining_calls_empty
+                    
+                    if matches_level:
+                        # Rename uid to walkin_id for consistency with frontend
+                        lead['walkin_id'] = lead.get('uid')
+                        leads.append(lead)
+        
+        print(f"DEBUG: Found {len(leads)} leads for {ps_name} - {level} {source}")
+        
+        return jsonify({
+            'success': True,
+            'leads': leads,
+            'count': len(leads)
+        })
+        
+    except Exception as e:
+        print(f"Error in api_ps_followup_leads_for_analytics: {str(e)}")
+        return jsonify({'success': False, 'message': f'Error fetching lead details: {str(e)}'})
+
+@app.route('/api/ps_lead_history')
+@require_admin
+def api_ps_lead_history():
+    """API to get PS follow-up call history for CRE leads - optimized for token usage"""
+    try:
+        lead_uid = request.args.get('lead_uid')
+        if not lead_uid:
+            return jsonify({'success': False, 'message': 'Lead UID is required'})
+        
+        # Fetch minimal call history data to reduce token usage
+        history_result = supabase.table('ps_followup_master').select(
+            'id, call_date, call_response, next_followup_date, remarks'
+        ).eq('lead_uid', lead_uid).order('call_date', desc=True).limit(10).execute()
+        
+        history_data = history_result.data if history_result.data else []
+        
+        # Format history for display
+        formatted_history = []
+        for entry in history_data:
+            formatted_history.append({
+                'call_date': entry.get('call_date'),
+                'response': entry.get('call_response', 'No response'),
+                'next_date': entry.get('next_followup_date'),
+                'remarks': entry.get('remarks', 'No remarks')[:100] if entry.get('remarks') else 'No remarks'  # Truncate for token savings
+            })
+        
+        return jsonify({
+            'success': True,
+            'history': formatted_history,
+            'count': len(formatted_history)
+        })
+        
+    except Exception as e:
+        print(f"Error in api_ps_lead_history: {str(e)}")
+        return jsonify({'success': False, 'message': f'Error fetching lead history: {str(e)}'})
+
+@app.route('/api/walkin_lead_history')
+@require_admin
+def api_walkin_lead_history():
+    """API to get PS follow-up call history for walk-in leads - optimized for token usage"""
+    try:
+        walkin_id = request.args.get('walkin_id')
+        if not walkin_id:
+            return jsonify({'success': False, 'message': 'Walk-in ID is required'})
+        
+        # Fetch minimal call history data to reduce token usage
+        history_result = supabase.table('ps_followup_master').select(
+            'id, call_date, call_response, next_followup_date, remarks'
+        ).eq('walkin_id', walkin_id).order('call_date', desc=True).limit(10).execute()
+        
+        history_data = history_result.data if history_result.data else []
+        
+        # Format history for display
+        formatted_history = []
+        for entry in history_data:
+            formatted_history.append({
+                'call_date': entry.get('call_date'),
+                'response': entry.get('call_response', 'No response'),
+                'next_date': entry.get('next_followup_date'),
+                'remarks': entry.get('remarks', 'No remarks')[:100] if entry.get('remarks') else 'No remarks'  # Truncate for token savings
+            })
+        
+        return jsonify({
+            'success': True,
+            'history': formatted_history,
+            'count': len(formatted_history)
+        })
+        
+    except Exception as e:
+        print(f"Error in api_walkin_lead_history: {str(e)}")
+        return jsonify({'success': False, 'message': f'Error fetching walk-in lead history: {str(e)}'})
 
 @app.route('/api/cre_pending_leads')
 @require_admin
