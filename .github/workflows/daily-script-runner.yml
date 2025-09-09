@@ -1,28 +1,32 @@
 name: Daily Script Runner
 on:
   schedule:
-    - cron: '*/5 * * * *'  # Every 5 minutes - For Meta script only
+    - cron: '*/5 * * * *'  # Every 5 minutes - For all scripts except Salesforce
   workflow_dispatch:
 
 jobs:
-  run-meta-script:
+  run-scripts:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
+      
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      
       - name: Install dependencies
         run: pip install -r requirements.txt
-      # - name: Run knowlaritytosupabase.py (COMMENTED OUT)
-      #   env:
-      #     SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      #     SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-      #     KNOW_SR_KEY: ${{ secrets.KNOW_SR_KEY }}
-      #     KNOW_X_API_KEY: ${{ secrets.KNOW_X_API_KEY }}
-      #   run: python knowlaritytosupabase.py
+      
+      - name: Run knowlaritytosupabase.py
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          KNOW_SR_KEY: ${{ secrets.KNOW_SR_KEY }}
+          KNOW_X_API_KEY: ${{ secrets.KNOW_X_API_KEY }}
+        run: python knowlaritytosupabase.py
+      
       - name: Run metatosupabase.py
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -30,7 +34,9 @@ jobs:
           META_PAGE_ACCESS_TOKEN: ${{ secrets.META_PAGE_ACCESS_TOKEN }}
           PAGE_ID: ${{ secrets.PAGE_ID }}
         run: python metatosupabase.py
-  # run-salesforce-script: (ENTIRE JOB COMMENTED OUT)
+
+  # Salesforce job remains commented out
+  # run-salesforce-script:
   #   runs-on: ubuntu-latest
   #   steps:
   #     - name: Checkout repo
