@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Set, Optional, Tuple
 import pandas as pd
+import random
 
 # Environment setup
 load_dotenv()
@@ -15,6 +16,46 @@ if not all([PAGE_TOKEN, PAGE_ID, SUPA_URL, SUPA_KEY]):
 supabase = create_client(SUPA_URL, SUPA_KEY)
 _sequence_lock = threading.Lock()
 _sequence_cache = None
+
+def validate_token_on_startup():
+    """Validate token before starting the sync process"""
+    print("🔐 Validating Meta API token...")
+    
+    try:
+        # Test basic token validity
+        response = requests.get(
+            f"https://graph.facebook.com/v20.0/me",
+            params={"access_token": PAGE_TOKEN},
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            user_info = response.json()
+            print(f"✅ Token valid for: {user_info.get('name', 'Unknown')}")
+            
+            # Test page access
+            page_response = requests.get(
+                f"https://graph.facebook.com/v20.0/{PAGE_ID}",
+                params={"access_token": PAGE_TOKEN, "fields": "name"},
+                timeout=10
+            )
+            
+            if page_response.status_code == 200:
+                page_info = page_response.json()
+                print(f"✅ Page access confirmed: {page_info.get('name', 'Unknown')}")
+                return True
+            else:
+                print(f"❌ Cannot access page {PAGE_ID}: {page_response.json()}")
+                return False
+                
+        else:
+            error_info = response.json()
+            print(f"❌ Token validation failed: {error_info}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Token validation error: {e}")
+        return False
 
 def normalize_phone_number(phone: str) -> str:
     """Normalize phone to 10-digit format"""
@@ -48,21 +89,21 @@ def get_next_sequence_number(supabase):
         print(f"❌ Error getting sequence number: {e}")
         return 1
 
-def check_existing_leads(supabase, df_leads):
-    """Check for existing leads by phone number in both lead_master and duplicate_leads tables"""
+def check_existing_leads_bulk(supabase, df_leads):
+    """Optimized bulk check for existing leads"""
     try:
         phone_list = df_leads['customer_mobile_number'].unique().tolist()
         
-        # Check lead_master table
-        existing_master = supabase.table("lead_master").select("*").in_("customer_mobile_number", phone_list).execute()
+        # Single query for lead_master - get only essential fields
+        existing_master = supabase.table("lead_master").select("customer_mobile_number,source,sub_source,uid,id,date,customer_name").in_("customer_mobile_number", phone_list).execute()
         master_records = {row['customer_mobile_number']: row for row in existing_master.data}
         
-        # Check duplicate_leads table
-        existing_duplicate = supabase.table("duplicate_leads").select("*").in_("customer_mobile_number", phone_list).execute()
+        # Single query for duplicate_leads - get only essential fields
+        duplicate_fields = "customer_mobile_number,uid,id,duplicate_count," + ",".join([f"source{i},sub_source{i}" for i in range(1, 11)])
+        existing_duplicate = supabase.table("duplicate_leads").select(duplicate_fields).in_("customer_mobile_number", phone_list).execute()
         duplicate_records = {row['customer_mobile_number']: row for row in existing_duplicate.data}
         
         print(f"📞 Found {len(master_records)} existing in lead_master and {len(duplicate_records)} in duplicate_leads")
-        
         return master_records, duplicate_records
         
     except Exception as e:
@@ -76,63 +117,32 @@ def find_next_available_source_slot(duplicate_record):
             return i
     return None  # All slots are full
 
-def add_source_to_duplicate_record(supabase, duplicate_record, new_source, new_sub_source, new_date):
-    """Add new source to existing duplicate_leads record"""
-    try:
-        slot = find_next_available_source_slot(duplicate_record)
-        if slot is None:
-            print(f"⚠️ All source slots full for phone: {duplicate_record['customer_mobile_number']}")
-            return False
-        
-        # Update the record with new source in the available slot
-        update_data = {
-            f'source{slot}': new_source,
-            f'sub_source{slot}': new_sub_source,
-            f'date{slot}': new_date,
-            'duplicate_count': duplicate_record['duplicate_count'] + 1,
-            'updated_at': datetime.now().isoformat()
-        }
-        
-        supabase.table("duplicate_leads").update(update_data).eq('id', duplicate_record['id']).execute()
-        print(f"✅ Added source{slot} to duplicate record: {duplicate_record['uid']} | Phone: {duplicate_record['customer_mobile_number']} | New Source: {new_source}")
-        return True
-        
-    except Exception as e:
-        print(f"❌ Failed to add source to duplicate record: {e}")
-        return False
+def process_duplicates_batch(supabase, duplicate_updates):
+    """Process multiple duplicate updates in batch"""
+    if not duplicate_updates:
+        return 0
+    
+    success_count = 0
+    for update_data in duplicate_updates:
+        try:
+            supabase.table("duplicate_leads").update(update_data['data']).eq('id', update_data['id']).execute()
+            success_count += 1
+        except Exception as e:
+            print(f"❌ Failed batch duplicate update: {e}")
+    
+    return success_count
 
-def create_duplicate_record(supabase, original_record, new_source, new_sub_source, new_date):
-    """Create new duplicate_leads record when a lead becomes duplicate"""
+def create_duplicate_records_batch(supabase, duplicate_records):
+    """Create multiple duplicate records in batch"""
+    if not duplicate_records:
+        return 0
+    
     try:
-        duplicate_data = {
-            'uid': original_record['uid'],
-            'customer_mobile_number': original_record['customer_mobile_number'],
-            'customer_name': original_record['customer_name'],
-            'original_lead_id': original_record['id'],
-            'source1': original_record['source'],
-            'sub_source1': original_record['sub_source'],
-            'date1': original_record['date'],
-            'source2': new_source,
-            'sub_source2': new_sub_source,
-            'date2': new_date,
-            'duplicate_count': 2,
-            'created_at': datetime.now().isoformat(),
-            'updated_at': datetime.now().isoformat()
-        }
-        
-        # Initialize remaining slots as None
-        for i in range(3, 11):
-            duplicate_data[f'source{i}'] = None
-            duplicate_data[f'sub_source{i}'] = None
-            duplicate_data[f'date{i}'] = None
-        
-        supabase.table("duplicate_leads").insert(duplicate_data).execute()
-        print(f"✅ Created duplicate record: {original_record['uid']} | Phone: {original_record['customer_mobile_number']} | Sources: {original_record['source']} + {new_source}")
-        return True
-        
+        supabase.table("duplicate_leads").insert(duplicate_records).execute()
+        return len(duplicate_records)
     except Exception as e:
-        print(f"❌ Failed to create duplicate record: {e}")
-        return False
+        print(f"❌ Failed batch duplicate creation: {e}")
+        return 0
 
 def is_duplicate_source(existing_record, new_source, new_sub_source):
     """Check if the new source/sub_source combination already exists in the record"""
@@ -149,47 +159,69 @@ def is_duplicate_source(existing_record, new_source, new_sub_source):
     
     return False
 
-def insert_lead_safely(supabase, lead_data):
-    """Insert lead with duplicate check at database level"""
+def insert_leads_batch(supabase, leads_batch):
+    """Insert multiple leads in batch with error handling"""
+    if not leads_batch:
+        return 0, 0
+    
     try:
-        # First, check if this exact combination already exists
-        existing = supabase.table("lead_master").select("id").eq(
-            "customer_mobile_number", lead_data['customer_mobile_number']
-        ).eq("source", lead_data['source']).eq("sub_source", lead_data['sub_source']).execute()
-        
-        if existing.data:
-            print(f"⚠️ Database-level duplicate detected: {lead_data['customer_mobile_number']} | {lead_data['source']} | {lead_data['sub_source']}")
-            return False
-        
-        # Insert if no duplicate found
-        supabase.table("lead_master").insert(lead_data).execute()
-        return True
-        
+        # Try batch insert first
+        supabase.table("lead_master").insert(leads_batch).execute()
+        return len(leads_batch), 0
     except Exception as e:
-        if "duplicate key" in str(e).lower() or "unique constraint" in str(e).lower():
-            print(f"🛡️ Database constraint prevented duplicate: {lead_data['customer_mobile_number']}")
-            return False
-        else:
-            print(f"❌ Database error: {e}")
-            return False
+        # If batch fails, try individual inserts
+        print(f"⚠️ Batch insert failed, trying individual inserts: {e}")
+        success_count = 0
+        failed_count = 0
+        
+        for lead in leads_batch:
+            try:
+                # Quick check for exact duplicate
+                existing = supabase.table("lead_master").select("id").eq(
+                    "customer_mobile_number", lead['customer_mobile_number']
+                ).eq("source", lead['source']).eq("sub_source", lead['sub_source']).limit(1).execute()
+                
+                if not existing.data:
+                    supabase.table("lead_master").insert(lead).execute()
+                    success_count += 1
+                else:
+                    failed_count += 1
+            except Exception as individual_e:
+                failed_count += 1
+                
+        return success_count, failed_count
 
 class MetaAPIOptimized:
-    def __init__(self, page_token: str, max_workers: int = 5):
+    def __init__(self, page_token: str, max_workers: int = 5):  # Increased workers
         self.page_token = page_token
         self.max_workers = max_workers
         self.session = requests.Session()
         self._campaign_cache = {}
-        self.api_version = "v18.0"
+        self.api_version = "v20.0"
+        
+        # Optimized session configuration
+        self.session.headers.update({
+            'User-Agent': 'CRM-Lead-Sync/1.0',
+            'Connection': 'keep-alive'
+        })
     
-    def _make_request(self, url: str, params: dict = None) -> dict:
-        """Make API request with error handling"""
-        try:
-            response = self.session.get(url, params=params, timeout=15)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            print(f"⚠️ API error: {e}")
-            return {}
+    def _make_request_fast(self, url: str, params: dict = None, max_retries: int = 2) -> dict:
+        """Faster API request with reduced retries for speed"""
+        for attempt in range(max_retries):
+            try:
+                response = self.session.get(url, params=params, timeout=20)  # Reduced timeout
+                response.raise_for_status()
+                return response.json()
+            except requests.exceptions.RequestException as e:
+                if attempt == max_retries - 1:
+                    print(f"❌ Request failed: {url}")
+                    return {}
+                
+                # Quick retry with minimal delay
+                wait_time = 1 + (attempt * 0.5)
+                time.sleep(wait_time)
+        
+        return {}
     
     def get_campaign_name_safe(self, form_id: str, form_name: str) -> str:
         """Get campaign name safely from form name"""
@@ -205,17 +237,22 @@ class MetaAPIOptimized:
         self._campaign_cache[form_id] = cleaned or "Unknown Campaign"
         return self._campaign_cache[form_id]
     
-    def get_paginated_optimized(self, endpoint: str, **params) -> List[dict]:
-        """Get paginated data with early termination"""
+    def get_paginated_fast(self, endpoint: str, **params) -> List[dict]:
+        """Faster paginated data retrieval with optimized limits"""
         params["access_token"] = self.page_token
-        params["limit"] = 100
+        params["limit"] = 100  # Increased limit for faster retrieval
         
         all_data = []
         next_url = f"https://graph.facebook.com/{self.api_version}/{endpoint}"
         consecutive_old_pages = 0
+        page_count = 0
+        max_pages = 10  # Reduced max pages for faster processing
         
-        while next_url and consecutive_old_pages < 3:
-            response = self._make_request(next_url, params if not next_url.startswith("https://") or not all_data else None)
+        while next_url and consecutive_old_pages < 2 and page_count < max_pages:
+            response = self._make_request_fast(
+                next_url, 
+                params if not next_url.startswith("https://") or not all_data else None
+            )
             
             if not response or "data" not in response:
                 break
@@ -233,13 +270,17 @@ class MetaAPIOptimized:
                 else:
                     consecutive_old_pages = 0
                     
-                if consecutive_old_pages >= 3:
+                if consecutive_old_pages >= 2:  # Reduced threshold
                     break
             else:
                 all_data.extend(page_data)
             
             next_url = response.get("paging", {}).get("next")
+            page_count += 1
+            
+            # Minimal pause
             if next_url:
+                time.sleep(0.1)  # Reduced delay
                 params = {}
             else:
                 break
@@ -251,7 +292,7 @@ class MetaAPIOptimized:
         if not created_time_str:
             return False
         
-        formats = ["%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S.%f%z", "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%d %H:%M:%S"]
+        formats = ["%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%SZ"]
         
         for fmt in formats:
             try:
@@ -267,13 +308,17 @@ class MetaAPIOptimized:
                 continue
         return False
     
-    def get_forms_with_campaign_info_safe(self) -> List[dict]:
-        """Get forms with campaign info"""
+    def get_forms_fast(self) -> List[dict]:
+        """Get forms quickly"""
         if not hasattr(self, '_enhanced_forms_cache'):
-            base_forms = self._make_request(
+            print("🔍 Fetching forms...")
+            base_forms_response = self._make_request_fast(
                 f"https://graph.facebook.com/{self.api_version}/{PAGE_ID}/leadgen_forms",
-                {"access_token": self.page_token, "fields": "id,name,status"}
-            ).get("data", [])
+                {"access_token": self.page_token, "fields": "id,name,status", "limit": 100}
+            )
+            
+            base_forms = base_forms_response.get("data", [])
+            print(f"📋 Found {len(base_forms)} forms")
             
             enhanced_forms = []
             for form in base_forms:
@@ -286,24 +331,37 @@ class MetaAPIOptimized:
             self._enhanced_forms_cache = enhanced_forms
         return self._enhanced_forms_cache
     
-    def get_form_leads_parallel(self, form_ids: List[str]) -> Dict[str, List[dict]]:
-        """Fetch leads from multiple forms in parallel"""
+    def get_form_leads_parallel_fast(self, form_ids: List[str]) -> Dict[str, List[dict]]:
+        """Fast parallel lead fetching"""
         results = {}
         
-        def fetch_form_leads(form_id: str) -> Tuple[str, List[dict]]:
-            return form_id, self.get_paginated_optimized(f"{form_id}/leads")
+        def fetch_form_leads_fast(form_id: str) -> Tuple[str, List[dict]]:
+            try:
+                leads = self.get_paginated_fast(f"{form_id}/leads")
+                return form_id, leads
+            except Exception as e:
+                print(f"❌ Error for form {form_id}")
+                return form_id, []
         
-        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            future_to_form = {executor.submit(fetch_form_leads, fid): fid for fid in form_ids}
+        # Process all forms in parallel with increased workers
+        batch_size = 8  # Increased batch size
+        total_batches = (len(form_ids) + batch_size - 1) // batch_size
+        
+        for batch_num, i in enumerate(range(0, len(form_ids), batch_size), 1):
+            batch = form_ids[i:i + batch_size]
+            print(f"🔄 Batch {batch_num}/{total_batches} ({len(batch)} forms)")
             
-            for future in as_completed(future_to_form):
-                try:
+            with ThreadPoolExecutor(max_workers=min(self.max_workers, len(batch))) as executor:
+                future_to_form = {executor.submit(fetch_form_leads_fast, fid): fid for fid in batch}
+                
+                for future in as_completed(future_to_form):
                     form_id, leads = future.result()
                     results[form_id] = leads
-                except Exception as e:
-                    form_id = future_to_form[future]
-                    print(f"❌ Error fetching leads for form {form_id}: {e}")
-                    results[form_id] = []
+            
+            # Minimal pause between batches
+            if i + batch_size < len(form_ids):
+                time.sleep(0.5)  # Reduced pause
+        
         return results
 
 meta_api = MetaAPIOptimized(PAGE_TOKEN)
@@ -338,8 +396,8 @@ def map_lead_with_source(raw: dict, campaign_name: str) -> Optional[dict]:
         "date": created, 
         "customer_name": name, 
         "customer_mobile_number": normalized_phone,
-        "source": "META",  # Fixed source
-        "sub_source": "Meta",  # Fixed sub_source
+        "source": "META",
+        "sub_source": "Meta",
         "campaign": campaign_name,
         "cre_name": None, "lead_category": None, "model_interested": None,
         "branch": None, "ps_name": None, "assigned": "No", "lead_status": "Pending",
@@ -350,211 +408,57 @@ def map_lead_with_source(raw: dict, campaign_name: str) -> Optional[dict]:
         "final_status": "Pending", "created_at": now_iso, "updated_at": now_iso
     }
 
-def preview_all_forms_with_details():
-    """Preview ALL forms with complete details - regardless of lead activity"""
-    print(f"\n📝 COMPLETE FORM INVENTORY - ALL FORMS")
-    print("=" * 60)
-    
-    # Get all forms
-    forms = meta_api.get_forms_with_campaign_info_safe()
-    print(f"📊 Total Forms Found: {len(forms)}")
-    print("=" * 60)
-    
-    # Get leads for all forms
-    all_form_leads = meta_api.get_form_leads_parallel([f['id'] for f in forms])
-    
-    forms_with_recent_leads = 0
-    forms_without_recent_leads = 0
-    total_leads_24h = 0
-    
-    for i, form in enumerate(forms, 1):
-        form_id = form['id']
-        form_name = form['name']
-        form_status = form.get('status', 'Unknown')
-        campaign_name = form['campaign_name']
-        leads = all_form_leads.get(form_id, [])
-        
-        print(f"\n{i}. FORM DETAILS:")
-        print(f"   📄 Form Name: {form_name}")
-        print(f"   🆔 Form ID: {form_id}")
-        print(f"   📊 Campaign: {campaign_name}")
-        print(f"   📈 Status: {form_status}")
-        print(f"   🎯 Source: META | Sub-source: Meta")
-        
-        # Analyze leads
-        total_leads = len(leads)
-        recent_leads = 0
-        local_fields = set()
-        
-        for lead in leads:
-            if meta_api._is_within_past_24_hours(lead.get("created_time", "")):
-                recent_leads += 1
-                total_leads_24h += 1
-                for fd in lead.get("field_data", []):
-                    field_name = fd["name"]
-                    local_fields.add(field_name)
-        
-        print(f"   📊 Total Leads (All Time): {total_leads}")
-        print(f"   🕐 Leads (Past 24h): {recent_leads}")
-        
-        if local_fields:
-            print(f"   📝 Field Names: {', '.join(sorted(local_fields))}")
-            forms_with_recent_leads += 1
-        else:
-            if total_leads > 0:
-                print(f"   📝 No recent leads, but form has {total_leads} historical leads")
-            else:
-                print(f"   📝 No leads found (form might be new or inactive)")
-            forms_without_recent_leads += 1
-        
-        print("   " + "-" * 50)
-    
-    # Summary
-    print(f"\n📊 SUMMARY:")
-    print(f"🧾 Total Forms: {len(forms)}")
-    print(f"✅ Forms with Recent Leads (24h): {forms_with_recent_leads}")
-    print(f"⚠️ Forms without Recent Leads: {forms_without_recent_leads}")
-    print(f"📱 Total Recent Leads (24h): {total_leads_24h}")
-    print("=" * 60)
-
-def preview_forms_summary_table():
-    """Show a clean table summary of all forms"""
-    print(f"\n📋 FORMS SUMMARY TABLE")
-    print("=" * 100)
-    
-    forms = meta_api.get_forms_with_campaign_info_safe()
-    all_form_leads = meta_api.get_form_leads_parallel([f['id'] for f in forms])
-    
-    # Header
-    print(f"{'#':<3} {'Form Name':<30} {'Campaign':<25} {'Status':<10} {'Recent':<8} {'Total':<8}")
-    print("-" * 100)
-    
-    total_recent = 0
-    total_all_time = 0
-    
-    for i, form in enumerate(forms, 1):
-        form_id = form['id']
-        form_name = form['name'][:29] + "..." if len(form['name']) > 32 else form['name']
-        campaign_name = form['campaign_name'][:24] + "..." if len(form['campaign_name']) > 27 else form['campaign_name']
-        form_status = form.get('status', 'Unknown')
-        leads = all_form_leads.get(form_id, [])
-        
-        total_leads = len(leads)
-        recent_leads = sum(1 for lead in leads if meta_api._is_within_past_24_hours(lead.get("created_time", "")))
-        
-        total_recent += recent_leads
-        total_all_time += total_leads
-        
-        print(f"{i:<3} {form_name:<30} {campaign_name:<25} {form_status:<10} {recent_leads:<8} {total_leads:<8}")
-    
-    print("-" * 100)
-    print(f"{'TOTAL':<59} {total_recent:<8} {total_all_time:<8}")
-    print("=" * 100)
-
-def preview_field_names_optimized():
-    """Preview field names with campaign info"""
-    print(f"\n📝 Enhanced field-name preview for PAST 24 HOURS")
-    
-    forms = meta_api.get_forms_with_campaign_info_safe()
-    all_form_leads = meta_api.get_form_leads_parallel([f['id'] for f in forms])
-    
-    global_set = set()
-    total_leads_24h = 0
-    
-    for form in forms:
-        form_id, form_name = form['id'], form['name']
-        campaign_name = form['campaign_name']
-        leads = all_form_leads.get(form_id, [])
-        
-        print(f"📄 {form_name} ({form_id})")
-        print(f"   📊 Campaign: {campaign_name} | Source: META | Sub-source: Meta")
-        
-        local_fields = set()
-        leads_count = 0
-        
-        for lead in leads:
-            if meta_api._is_within_past_24_hours(lead.get("created_time", "")):
-                leads_count += 1
-                total_leads_24h += 1
-                for fd in lead.get("field_data", []):
-                    field_name = fd["name"]
-                    local_fields.add(field_name)
-                    global_set.add(field_name)
-        
-        if local_fields:
-            print(f"   • Past 24h leads: {leads_count}")
-            print("   • Fields: " + "  • ".join(sorted(local_fields)))
-        else:
-            print("   ⚠️  No leads in past 24 hours.")
-        print()
-    
-    print(f"📊 TOTAL LEADS: {total_leads_24h}")
-    print("🧾 ALL FIELDS:", ", ".join(sorted(global_set)), "\n")
-
-def sync_to_db_optimized():
-    """Enhanced sync with proper intra-batch duplicate handling"""
-    print(f"🔄 Meta API sync starting with duplicate handling...")
+def sync_to_db_fast():
+    """Fast optimized sync with batch processing"""
+    print(f"🚀 FAST Meta API sync starting...")
     print(f"🎯 Source: META | Sub-source: Meta")
-    print(f"🎯 Each lead processed individually - duplicate handling active")
     
-    forms = meta_api.get_forms_with_campaign_info_safe()
-    all_form_leads = meta_api.get_form_leads_parallel([f['id'] for f in forms])
+    # Get forms and leads quickly
+    forms = meta_api.get_forms_fast()
+    all_form_leads = meta_api.get_form_leads_parallel_fast([f['id'] for f in forms])
     
+    # Process leads quickly
     all_new_leads = []
     form_data = {f['id']: f for f in forms}
     
     for form_id, leads in all_form_leads.items():
         form_info = form_data.get(form_id, {})
         campaign_name = form_info.get('campaign_name', 'Unknown Campaign')
-        valid_leads = 0
         
         for raw_lead in leads:
             mapped_lead = map_lead_with_source(raw_lead, campaign_name)
             if mapped_lead and mapped_lead["customer_mobile_number"]:
                 all_new_leads.append(mapped_lead)
-                valid_leads += 1
-        
-        if valid_leads > 0:
-            print(f"✅ {form_info.get('name', form_id)}: {valid_leads} leads")
     
     if not all_new_leads:
         print("📭 No valid leads found.")
         return
     
-    print(f"\n📊 Collected {len(all_new_leads)} leads from Meta")
+    print(f"📊 Collected {len(all_new_leads)} leads from Meta")
     
-    # STEP 1: Remove intra-batch duplicates (same phone + same source/sub_source)
+    # Fast deduplication using set for O(1) lookups
     seen_combinations = set()
     deduplicated_leads = []
-    intra_batch_duplicates = 0
     
     for lead in all_new_leads:
-        phone = lead['customer_mobile_number']
-        source = lead['source']
-        sub_source = lead['sub_source']
-        combination = (phone, source, sub_source)
-        
-        if combination in seen_combinations:
-            print(f"🔄 Removing intra-batch duplicate: {phone} | Source: {source} | Sub-source: {sub_source}")
-            intra_batch_duplicates += 1
-            continue
-        
-        seen_combinations.add(combination)
-        deduplicated_leads.append(lead)
+        combination = (lead['customer_mobile_number'], lead['source'], lead['sub_source'])
+        if combination not in seen_combinations:
+            seen_combinations.add(combination)
+            deduplicated_leads.append(lead)
     
-    if intra_batch_duplicates > 0:
-        print(f"🧹 Removed {intra_batch_duplicates} intra-batch duplicates")
+    print(f"🧹 After deduplication: {len(deduplicated_leads)} leads")
     
-    # Convert to DataFrame for processing
+    # Convert to DataFrame
     df_processed = pd.DataFrame(deduplicated_leads)
     
-    # STEP 2: Check existing records in both tables
-    master_records, duplicate_records = check_existing_leads(supabase, df_processed)
+    # Bulk check existing records
+    master_records, duplicate_records = check_existing_leads_bulk(supabase, df_processed)
     
-    # STEP 3: Process each lead
+    # Fast processing
     new_leads = []
-    updated_duplicates = 0
-    skipped_duplicates = 0
+    duplicate_updates = []
+    new_duplicate_records = []
+    skipped_count = 0
     
     for _, row in df_processed.iterrows():
         phone = row['customer_mobile_number']
@@ -562,126 +466,207 @@ def sync_to_db_optimized():
         current_sub_source = row['sub_source']
         current_date = row['date']
         
-        # Check if phone exists in lead_master
         if phone in master_records:
             master_record = master_records[phone]
             
-            # Check if this is a duplicate source/sub_source combination
             if is_duplicate_source(master_record, current_source, current_sub_source):
-                print(f"⚠️ Skipping duplicate: {phone} | Source: {current_source} | Sub-source: {current_sub_source}")
-                skipped_duplicates += 1
+                skipped_count += 1
                 continue
             
-            # Check if already exists in duplicate_leads
             if phone in duplicate_records:
                 duplicate_record = duplicate_records[phone]
-                
-                # Check if this source/sub_source already exists in duplicate record
                 if is_duplicate_source(duplicate_record, current_source, current_sub_source):
-                    print(f"⚠️ Skipping duplicate: {phone} | Source: {current_source} | Sub-source: {current_sub_source}")
-                    skipped_duplicates += 1
+                    skipped_count += 1
                     continue
                 
-                # Add to existing duplicate record
-                if add_source_to_duplicate_record(supabase, duplicate_record, current_source, current_sub_source, current_date):
-                    updated_duplicates += 1
-                    # Update local duplicate_records to avoid conflicts in same batch
-                    duplicate_records[phone]['duplicate_count'] += 1
+                slot = find_next_available_source_slot(duplicate_record)
+                if slot:
+                    update_data = {
+                        f'source{slot}': current_source,
+                        f'sub_source{slot}': current_sub_source,
+                        f'date{slot}': current_date,
+                        'duplicate_count': duplicate_record['duplicate_count'] + 1,
+                        'updated_at': datetime.now().isoformat()
+                    }
+                    duplicate_updates.append({'id': duplicate_record['id'], 'data': update_data})
             else:
                 # Create new duplicate record
-                if create_duplicate_record(supabase, master_record, current_source, current_sub_source, current_date):
-                    updated_duplicates += 1
-                    # Add to local duplicate_records to avoid conflicts in same batch
-                    duplicate_records[phone] = {
-                        'customer_mobile_number': phone,
-                        'duplicate_count': 2,
-                        'source1': master_record['source'],
-                        'source2': current_source,
-                        'sub_source1': master_record['sub_source'],
-                        'sub_source2': current_sub_source
-                    }
+                duplicate_data = {
+                    'uid': master_record['uid'],
+                    'customer_mobile_number': phone,
+                    'customer_name': row['customer_name'],
+                    'original_lead_id': master_record['id'],
+                    'source1': master_record['source'],
+                    'sub_source1': master_record['sub_source'],
+                    'date1': master_record.get('date', current_date),
+                    'source2': current_source,
+                    'sub_source2': current_sub_source,
+                    'date2': current_date,
+                    'duplicate_count': 2,
+                    'created_at': datetime.now().isoformat(),
+                    'updated_at': datetime.now().isoformat()
+                }
+                
+                # Initialize remaining slots
+                for i in range(3, 11):
+                    duplicate_data[f'source{i}'] = None
+                    duplicate_data[f'sub_source{i}'] = None
+                    duplicate_data[f'date{i}'] = None
+                
+                new_duplicate_records.append(duplicate_data)
         else:
-            # Completely new lead - add to new_leads list
             new_leads.append(row)
     
-    # STEP 4: Process new leads ONE BY ONE to prevent race conditions
+    # Batch process results
     successful_inserts = 0
     failed_inserts = 0
     
-    if not new_leads:
-        print("✅ No new leads to insert.")
-    else:
-        print(f"🆕 Found {len(new_leads)} new leads to insert")
+    if new_leads:
+        print(f"🆕 Processing {len(new_leads)} new leads in batches...")
         
-        # Process each new lead individually
+        # Generate UIDs
         sequence = get_next_sequence_number(supabase)
+        leads_with_uids = []
         
-        for lead in new_leads:
-            try:
-                # Generate UID for this lead
-                new_uid = generate_uid(lead['source'], lead['customer_mobile_number'], sequence)
-                lead['uid'] = new_uid
-                
-                # Final columns check
-                final_cols = ['uid', 'date', 'customer_name', 'customer_mobile_number', 'source', 'sub_source', 'campaign',
-                              'cre_name', 'lead_category', 'model_interested', 'branch', 'ps_name',
-                              'assigned', 'lead_status', 'follow_up_date',
-                              'first_call_date', 'first_remark', 'second_call_date', 'second_remark',
-                              'third_call_date', 'third_remark', 'fourth_call_date', 'fourth_remark',
-                              'fifth_call_date', 'fifth_remark', 'sixth_call_date', 'sixth_remark',
-                              'seventh_call_date', 'seventh_remark', 'final_status',
-                              'created_at', 'updated_at']
-                
-                # Create final lead dict with only required columns
-                final_lead = {col: lead.get(col) for col in final_cols}
-                
-                # Insert individual lead safely
-                if insert_lead_safely(supabase, final_lead):
-                    print(f"✅ Inserted new lead: {new_uid} | Phone: {lead['customer_mobile_number']} | Campaign: {lead['campaign']}")
-                    successful_inserts += 1
-                else:
-                    failed_inserts += 1
-                
-                sequence += 1
-                
-            except Exception as e:
-                print(f"❌ Failed to insert Phone: {lead['customer_mobile_number']}: {e}")
-                failed_inserts += 1
+        for i, lead in enumerate(new_leads):
+            new_uid = generate_uid(lead['source'], lead['customer_mobile_number'], sequence + i)
+            lead_dict = lead.to_dict() if hasattr(lead, 'to_dict') else dict(lead)
+            lead_dict['uid'] = new_uid
+            
+            # Final columns
+            final_cols = ['uid', 'date', 'customer_name', 'customer_mobile_number', 'source', 'sub_source', 'campaign',
+                          'cre_name', 'lead_category', 'model_interested', 'branch', 'ps_name',
+                          'assigned', 'lead_status', 'follow_up_date',
+                          'first_call_date', 'first_remark', 'second_call_date', 'second_remark',
+                          'third_call_date', 'third_remark', 'fourth_call_date', 'fourth_remark',
+                          'fifth_call_date', 'fifth_remark', 'sixth_call_date', 'sixth_remark',
+                          'seventh_call_date', 'seventh_remark', 'final_status',
+                          'created_at', 'updated_at']
+            
+            final_lead = {col: lead_dict.get(col) for col in final_cols}
+            leads_with_uids.append(final_lead)
+        
+        # Batch insert with chunks
+        chunk_size = 50
+        for i in range(0, len(leads_with_uids), chunk_size):
+            chunk = leads_with_uids[i:i + chunk_size]
+            success, failed = insert_leads_batch(supabase, chunk)
+            successful_inserts += success
+            failed_inserts += failed
+    
+    # Process duplicates in batches
+    updated_duplicates = 0
+    if duplicate_updates:
+        updated_duplicates += process_duplicates_batch(supabase, duplicate_updates)
+    
+    if new_duplicate_records:
+        updated_duplicates += create_duplicate_records_batch(supabase, new_duplicate_records)
     
     # Summary
-    print(f"\n📊 SUMMARY:")
-    print(f"🧹 Intra-batch duplicates removed: {intra_batch_duplicates}")
+    print(f"\n📊 FAST SYNC SUMMARY:")
     print(f"✅ New leads inserted: {successful_inserts}")
     print(f"❌ Failed insertions: {failed_inserts}")
     print(f"🔄 Duplicate records updated/created: {updated_duplicates}")
-    print(f"⚠️ Skipped exact duplicates: {skipped_duplicates}")
+    print(f"⚠️ Skipped exact duplicates: {skipped_count}")
     print(f"📱 Total records processed: {len(all_new_leads)}")
-    print(f"🎯 Source: META | Sub-source: Meta")
-    print(f"📊 Each lead processed individually with duplicate handling")
-    print(f"🔄 Duplicates with other sources handled via duplicate_leads table")
+    print(f"🚀 Processing completed in optimized batch mode")
 
-# Compatibility functions
-def preview_field_names():
-    preview_field_names_optimized()
+def quick_preview():
+    """Quick preview without detailed analysis"""
+    print("🔍 QUICK FORM PREVIEW")
+    print("=" * 50)
+    
+    forms = meta_api.get_forms_fast()
+    all_form_leads = meta_api.get_form_leads_parallel_fast([f['id'] for f in forms])
+    
+    total_recent = 0
+    active_forms = 0
+    
+    for form in forms:
+        leads = all_form_leads.get(form['id'], [])
+        recent_leads = sum(1 for lead in leads if meta_api._is_within_past_24_hours(lead.get("created_time", "")))
+        
+        if recent_leads > 0:
+            active_forms += 1
+            total_recent += recent_leads
+            print(f"✅ {form['name']}: {recent_leads} recent leads")
+    
+    print(f"\n📊 QUICK SUMMARY:")
+    print(f"📋 Total Forms: {len(forms)}")
+    print(f"✅ Active Forms: {active_forms}")
+    print(f"📱 Total Recent Leads: {total_recent}")
+    print("=" * 50)
 
-def sync_to_db():
-    sync_to_db_optimized()
+def test_token_and_permissions():
+    """Test if token is valid and has required permissions"""
+    
+    # Test token validity
+    response = requests.get(
+        f"https://graph.facebook.com/v20.0/me",
+        params={"access_token": PAGE_TOKEN}
+    )
+    
+    if response.status_code == 200:
+        print("✅ Token is valid")
+        print(f"📱 Token belongs to: {response.json().get('name')}")
+        
+        # Test permissions
+        perm_response = requests.get(
+            f"https://graph.facebook.com/v20.0/me/permissions",
+            params={"access_token": PAGE_TOKEN}
+        )
+        
+        if perm_response.status_code == 200:
+            permissions = perm_response.json().get('data', [])
+            active_perms = [p['permission'] for p in permissions if p.get('status') == 'granted']
+            required_perms = ["leads_retrieval", "pages_read_engagement"]
+            
+            print(f"📋 Active permissions: {active_perms}")
+            missing = [p for p in required_perms if p not in active_perms]
+            
+            if missing:
+                print(f"❌ Missing permissions: {missing}")
+                return False
+            else:
+                print("✅ All required permissions granted")
+                return True
+        else:
+            print("❌ Could not check permissions")
+            return False
+    else:
+        print(f"❌ Token is invalid: {response.json()}")
+        return False
 
 if __name__ == "__main__":
-    print("🔍 COMPREHENSIVE FORM ANALYSIS")
-    print("=" * 60)
+    # Validate token first
+    if not validate_token_on_startup():
+        print("\n🛑 TOKEN VALIDATION FAILED")
+        print("=" * 50)
+        print("📖 INSTRUCTIONS TO FIX:")
+        print("1. Go to Meta Business Manager: https://business.facebook.com")
+        print("2. Navigate to Business Settings → System Users")
+        print("3. Generate new token with permissions:")
+        print("   - leads_retrieval")
+        print("   - pages_read_engagement")
+        print("   - pages_manage_ads")
+        print("4. Update your .env file with new token")
+        print("5. Run the script again")
+        print("=" * 50)
+        
+        # Optional: Test the token manually
+        print("\n🔧 You can also test your current token:")
+        test_token_and_permissions()
+        exit(1)
     
-    # Show all forms with complete details
-    preview_all_forms_with_details()
+    # Continue with optimized script
+    print("\n🚀 FAST META SYNC MODE")
+    print("=" * 50)
     
-    # Show summary table
-    preview_forms_summary_table()
+    # Quick preview
+    quick_preview()
     
-    # Original field preview (only forms with recent leads)
-    preview_field_names()
-    
-    # Proceed with sync
-    print("\n" + "=" * 60)
-    print("🔄 STARTING SYNC PROCESS")
-    print("=" * 60)
-    sync_to_db()
+    # Fast sync
+    print("\n" + "=" * 50)
+    print("🚀 STARTING FAST SYNC")
+    print("=" * 50)
+    sync_to_db_fast()
