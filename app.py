@@ -68,7 +68,14 @@ socketio = SocketIO(
 ALLOWED_CORS_ORIGINS = {
     'https://www.raamather.com',
     'http://www.raamather.com',
+    'https://raamather.com',
+    'http://raamather.com',
+    'https://epicleads.in',
+    'http://epicleads.in',
     'http://localhost:3000',
+    'https://localhost:3000',
+    'http://127.0.0.1:3000',
+    'https://127.0.0.1:3000',
 }
 
 @app.after_request
@@ -76,12 +83,13 @@ def add_cors_headers(response):
     try:
         origin = request.headers.get('Origin')
         if origin and origin in ALLOWED_CORS_ORIGINS:
-            # Only expose CORS for the external API paths
-            if request.path.startswith('/api/submit_') or request.path == '/api/docs':
+            # Apply CORS to all API routes
+            if request.path.startswith('/api/'):
+                requested_headers = request.headers.get('Access-Control-Request-Headers', 'Content-Type, Authorization')
                 response.headers['Access-Control-Allow-Origin'] = origin
                 response.headers['Vary'] = 'Origin'
                 response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-                response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+                response.headers['Access-Control-Allow-Headers'] = requested_headers
                 response.headers['Access-Control-Max-Age'] = '86400'
     except Exception:
         pass
