@@ -146,9 +146,14 @@
           Add Walk-in Lead
         </h2>
         <p class="lead mb-3">Enter customer information for walk-in leads</p>
-        <a href="{{ url_for('rec_dashboard') }}" class="btn btn-outline-light btn-sm">
+        <a href="{% if session.user_type == 'ps' %}{{ url_for('ps_dashboard') }}{% else %}{{ url_for('rec_dashboard') }}{% endif %}" class="btn btn-outline-light btn-sm">
           <i class="fas fa-chart-bar me-1"></i>View All
         </a>
+        {% if session.user_type == 'ps' %}
+        <a href="{{ url_for('ps_dashboard') }}" class="btn btn-light btn-sm ms-2">
+          <i class="fas fa-arrow-left me-1"></i>Back to Dashboard
+        </a>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -252,7 +257,7 @@
                   </label>
                   <div class="position-relative">
                     <i class="fas fa-building field-icon"></i>
-                    <select class="form-select field-with-icon" name="branch" id="branch-select" required>
+                    <select class="form-select field-with-icon" name="branch" id="branch-select" required {% if session.user_type == 'ps' %}data-disabled="true"{% endif %}>
                       <option value="">Select branch</option>
                       {% for branch in branches %}
                       <option value="{{ branch }}" {% if branch == default_branch %}selected{% endif %}>{{ branch }}</option>
@@ -272,13 +277,19 @@
                   </label>
                   <div class="position-relative">
                     <i class="fas fa-user-tie field-icon"></i>
-                    <select class="form-select field-with-icon" name="ps_assigned" id="ps-select" required>
+                    <select class="form-select field-with-icon" name="ps_assigned" id="ps-select" required {% if session.user_type == 'ps' %}data-disabled="true"{% endif %}>
                       <option value="">Select branch first</option>
                     </select>
                   </div>
                 </div>
               </div>
             </div>
+
+            {% if session.user_type == 'ps' %}
+            <!-- Hidden fields so values submit even if selects are disabled via JS -->
+            <input type="hidden" name="branch" value="{{ default_branch }}">
+            <input type="hidden" name="ps_assigned" value="{{ default_ps_name }}">
+            {% endif %}
 
             <!-- Submit Button -->
             <div class="text-center mt-4">
@@ -323,6 +334,8 @@
   const branchSelect = document.getElementById('branch-select');
   const psSelect = document.getElementById('ps-select');
   const psOptions = {{ ps_options_json|safe }};
+  const defaultPSName = "{{ default_ps_name or '' }}";
+  const isPS = {{ 'true' if session.get('user_type') == 'ps' else 'false' }};
 
   function updatePSDropdown() {
     const branch = branchSelect.value;
@@ -347,8 +360,26 @@
     }
   }
   
-  branchSelect.addEventListener('change', updatePSDropdown);
-  document.addEventListener('DOMContentLoaded', updatePSDropdown);
+  branchSelect.addEventListener('change', function() {
+    updatePSDropdown();
+    if (defaultPSName) {
+      psSelect.value = defaultPSName;
+    }
+  });
+  document.addEventListener('DOMContentLoaded', function() {
+    // Ensure branch default is selected from server
+    updatePSDropdown();
+    // Auto-select PS for PS users
+    if (defaultPSName) {
+      psSelect.value = defaultPSName;
+    }
+    // Lock fields for PS users
+    if (isPS) {
+      // Disable visually but keep data-disabled flag; hidden inputs will carry values
+      branchSelect.setAttribute('disabled', 'disabled');
+      psSelect.setAttribute('disabled', 'disabled');
+    }
+  });
   
   // Add form validation feedback
   document.querySelectorAll('.form-control, .form-select').forEach(function(input) {
@@ -390,6 +421,13 @@
           phone_number: normalizedPhone
         })
       });
+      
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        // If server did not return JSON (e.g., redirected to HTML), just submit form
+        document.querySelector('form').submit();
+        return true;
+      }
       
       const result = await response.json();
       
@@ -450,6 +488,7 @@
     } catch (error) {
       console.error('Error checking duplicate lead:', error);
       // If there's an error, proceed with form submission
+      document.querySelector('form').submit();
       return true;
     }
   }
@@ -486,6 +525,13 @@
           phone_number: normalizedPhone
         })
       });
+      
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        // If server didn't return JSON, don’t block user; clear feedback
+        feedbackDiv.style.display = 'none';
+        return;
+      }
       
       const result = await response.json();
       

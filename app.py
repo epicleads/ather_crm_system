@@ -17,7 +17,7 @@ import io
 from dotenv import load_dotenv
 from collections import defaultdict, Counter
 import json
-from auth import AuthManager, require_auth, require_admin, require_cre, require_ps, require_rec
+from auth import AuthManager, require_auth, require_admin, require_cre, require_ps, require_rec, require_ps_or_rec
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from security_verification import run_security_verification
@@ -1361,7 +1361,7 @@ from auth import require_branch_head
 
 @app.route('/')
 def index():
-    session.clear()  # Ensure no session data is present
+    # Do not clear session on homepage to avoid accidental logout via redirects
     return render_template('index.html')
 @app.route('/unified_login', methods=['POST'])
 @limiter.limit("100000 per minute")
@@ -2955,7 +2955,7 @@ def check_duplicate_lead():
         return jsonify({'success': False, 'message': f'Error checking duplicate: {str(e)}'}), 500
 
 @app.route('/check_duplicate_walkin_lead', methods=['POST'])
-@require_rec
+@require_ps_or_rec
 def check_duplicate_walkin_lead():
     """
     Check if a walkin lead with the same phone number already exists.
@@ -4901,7 +4901,7 @@ def fix_missing_timestamps():
 
 @app.route('/')
 def index():
-    session.clear()  # Ensure no session data is present
+    # Do not clear session on homepage to avoid accidental logout via redirects
     return render_template('index.html')
 @app.route('/unified_login', methods=['POST'])
 @limiter.limit("100000 per minute")
@@ -15230,7 +15230,7 @@ def view_walkin_call_history(uid):
         return redirect(url_for('rec_dashboard'))
 
 @app.route('/add_walkin_lead', methods=['GET', 'POST'])
-@require_rec
+@require_ps_or_rec
 def add_walkin_lead():
 
     # Models and branches (customize as needed)
@@ -15256,8 +15256,13 @@ def add_walkin_lead():
         customer_location = request.form.get('customer_location')
         model_interested = request.form['model_interested']
         occupation = request.form.get('occupation')
-        branch = request.form['branch']
-        ps_assigned = request.form['ps_assigned']
+        branch = request.form.get('branch', '')
+        ps_assigned = request.form.get('ps_assigned', '')
+        
+        # Enforce PS context: when PS submits, force branch and PS to their own
+        if session.get('user_type') == 'ps':
+            branch = session.get('branch') or branch
+            ps_assigned = session.get('ps_name') or ps_assigned
         
         # Normalize phone number
         normalized_phone = ''.join(filter(str.isdigit, mobile_number))
@@ -15545,15 +15550,22 @@ def add_walkin_lead():
                 else:
                     flash(f'Error adding walk-in lead: {error_str}', 'danger')
 
-    # Get receptionist's branch from session
-    rec_branch = session.get('rec_branch', '')
+    # Determine default values based on role
+    default_branch = ''
+    default_ps_name = ''
+    if session.get('user_type') == 'rec':
+        default_branch = session.get('rec_branch', '')
+    elif session.get('user_type') == 'ps':
+        default_branch = session.get('branch', '')
+        default_ps_name = session.get('ps_name', '')
     
     return render_template(
         'add_walkin_lead.html',
         models=models,
         branches=branches,
         ps_options_json=ps_options_json,
-        default_branch=rec_branch
+        default_branch=default_branch,
+        default_ps_name=default_ps_name
     )
 
 @app.route('/api/branch_analytics/ps_performance')
