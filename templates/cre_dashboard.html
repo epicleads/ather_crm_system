@@ -50,6 +50,70 @@
         opacity: 1;
     }
     
+    /* Call Statistics Mini Display */
+    .call-stats-mini {
+        font-size: 0.7rem;
+        line-height: 1.3;
+        max-width: 140px;
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+    }
+    
+    .call-stats-mini .stat-item {
+        display: block;
+        padding: 1px 3px;
+        border-radius: 2px;
+        font-weight: 500;
+        font-size: 0.55rem;
+        text-align: left;
+        margin-bottom: 1px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        line-height: 1.2;
+        width: 100%;
+        box-sizing: border-box;
+    }
+    
+    .call-stats-mini .stat-total {
+        background-color: #6c757d;
+        color: white;
+    }
+    
+    .call-stats-mini .stat-rnr {
+        background-color: #ffc107;
+        color: #000;
+    }
+    
+    .call-stats-mini .stat-busy {
+        background-color: #fd7e14;
+        color: white;
+    }
+    
+    .call-stats-mini .stat-callback {
+        background-color: #20c997;
+        color: white;
+    }
+    
+    .call-stats-mini .stat-notconnected {
+        background-color: #dc3545;
+        color: white;
+    }
+    
+    .call-stats-mini .stat-connected {
+        background-color: #198754;
+        color: white;
+    }
+    
+    .call-stats-cell {
+        width: 140px;
+        min-width: 140px;
+        max-width: 140px;
+        vertical-align: top;
+        padding: 4px !important;
+    }
+    
     /* Add a subtle border to distinguish low priority leads */
     .fresh-lead-row[data-lead-status="RNR"],
     .fresh-lead-row[data-lead-status="Busy on another Call"],
@@ -362,6 +426,7 @@
                                     <tr>
                                         <th>Action</th>
                                         <th>Lead Status</th>
+                                        <th>Call Stats</th>
                                         <th>Customer Name</th>
                                         <th>Mobile</th>
                                         <th>Source</th>
@@ -378,6 +443,11 @@
                                             <a href="{{ url_for('update_lead', uid=lead.uid, return_tab='untouched-leads') }}" class="btn btn-sm btn-primary update-untouched-link">Update</a>
                                         </td>
                                         <td>{{ lead.lead_status }}</td>
+                                        <td class="call-stats-cell" data-uid="{{ lead.uid }}">
+                                            <div class="call-stats-mini">
+                                                <span class="text-muted">Loading...</span>
+                                            </div>
+                                        </td>
                                         <td>{{ lead.customer_name }}</td>
                                         <td>{{ lead.customer_mobile_number }}</td>
                                         <td>{{ lead.source }}</td>
@@ -407,6 +477,7 @@
                                     <tr>
                                         <th>Action</th>
                                         <th>Lead Status</th>
+                                        <th>Call Stats</th>
                                         <th>Customer Name</th>
                                         <th>Mobile</th>
                                         <th>Source</th>
@@ -423,6 +494,11 @@
                                             <a href="{{ url_for('update_lead', uid=lead.uid, return_tab='called-leads') }}" class="btn btn-sm btn-primary update-called-link">Update</a>
                                         </td>
                                         <td>{{ lead.lead_status }}</td>
+                                        <td class="call-stats-cell" data-uid="{{ lead.uid }}">
+                                            <div class="call-stats-mini">
+                                                <span class="text-muted">Loading...</span>
+                                            </div>
+                                        </td>
                                         <td>{{ lead.customer_name }}</td>
                                         <td>{{ lead.customer_mobile_number }}</td>
                                         <td>{{ lead.source }}</td>
@@ -452,6 +528,7 @@
                                     <tr>
                                         <th>Action</th>
                                         <th>Lead Status</th>
+                                        <th>Call Stats</th>
                                         <th>Customer Name</th>
                                         <th>Mobile</th>
                                         <th>Source</th>
@@ -468,6 +545,11 @@
                                             <a href="{{ url_for('update_lead', uid=lead.uid, return_tab='follow-up-leads') }}" class="btn btn-sm btn-warning update-follow-up-link">Update</a>
                                         </td>
                                         <td><span class="badge bg-warning">{{ lead.lead_status }}</span></td>
+                                        <td class="call-stats-cell" data-uid="{{ lead.uid }}">
+                                            <div class="call-stats-mini">
+                                                <span class="text-muted">Loading...</span>
+                                            </div>
+                                        </td>
                                         <td>{{ lead.customer_name }}</td>
                                         <td>{{ lead.customer_mobile_number }}</td>
                                         <td>{{ lead.source }}</td>
@@ -2594,5 +2676,203 @@ function setupPendingSearch() {
 
 // Initialize the search functionality
 setupPendingSearch();
+
+// Call Statistics Loading Function
+function loadCallStatistics() {
+    console.log('Loading call statistics...');
+    
+    // Get all UIDs from the current visible table - check both main and sub tabs
+    let visibleTable = document.querySelector('.tab-pane.active .tab-pane.active table');
+    if (!visibleTable) {
+        visibleTable = document.querySelector('.tab-pane.active table');
+    }
+    if (!visibleTable) {
+        console.log('No visible table found');
+        return;
+    }
+    
+    console.log('Found visible table:', visibleTable);
+    
+    const callStatsCells = visibleTable.querySelectorAll('.call-stats-cell');
+    console.log('Found call stats cells:', callStatsCells.length);
+    
+    if (callStatsCells.length === 0) return;
+    
+    const uids = Array.from(callStatsCells).map(cell => cell.getAttribute('data-uid'));
+    console.log('UIDs to fetch:', uids);
+    
+    if (uids.length === 0) return;
+    
+    // Fetch call statistics for all UIDs
+    console.log('Making API request to /api/cre_call_stats_batch');
+    
+    // Add timeout to prevent hanging
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
+    fetch('/api/cre_call_stats_batch', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ uids: uids }),
+        signal: controller.signal
+    })
+    .then(response => {
+        clearTimeout(timeoutId);
+        console.log('API response status:', response.status);
+        return response.json();
+    })
+    .then(data => {
+        console.log('API response data:', data);
+        if (data.success && data.stats) {
+            console.log('Successfully received stats for', Object.keys(data.stats).length, 'leads');
+            // Update each cell with the statistics
+            callStatsCells.forEach(cell => {
+                const uid = cell.getAttribute('data-uid');
+                const stats = data.stats[uid];
+                const miniDiv = cell.querySelector('.call-stats-mini');
+                
+                console.log('Processing stats for UID:', uid, 'Stats:', stats);
+                
+                if (stats && miniDiv) {
+                    let html = '';
+                    
+                    // Only show stats if there are calls
+                    if (stats.total_calls > 0) {
+                        html += `<div class="stat-item stat-total">Total: ${stats.total_calls}</div>`;
+                        
+                        if (stats.rnr_calls > 0) {
+                            html += `<div class="stat-item stat-rnr">RNR: ${stats.rnr_calls}</div>`;
+                        }
+                        if (stats.busy_calls > 0) {
+                            html += `<div class="stat-item stat-busy">Busy: ${stats.busy_calls}</div>`;
+                        }
+                        if (stats.call_me_back > 0) {
+                            html += `<div class="stat-item stat-callback">Call Back: ${stats.call_me_back}</div>`;
+                        }
+                        if (stats.call_not_connected > 0) {
+                            html += `<div class="stat-item stat-notconnected">No Conn: ${stats.call_not_connected}</div>`;
+                        }
+                        if (stats.connected_calls > 0) {
+                            html += `<div class="stat-item stat-connected">Connected: ${stats.connected_calls}</div>`;
+                        }
+                    } else {
+                        html = '<div class="text-muted" style="font-size: 0.55rem;">No calls</div>';
+                    }
+                    
+                    miniDiv.innerHTML = html;
+                    console.log('Updated HTML for UID:', uid, 'HTML:', html);
+                } else if (miniDiv) {
+                    miniDiv.innerHTML = '<div class="text-muted" style="font-size: 0.55rem;">No calls</div>';
+                    console.log('No stats found for UID:', uid);
+                }
+            });
+        } else {
+            console.log('API response was not successful or no stats data:', data);
+            // Show error state
+            callStatsCells.forEach(cell => {
+                const miniDiv = cell.querySelector('.call-stats-mini');
+                if (miniDiv) {
+                    miniDiv.innerHTML = '<span class="text-warning" style="font-size: 0.7rem;">No data</span>';
+                }
+            });
+        }
+    })
+    .catch(error => {
+        clearTimeout(timeoutId);
+        console.error('Error loading call statistics:', error);
+        // Show error state
+        callStatsCells.forEach(cell => {
+            const miniDiv = cell.querySelector('.call-stats-mini');
+            if (miniDiv) {
+                if (error.name === 'AbortError') {
+                    miniDiv.innerHTML = '<span class="text-warning" style="font-size: 0.7rem;">Timeout</span>';
+                } else {
+                    miniDiv.innerHTML = '<span class="text-danger" style="font-size: 0.7rem;">Error</span>';
+                }
+            }
+        });
+    });
+}
+
+// Fallback function to load individual call histories if batch fails
+function loadCallStatisticsFallback() {
+    console.log('Using fallback method to load call statistics...');
+    const visibleTable = document.querySelector('.tab-pane.active .tab-pane.active table') || document.querySelector('.tab-pane.active table');
+    if (!visibleTable) return;
+    
+    const callStatsCells = visibleTable.querySelectorAll('.call-stats-cell');
+    if (callStatsCells.length === 0) return;
+    
+    callStatsCells.forEach(cell => {
+        const uid = cell.getAttribute('data-uid');
+        const miniDiv = cell.querySelector('.call-stats-mini');
+        if (!miniDiv) return;
+        
+        // Try to get individual call history
+        fetch(`/cre_call_attempt_history_json/${uid}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.history) {
+                    const history = data.history;
+                    const total_calls = history.length;
+                    const rnr_count = history.filter(h => h.status === 'RNR').length;
+                    const busy_count = history.filter(h => h.status === 'Busy on another Call').length;
+                    const call_me_back_count = history.filter(h => h.status === 'Call me Back').length;
+                    const call_not_connected_count = history.filter(h => h.status === 'Call not Connected').length;
+                    const connected_count = history.filter(h => h.status === 'Connected').length;
+                    
+                    let html = '';
+                    if (total_calls > 0) {
+                        html += `<div class="stat-item stat-total">Total: ${total_calls}</div>`;
+                        if (rnr_count > 0) html += `<div class="stat-item stat-rnr">RNR: ${rnr_count}</div>`;
+                        if (busy_count > 0) html += `<div class="stat-item stat-busy">Busy: ${busy_count}</div>`;
+                        if (call_me_back_count > 0) html += `<div class="stat-item stat-callback">Call Back: ${call_me_back_count}</div>`;
+                        if (call_not_connected_count > 0) html += `<div class="stat-item stat-notconnected">No Conn: ${call_not_connected_count}</div>`;
+                        if (connected_count > 0) html += `<div class="stat-item stat-connected">Connected: ${connected_count}</div>`;
+                    } else {
+                        html = '<div class="text-muted" style="font-size: 0.55rem;">No calls</div>';
+                    }
+                    miniDiv.innerHTML = html;
+                } else {
+                    miniDiv.innerHTML = '<div class="text-muted" style="font-size: 0.55rem;">No calls</div>';
+                }
+            })
+            .catch(error => {
+                console.error(`Error loading call history for ${uid}:`, error);
+                miniDiv.innerHTML = '<div class="text-muted" style="font-size: 0.55rem;">No calls</div>';
+            });
+    });
+}
+
+// Load call statistics when page loads
+loadCallStatistics();
+
+// Set up fallback after 5 seconds if still loading
+setTimeout(() => {
+    const visibleTable = document.querySelector('.tab-pane.active .tab-pane.active table') || document.querySelector('.tab-pane.active table');
+    if (visibleTable) {
+        const loadingCells = visibleTable.querySelectorAll('.call-stats-mini');
+        const stillLoading = Array.from(loadingCells).some(cell => cell.textContent.includes('Loading'));
+        if (stillLoading) {
+            console.log('Batch API taking too long, using fallback method...');
+            loadCallStatisticsFallback();
+        }
+    }
+}, 5000);
+
+// Reload call statistics when switching tabs
+document.addEventListener('shown.bs.tab', function (e) {
+    // Small delay to ensure the new tab content is fully rendered
+    setTimeout(loadCallStatistics, 100);
+});
+
+// Also reload when the fresh leads sub-tabs are switched
+document.querySelectorAll('a[data-bs-toggle="tab"]').forEach(tab => {
+    tab.addEventListener('shown.bs.tab', function (e) {
+        setTimeout(loadCallStatistics, 100);
+    });
+});
 </script>
 {% endblock %}

@@ -35,19 +35,22 @@ jobs:
           PAGE_ID: ${{ secrets.PAGE_ID }}
         run: python metatosupabase.py
 
-  # Salesforce job remains commented out
+  # Salesforce job - kept commented for future use
   # run-salesforce-script:
   #   runs-on: ubuntu-latest
   #   steps:
   #     - name: Checkout repo
   #       uses: actions/checkout@v3
+  #     
   #     - name: Set up Python
   #       uses: actions/setup-python@v5
   #       with:
   #         python-version: '3.11'
+  #     
   #     - name: Install dependencies
   #       run: pip install -r requirements.txt
-  #     - name: Run syncsalesforcetosupabase.py (COMMENTED OUT)
+  #     
+  #     - name: Run syncsalesforcetosupabase.py
   #       env:
   #         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
   #         SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}

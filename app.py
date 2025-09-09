@@ -17,7 +17,7 @@ import io
 from dotenv import load_dotenv
 from collections import defaultdict, Counter
 import json
-from auth import AuthManager, require_auth, require_admin, require_cre, require_ps, require_rec
+from auth import AuthManager, require_auth, require_admin, require_cre, require_ps, require_rec, require_ps_or_rec
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from security_verification import run_security_verification
@@ -122,6 +122,542 @@ def is_valid_uid(uid):
         return False
     # Add your UID validation logic here
     return True
+
+
+# ==============================
+# Unified Test Drive management
+# ==============================
+def get_test_drive_state(lead_uid: str) -> dict:
+    """Return current test drive state for a lead from alltest_drive table.
+    Structure: { value: bool, locked: bool, updated_at: str, updated_by: str }
+    Fallbacks to False/Unlocked if not present.
+    """
+    try:
+        merged_value = False
+        merged_locked = False
+        merged_updated_at = None
+        merged_updated_by = ''
+
+        # 1) alltest_drive (most recent) - only if table exists
+        at_row = None
+        try:
+            result = supabase.table('alltest_drive').select('*').eq('original_id', lead_uid).order('updated_at', desc=True).limit(1).execute()
+            if result.data:
+                at_row = result.data[0]
+        except Exception as _ea:
+            print(f"[WARN] alltest_drive lookup failed for {lead_uid}: {_ea}")
+            # Table might not exist, continue without it
+
+        if at_row:
+            # Map the alltest_drive table fields to our expected structure
+            at_value = bool(at_row.get('test_drive_done') == 'Yes' or at_row.get('test_drive_done') == 'True')
+            at_locked = bool(at_row.get('test_drive_done') == 'Yes' or at_row.get('test_drive_done') == 'True')  # Yes is treated as locked
+            merged_value = at_value
+            merged_locked = at_locked
+            merged_updated_at = at_row.get('updated_at')
+            merged_updated_by = at_row.get('cre_name') or at_row.get('ps_name') or ''
+
+        # 2) ps_followup_master
+        ps_row = None
+        try:
+            ps_row_res = supabase.table('ps_followup_master').select('test_drive_done, updated_at, ps_name').eq('lead_uid', lead_uid).limit(1).execute()
+            if ps_row_res.data:
+                ps_row = ps_row_res.data[0]
+        except Exception as _e2:
+            print(f"[WARN] ps_followup_master lookup failed for {lead_uid}: {_e2}")
+
+        if ps_row is not None:
+            ps_raw = ps_row.get('test_drive_done')
+            if ps_raw is not None:
+                ps_bool = True if str(ps_raw).lower() in ['true', 'yes', '1'] else False
+                # Promote Yes from PS even if alltestdrive says No/False
+                if ps_bool:
+                    merged_value = True
+                    merged_locked = True
+                    merged_updated_at = merged_updated_at or ps_row.get('updated_at')
+                    if not merged_updated_by:
+                        merged_updated_by = ps_row.get('ps_name') or ''
+
+        # 3) activity_leads table (for event leads)
+        al_row = None
+        try:
+            al_res = supabase.table('activity_leads').select('test_drive_done, created_at, cre_assigned, ps_name').eq('activity_uid', lead_uid).limit(1).execute()
+            if al_res.data:
+                al_row = al_res.data[0]
+        except Exception as _e3:
+            print(f"[WARN] activity_leads lookup failed for {lead_uid}: {_e3}")
+
+        if al_row is not None:
+            al_raw = al_row.get('test_drive_done')
+            if al_raw is not None:
+                al_bool = True if str(al_raw).lower() in ['true', 'yes', '1'] else False
+                # If activity_leads has a value, use it and determine lock status
+                if al_bool:
+                    merged_value = True
+                    merged_locked = True  # Lock when test drive is done
+                    merged_updated_at = merged_updated_at or al_row.get('created_at')
+                    if not merged_updated_by:
+                        merged_updated_by = al_row.get('cre_assigned') or al_row.get('ps_name') or ''
+                else:
+                    # If test drive is not done, don't override existing locked status
+                    if not merged_locked:
+                        merged_value = False
+                        merged_updated_at = merged_updated_at or al_row.get('created_at')
+                        if not merged_updated_by:
+                            merged_updated_by = al_row.get('cre_assigned') or al_row.get('ps_name') or ''
+
+        # 4) ps_followup_master - try to find by phone number for event leads
+        if not merged_value and al_row and al_row.get('customer_phone_number'):
+            try:
+                phone = al_row['customer_phone_number']
+                ps_row_res = supabase.table('ps_followup_master').select('test_drive_done, updated_at, ps_name').eq('customer_mobile_number', phone).limit(1).execute()
+                if ps_row_res.data:
+                    ps_row = ps_row_res.data[0]
+                    ps_raw = ps_row.get('test_drive_done')
+                    if ps_raw is not None:
+                        ps_bool = True if str(ps_raw).lower() in ['true', 'yes', '1'] else False
+                        if ps_bool:
+                            merged_value = True
+                            merged_locked = True
+                            merged_updated_at = merged_updated_at or ps_row.get('updated_at')
+                            if not merged_updated_by:
+                                merged_updated_by = ps_row.get('ps_name') or ''
+            except Exception as _e2:
+                print(f"[WARN] ps_followup_master phone lookup failed for {lead_uid}: {_e2}")
+
+        # 5) lead_master as last fallback
+        lm_row = None
+        try:
+            lm_res = supabase.table('lead_master').select('test_drive_done, updated_at, cre_name').eq('uid', lead_uid).limit(1).execute()
+            if lm_res.data:
+                lm_row = lm_res.data[0]
+        except Exception as _e4:
+            print(f"[WARN] lead_master lookup failed for {lead_uid}: {_e4}")
+
+        if lm_row is not None and not merged_value:
+            lm_raw = lm_row.get('test_drive_done')
+            if lm_raw is not None:
+                lm_bool = True if str(lm_raw).lower() in ['true', 'yes', '1'] else False
+                if lm_bool:
+                    merged_value = True
+                    merged_locked = True
+                    merged_updated_at = merged_updated_at or lm_row.get('updated_at')
+                    if not merged_updated_by:
+                        merged_updated_by = lm_row.get('cre_name') or ''
+
+        return {
+            'value': bool(merged_value),
+            'locked': bool(merged_locked),
+            'updated_at': merged_updated_at,
+            'updated_by': merged_updated_by
+        }
+    except Exception as _e:
+        print(f"[WARN] get_test_drive_state failed for {lead_uid}: {_e}")
+        return {'value': False, 'locked': False, 'updated_at': None, 'updated_by': ''}
+
+
+def set_test_drive_state(lead_uid: str, actor_role: str, actor_name: str, new_value_raw) -> dict:
+    """Set test drive state with locking and cross-entity sync.
+    - If current is True (locked), further changes are blocked.
+    - If setting to True: lock the state and propagate to related tables.
+    - If setting to False: allowed only when not locked; remains required until True.
+    Returns: { success: bool, locked: bool, value: bool, message: str }
+    """
+    try:
+        desired = None
+        if new_value_raw is not None:
+            s = str(new_value_raw).strip().lower()
+            if s in ['true', 'yes', '1', 'y']: desired = True
+            elif s in ['false', 'no', '0', 'n', '']: desired = False
+        if desired is None:
+            return {'success': True, 'locked': get_test_drive_state(lead_uid)['locked'], 'value': get_test_drive_state(lead_uid)['value'], 'message': 'No change'}
+
+        current = get_test_drive_state(lead_uid)
+        if current['locked']:
+            # Already locked - cannot change
+            return {'success': False, 'locked': True, 'value': current['value'], 'message': 'Test Drive status is locked and cannot be changed'}
+
+        locked = False
+        value_to_store = bool(desired)
+        # Lock when setting to "Yes", keep unlocked when setting to "No"
+        if value_to_store:
+            locked = True
+
+        # Use enhanced sync function to update alltest_drive table
+        try:
+            # Determine source table based on lead_uid pattern
+            if 'AC-' in lead_uid:
+                source_table = 'activity_leads'
+            elif lead_uid.startswith('W'):
+                source_table = 'walkin_table'
+            else:
+                source_table = 'lead_master'
+            
+            # Fetch complete lead data for comprehensive sync
+            lead_data = {'test_drive_done': 'Yes' if value_to_store else 'No'}
+            
+            # Add actor information
+            if actor_role == 'cre':
+                lead_data['cre_name'] = actor_name
+            elif actor_role == 'ps':
+                lead_data['ps_name'] = actor_name
+            
+            # Try to fetch complete lead data for better sync
+            try:
+                if source_table == 'activity_leads':
+                    complete_data = supabase.table('activity_leads').select('*').eq('activity_uid', lead_uid).execute()
+                elif source_table == 'walkin_table':
+                    complete_data = supabase.table('walkin_table').select('*').eq('uid', lead_uid).execute()
+                else:  # lead_master
+                    complete_data = supabase.table('lead_master').select('*').eq('uid', lead_uid).execute()
+                
+                if complete_data.data:
+                    # Merge complete data with test drive info
+                    lead_data.update(complete_data.data[0])
+                    lead_data['test_drive_done'] = 'Yes' if value_to_store else 'No'
+            except Exception as fetch_error:
+                print(f"Warning: Could not fetch complete lead data for sync: {fetch_error}")
+                # Continue with basic data
+            
+            # Use enhanced sync function
+            sync_test_drive_to_alltest_drive_enhanced(source_table, lead_uid, lead_data)
+            
+        except Exception as _e:
+            print(f"[WARN] Enhanced sync to alltest_drive failed: {_e}")
+            # Fallback to simple sync
+            try:
+                payload = {
+                    'source_table': 'activity_leads' if 'AC-' in lead_uid else 'lead_master',
+                    'original_id': lead_uid,
+                    'test_drive_done': 'Yes' if value_to_store else 'No',
+                    'updated_at': datetime.now().isoformat(),
+                    'cre_name': actor_name if actor_role == 'cre' else None,
+                    'ps_name': actor_name if actor_role == 'ps' else None
+                }
+                supabase.table('alltest_drive').insert(payload).execute()
+            except Exception as _e2:
+                print(f"[WARN] Fallback sync to alltest_drive also failed: {_e2}")
+
+        # Propagate to lead_master, ps_followup_master, and activity_leads for this lead if available
+        try:
+            supabase.table('lead_master').update({'test_drive_done': value_to_store}).eq('uid', lead_uid).execute()
+            print(f"[DEBUG] Successfully updated lead_master.test_drive_done to {value_to_store}")
+        except Exception as _e:
+            print(f"[WARN] propagate lead_master test_drive_done failed: {_e}")
+            # Check if the column exists
+            try:
+                # Try to get the table structure to see if test_drive_done column exists
+                result = supabase.table('lead_master').select('*').limit(1).execute()
+                if result.data:
+                    columns = list(result.data[0].keys())
+                    if 'test_drive_done' not in columns:
+                        print(f"[INFO] lead_master table doesn't have test_drive_done column. Available columns: {columns}")
+                    else:
+                        print(f"[DEBUG] test_drive_done column exists in lead_master")
+            except Exception as col_check_error:
+                print(f"[WARN] Could not check lead_master table structure: {col_check_error}")
+        
+        # Try to update ps_followup_master - handle both regular leads and event leads
+        try:
+            print(f"[DEBUG] Attempting to update ps_followup_master for lead_uid: {lead_uid}")
+            # First try with lead_uid (for regular leads)
+            result = supabase.table('ps_followup_master').update({'test_drive_done': value_to_store}).eq('lead_uid', lead_uid).execute()
+            print(f"[DEBUG] ps_followup_master update by lead_uid result: {result.data}")
+            
+            if not result.data:
+                print(f"[DEBUG] No ps_followup_master record found by lead_uid, trying phone number lookup")
+                # If no update, try to find by customer phone number from activity_leads
+                al_result = supabase.table('activity_leads').select('customer_phone_number').eq('activity_uid', lead_uid).execute()
+                print(f"[DEBUG] activity_leads phone lookup result: {al_result.data}")
+                
+                if al_result.data and al_result.data[0].get('customer_phone_number'):
+                    phone = al_result.data[0]['customer_phone_number']
+                    print(f"[DEBUG] Found phone number: {phone}, attempting update by phone")
+                    # Try to update ps_followup_master by phone number
+                    phone_result = supabase.table('ps_followup_master').update({'test_drive_done': value_to_store}).eq('customer_mobile_number', phone).execute()
+                    print(f"[DEBUG] ps_followup_master update by phone result: {phone_result.data}")
+                else:
+                    print(f"[DEBUG] No phone number found in activity_leads for {lead_uid}")
+            else:
+                print(f"[DEBUG] Successfully updated ps_followup_master by lead_uid")
+        except Exception as _e:
+            print(f"[WARN] propagate ps_followup_master test_drive_done failed: {_e}")
+            import traceback
+            traceback.print_exc()
+        
+        try:
+            result = supabase.table('activity_leads').update({'test_drive_done': value_to_store}).eq('activity_uid', lead_uid).execute()
+            print(f"[DEBUG] Successfully updated activity_leads.test_drive_done to {value_to_store}")
+        except Exception as _e:
+            print(f"[WARN] propagate activity_leads test_drive_done failed: {_e}")
+            # Check if this is an event lead or regular lead
+            try:
+                al_result = supabase.table('activity_leads').select('activity_uid').eq('activity_uid', lead_uid).limit(1).execute()
+                if al_result.data:
+                    print(f"[DEBUG] This is an event lead (activity_uid: {lead_uid})")
+                else:
+                    print(f"[DEBUG] This is not an event lead (no activity_uid: {lead_uid})")
+            except Exception as check_error:
+                print(f"[WARN] Could not check if this is an event lead: {check_error}")
+
+        # Audit
+        try:
+            auth_manager.log_audit_event(
+                user_id=session.get('user_id'),
+                user_type=session.get('user_type'),
+                action='TEST_DRIVE_UPDATE',
+                resource='alltest_drive',
+                resource_id=lead_uid,
+                details={'value': value_to_store, 'locked': locked, 'actor_role': actor_role}
+            )
+        except Exception:
+            pass
+
+        return {'success': True, 'locked': locked, 'value': value_to_store, 'message': 'Updated'}
+    except Exception as e:
+        print(f"[ERROR] set_test_drive_state failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return {'success': False, 'locked': False, 'value': False, 'message': str(e)}
+
+
+def sync_test_drive_to_alltest_drive_enhanced(source_table, original_id, lead_data):
+    """
+    Enhanced sync test drive data to alltest_drive table when test_drive_done is updated
+    Ensures all columns are properly populated and created_at is set on first creation
+    """
+    try:
+        # Check if test_drive_done is not null and is Yes/No or True/False
+        test_drive_done = lead_data.get('test_drive_done')
+        
+        # Handle both boolean and string values
+        if test_drive_done is None:
+            print(f"[DEBUG] No test_drive_done value found in lead_data: {lead_data}")
+            return
+        
+        # Convert boolean to string if needed
+        if test_drive_done is True:
+            test_drive_done = 'Yes'
+        elif test_drive_done is False:
+            test_drive_done = 'No'
+        elif test_drive_done not in ['Yes', 'No']:
+            print(f"[DEBUG] Invalid test_drive_done value: {test_drive_done}")
+            return
+        
+        print(f"[DEBUG] Syncing test drive data for {source_table} - {original_id}: {test_drive_done}")
+        
+        # Check if record already exists in alltest_drive
+        existing_record = supabase.table('alltest_drive').select('*').eq('source_table', source_table).eq('original_id', str(original_id)).execute()
+        
+        # Prepare base data for alltest_drive table
+        alltest_drive_data = {
+            'source_table': source_table,
+            'original_id': str(original_id),
+            'test_drive_done': test_drive_done,
+            'updated_at': datetime.now().isoformat()
+        }
+        
+        print(f"[DEBUG] Base alltest_drive_data: {alltest_drive_data}")
+        print(f"[DEBUG] Lead data keys: {list(lead_data.keys())}")
+        
+        # Map fields based on source table with comprehensive data extraction
+        if source_table == 'walkin_table':
+            walkin_mapping = {
+                'customer_name': lead_data.get('customer_name'),
+                'mobile_number': lead_data.get('mobile_number'),
+                'lead_status': lead_data.get('lead_status'),
+                'lead_category': lead_data.get('lead_category'),
+                'model_interested': lead_data.get('model_interested'),
+                'final_status': lead_data.get('status'),
+                'ps_name': lead_data.get('ps_assigned'),
+                'branch': lead_data.get('branch'),
+                'remarks': lead_data.get('remarks'),
+                'source': 'Walk-in',
+                'lead_source': 'Walk-in'
+            }
+            alltest_drive_data.update(walkin_mapping)
+            # For walkin_table, use uid instead of id
+            alltest_drive_data['original_id'] = lead_data.get('uid', str(original_id))
+            print(f"[DEBUG] Walk-in mapping: {walkin_mapping}")
+            
+        elif source_table == 'ps_followup_master':
+            ps_mapping = {
+                'customer_name': lead_data.get('customer_name'),
+                'mobile_number': lead_data.get('customer_mobile_number'),
+                'lead_status': lead_data.get('lead_status'),
+                'lead_category': lead_data.get('lead_category'),
+                'model_interested': lead_data.get('model_interested'),
+                'final_status': lead_data.get('final_status'),
+                'ps_name': lead_data.get('ps_name'),
+                'branch': lead_data.get('branch') or lead_data.get('ps_branch'),
+                'lead_source': lead_data.get('lead_source'),
+                'cre_name': lead_data.get('cre_name'),
+                'ps_branch': lead_data.get('ps_branch'),
+                'remarks': lead_data.get('remarks'),
+                'source': lead_data.get('source')
+            }
+            alltest_drive_data.update(ps_mapping)
+            print(f"[DEBUG] PS followup mapping: {ps_mapping}")
+            
+        elif source_table == 'activity_leads':
+            activity_mapping = {
+                'customer_name': lead_data.get('customer_name'),
+                'mobile_number': lead_data.get('customer_phone_number'),
+                'lead_status': lead_data.get('lead_status'),
+                'lead_category': lead_data.get('lead_category'),
+                'model_interested': lead_data.get('interested_model'),
+                'final_status': lead_data.get('final_status'),
+                'ps_name': lead_data.get('ps_name'),
+                'branch': lead_data.get('location'),
+                'remarks': lead_data.get('remarks'),
+                'activity_name': lead_data.get('activity_name'),
+                'activity_location': lead_data.get('activity_location'),
+                'customer_location': lead_data.get('customer_location'),
+                'customer_profession': lead_data.get('customer_profession'),
+                'gender': lead_data.get('gender'),
+                'lead_source': lead_data.get('lead_source'),
+                'cre_name': lead_data.get('cre_assigned'),
+                'source': lead_data.get('source')
+            }
+            alltest_drive_data.update(activity_mapping)
+            print(f"[DEBUG] Activity mapping: {activity_mapping}")
+            
+        elif source_table == 'lead_master':
+            lead_master_mapping = {
+                'customer_name': lead_data.get('customer_name'),
+                'mobile_number': lead_data.get('mobile_number'),
+                'lead_status': lead_data.get('lead_status'),
+                'lead_category': lead_data.get('lead_category'),
+                'model_interested': lead_data.get('model_interested'),
+                'final_status': lead_data.get('final_status'),
+                'ps_name': lead_data.get('ps_name'),
+                'branch': lead_data.get('branch'),
+                'lead_source': lead_data.get('lead_source'),
+                'cre_name': lead_data.get('cre_name'),
+                'ps_branch': lead_data.get('ps_branch'),
+                'remarks': lead_data.get('remarks'),
+                'source': lead_data.get('source')
+            }
+            alltest_drive_data.update(lead_master_mapping)
+            print(f"[DEBUG] Lead master mapping: {lead_master_mapping}")
+        
+        # Handle created_at timestamp - set only if record doesn't exist
+        if not existing_record.data:
+            # New record - set created_at to current timestamp
+            alltest_drive_data['created_at'] = datetime.now().isoformat()
+        else:
+            # Existing record - preserve original created_at
+            alltest_drive_data['created_at'] = existing_record.data[0].get('created_at')
+        
+        # Insert or update record in alltest_drive table
+        if existing_record.data:
+            # Update existing record - preserve created_at
+            update_data = {k: v for k, v in alltest_drive_data.items() if k != 'created_at'}
+            print(f"[DEBUG] Updating existing record with data: {update_data}")
+            result = supabase.table('alltest_drive').update(update_data).eq('source_table', source_table).eq('original_id', str(original_id)).execute()
+            print(f"Updated existing test drive record for {source_table} - {original_id}")
+        else:
+            # Insert new record with created_at
+            print(f"[DEBUG] Inserting new record with data: {alltest_drive_data}")
+            result = supabase.table('alltest_drive').insert(alltest_drive_data).execute()
+            print(f"Created new test drive record for {source_table} - {original_id}")
+            
+        print(f"Successfully synced test drive data for {source_table} - {original_id}")
+        
+    except Exception as e:
+        print(f"Error syncing test drive data to alltest_drive: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+# Debug route to check test drive status
+@app.route('/debug/test_drive/<lead_uid>')
+def debug_test_drive(lead_uid):
+    """Debug route to check test drive status for a lead"""
+    try:
+        print(f"[DEBUG] Checking test drive status for: {lead_uid}")
+        
+        # Check activity_leads
+        al_result = supabase.table('activity_leads').select('test_drive_done, customer_phone_number').eq('activity_uid', lead_uid).execute()
+        print(f"[DEBUG] activity_leads result: {al_result.data}")
+        
+        # Check ps_followup_master by lead_uid
+        ps_result = supabase.table('ps_followup_master').select('test_drive_done').eq('lead_uid', lead_uid).execute()
+        print(f"[DEBUG] ps_followup_master by lead_uid result: {ps_result.data}")
+        
+        # Check ps_followup_master by phone number
+        ps_phone_result = None
+        if al_result.data and al_result.data[0].get('customer_phone_number'):
+            phone = al_result.data[0]['customer_phone_number']
+            ps_phone_result = supabase.table('ps_followup_master').select('test_drive_done').eq('customer_mobile_number', phone).execute()
+            print(f"[DEBUG] ps_followup_master by phone {phone} result: {ps_phone_result.data}")
+        
+        # Check lead_master
+        lm_result = None
+        try:
+            lm_result = supabase.table('lead_master').select('test_drive_done').eq('uid', lead_uid).execute()
+            print(f"[DEBUG] lead_master result: {lm_result.data}")
+        except Exception as e:
+            print(f"[DEBUG] lead_master check failed: {e}")
+        
+        # Check alltest_drive table
+        at_result = None
+        try:
+            at_result = supabase.table('alltest_drive').select('*').eq('original_id', lead_uid).execute()
+            print(f"[DEBUG] alltest_drive result: {at_result.data}")
+        except Exception as e:
+            print(f"[DEBUG] alltest_drive check failed: {e}")
+        
+        # Get test drive state
+        test_drive_state = get_test_drive_state(lead_uid)
+        print(f"[DEBUG] Final test drive state: {test_drive_state}")
+        
+        return {
+            'lead_uid': lead_uid,
+            'activity_leads': al_result.data,
+            'ps_followup_master_by_uid': ps_result.data,
+            'ps_followup_master_by_phone': ps_phone_result.data if ps_phone_result else None,
+            'lead_master': lm_result.data if lm_result else None,
+            'alltest_drive': at_result.data if at_result else None,
+            'final_state': test_drive_state
+        }
+        
+    except Exception as e:
+        print(f"[ERROR] Debug route failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return {'error': str(e)}
+
+
+# Debug route to check alltest_drive table directly
+@app.route('/debug/alltest_drive')
+def debug_alltest_drive():
+    """Debug route to check alltest_drive table contents"""
+    try:
+        print(f"[DEBUG] Checking alltest_drive table contents")
+        
+        # Get all records from alltest_drive table
+        result = supabase.table('alltest_drive').select('*').order('updated_at', desc=True).limit(10).execute()
+        print(f"[DEBUG] alltest_drive table result: {result.data}")
+        
+        # Get table structure
+        structure_result = supabase.table('alltest_drive').select('*').limit(1).execute()
+        columns = []
+        if structure_result.data:
+            columns = list(structure_result.data[0].keys())
+        
+        return {
+            'table_name': 'alltest_drive',
+            'columns': columns,
+            'recent_records': result.data,
+            'total_records': len(result.data) if result.data else 0
+        }
+        
+    except Exception as e:
+        print(f"[ERROR] Debug alltest_drive route failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return {'error': str(e)}
 
 
 # Using Flask's built-in tojson filter
@@ -852,10 +1388,13 @@ def fix_missing_timestamps():
 
 # Routes moved to after app initialization
 
+# Import branch head decorator
+from auth import require_branch_head
+
 
 @app.route('/')
 def index():
-    session.clear()  # Ensure no session data is present
+    # Do not clear session on homepage to avoid accidental logout via redirects
     return render_template('index.html')
 @app.route('/unified_login', methods=['POST'])
 @limiter.limit("100000 per minute")
@@ -1989,11 +2528,11 @@ def delete_cre(cre_id):
         
         print(f"[DEBUG] Checking pending leads for CRE: {cre_name}")
         
-        # Check if CRE has any pending leads in lead_master
+        # Check if CRE has any pending leads in lead_master (only leads with completed qualifying calls)
         try:
-            pending_leads_result = supabase.table('lead_master').select('id').eq('cre_name', cre_name).eq('final_status', 'Pending').execute()
+            pending_leads_result = supabase.table('lead_master').select('id').eq('cre_name', cre_name).eq('final_status', 'Pending').not_.is_('first_call_date', 'null').execute()
             pending_count = len(pending_leads_result.data) if pending_leads_result.data else 0
-            print(f"[DEBUG] lead_master pending count: {pending_count}")
+            print(f"[DEBUG] lead_master pending count (qualifying call completed): {pending_count}")
         except Exception as e:
             print(f"[DEBUG] Error checking lead_master: {str(e)}")
             pending_count = 0
@@ -2348,6 +2887,10 @@ def check_duplicate_lead():
             # Found existing lead(s)
             existing_lead = existing_leads[0]  # Get the first one
             
+            # Add timestamp fields for frontend display
+            if existing_lead.get('created_at'):
+                existing_lead['cre_assigned_timestamp'] = existing_lead['created_at']
+            
             # Check if this exact source-subsource combination already exists
             exact_match = any(
                 lead.get('source') == source and lead.get('sub_source') == subsource 
@@ -2390,6 +2933,10 @@ def check_duplicate_lead():
         if duplicate_leads:
             # Found in duplicate_leads table
             duplicate_lead = duplicate_leads[0]
+            
+            # Add timestamp fields for frontend display
+            if duplicate_lead.get('created_at'):
+                duplicate_lead['cre_assigned_timestamp'] = duplicate_lead['created_at']
             
             # Check if this exact source-subsource combination already exists in any slot
             exact_match = False
@@ -2441,7 +2988,7 @@ def check_duplicate_lead():
         return jsonify({'success': False, 'message': f'Error checking duplicate: {str(e)}'}), 500
 
 @app.route('/check_duplicate_walkin_lead', methods=['POST'])
-@require_rec
+@require_ps_or_rec
 def check_duplicate_walkin_lead():
     """
     Check if a walkin lead with the same phone number already exists.
@@ -2817,8 +3364,8 @@ def add_lead():
             flash('Please fill all required fields', 'error')
             return render_template('add_lead.html', branches=branches, ps_users=ps_users)
         
-        # Validate follow_up_date is required when final_status is Pending
-        if final_status == 'Pending' and not follow_up_date:
+        # Validate follow_up_date is required when final_status is Pending (relaxed for RNR)
+        if final_status == 'Pending' and not follow_up_date and lead_status != 'RNR':
             flash('Follow-up date is required when final status is Pending', 'error')
             return render_template('add_lead.html', branches=branches, ps_users=ps_users)
         
@@ -2903,7 +3450,7 @@ def add_lead():
             'updated_at': datetime.now().isoformat(),
             'first_remark': remark,
             'cre_name': cre_name,
-            'first_call_date': date_now
+            'first_call_date': None if lead_status in ['RNR', 'Call me Back'] else date_now
         }
         try:
             # If this is a duplicate with new source, add to duplicate_leads table
@@ -3033,8 +3580,8 @@ def add_lead_optimized():
                 'message': 'Please fill all required fields'
             })
         
-        # Validate follow_up_date is required when final_status is Pending
-        if final_status == 'Pending' and not follow_up_date:
+        # Validate follow_up_date is required when final_status is Pending (relaxed for RNR)
+        if final_status == 'Pending' and not follow_up_date and lead_status != 'RNR':
             return jsonify({
                 'success': False,
                 'message': 'Follow-up date is required when final status is Pending'
@@ -3067,7 +3614,7 @@ def add_lead_optimized():
             'updated_at': datetime.now().isoformat(),
             'first_remark': remark,
             'cre_name': cre_name,
-            'first_call_date': date_now
+            'first_call_date': None if lead_status in ['RNR', 'Call me Back'] else date_now
         }
         
         # Get PS branch if PS is assigned
@@ -3506,8 +4053,8 @@ def cre_dashboard():
         if lead.get('ps_name'):
             assigned_to_ps.append(lead)
 
-        # Pending Leads: any lead with final_status == 'Pending'
-        if final_status == 'Pending':
+        # Pending Leads: only leads with final_status == 'Pending' AND qualifying call completed (first_call_date IS NOT NULL)
+        if final_status == 'Pending' and has_first_call:
             attended_leads.append(lead)
 
         # Untouched Leads (Fresh leads that are still pending)
@@ -3524,6 +4071,10 @@ def cre_dashboard():
                 called_leads.append(lead)
             continue
 
+    # Sort won and lost leads by date in descending order
+    won_leads.sort(key=lambda x: x.get('won_timestamp') or '', reverse=True)
+    lost_leads.sort(key=lambda x: x.get('lost_timestamp') or '', reverse=True)
+    
     print(f"Won leads count: {len(won_leads)}")
     print(f"Lost leads count: {len(lost_leads)}")
     
@@ -3541,13 +4092,14 @@ def cre_dashboard():
     # Get today's followups
     today = date.today()
     today_str = today.isoformat()
-    # Get all leads with follow-up date <= today and final_status = 'Pending'
+    # Get all leads with follow-up date <= today, final_status = 'Pending', qualifying call completed (first_call_date IS NOT NULL)
     todays_followups = []
     for lead in all_leads:
         follow_up_date = lead.get('follow_up_date')
         final_status = lead.get('final_status')
+        has_first_call = lead.get('first_call_date') is not None
         
-        if follow_up_date and final_status == 'Pending':
+        if follow_up_date and final_status == 'Pending' and has_first_call:
             # Parse follow_up_date and check if it's <= today
             try:
                 if 'T' in str(follow_up_date):
@@ -4382,7 +4934,7 @@ def fix_missing_timestamps():
 
 @app.route('/')
 def index():
-    session.clear()  # Ensure no session data is present
+    # Do not clear session on homepage to avoid accidental logout via redirects
     return render_template('index.html')
 @app.route('/unified_login', methods=['POST'])
 @limiter.limit("100000 per minute")
@@ -5499,11 +6051,11 @@ def delete_cre(cre_id):
         
         print(f"[DEBUG] Checking pending leads for CRE: {cre_name}")
         
-        # Check if CRE has any pending leads in lead_master
+        # Check if CRE has any pending leads in lead_master (only leads with completed qualifying calls)
         try:
-            pending_leads_result = supabase.table('lead_master').select('id').eq('cre_name', cre_name).eq('final_status', 'Pending').execute()
+            pending_leads_result = supabase.table('lead_master').select('id').eq('cre_name', cre_name).eq('final_status', 'Pending').not_.is_('first_call_date', 'null').execute()
             pending_count = len(pending_leads_result.data) if pending_leads_result.data else 0
-            print(f"[DEBUG] lead_master pending count: {pending_count}")
+            print(f"[DEBUG] lead_master pending count (qualifying call completed): {pending_count}")
         except Exception as e:
             print(f"[DEBUG] Error checking lead_master: {str(e)}")
             pending_count = 0
@@ -5858,6 +6410,10 @@ def check_duplicate_lead():
             # Found existing lead(s)
             existing_lead = existing_leads[0]  # Get the first one
             
+            # Add timestamp fields for frontend display
+            if existing_lead.get('created_at'):
+                existing_lead['cre_assigned_timestamp'] = existing_lead['created_at']
+            
             # Check if this exact source-subsource combination already exists
             exact_match = any(
                 lead.get('source') == source and lead.get('sub_source') == subsource 
@@ -5900,6 +6456,10 @@ def check_duplicate_lead():
         if duplicate_leads:
             # Found in duplicate_leads table
             duplicate_lead = duplicate_leads[0]
+            
+            # Add timestamp fields for frontend display
+            if duplicate_lead.get('created_at'):
+                duplicate_lead['cre_assigned_timestamp'] = duplicate_lead['created_at']
             
             # Check if this exact source-subsource combination already exists in any slot
             exact_match = False
@@ -6327,8 +6887,8 @@ def add_lead():
             flash('Please fill all required fields', 'error')
             return render_template('add_lead.html', branches=branches, ps_users=ps_users)
         
-        # Validate follow_up_date is required when final_status is Pending
-        if final_status == 'Pending' and not follow_up_date:
+        # Validate follow_up_date is required when final_status is Pending (relaxed for RNR)
+        if final_status == 'Pending' and not follow_up_date and lead_status != 'RNR':
             flash('Follow-up date is required when final status is Pending', 'error')
             return render_template('add_lead.html', branches=branches, ps_users=ps_users)
         
@@ -6413,7 +6973,7 @@ def add_lead():
             'updated_at': datetime.now().isoformat(),
             'first_remark': remark,
             'cre_name': cre_name,
-            'first_call_date': date_now
+            'first_call_date': None if lead_status in ['RNR', 'Call me Back'] else date_now
         }
         try:
             # If this is a duplicate with new source, add to duplicate_leads table
@@ -6543,8 +7103,8 @@ def add_lead_optimized():
                 'message': 'Please fill all required fields'
             })
         
-        # Validate follow_up_date is required when final_status is Pending
-        if final_status == 'Pending' and not follow_up_date:
+        # Validate follow_up_date is required when final_status is Pending (relaxed for RNR)
+        if final_status == 'Pending' and not follow_up_date and lead_status != 'RNR':
             return jsonify({
                 'success': False,
                 'message': 'Follow-up date is required when final status is Pending'
@@ -6577,7 +7137,7 @@ def add_lead_optimized():
             'updated_at': datetime.now().isoformat(),
             'first_remark': remark,
             'cre_name': cre_name,
-            'first_call_date': date_now
+            'first_call_date': None if lead_status in ['RNR', 'Call me Back'] else date_now
         }
         
         # Get PS branch if PS is assigned
@@ -7016,8 +7576,8 @@ def cre_dashboard():
         if lead.get('ps_name'):
             assigned_to_ps.append(lead)
 
-        # Pending Leads: any lead with final_status == 'Pending'
-        if final_status == 'Pending':
+        # Pending Leads: only leads with final_status == 'Pending' AND qualifying call completed (first_call_date IS NOT NULL)
+        if final_status == 'Pending' and has_first_call:
             attended_leads.append(lead)
 
         # Untouched Leads (Fresh leads that are still pending)
@@ -7051,13 +7611,14 @@ def cre_dashboard():
     # Get today's followups
     today = date.today()
     today_str = today.isoformat()
-    # Get all leads with follow-up date <= today and final_status = 'Pending'
+    # Get all leads with follow-up date <= today, final_status = 'Pending', qualifying call completed (first_call_date IS NOT NULL)
     todays_followups = []
     for lead in all_leads:
         follow_up_date = lead.get('follow_up_date')
         final_status = lead.get('final_status')
+        has_first_call = lead.get('first_call_date') is not None
         
-        if follow_up_date and final_status == 'Pending':
+        if follow_up_date and final_status == 'Pending' and has_first_call:
             # Parse follow_up_date and check if it's <= today
             try:
                 if 'T' in str(follow_up_date):
@@ -7170,7 +7731,7 @@ def update_lead(uid):
         lead_statuses = [
             'Busy on another Call', 'RNR', 'Call me Back', 'Interested',
             'Not Interested', 'Did Not Inquire', 'Lost to Competition',
-            'Lost to Co Dealer', 'Call Disconnected', 'Wrong Number'
+            'Lost to Co Dealer', 'Call Disconnected', 'Wrong Number', 'Out of Station'
         ]
 
         if request.method == 'POST':
@@ -7181,7 +7742,7 @@ def update_lead(uid):
 
             # Lock follow_up_date and set final_status for certain statuses
             lock_statuses = ['Booked', 'Retailed']
-            lost_statuses = ['Not Interested', 'Lost to Codealer', 'Lost to Competition']
+            lost_statuses = ['Not Interested', 'Lost to Codealer', 'Lost to Competition', 'Out of Station']
             if lead_status in lock_statuses:
                 update_data['lead_status'] = lead_status
                 update_data['follow_up_date'] = follow_up_date or lead_data.get('follow_up_date')
@@ -7190,6 +7751,14 @@ def update_lead(uid):
                 update_data['lead_status'] = lead_status
                 update_data['follow_up_date'] = follow_up_date or lead_data.get('follow_up_date')
                 update_data['final_status'] = 'Lost'
+                
+                # Handle Out of Station specific logic
+                if lead_status == 'Out of Station':
+                    out_of_station_location = request.form.get('out_of_station_location', '').strip()
+                    if not out_of_station_location:
+                        flash('Location is required when lead status is "Out of Station"', 'error')
+                        return redirect(url_for('update_lead', uid=uid, return_tab=return_tab))
+                    update_data['out_of_station_location'] = out_of_station_location
             else:
                 if lead_status:
                     update_data['lead_status'] = lead_status
@@ -7212,25 +7781,29 @@ def update_lead(uid):
             # Handle PS assignment and email notification
             ps_name = request.form.get('ps_name')
             if ps_name and ps_name != lead_data.get('ps_name'):
+                # Check if PS is active before assignment
+                ps_user = next((ps for ps in ps_users if ps['name'] == ps_name), None)
+                if not ps_user:
+                    flash(f'Product Specialist {ps_name} not found', 'error')
+                    return redirect(url_for('update_lead', uid=uid))
+                
+                if not ps_user.get('is_active', True):
+                    flash(f'Product Specialist {ps_name} is unavailable for today (inactive status)', 'error')
+                    return redirect(url_for('update_lead', uid=uid))
+                
                 update_data['ps_name'] = ps_name
                 update_data['assigned'] = 'Yes'
                 update_data['ps_assigned_at'] = datetime.now().isoformat()
 
-                # Get PS details for followup creation
-                ps_user = next((ps for ps in ps_users if ps['name'] == ps_name), None)
-                if ps_user:
-                    # Create PS followup record
-                    updated_lead_data = {**lead_data, **update_data}
-                    create_or_update_ps_followup(updated_lead_data, ps_name, ps_user['branch'])
+                # Create PS followup record
+                updated_lead_data = {**lead_data, **update_data}
+                create_or_update_ps_followup(updated_lead_data, ps_name, ps_user['branch'])
 
                 # Send email to PS
                 try:
-                    if ps_user:
-                        lead_data_for_email = {**lead_data, **update_data}
-                        socketio.start_background_task(send_email_to_ps, ps_user['email'], ps_user['name'], lead_data_for_email, session.get('cre_name'))
-                        flash(f'Lead assigned to {ps_name} and email notification sent', 'success')
-                    else:
-                        flash(f'Lead assigned to {ps_name}', 'success')
+                    lead_data_for_email = {**lead_data, **update_data}
+                    socketio.start_background_task(send_email_to_ps, ps_user['email'], ps_user['name'], lead_data_for_email, session.get('cre_name'))
+                    flash(f'Lead assigned to {ps_name} and email notification sent', 'success')
                 except Exception as e:
                     print(f"Error sending email: {e}")
                     flash(f'Lead assigned to {ps_name} (email notification failed)', 'warning')
@@ -7245,6 +7818,13 @@ def update_lead(uid):
                     update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 elif final_status == 'Lost':
                     update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+            # If lead status is RNR or Call me Back, ensure first_call_date is NULL
+            if lead_status in ['RNR', 'Call me Back']:
+                update_data['first_call_date'] = None
+                # Also relax follow_up_date if final_status Pending
+                if update_data.get('final_status', lead_data.get('final_status')) == 'Pending':
+                    update_data['follow_up_date'] = update_data.get('follow_up_date') or None
 
             # Handle call dates and remarks - record for all statuses including RNR
             if request.form.get('call_date') and call_remark:
@@ -7294,6 +7874,32 @@ def update_lead(uid):
                     flash('Lead updated successfully', 'success')
                 else:
                     flash('No changes to update', 'info')
+
+                # Apply test drive update after main update
+                cre_test_drive_raw = request.form.get('test_drive_done')
+                if cre_test_drive_raw:
+                    # Check test drive state and validate
+                    test_drive_state = get_test_drive_state(uid)
+                    if test_drive_state['locked']:
+                        flash('Test Drive status is locked and cannot be changed.', 'error')
+                        return redirect(url_for('update_lead', uid=uid, return_tab=return_tab))
+                
+                td_result = set_test_drive_state(uid, 'cre', session.get('cre_name',''), cre_test_drive_raw)
+                if td_result.get('success') and td_result.get('value'):
+                    # Notify counterpart (log)
+                    try:
+                        ps_name_notify = (lead_data.get('ps_name') or update_data.get('ps_name'))
+                        if ps_name_notify:
+                            auth_manager.log_audit_event(
+                                user_id=session.get('user_id'),
+                                user_type='cre',
+                                action='TEST_DRIVE_SYNCED_TO_PS',
+                                resource='lead_master',
+                                resource_id=uid,
+                                details={'ps_name': ps_name_notify}
+                            )
+                    except Exception:
+                        pass
                 
                 # Redirect based on return_tab parameter
                 if return_tab:
@@ -7339,7 +7945,8 @@ def update_lead(uid):
                                next_call=next_call,
                                completed_calls=completed_calls,
                                today=date.today(),
-                               ps_call_summary=ps_call_summary)
+                               ps_call_summary=ps_call_summary,
+                               test_drive_state=get_test_drive_state(uid))
 
     except Exception as e:
         flash(f'Error loading lead: {str(e)}', 'error')
@@ -7534,6 +8141,7 @@ def ps_dashboard():
                         print(f"[DEBUG] Lead {lead.get('lead_uid')} excluded from fresh_leads due to lead_status: {lead_status}")
 
             # Add to today's followups if applicable (exclude Won/Lost and specific statuses)
+            # Show leads that need follow-up today (regardless of qualifying call status)
             follow_up_date = lead.get('follow_up_date')
             if (follow_up_date and final_status == 'Pending' and
                 (not lead_status or lead_status not in excluded_statuses)):
@@ -7549,13 +8157,26 @@ def ps_dashboard():
                         lead_dict['is_overdue'] = followup_date_parsed < datetime.now().date()
                         lead_dict['overdue_days'] = (datetime.now().date() - followup_date_parsed).days
                         todays_followups_regular.append(lead_dict)
-                        print(f"[DEBUG] Added to today's followups: {lead.get('lead_uid')}")
+                        print(f"[DEBUG] Added to today's followups: {lead.get('lead_uid')} - Follow-up date: {follow_up_date}, Parsed: {followup_date_parsed}, Today: {datetime.now().date()}, Overdue: {lead_dict['is_overdue']}")
+                    else:
+                        print(f"[DEBUG] Lead {lead.get('lead_uid')} NOT added - Follow-up date {followup_date_parsed} is in the future (Today: {datetime.now().date()})")
+                        print(f"[DEBUG] Date comparison: {followup_date_parsed} <= {datetime.now().date()} = {followup_date_parsed <= datetime.now().date()}")
+                        print(f"[DEBUG] Date types - followup_date_parsed: {type(followup_date_parsed)}, today: {type(datetime.now().date())}")
                 except (ValueError, TypeError):
                     # If date parsing fails, include the lead for manual review
                     lead_dict['is_overdue'] = False
                     lead_dict['overdue_days'] = 0
                     todays_followups_regular.append(lead_dict)
-                    print(f"[DEBUG] Added to today's followups (date parse failed): {lead.get('lead_uid')}")
+                    print(f"[DEBUG] Added to today's followups (date parse failed): {lead.get('lead_uid')} - Error: {e}")
+            else:
+                # Debug why lead is not being added
+                if follow_up_date and final_status == 'Pending':
+                    print(f"[DEBUG] Lead {lead.get('lead_uid')} NOT added to today's followups:")
+                    print(f"  - Has follow_up_date: {bool(follow_up_date)}")
+                    print(f"  - Lead status excluded: {lead_status in excluded_statuses if lead_status else False}")
+                    print(f"  - Lead status: {lead_status}")
+                    print(f"  - Final status: {final_status}")
+                    print(f"  - Follow-up date: {follow_up_date}")
 
 
 
@@ -7684,7 +8305,9 @@ def ps_dashboard():
                         print(f"[DEBUG] Event lead {lead_dict['lead_uid']} excluded from fresh_leads due to lead_status: {lead_status}")
 
             # Add event leads with today's ps_followup_date_ts to today's followups
+            # Show leads that need follow-up today (regardless of qualifying call status)
             ps_followup_date_ts = lead.get('ps_followup_date_ts')
+            print(f"[DEBUG] Event lead {lead_dict['lead_uid']} - ps_followup_date_ts: {ps_followup_date_ts}, final_status: {final_status}, lead_status: {lead_status}")
             if (ps_followup_date_ts and
                 str(ps_followup_date_ts)[:10] == today_str and
                 final_status not in ['Won', 'Lost'] and
@@ -7692,7 +8315,15 @@ def ps_dashboard():
                 # Set follow_up_date for template compatibility
                 lead_dict['follow_up_date'] = str(ps_followup_date_ts)
                 todays_followups_event.append(lead_dict)
-                print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to today's followups")
+                print(f"[DEBUG] Event lead {lead_dict['lead_uid']} added to today's followups - Follow-up date: {ps_followup_date_ts}, Today string: {today_str}")
+            else:
+                if ps_followup_date_ts and final_status not in ['Won', 'Lost']:
+                    print(f"[DEBUG] Event lead {lead_dict['lead_uid']} NOT added to today's followups:")
+                    print(f"  - Has ps_followup_date_ts: {bool(ps_followup_date_ts)}")
+                    print(f"  - Date string comparison: {str(ps_followup_date_ts)[:10]} == {today_str} = {str(ps_followup_date_ts)[:10] == today_str}")
+                    print(f"  - Lead status excluded: {lead_status in excluded_statuses if lead_status else False}")
+                    print(f"  - Lead status: {lead_status}")
+                    print(f"  - Final status: {final_status}")
 
         print(f"[PERF] ps_dashboard: event leads processing took {time.time() - t3:.3f} seconds")
 
@@ -7743,6 +8374,8 @@ def ps_dashboard():
                 print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to lost_leads")
             elif final_status == 'Pending' or not final_status:
                 # Add to today's followups if next_followup_date is <= today
+                # Show leads that need follow-up today (regardless of qualifying call status)
+                print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} - next_followup_date: {next_followup_date}")
                 if next_followup_date:
                     try:
                         if 'T' in str(next_followup_date):
@@ -7756,7 +8389,7 @@ def ps_dashboard():
                             lead_dict['overdue_days'] = (datetime.now().date() - followup_date_parsed).days
                             lead_dict['follow_up_date'] = str(next_followup_date)
                             todays_followups_walkin.append(lead_dict)
-                            print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to today's followups")
+                            print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to today's followups - Follow-up date: {next_followup_date}, Parsed: {followup_date_parsed}, Today: {datetime.now().date()}, Overdue: {lead_dict['is_overdue']}")
                     except (ValueError, TypeError):
                         # If date parsing fails, include the lead for manual review
                         lead_dict['is_overdue'] = False
@@ -7766,10 +8399,11 @@ def ps_dashboard():
                         print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} added to today's followups (date parse failed)")
                 
                 # Add to pending leads if no first call has been made yet
-                first_call_date = lead.get('first_call_date')
+                if not next_followup_date:
+                    print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} NOT added to today's followups - missing next_followup_date")
                 # Get lead_status for walk-in leads (use status field or default to None)
                 lead_status = lead.get('status') or lead.get('lead_status')
-                print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} - first_call_date: {first_call_date}, lead_status: {lead_status}")
+                print(f"[DEBUG] Walk-in lead {lead_dict['lead_uid']} - lead_status: {lead_status}")
                 
                 # For walk-in leads, check if any call dates exist
                 has_any_call = any(lead.get(f'{i}_call_date') for i in range(1, 8))
@@ -7844,6 +8478,15 @@ def ps_dashboard():
         # Merge today's followup lists
         todays_followups = todays_followups_regular + todays_followups_event + todays_followups_walkin
 
+        print(f"[DEBUG] Today's followups breakdown:")
+        print(f"  - Regular leads: {len(todays_followups_regular)}")
+        print(f"  - Event leads: {len(todays_followups_event)}")
+        print(f"  - Walk-in leads: {len(todays_followups_walkin)}")
+        print(f"  - Total: {len(todays_followups)}")
+        print(f"[DEBUG] Regular leads in today's followups: {[lead.get('lead_uid') for lead in todays_followups_regular]}")
+        print(f"[DEBUG] Event leads in today's followups: {[lead.get('lead_uid') for lead in todays_followups_event]}")
+        print(f"[DEBUG] Walk-in leads in today's followups: {[lead.get('lead_uid') for lead in todays_followups_walkin]}")
+
         print(f"[PERF] ps_dashboard: final processing took {time.time() - t5:.3f} seconds")
 
         t6 = time.time()
@@ -7879,7 +8522,22 @@ def ps_dashboard():
         print(f"[DEBUG] Lost leads being sent to template: {[lead.get('lead_uid') for lead in lost_leads]}")
         print(f"[DEBUG] Event leads being sent to template: {[lead.get('lead_uid') for lead in event_leads]}")
         print(f"[DEBUG] Walk-in leads count: {len(walkin_leads) if walkin_leads else 0}")
-        print(f"[DEBUG] Today's followups count: {len(todays_followups)}")
+        print(f"[DEBUG] Today's followups being sent to template: {[lead.get('lead_uid') for lead in todays_followups]}")
+        print(f"[DEBUG] Today's followups count being sent to template: {len(todays_followups)}")
+        print(f"[DEBUG] Today's followups breakdown:")
+        print(f"  - Regular leads: {len(todays_followups_regular)}")
+        print(f"  - Event leads: {len(todays_followups_event)}")
+        print(f"  - Walk-in leads: {len(todays_followups_walkin)}")
+        print(f"[DEBUG] Today's followups details:")
+        for i, lead in enumerate(todays_followups):
+            print(f"  {i+1}. {lead.get('lead_uid', 'N/A')} - {lead.get('customer_name', 'N/A')} - Follow-up: {lead.get('follow_up_date', 'N/A')}")
+        
+        # Debug date comparison issues
+        print(f"[DEBUG] Date comparison debug:")
+        print(f"  - date.today(): {date.today()}")
+        print(f"  - datetime.now().date(): {datetime.now().date()}")
+        print(f"  - today_str: {today_str if 'today_str' in locals() else 'Not defined'}")
+        
         print(f"[PERF] ps_dashboard TOTAL took {time.time() - start_time:.3f} seconds")
         
         # Add session data to template context for debugging
@@ -7992,11 +8650,25 @@ def update_walkin_lead(walkin_id):
                 redirect_url = url_for('update_walkin_lead', walkin_id=walkin_id, return_tab=return_tab)
                 return redirect(redirect_url)
             
-            # Validate test_drive_done is required
-            if not test_drive_done:
-                flash('Test Drive Done field is required.', 'error')
-                redirect_url = url_for('update_walkin_lead', walkin_id=walkin_id, return_tab=return_tab)
-                return redirect(redirect_url)
+            # Check test drive state and validate
+            test_drive_state = get_test_drive_state(walkin_lead['uid'])
+            if test_drive_state['locked']:
+                # When locked, use the locked value instead of form input
+                test_drive_done = 'Yes' if test_drive_state['value'] else 'No'
+                flash('Test Drive status is locked and cannot be changed.', 'warning')
+                
+                # If test drive is completed and locked, ensure lead status reflects this
+                if test_drive_state['value'] and lead_status == 'Test Drive':
+                    # Test drive is done, so update lead status to next appropriate status
+                    if not lead_status or lead_status == 'Test Drive':
+                        lead_status = 'Interested'  # Default to Interested after test drive
+                        flash('Lead status automatically updated to "Interested" since test drive is completed.', 'info')
+            else:
+                # Validate test_drive_done is required only when not locked
+                if not test_drive_done:
+                    flash('Test Drive Done field is required.', 'error')
+                    redirect_url = url_for('update_walkin_lead', walkin_id=walkin_id, return_tab=return_tab)
+                    return redirect(redirect_url)
             
             followup_no = submitted_followup_no
             
@@ -8054,13 +8726,20 @@ def update_walkin_lead(walkin_id):
                     remarks=call_remark if call_remark else None
                 )
             
-            # Sync to alltest_drive table if test_drive_done is set
-            if test_drive_done in ['Yes', 'No', True, False]:
-                # Get the updated walkin lead data for syncing
-                updated_walkin_result = supabase.table('walkin_table').select('*').eq('id', walkin_id).execute()
-                if updated_walkin_result.data:
-                    updated_walkin_data = updated_walkin_result.data[0]
-                    sync_test_drive_to_alltest_drive('walkin_table', walkin_id, updated_walkin_data)
+            # Update test drive state using the centralized function (only if not locked)
+            if not test_drive_state['locked'] and test_drive_done in ['Yes', 'No', True, False]:
+                td_result = set_test_drive_state(walkin_lead['uid'], 'ps', ps_name, test_drive_done)
+                if not td_result.get('success'):
+                    flash(f'Warning: Test drive update failed: {td_result.get("message")}', 'warning')
+            
+            # Additional sync to alltest_drive with comprehensive data
+            try:
+                # Get updated walk-in lead data for comprehensive sync
+                updated_walkin_lead = supabase.table('walkin_table').select('*').eq('id', walkin_id).execute()
+                if updated_walkin_lead.data:
+                    sync_test_drive_to_alltest_drive_enhanced('walkin_table', walkin_lead['uid'], updated_walkin_lead.data[0])
+            except Exception as e:
+                print(f"Warning: Additional sync to alltest_drive failed: {e}")
             
             flash(f'Walk-in lead updated successfully! Follow-up {followup_no} recorded.', 'success')
             redirect_url = url_for('ps_dashboard', tab=return_tab)
@@ -8100,7 +8779,8 @@ def update_walkin_lead(walkin_id):
             next_call=next_call,
             completed_calls=completed_calls,
             available_calls=available_calls,
-            models=models
+            models=models,
+            test_drive_state=get_test_drive_state(walkin_lead['uid'])
         )
         
     except Exception as e:
@@ -8164,11 +8844,17 @@ def update_ps_lead(uid):
                     update_data['lead_category'] = lead_category
                 if model_interested:
                     update_data['model_interested'] = model_interested
-                # Test Drive Done is now required
-                if not test_drive_done:
-                    flash('Test Drive Done field is required', 'error')
-                    return redirect(url_for('update_ps_lead', uid=uid, return_tab=return_tab))
-                update_data['test_drive_done'] = test_drive_done
+                # Check test drive state and validate
+                test_drive_state = get_test_drive_state(uid)
+                if test_drive_state['locked']:
+                    # Skip test drive validation when status is locked
+                    pass
+                else:
+                    # Test Drive Done is now required only when not locked
+                    if not test_drive_done:
+                        flash('Test Drive Done field is required', 'error')
+                        return redirect(url_for('update_ps_lead', uid=uid, return_tab=return_tab))
+                    update_data['test_drive_done'] = test_drive_done
                 if request.form.get('follow_up_date'):
                     update_data['follow_up_date'] = follow_up_date
                 if request.form.get('final_status'):
@@ -8207,13 +8893,20 @@ def update_ps_lead(uid):
                     if update_data:
                         supabase.table('ps_followup_master').update(update_data).eq('lead_uid', uid).execute()
                         
-                        # Sync to alltest_drive table if test_drive_done is set
+                        # Update test drive state using the centralized function
                         if test_drive_done in ['Yes', 'No', True, False]:
-                            # Get the updated ps_followup data for syncing
-                            updated_ps_result = supabase.table('ps_followup_master').select('*').eq('lead_uid', uid).execute()
-                            if updated_ps_result.data:
-                                updated_ps_data = updated_ps_result.data[0]
-                                sync_test_drive_to_alltest_drive('ps_followup_master', uid, updated_ps_data)
+                            td_result = set_test_drive_state(uid, 'ps', session.get('ps_name'), test_drive_done)
+                            if not td_result.get('success'):
+                                flash(f'Warning: Test drive update failed: {td_result.get("message")}', 'warning')
+                        
+                        # Additional comprehensive sync to alltest_drive
+                        try:
+                            # Get updated PS followup data for comprehensive sync
+                            updated_ps_data = supabase.table('ps_followup_master').select('*').eq('lead_uid', uid).execute()
+                            if updated_ps_data.data:
+                                sync_test_drive_to_alltest_drive_enhanced('ps_followup_master', uid, updated_ps_data.data[0])
+                        except Exception as e:
+                            print(f"Warning: Additional sync to alltest_drive failed for PS lead {uid}: {e}")
                         
                         # Also update the main lead table final status
                         if request.form.get('final_status'):
@@ -8250,7 +8943,8 @@ def update_ps_lead(uid):
                                        next_call=next_call,
                                        completed_calls=completed_calls,
                                        today=date.today(),
-                                       cre_call_summary=cre_call_summary)
+                                       cre_call_summary=cre_call_summary,
+                                       test_drive_state=get_test_drive_state(uid))
         else:
             flash('Lead not found', 'error')
             redirect_url = url_for('ps_dashboard', tab=return_tab)
@@ -8340,7 +9034,7 @@ def update_lead_optimized(uid):
         lead_statuses = [
             'Busy on another Call', 'RNR', 'Call me Back', 'Interested',
             'Not Interested', 'Did Not Inquire', 'Lost to Competition',
-            'Lost to Co Dealer', 'Call Disconnected', 'Wrong Number'
+            'Lost to Co Dealer', 'Call Disconnected', 'Wrong Number', 'Out of Station'
         ]
 
         if request.method == 'POST':
@@ -8354,7 +9048,7 @@ def update_lead_optimized(uid):
 
             # Lock follow_up_date and set final_status for certain statuses
             lock_statuses = ['Booked', 'Retailed']
-            lost_statuses = ['Not Interested', 'Lost to Codealer', 'Lost to Competition']
+            lost_statuses = ['Not Interested', 'Lost to Codealer', 'Lost to Competition', 'Out of Station']
 
             if lead_status in lock_statuses:
                 update_data['lead_status'] = lead_status
@@ -8364,6 +9058,14 @@ def update_lead_optimized(uid):
                 update_data['lead_status'] = lead_status
                 update_data['follow_up_date'] = follow_up_date or lead_data.get('follow_up_date')
                 update_data['final_status'] = 'Lost'
+                
+                # Handle Out of Station specific logic
+                if lead_status == 'Out of Station':
+                    out_of_station_location = request.form.get('out_of_station_location', '').strip()
+                    if not out_of_station_location:
+                        flash('Location is required when lead status is "Out of Station"', 'error')
+                        return redirect(url_for('update_lead_optimized', uid=uid, return_tab=return_tab))
+                    update_data['out_of_station_location'] = out_of_station_location
             else:
                 if lead_status:
                     update_data['lead_status'] = lead_status
@@ -9019,7 +9721,7 @@ def analytics():
 
         # Branch performance
         branch_performance = []
-        branches = set([ps.get('branch') for ps in all_ps if ps.get('branch')])
+        branches = set([ps.get('branch') for ps in all_ps if ps.get('branch') and ps.get('branch') != 'TEST'])
         for branch in branches:
             branch_ps = [ps for ps in all_ps if ps.get('branch') == branch]
             ps_names = [ps['name'] for ps in branch_ps]
@@ -9155,6 +9857,10 @@ def analytics():
         # Calculate conversion rates and format data
         campaign_platform_counts = []
         for key, data in campaign_platform_data.items():
+            # Filter out rows where pending leads count is 0
+            if data['pending'] == 0:
+                continue
+                
             conversion_rate = round((data['won'] / data['total_leads'] * 100) if data['total_leads'] > 0 else 0, 1)
             
             campaign_platform_counts.append({
@@ -11212,7 +11918,8 @@ def activity_event():
                             'customer_phone_number': customer_phone,
                             'created_at': datetime.now().isoformat(),
                             'lead_category': lead_statuses[i] if i < len(lead_statuses) else 'WARM',
-                            'cre_assigned': cre_assigned
+                            'cre_assigned': cre_assigned,
+                            'final_status': 'Pending'
                         }
                         
                         # Insert into activity_leads
@@ -11505,6 +12212,54 @@ def cre_call_attempt_history_json(uid):
         return jsonify({'success': True, 'history': sorted_history})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e), 'history': []})
+
+@app.route('/api/cre_call_stats_batch', methods=['POST'])
+@require_auth(['cre', 'admin'])
+def cre_call_stats_batch():
+    """Return call attempt statistics for multiple leads (for CRE dashboard inline display)"""
+    try:
+        data = request.get_json()
+        uids = data.get('uids', [])
+        
+        print(f"API called with UIDs: {uids}")
+        
+        if not uids:
+            return jsonify({'success': True, 'stats': {}})
+        
+        # Get call attempt history for all UIDs in one query
+        history_result = supabase.table('cre_call_attempt_history').select('uid,status').in_('uid', uids).execute()
+        history = history_result.data if history_result.data else []
+        
+        print(f"Found {len(history)} call history records")
+        
+        # Calculate statistics for each UID
+        stats = {}
+        for uid in uids:
+            uid_history = [h for h in history if h.get('uid') == uid]
+            
+            total_calls = len(uid_history)
+            rnr_count = len([h for h in uid_history if h.get('status') == 'RNR'])
+            busy_count = len([h for h in uid_history if h.get('status') == 'Busy on another Call'])
+            call_me_back_count = len([h for h in uid_history if h.get('status') == 'Call me Back'])
+            call_not_connected_count = len([h for h in uid_history if h.get('status') == 'Call not Connected'])
+            connected_count = len([h for h in uid_history if h.get('status') == 'Connected'])
+            
+            stats[uid] = {
+                'total_calls': total_calls,
+                'rnr_calls': rnr_count,
+                'busy_calls': busy_count,
+                'call_me_back': call_me_back_count,
+                'call_not_connected': call_not_connected_count,
+                'connected_calls': connected_count
+            }
+            
+            print(f"UID {uid}: {total_calls} total calls, {rnr_count} RNR, {busy_count} busy, {call_me_back_count} callback, {call_not_connected_count} not connected, {connected_count} connected")
+        
+        print(f"Returning stats for {len(stats)} UIDs")
+        return jsonify({'success': True, 'stats': stats})
+    except Exception as e:
+        print(f"Error in cre_call_stats_batch: {str(e)}")
+        return jsonify({'success': False, 'message': str(e), 'stats': {}})
 
 
 @app.route('/ps_call_attempt_history_json/<uid>')
@@ -12144,6 +12899,7 @@ def download_lead_master():
             ('branch', 'Branch'),
             ('ps_name', 'PS Name'),
             ('lead_status', 'Lead Status'),
+            ('out_of_station_location', 'Out of Station Location'),
             ('first_call_date', 'First Call Date'),
             ('first_call_remark', 'First Call Remark'),
             ('second_call_date', 'Second Call Date'),
@@ -12649,11 +13405,18 @@ def cre_analytics_data():
         
         # Get current CRE name from session
         current_cre = session.get('cre_name')
+        print(f"DEBUG: Session CRE name: '{current_cre}'")
+        print(f"DEBUG: Session data: {dict(session)}")
         
         # Get all leads data
         all_leads = safe_get_data('lead_master')
         cre_users = safe_get_data('cre_users')
         active_cre_users = [cre for cre in cre_users if cre.get('is_active', True)]
+        
+        # Debug: Check available CRE names in data
+        unique_cre_names = set(lead.get('cre_name') for lead in all_leads if lead.get('cre_name'))
+        print(f"DEBUG: Available CRE names in database: {sorted(unique_cre_names)}")
+        print(f"DEBUG: Active CRE users: {[cre.get('name') for cre in active_cre_users]}")
         
         # Helper function to parse timestamps
         def parse_timestamp(timestamp_str):
@@ -12690,10 +13453,17 @@ def cre_analytics_data():
             from_date_obj = parse_date_input(from_date_str)
             to_date_obj = parse_date_input(to_date_str)
             
+            print(f"DEBUG: Date filter - from_date_str: {from_date_str}, to_date_str: {to_date_str}")
+            print(f"DEBUG: Date filter - from_date_obj: {from_date_obj}, to_date_obj: {to_date_obj}")
+            print(f"DEBUG: Date filter - target_date: {target_date}, target_date_obj: {target_date_obj}")
+            
             if not from_date_obj or not to_date_obj:
+                print(f"DEBUG: Invalid date format, including all")
                 return True  # Invalid date format, include all
             
-            return from_date_obj <= target_date_obj <= to_date_obj
+            result = from_date_obj <= target_date_obj <= to_date_obj
+            print(f"DEBUG: Date filter result: {result}")
+            return result
         
         # Get filtered leaderboard for all active CREs
         def get_filtered_all_cre_leaderboard():
@@ -12824,6 +13594,214 @@ def cre_analytics_data():
                 platform_data[platform]['conversion_rate'] = round(conversion_rate, 2)
             return platform_data
         
+        # Get leads assigned by category for all CREs
+        def get_leads_assigned_by_category():
+            category_data = {}
+            
+            print(f"DEBUG: active_cre_users count: {len(active_cre_users)}")
+            print(f"DEBUG: all_leads count: {len(all_leads)}")
+            print(f"DEBUG: Sample all_leads: {all_leads[:3] if len(all_leads) > 0 else 'No leads'}")
+            
+            # Initialize data structure for all active CREs
+            for cre in active_cre_users:
+                cre_name = cre.get('name')
+                if cre_name:
+                    category_data[cre_name] = {
+                        'hot': 0,
+                        'cold': 0,
+                        'warm': 0,
+                        'not_interested': 0,
+                        'not_set': 0
+                    }
+            
+            print(f"DEBUG: Initialized category_data for CREs: {list(category_data.keys())}")
+            print(f"DEBUG: Sample active_cre_users: {active_cre_users[:3] if len(active_cre_users) > 0 else 'No active CRE users'}")
+            
+            # Process leads and count by category
+            processed_leads = 0
+            filtered_leads = 0
+            for lead in all_leads:
+                processed_leads += 1
+                cre_name = lead.get('cre_name')
+                # Handle None values safely
+                lead_category_raw = lead.get('lead_category')
+                lead_category = lead_category_raw.lower() if lead_category_raw else ''
+                
+                if processed_leads <= 5:  # Debug first 5 leads
+                    print(f"DEBUG: Lead {processed_leads}: cre_name={cre_name}, lead_category={lead_category}, cre_assigned_at={lead.get('cre_assigned_at')}")
+                
+                if cre_name in category_data and lead.get('cre_assigned_at'):
+                    # Check if lead is within date filter
+                    assigned_date = parse_timestamp(lead.get('cre_assigned_at'))
+                    if is_within_date_filter(assigned_date):
+                        filtered_leads += 1
+                        # Map lead categories to our table columns
+                        if lead_category in ['hot']:
+                            category_data[cre_name]['hot'] += 1
+                        elif lead_category in ['cold']:
+                            category_data[cre_name]['cold'] += 1
+                        elif lead_category in ['warm']:
+                            category_data[cre_name]['warm'] += 1
+                        elif lead_category in ['not interested', 'not_interested']:
+                            category_data[cre_name]['not_interested'] += 1
+                        elif lead_category in ['not set', 'not_set', ''] or not lead_category:
+                            category_data[cre_name]['not_set'] += 1
+                    else:
+                        if processed_leads <= 5:  # Debug first 5 leads
+                            print(f"DEBUG: Lead {processed_leads} filtered out by date: assigned_date={assigned_date}")
+                else:
+                    if processed_leads <= 5:  # Debug first 5 leads
+                        if cre_name not in category_data:
+                            print(f"DEBUG: Lead {processed_leads} skipped - cre_name '{cre_name}' not in active CREs")
+                        if not lead.get('cre_assigned_at'):
+                            print(f"DEBUG: Lead {processed_leads} skipped - no cre_assigned_at")
+            
+            print(f"DEBUG: Processed {processed_leads} leads, filtered {filtered_leads} leads")
+            print(f"DEBUG: Final category_data: {category_data}")
+            return category_data
+        
+        leads_category_data = get_leads_assigned_by_category()
+        print(f"DEBUG: Final response leads_assigned_by_category: {leads_category_data}")
+        
+        # Get summary metrics for current CRE
+        def get_summary_metrics():
+            cre_leads = [lead for lead in all_leads if lead.get('cre_name') == current_cre]
+            print(f"DEBUG: Current CRE: {current_cre}")
+            print(f"DEBUG: Total leads in database: {len(all_leads)}")
+            print(f"DEBUG: Leads for current CRE: {len(cre_leads)}")
+            
+            # Debug: Show sample lead data
+            if cre_leads:
+                sample_lead = cre_leads[0]
+                print(f"DEBUG: Sample lead data: {sample_lead}")
+                print(f"DEBUG: Sample lead_status: '{sample_lead.get('lead_status')}'")
+                print(f"DEBUG: Sample lead_category: '{sample_lead.get('lead_category')}'")
+                print(f"DEBUG: Sample final_status: '{sample_lead.get('final_status')}'")
+                print(f"DEBUG: Sample cre_name: '{sample_lead.get('cre_name')}'")
+            
+            # Parse date filters
+            from_date = None
+            to_date = None
+            if from_date_str:
+                from_date = datetime.strptime(from_date_str, '%Y-%m-%d').date()
+            if to_date_str:
+                to_date = datetime.strptime(to_date_str, '%Y-%m-%d').date()
+            
+            # Total leads assigned to current CRE (DATE FILTERED based on cre_assigned_at)
+            total_leads = 0
+            for lead in cre_leads:
+                if lead.get('cre_assigned_at'):
+                    assigned_date = parse_timestamp(lead.get('cre_assigned_at'))
+                    if assigned_date:
+                        assigned_date_only = assigned_date.date()
+                        # Apply date filter if provided
+                        if from_date and assigned_date_only < from_date:
+                            continue
+                        if to_date and assigned_date_only > to_date:
+                            continue
+                        total_leads += 1
+            
+            # Hot leads (lead_category = 'Hot') (DATE FILTERED based on cre_assigned_at)
+            hot_leads = 0
+            for lead in cre_leads:
+                lead_category = lead.get('lead_category')
+                if lead_category == 'Hot':
+                    # Apply date filter based on cre_assigned_at
+                    if lead.get('cre_assigned_at'):
+                        assigned_date = parse_timestamp(lead.get('cre_assigned_at'))
+                        if assigned_date:
+                            assigned_date_only = assigned_date.date()
+                            # Apply date filter if provided
+                            if from_date and assigned_date_only < from_date:
+                                continue
+                            if to_date and assigned_date_only > to_date:
+                                continue
+                            hot_leads += 1
+                            print(f"DEBUG: Found Hot lead: {lead.get('customer_name')} - lead_category: {lead_category}")
+            
+            print(f"DEBUG: Total cre_leads for {current_cre}: {len(cre_leads)}")
+            print(f"DEBUG: Hot leads count: {hot_leads}")
+            
+            # FTD Assigned (Today's leads assigned using cre_assigned_at timestamp) - INDEPENDENT OF DATE FILTER
+            ftd_assigned = 0
+            today = datetime.now().date()
+            for lead in cre_leads:
+                if lead.get('cre_assigned_at'):
+                    assigned_date = parse_timestamp(lead.get('cre_assigned_at'))
+                    if assigned_date and assigned_date.date() == today:
+                        ftd_assigned += 1
+            
+            # MTD Assigned (Current ongoing month leads assigned) - INDEPENDENT OF DATE FILTER
+            mtd_assigned = 0
+            current_month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            current_month_end = (current_month_start.replace(day=1) + timedelta(days=32)).replace(day=1) - timedelta(seconds=1)
+            
+            for lead in cre_leads:
+                if lead.get('cre_assigned_at'):
+                    assigned_date = parse_timestamp(lead.get('cre_assigned_at'))
+                    if assigned_date and current_month_start <= assigned_date <= current_month_end:
+                        mtd_assigned += 1
+            
+            # FTD Retails (Today's retails using won_timestamp = today date) - INDEPENDENT OF DATE FILTER
+            ftd_retails = 0
+            for lead in cre_leads:
+                if lead.get('final_status') == 'Won' and lead.get('won_timestamp'):
+                    won_date = parse_timestamp(lead.get('won_timestamp'))
+                    if won_date and won_date.date() == today:
+                        ftd_retails += 1
+                        print(f"DEBUG: Found today's retail: {lead.get('customer_name')} - won_timestamp: {lead.get('won_timestamp')}")
+            
+            # MTD Retails (Ongoing month retails using won_timestamp = ongoing month) - INDEPENDENT OF DATE FILTER
+            mtd_retails = 0
+            for lead in cre_leads:
+                if lead.get('final_status') == 'Won' and lead.get('won_timestamp'):
+                    won_date = parse_timestamp(lead.get('won_timestamp'))
+                    if won_date and current_month_start <= won_date <= current_month_end:
+                        mtd_retails += 1
+                        print(f"DEBUG: Found current month retail: {lead.get('customer_name')} - won_timestamp: {lead.get('won_timestamp')}")
+            
+            # Total Retails (All won cases for current CRE) - DATE FILTERED based on won_timestamp
+            total_retails = 0
+            for lead in cre_leads:
+                if lead.get('final_status') == 'Won' and lead.get('won_timestamp'):
+                    won_date = parse_timestamp(lead.get('won_timestamp'))
+                    if won_date:
+                        won_date_only = won_date.date()
+                        # Apply date filter if provided
+                        if from_date and won_date_only < from_date:
+                            continue
+                        if to_date and won_date_only > to_date:
+                            continue
+                        total_retails += 1
+                        print(f"DEBUG: Found retail (date filtered): {lead.get('customer_name')} - won_timestamp: {lead.get('won_timestamp')}")
+            
+            print(f"DEBUG: Today's date: {today}")
+            print(f"DEBUG: Current month range: {current_month_start.date()} to {current_month_end.date()}")
+            print(f"DEBUG: FTD retails count: {ftd_retails}")
+            print(f"DEBUG: MTD retails count: {mtd_retails}")
+            print(f"DEBUG: Total retails count (date filtered): {total_retails}")
+            
+            print(f"DEBUG: Summary metrics calculation:")
+            print(f"DEBUG: - Total leads (date filtered): {total_leads}")
+            print(f"DEBUG: - Hot leads (date filtered): {hot_leads}")
+            print(f"DEBUG: - FTD Assigned (today, independent): {ftd_assigned}")
+            print(f"DEBUG: - MTD Assigned (current month, independent): {mtd_assigned}")
+            print(f"DEBUG: - FTD Retails (today, independent): {ftd_retails}")
+            print(f"DEBUG: - MTD Retails (current month, independent): {mtd_retails}")
+            print(f"DEBUG: - Total Retails (date filtered): {total_retails}")
+            
+            return {
+                'total_leads': total_leads,
+                'hot_leads': hot_leads,
+                'ftd_assigned': ftd_assigned,
+                'mtd_assigned': mtd_assigned,
+                'ftd_retails': ftd_retails,
+                'mtd_retails': mtd_retails,
+                'total_retails': total_retails
+            }
+        
+        summary_metrics = get_summary_metrics()
+        
         return jsonify({
             'success': True,
             'from_date': from_date_str,
@@ -12831,7 +13809,9 @@ def cre_analytics_data():
             'top_5_leaderboard': get_filtered_all_cre_leaderboard()[:5],
             'cre_platform_conversion': get_filtered_cre_platform_conversion(),
             'cre_platform_conversion_live': get_cre_platform_conversion_live(),
-            'cre_overall_stats': get_filtered_cre_overall_stats()
+            'cre_overall_stats': get_filtered_cre_overall_stats(),
+            'leads_assigned_by_category': leads_category_data,
+            'summary_metrics': summary_metrics
         })
         
     except Exception as e:
@@ -13010,12 +13990,27 @@ def update_event_lead(activity_uid):
                 update_data['lead_category'] = lead_category
             if interested_model:
                 update_data['interested_model'] = interested_model
-            # Test Drive Done is now required
-            if not test_drive_done:
-                flash('Test Drive Done field is required', 'error')
-                redirect_url = url_for('update_event_lead', activity_uid=activity_uid, return_tab=return_tab)
-                return redirect(redirect_url)
-            update_data['test_drive_done'] = test_drive_done
+            # Check test drive state and validate
+            test_drive_state = get_test_drive_state(activity_uid)
+            if test_drive_state['locked']:
+                # Skip test drive validation when status is locked
+                pass
+            else:
+                # Test Drive Done is now required only when not locked
+                if not test_drive_done:
+                    flash('Test Drive Done field is required', 'error')
+                    redirect_url = url_for('update_event_lead', activity_uid=activity_uid, return_tab=return_tab)
+                    return redirect(redirect_url)
+            # Convert string values to boolean for the database
+            if test_drive_done == 'Yes' or test_drive_done == 'true' or test_drive_done == True:
+                update_data['test_drive_done'] = True
+            elif test_drive_done == 'No' or test_drive_done == 'false' or test_drive_done == False:
+                update_data['test_drive_done'] = False
+            elif test_drive_done == '' or test_drive_done is None:
+                # Skip updating test_drive_done when empty or None to avoid PostgreSQL error
+                pass
+            else:
+                update_data['test_drive_done'] = None
             if customer_location:
                 update_data['customer_location'] = customer_location
             if ps_followup_date_ts:
@@ -13051,13 +14046,72 @@ def update_event_lead(activity_uid):
                         remarks=call_remark if call_remark else None
                     )
                 
-                # Sync to alltest_drive table if test_drive_done is set
+                # Update test drive state using the centralized function
                 if test_drive_done in ['Yes', 'No', True, False]:
-                    # Get the updated activity lead data for syncing
-                    updated_activity_result = supabase.table('activity_leads').select('*').eq('activity_uid', activity_uid).execute()
-                    if updated_activity_result.data:
-                        updated_activity_data = updated_activity_result.data[0]
-                        sync_test_drive_to_alltest_drive('activity_leads', activity_uid, updated_activity_data)
+                    td_result = set_test_drive_state(activity_uid, 'ps', session.get('ps_name'), test_drive_done)
+                    if not td_result.get('success'):
+                        flash(f'Warning: Test drive update failed: {td_result.get("message")}', 'warning')
+                
+                # Additional comprehensive sync to alltest_drive
+                try:
+                    # Get updated activity lead data for comprehensive sync
+                    updated_activity_data = supabase.table('activity_leads').select('*').eq('activity_uid', activity_uid).execute()
+                    if updated_activity_data.data:
+                        sync_test_drive_to_alltest_drive_enhanced('activity_leads', activity_uid, updated_activity_data.data[0])
+                except Exception as e:
+                    print(f"Warning: Additional sync to alltest_drive failed for event lead {activity_uid}: {e}")
+                
+                # Ensure ps_followup_master has a record for this event lead
+                try:
+                    print(f"[DEBUG] Checking if ps_followup_master record exists for event lead {activity_uid}")
+                    existing_ps_followup = supabase.table('ps_followup_master').select('*').eq('lead_uid', activity_uid).execute()
+                    print(f"[DEBUG] Existing ps_followup_master records: {existing_ps_followup.data}")
+                    
+                    if not existing_ps_followup.data:
+                        print(f"[DEBUG] No ps_followup_master record found, creating new one")
+                        # Create ps_followup_master record for this event lead
+                        ps_followup_data = {
+                            'lead_uid': activity_uid,
+                            'ps_name': session.get('ps_name'),
+                            'ps_branch': lead.get('location'),
+                            'customer_name': lead.get('customer_name'),
+                            'customer_mobile_number': lead.get('customer_phone_number'),
+                            'source': 'Activity',
+                            'cre_name': lead.get('cre_assigned'),
+                            'lead_category': lead.get('lead_category'),
+                            'model_interested': lead.get('interested_model'),
+                            'final_status': lead.get('final_status') or 'Pending',
+                            'ps_assigned_at': datetime.now().isoformat(),
+                            'created_at': lead.get('created_at') or datetime.now().isoformat(),
+                            'test_drive_done': value_to_store if test_drive_done == 'Yes' else False
+                        }
+                        print(f"[DEBUG] Creating ps_followup_master with data: {ps_followup_data}")
+                        try:
+                            insert_result = supabase.table('ps_followup_master').insert(ps_followup_data).execute()
+                            print(f"[DEBUG] ps_followup_master insert result: {insert_result.data}")
+                            print(f"Created ps_followup_master record for event lead {activity_uid}")
+                        except Exception as insert_error:
+                            print(f"[WARN] Failed to insert ps_followup_master due to constraint: {insert_error}")
+                            # Try to update by phone number instead
+                            if lead.get('customer_phone_number'):
+                                try:
+                                    phone_update = supabase.table('ps_followup_master').update({
+                                        'test_drive_done': True if test_drive_done == 'Yes' else False
+                                    }).eq('customer_mobile_number', lead.get('customer_phone_number')).execute()
+                                    print(f"[DEBUG] Updated ps_followup_master by phone: {phone_update.data}")
+                                except Exception as phone_error:
+                                    print(f"[WARN] Failed to update by phone: {phone_error}")
+                    else:
+                        print(f"[DEBUG] ps_followup_master record already exists, updating test_drive_done")
+                        # Update existing record with test drive status
+                        update_result = supabase.table('ps_followup_master').update({
+                            'test_drive_done': True if test_drive_done == 'Yes' else False
+                        }).eq('lead_uid', activity_uid).execute()
+                        print(f"[DEBUG] ps_followup_master update result: {update_result.data}")
+                except Exception as e:
+                    print(f"Warning: Failed to create/update ps_followup_master record: {e}")
+                    import traceback
+                    traceback.print_exc()
                 
                 flash('Event lead updated successfully', 'success')
                 return redirect(url_for('ps_dashboard', tab=return_tab))
@@ -13075,7 +14129,8 @@ def update_event_lead(activity_uid):
                              completed_calls=completed_calls, 
                              ps_call_history=ps_call_history,
                              cre_call_history=cre_call_history,
-                             today=date.today())
+                             today=date.today(),
+                             test_drive_state=get_test_drive_state(activity_uid))
     except Exception as e:
         print(f'[DEBUG] Exception in update_event_lead: {str(e)}')
         print(f'[DEBUG] Exception type: {type(e)}')
@@ -13170,8 +14225,20 @@ def update_event_lead_cre(activity_uid):
                 update_data['lead_status'] = lead_status
             if final_status:
                 update_data['final_status'] = final_status
+            # Check test drive state and validate
+            test_drive_state = get_test_drive_state(activity_uid)
+            if test_drive_state['locked']:
+                # Skip test drive validation when status is locked
+                pass
+            
             if test_drive_done:
-                update_data['test_drive_done'] = test_drive_done
+                # Convert string values to boolean for the database
+                if test_drive_done == 'Yes':
+                    update_data['test_drive_done'] = True
+                elif test_drive_done == 'No':
+                    update_data['test_drive_done'] = False
+                else:
+                    update_data['test_drive_done'] = test_drive_done
             
             # Handle CRE call date/remark for the next call
             skip_statuses = ["Call not Connected", "RNR", "Call me Back", "Busy on another Call"]
@@ -13188,13 +14255,72 @@ def update_event_lead_cre(activity_uid):
             if update_data:
                 supabase.table('activity_leads').update(update_data).eq('activity_uid', activity_uid).execute()
                 
-                # Sync to alltest_drive table if test_drive_done is set
+                # Update test drive state using the centralized function
                 if test_drive_done in ['Yes', 'No', True, False]:
-                    # Get the updated activity lead data for syncing
-                    updated_activity_result = supabase.table('activity_leads').select('*').eq('activity_uid', activity_uid).execute()
-                    if updated_activity_result.data:
-                        updated_activity_data = updated_activity_result.data[0]
-                        sync_test_drive_to_alltest_drive('activity_leads', activity_uid, updated_activity_data)
+                    td_result = set_test_drive_state(activity_uid, 'cre', session.get('cre_name'), test_drive_done)
+                    if not td_result.get('success'):
+                        flash(f'Warning: Test drive update failed: {td_result.get("message")}', 'warning')
+                
+                # Additional comprehensive sync to alltest_drive
+                try:
+                    # Get updated activity lead data for comprehensive sync
+                    updated_activity_data = supabase.table('activity_leads').select('*').eq('activity_uid', activity_uid).execute()
+                    if updated_activity_data.data:
+                        sync_test_drive_to_alltest_drive_enhanced('activity_leads', activity_uid, updated_activity_data.data[0])
+                except Exception as e:
+                    print(f"Warning: Additional sync to alltest_drive failed for CRE event lead {activity_uid}: {e}")
+                
+                # Ensure ps_followup_master has a record for this event lead
+                try:
+                    print(f"[DEBUG] Checking if ps_followup_master record exists for event lead {activity_uid}")
+                    existing_ps_followup = supabase.table('ps_followup_master').select('*').eq('lead_uid', activity_uid).execute()
+                    print(f"[DEBUG] Existing ps_followup_master records: {existing_ps_followup.data}")
+                    
+                    if not existing_ps_followup.data:
+                        print(f"[DEBUG] No ps_followup_master record found, creating new one")
+                        # Create ps_followup_master record for this event lead
+                        ps_followup_data = {
+                            'lead_uid': activity_uid,
+                            'ps_name': lead.get('ps_name'),
+                            'ps_branch': lead.get('location'),
+                            'customer_name': lead.get('customer_name'),
+                            'customer_mobile_number': lead.get('customer_phone_number'),
+                            'source': 'Activity',
+                            'cre_name': session.get('cre_name'),
+                            'lead_category': lead.get('lead_category'),
+                            'model_interested': lead.get('interested_model'),
+                            'final_status': lead.get('final_status') or 'Pending',
+                            'ps_assigned_at': datetime.now().isoformat(),
+                            'created_at': lead.get('created_at') or datetime.now().isoformat(),
+                            'test_drive_done': value_to_store if test_drive_done == 'Yes' else False
+                        }
+                        print(f"[DEBUG] Creating ps_followup_master with data: {ps_followup_data}")
+                        try:
+                            insert_result = supabase.table('ps_followup_master').insert(ps_followup_data).execute()
+                            print(f"[DEBUG] ps_followup_master insert result: {insert_result.data}")
+                            print(f"Created ps_followup_master record for event lead {activity_uid}")
+                        except Exception as insert_error:
+                            print(f"[WARN] Failed to insert ps_followup_master due to constraint: {insert_error}")
+                            # Try to update by phone number instead
+                            if lead.get('customer_phone_number'):
+                                try:
+                                    phone_update = supabase.table('ps_followup_master').update({
+                                        'test_drive_done': True if test_drive_done == 'Yes' else False
+                                    }).eq('customer_mobile_number', lead.get('customer_phone_number')).execute()
+                                    print(f"[DEBUG] Updated ps_followup_master by phone: {phone_update.data}")
+                                except Exception as phone_error:
+                                    print(f"[WARN] Failed to update by phone: {phone_error}")
+                    else:
+                        print(f"[DEBUG] ps_followup_master record already exists, updating test_drive_done")
+                        # Update existing record with test drive status
+                        update_result = supabase.table('ps_followup_master').update({
+                            'test_drive_done': True if test_drive_done == 'Yes' else False
+                        }).eq('lead_uid', activity_uid).execute()
+                        print(f"[DEBUG] ps_followup_master update result: {update_result.data}")
+                except Exception as e:
+                    print(f"Warning: Failed to create/update ps_followup_master record: {e}")
+                    import traceback
+                    traceback.print_exc()
                 
                 flash('Event lead updated successfully', 'success')
                 # Redirect based on return_tab parameter
@@ -13222,7 +14348,8 @@ def update_event_lead_cre(activity_uid):
                              completed_calls=completed_calls, 
                              cre_call_history=cre_call_history,
                              ps_call_history=ps_call_history,
-                             today=date.today())
+                             today=date.today(),
+                             test_drive_state=get_test_drive_state(activity_uid))
     except Exception as e:
         flash(f'Error updating event lead: {str(e)}', 'error')
         return redirect(url_for('cre_dashboard'))
@@ -13817,6 +14944,14 @@ def cre_dashboard_leads():
         # Select the appropriate list based on status
         leads_list = won_leads if status == 'won' else lost_leads
         
+        # Sort leads by won/lost date in descending order
+        if status == 'won':
+            # Sort won leads by won_timestamp in descending order
+            leads_list.sort(key=lambda x: x.get('won_timestamp') or '', reverse=True)
+        else:
+            # Sort lost leads by lost_timestamp in descending order
+            leads_list.sort(key=lambda x: x.get('lost_timestamp') or '', reverse=True)
+        
         # Render only the table HTML
         return render_template('cre_dashboard_leads_table.html', 
                              leads_list=leads_list, 
@@ -14128,7 +15263,7 @@ def view_walkin_call_history(uid):
         return redirect(url_for('rec_dashboard'))
 
 @app.route('/add_walkin_lead', methods=['GET', 'POST'])
-@require_rec
+@require_ps_or_rec
 def add_walkin_lead():
 
     # Models and branches (customize as needed)
@@ -14154,8 +15289,13 @@ def add_walkin_lead():
         customer_location = request.form.get('customer_location')
         model_interested = request.form['model_interested']
         occupation = request.form.get('occupation')
-        branch = request.form['branch']
-        ps_assigned = request.form['ps_assigned']
+        branch = request.form.get('branch', '')
+        ps_assigned = request.form.get('ps_assigned', '')
+        
+        # Enforce PS context: when PS submits, force branch and PS to their own
+        if session.get('user_type') == 'ps':
+            branch = session.get('branch') or branch
+            ps_assigned = session.get('ps_name') or ps_assigned
         
         # Normalize phone number
         normalized_phone = ''.join(filter(str.isdigit, mobile_number))
@@ -14443,15 +15583,22 @@ def add_walkin_lead():
                 else:
                     flash(f'Error adding walk-in lead: {error_str}', 'danger')
 
-    # Get receptionist's branch from session
-    rec_branch = session.get('rec_branch', '')
+    # Determine default values based on role
+    default_branch = ''
+    default_ps_name = ''
+    if session.get('user_type') == 'rec':
+        default_branch = session.get('rec_branch', '')
+    elif session.get('user_type') == 'ps':
+        default_branch = session.get('branch', '')
+        default_ps_name = session.get('ps_name', '')
     
     return render_template(
         'add_walkin_lead.html',
         models=models,
         branches=branches,
         ps_options_json=ps_options_json,
-        default_branch=rec_branch
+        default_branch=default_branch,
+        default_ps_name=default_ps_name
     )
 
 @app.route('/api/branch_analytics/ps_performance')
@@ -14965,9 +16112,9 @@ def api_branch_summary():
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
         
-        # Get all branches from ps_followup_master
+        # Get all branches from ps_followup_master (excluding TEST branch)
         branches_query = supabase.table('ps_followup_master').select('ps_branch').not_.is_('ps_branch', 'null').execute()
-        branches = list(set([row.get('ps_branch') for row in (branches_query.data or []) if row.get('ps_branch')]))
+        branches = list(set([row.get('ps_branch') for row in (branches_query.data or []) if row.get('ps_branch') and row.get('ps_branch') != 'TEST']))
         
         branch_summary = []
         
@@ -15854,8 +17001,8 @@ def api_ps_followup_leads():
 def api_cre_pending_leads():
     """API to get pending leads summary for CRE transfer from lead_master only"""
     try:
-        # Get all pending leads from lead_master grouped by CRE only
-        lead_result = supabase.table('lead_master').select('cre_name').eq('final_status', 'Pending').execute()
+        # Get all pending leads from lead_master grouped by CRE only (only leads with completed qualifying calls)
+        lead_result = supabase.table('lead_master').select('cre_name').eq('final_status', 'Pending').not_.is_('first_call_date', 'null').execute()
         lead_pending_leads = lead_result.data if lead_result.data else []
         
         # Group leads by CRE and count them from lead_master only
@@ -16142,11 +17289,11 @@ def api_transfer_options():
 def api_branches():
     """API to get all available branches"""
     try:
-        # Get unique branches from ps_users table
+        # Get unique branches from ps_users table (excluding TEST branch)
         ps_result = supabase.table('ps_users').select('branch').eq('is_active', True).execute()
         branches = []
         if ps_result.data:
-            branches = list(set([ps.get('branch', '').strip() for ps in ps_result.data if ps.get('branch', '').strip()]))
+            branches = list(set([ps.get('branch', '').strip() for ps in ps_result.data if ps.get('branch', '').strip() and ps.get('branch', '').strip() != 'TEST']))
             branches.sort()  # Sort alphabetically
         
         return jsonify({
@@ -16699,13 +17846,11 @@ def get_system_branches():
     return [
         'SOMAJIGUDA', 
         'ATTAPUR', 
-        'BEGUMPET', 
         'KOMPALLY', 
         'MALAKPET', 
         'SRINAGAR COLONY', 
         'TOLICHOWKI',
-        'VANASTHALIPURAM',
-        'TEST'  # New TEST branch for development/testing
+        'VANASTHALIPURAM'
     ]
 
 def get_branch_display_name(branch_code):
@@ -16713,15 +17858,45 @@ def get_branch_display_name(branch_code):
     branch_names = {
         'SOMAJIGUDA': 'Somajiguda',
         'ATTAPUR': 'Attapur',
-        'BEGUMPET': 'Begumpet',
         'KOMPALLY': 'Kompally',
         'MALAKPET': 'Malakpet',
         'SRINAGAR COLONY': 'Srinagar Colony',
         'TOLICHOWKI': 'Tolichowki',
-        'VANASTHALIPURAM': 'Vanasthalipuram',
-        'TEST': 'TEST Branch'
+        'VANASTHALIPURAM': 'Vanasthalipuram'
     }
     return branch_names.get(branch_code, branch_code)
+
+
+# =====================================================
+# ADMIN UTILITY ROUTES
+# =====================================================
+
+@app.route('/fix_event_leads_final_status')
+@require_admin
+def fix_event_leads_final_status():
+    """Fix existing event leads that have NULL final_status by setting them to 'Pending'"""
+    try:
+        # Find all event leads with NULL final_status
+        null_status_leads = supabase.table('activity_leads').select('activity_uid, customer_name, final_status').is_('final_status', 'null').execute()
+        
+        if not null_status_leads.data:
+            flash('No event leads with NULL final_status found.', 'info')
+            return redirect(url_for('admin_dashboard'))
+        
+        # Update all NULL final_status to 'Pending'
+        update_result = supabase.table('activity_leads').update({'final_status': 'Pending'}).is_('final_status', 'null').execute()
+        
+        updated_count = len(null_status_leads.data)
+        flash(f'Successfully updated {updated_count} event leads: NULL final_status → Pending', 'success')
+        
+        print(f"✅ Fixed {updated_count} event leads with NULL final_status")
+        
+        return redirect(url_for('admin_dashboard'))
+        
+    except Exception as e:
+        print(f"❌ Error fixing event leads final_status: {e}")
+        flash(f'Error fixing event leads: {str(e)}', 'error')
+        return redirect(url_for('admin_dashboard'))
 
 
 # =====================================================
@@ -17083,6 +18258,310 @@ def api_documentation():
     }
     
     return jsonify(docs)
+
+
+# =====================================================
+# PS MANAGEMENT API ENDPOINTS FOR BRANCH HEADS
+# =====================================================
+
+@app.route('/api/branch_add_ps', methods=['POST'])
+@require_branch_head
+def branch_add_ps():
+    """Add a new PS user to the branch"""
+    try:
+        data = request.get_json()
+        name = data.get('name', '').strip()
+        username = data.get('username', '').strip()
+        phone = data.get('phone', '').strip()
+        email = data.get('email', '').strip()
+        password = data.get('password', '').strip()
+        
+        if not all([name, username, phone, email, password]):
+            return jsonify({'success': False, 'message': 'All fields are required'})
+        
+        # Get current branch from session
+        branch = session.get('branch_head_branch')
+        
+        # Check if username already exists
+        existing_user = supabase.table('ps_users').select('id').eq('username', username).execute()
+        if existing_user.data:
+            return jsonify({'success': False, 'message': 'Username already exists'})
+        
+        # Hash the password
+        from werkzeug.security import generate_password_hash
+        password_hash = generate_password_hash(password)
+        
+        # Create PS user
+        ps_data = {
+            'name': name,
+            'username': username,
+            'phone': phone,
+            'email': email,
+            'password_hash': password_hash,
+            'branch': branch,
+            'role': 'ps',
+            'is_active': True,
+            'created_at': datetime.now().isoformat()
+        }
+        
+        result = supabase.table('ps_users').insert(ps_data).execute()
+        
+        if result.data:
+            # Log the action
+            auth_manager.log_audit_event(
+                user_id=session.get('user_id'),
+                user_type=session.get('user_type'),
+                action='PS_USER_CREATED',
+                resource='ps_users',
+                details={
+                    'ps_name': name,
+                    'ps_username': username,
+                    'branch': branch
+                }
+            )
+            
+            return jsonify({
+                'success': True,
+                'message': f'PS user {name} created successfully'
+            })
+        else:
+            return jsonify({'success': False, 'message': 'Failed to create PS user'})
+            
+    except Exception as e:
+        print(f"Error creating PS user: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+
+
+@app.route('/api/branch_toggle_ps_status/<int:ps_id>', methods=['POST'])
+@require_branch_head
+def branch_toggle_ps_status(ps_id):
+    """Toggle PS user active status"""
+    try:
+        data = request.get_json()
+        active = data.get('active', False)
+        
+        # Get current PS info for logging
+        ps_result = supabase.table('ps_users').select('name, branch').eq('id', ps_id).execute()
+        if not ps_result.data:
+            return jsonify({'success': False, 'message': 'PS user not found'})
+        
+        ps_info = ps_result.data[0]
+        current_branch = session.get('branch_head_branch')
+        
+        # Verify PS belongs to the branch head's branch
+        if ps_info['branch'] != current_branch:
+            return jsonify({'success': False, 'message': 'You can only manage PS users in your branch'})
+        
+        # Update the status
+        result = supabase.table('ps_users').update({'is_active': active}).eq('id', ps_id).execute()
+        
+        if result.data:
+            # Log the action
+            auth_manager.log_audit_event(
+                user_id=session.get('user_id'),
+                user_type=session.get('user_type'),
+                action='PS_STATUS_TOGGLE',
+                resource='ps_users',
+                details={
+                    'ps_id': ps_id,
+                    'ps_name': ps_info['name'],
+                    'branch': ps_info['branch'],
+                    'new_status': 'Active' if active else 'Inactive'
+                }
+            )
+            
+            return jsonify({
+                'success': True,
+                'message': f'PS user {"activated" if active else "deactivated"} successfully'
+            })
+        else:
+            return jsonify({'success': False, 'message': 'Failed to update PS status'})
+            
+    except Exception as e:
+        print(f"Error toggling PS status: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+
+
+@app.route('/api/branch_update_ps_info/<int:ps_id>', methods=['POST'])
+@require_branch_head
+def branch_update_ps_info(ps_id):
+    """Update PS user contact information"""
+    try:
+        data = request.get_json()
+        phone = data.get('phone', '').strip()
+        email = data.get('email', '').strip()
+        
+        if not all([phone, email]):
+            return jsonify({'success': False, 'message': 'Phone and email are required'})
+        
+        # Get current PS info for logging
+        ps_result = supabase.table('ps_users').select('name, branch, phone, email').eq('id', ps_id).execute()
+        if not ps_result.data:
+            return jsonify({'success': False, 'message': 'PS user not found'})
+        
+        ps_info = ps_result.data[0]
+        current_branch = session.get('branch_head_branch')
+        
+        # Verify PS belongs to the branch head's branch
+        if ps_info['branch'] != current_branch:
+            return jsonify({'success': False, 'message': 'You can only manage PS users in your branch'})
+        
+        # Update the information
+        result = supabase.table('ps_users').update({
+            'phone': phone,
+            'email': email
+        }).eq('id', ps_id).execute()
+        
+        if result.data:
+            # Log the action
+            auth_manager.log_audit_event(
+                user_id=session.get('user_id'),
+                user_type=session.get('user_type'),
+                action='PS_INFO_UPDATE',
+                resource='ps_users',
+                details={
+                    'ps_id': ps_id,
+                    'ps_name': ps_info['name'],
+                    'branch': ps_info['branch'],
+                    'old_phone': ps_info['phone'],
+                    'new_phone': phone,
+                    'old_email': ps_info['email'],
+                    'new_email': email
+                }
+            )
+            
+            return jsonify({
+                'success': True,
+                'message': 'PS contact information updated successfully'
+            })
+        else:
+            return jsonify({'success': False, 'message': 'Failed to update PS information'})
+            
+    except Exception as e:
+        print(f"Error updating PS info: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+
+
+@app.route('/get_branch_list')
+@require_admin
+def get_branch_list():
+    """Get list of all branches for dropdown"""
+    try:
+        # Get all unique branches from ps_users table
+        result = supabase.table('ps_users').select('branch').execute()
+        
+        if not result.data:
+            return jsonify({
+                'success': True,
+                'branch_list': []
+            })
+        
+        # Extract unique branches
+        branches = list(set([ps['branch'] for ps in result.data if ps.get('branch') and ps['branch'] != 'TEST']))
+        branches.sort()
+        
+        branch_list = [{'name': branch} for branch in branches]
+        
+        return jsonify({
+            'success': True,
+            'branch_list': branch_list
+        })
+        
+    except Exception as e:
+        print(f"Error getting branch list: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+
+
+@app.route('/api/ps_performance_analytics')
+@require_admin
+def api_ps_performance_analytics():
+    """Get PS performance analytics data for analytics dashboard"""
+    try:
+        # Get filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        branch_filter = request.args.get('branch')
+        
+        # Build query for ps_followup_master
+        query = supabase.table('ps_followup_master').select('ps_name, ps_branch, ps_assigned_at, lead_status')
+        
+        # Apply date filters
+        if start_date:
+            query = query.gte('ps_assigned_at', start_date)
+        if end_date:
+            query = query.lte('ps_assigned_at', end_date)
+        
+        # Apply branch filter
+        if branch_filter:
+            query = query.eq('ps_branch', branch_filter)
+        
+        result = query.execute()
+        
+        if not result.data:
+            return jsonify({
+                'success': True,
+                'data': []
+            })
+        
+        # Process data to calculate performance metrics
+        ps_performance = {}
+        for lead in result.data:
+            ps_name = lead.get('ps_name')
+            branch = lead.get('ps_branch')
+            
+            if not ps_name:
+                continue
+            
+            if ps_name not in ps_performance:
+                ps_performance[ps_name] = {
+                    'ps_name': ps_name,
+                    'branch': branch,
+                    'leads_assigned': 0,
+                    'leads_contacted': 0
+                }
+            
+            ps_performance[ps_name]['leads_assigned'] += 1
+            if lead.get('lead_status'):
+                ps_performance[ps_name]['leads_contacted'] += 1
+        
+        # Calculate gap and format result
+        result_data = []
+        for ps_name, stats in ps_performance.items():
+            gap = stats['leads_assigned'] - stats['leads_contacted']
+            result_data.append({
+                'ps_name': stats['ps_name'],
+                'branch': stats['branch'],
+                'leads_assigned': stats['leads_assigned'],
+                'leads_contacted': stats['leads_contacted'],
+                'gap': gap
+            })
+        
+        # Sort by leads assigned (descending)
+        result_data.sort(key=lambda x: x['leads_assigned'], reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'data': result_data
+        })
+        
+    except Exception as e:
+        print(f"Error in ps_performance_analytics API: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
 
 
 if __name__ == '__main__':
