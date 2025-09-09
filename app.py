@@ -64,6 +64,29 @@ socketio = SocketIO(
     max_http_buffer_size=1e8
 )
 
+# CORS configuration for external submission endpoints
+ALLOWED_CORS_ORIGINS = {
+    'https://www.raamather.com',
+    'http://www.raamather.com',
+    'http://localhost:3000',
+}
+
+@app.after_request
+def add_cors_headers(response):
+    try:
+        origin = request.headers.get('Origin')
+        if origin and origin in ALLOWED_CORS_ORIGINS:
+            # Only expose CORS for the external API paths
+            if request.path.startswith('/api/submit_') or request.path == '/api/docs':
+                response.headers['Access-Control-Allow-Origin'] = origin
+                response.headers['Vary'] = 'Origin'
+                response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+                response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+                response.headers['Access-Control-Max-Age'] = '86400'
+    except Exception:
+        pass
+    return response
+
 # Routes moved to end of file for proper registration
 
 # Reduce Flask log noise
@@ -17912,11 +17935,14 @@ def websocket_user_info():
 # EXTERNAL API ENDPOINTS - For external data submission
 # =====================================================
 
-@app.route('/api/submit_lead', methods=['POST'])
+@app.route('/api/submit_lead', methods=['POST', 'OPTIONS'])
 def submit_external_lead():
     """External API endpoint that uses the same logic as CRE users"""
     try:
         print(f"🔍 External lead submission requested")
+        # Handle CORS preflight
+        if request.method == 'OPTIONS':
+            return ('', 204)
         
         # Get JSON data from external system
         data = request.get_json()
@@ -18016,11 +18042,14 @@ def submit_external_lead():
             'message': f'Internal server error: {str(e)}'
         }), 500
 
-@app.route('/api/submit_contact', methods=['POST'])
+@app.route('/api/submit_contact', methods=['POST', 'OPTIONS'])
 def submit_external_contact():
     """External API endpoint for submitting contact forms"""
     try:
         print(f"🔍 External contact submission requested")
+        # Handle CORS preflight
+        if request.method == 'OPTIONS':
+            return ('', 204)
         
         data = request.get_json()
         
@@ -18077,11 +18106,14 @@ def submit_external_contact():
             'message': f'Internal server error: {str(e)}'
         }), 500
 
-@app.route('/api/submit_enquiry', methods=['POST'])
+@app.route('/api/submit_enquiry', methods=['POST', 'OPTIONS'])
 def submit_external_enquiry():
     """External API endpoint for submitting enquiries"""
     try:
         print(f"🔍 External enquiry submission requested")
+        # Handle CORS preflight
+        if request.method == 'OPTIONS':
+            return ('', 204)
         
         data = request.get_json()
         
