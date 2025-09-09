@@ -697,6 +697,32 @@ def require_admin(f):
     return decorated_function
 
 
+def require_ps_or_rec(f):
+    """Decorator to require PS or Receptionist access without hard logout.
+    Falls back to previous dashboard if available instead of clearing session.
+    """
+
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        user_type = session.get('user_type')
+        if user_type in ('ps', 'rec'):
+            return f(*args, **kwargs)
+
+        # Soft-deny: try to send back to a relevant dashboard
+        try:
+            ref = request.referrer or ''
+        except Exception:
+            ref = ''
+
+        flash('PS or Receptionist access required', 'error')
+        if 'ps_dashboard' in ref:
+            return redirect(url_for('ps_dashboard'))
+        if 'rec_dashboard' in ref:
+            return redirect(url_for('rec_dashboard'))
+        return redirect(url_for('index'))
+
+    return decorated_function
+
 def require_cre(f):
     """Decorator to require CRE access"""
 

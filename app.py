@@ -17,7 +17,7 @@ import io
 from dotenv import load_dotenv
 from collections import defaultdict, Counter
 import json
-from auth import AuthManager, require_auth, require_admin, require_cre, require_ps, require_rec
+from auth import AuthManager, require_auth, require_admin, require_cre, require_ps, require_rec, require_ps_or_rec
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from security_verification import run_security_verification
@@ -63,6 +63,39 @@ socketio = SocketIO(
     ping_interval=25,
     max_http_buffer_size=1e8
 )
+
+# CORS configuration for external submission endpoints
+ALLOWED_CORS_ORIGINS = {
+    'https://www.raamather.com',
+    'http://www.raamather.com',
+    'https://raamather.com',
+    'http://raamather.com',
+    'https://epicleads.in',
+    'http://epicleads.in',
+    'https://raamather.netlify.app',
+    'http://raamather.netlify.app',
+    'http://localhost:3000',
+    'https://localhost:3000',
+    'http://127.0.0.1:3000',
+    'https://127.0.0.1:3000',
+}
+
+@app.after_request
+def add_cors_headers(response):
+    try:
+        origin = request.headers.get('Origin')
+        if origin and origin in ALLOWED_CORS_ORIGINS:
+            # Apply CORS to all API routes
+            if request.path.startswith('/api/'):
+                requested_headers = request.headers.get('Access-Control-Request-Headers', 'Content-Type, Authorization')
+                response.headers['Access-Control-Allow-Origin'] = origin
+                response.headers['Vary'] = 'Origin'
+                response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+                response.headers['Access-Control-Allow-Headers'] = requested_headers
+                response.headers['Access-Control-Max-Age'] = '86400'
+    except Exception:
+        pass
+    return response
 
 # Routes moved to end of file for proper registration
 
@@ -1361,7 +1394,7 @@ from auth import require_branch_head
 
 @app.route('/')
 def index():
-    session.clear()  # Ensure no session data is present
+    # Do not clear session on homepage to avoid accidental logout via redirects
     return render_template('index.html')
 @app.route('/unified_login', methods=['POST'])
 @limiter.limit("100000 per minute")
@@ -2955,7 +2988,7 @@ def check_duplicate_lead():
         return jsonify({'success': False, 'message': f'Error checking duplicate: {str(e)}'}), 500
 
 @app.route('/check_duplicate_walkin_lead', methods=['POST'])
-@require_rec
+@require_ps_or_rec
 def check_duplicate_walkin_lead():
     """
     Check if a walkin lead with the same phone number already exists.
@@ -4901,7 +4934,7 @@ def fix_missing_timestamps():
 
 @app.route('/')
 def index():
-    session.clear()  # Ensure no session data is present
+    # Do not clear session on homepage to avoid accidental logout via redirects
     return render_template('index.html')
 @app.route('/unified_login', methods=['POST'])
 @limiter.limit("100000 per minute")
@@ -15230,7 +15263,7 @@ def view_walkin_call_history(uid):
         return redirect(url_for('rec_dashboard'))
 
 @app.route('/add_walkin_lead', methods=['GET', 'POST'])
-@require_rec
+@require_ps_or_rec
 def add_walkin_lead():
 
     # Models and branches (customize as needed)
@@ -15256,8 +15289,13 @@ def add_walkin_lead():
         customer_location = request.form.get('customer_location')
         model_interested = request.form['model_interested']
         occupation = request.form.get('occupation')
-        branch = request.form['branch']
-        ps_assigned = request.form['ps_assigned']
+        branch = request.form.get('branch', '')
+        ps_assigned = request.form.get('ps_assigned', '')
+        
+        # Enforce PS context: when PS submits, force branch and PS to their own
+        if session.get('user_type') == 'ps':
+            branch = session.get('branch') or branch
+            ps_assigned = session.get('ps_name') or ps_assigned
         
         # Normalize phone number
         normalized_phone = ''.join(filter(str.isdigit, mobile_number))
@@ -15545,15 +15583,22 @@ def add_walkin_lead():
                 else:
                     flash(f'Error adding walk-in lead: {error_str}', 'danger')
 
-    # Get receptionist's branch from session
-    rec_branch = session.get('rec_branch', '')
+    # Determine default values based on role
+    default_branch = ''
+    default_ps_name = ''
+    if session.get('user_type') == 'rec':
+        default_branch = session.get('rec_branch', '')
+    elif session.get('user_type') == 'ps':
+        default_branch = session.get('branch', '')
+        default_ps_name = session.get('ps_name', '')
     
     return render_template(
         'add_walkin_lead.html',
         models=models,
         branches=branches,
         ps_options_json=ps_options_json,
-        default_branch=rec_branch
+        default_branch=default_branch,
+        default_ps_name=default_ps_name
     )
 
 @app.route('/api/branch_analytics/ps_performance')
@@ -18595,11 +18640,14 @@ def websocket_user_info():
 # EXTERNAL API ENDPOINTS - For external data submission
 # =====================================================
 
-@app.route('/api/submit_lead', methods=['POST'])
+@app.route('/api/submit_lead', methods=['POST', 'OPTIONS'])
 def submit_external_lead():
     """External API endpoint that uses the same logic as CRE users"""
     try:
         print(f"🔍 External lead submission requested")
+        # Handle CORS preflight
+        if request.method == 'OPTIONS':
+            return ('', 204)
         
         # Get JSON data from external system
         data = request.get_json()
@@ -18699,11 +18747,14 @@ def submit_external_lead():
             'message': f'Internal server error: {str(e)}'
         }), 500
 
-@app.route('/api/submit_contact', methods=['POST'])
+@app.route('/api/submit_contact', methods=['POST', 'OPTIONS'])
 def submit_external_contact():
     """External API endpoint for submitting contact forms"""
     try:
         print(f"🔍 External contact submission requested")
+        # Handle CORS preflight
+        if request.method == 'OPTIONS':
+            return ('', 204)
         
         data = request.get_json()
         
@@ -18760,11 +18811,14 @@ def submit_external_contact():
             'message': f'Internal server error: {str(e)}'
         }), 500
 
-@app.route('/api/submit_enquiry', methods=['POST'])
+@app.route('/api/submit_enquiry', methods=['POST', 'OPTIONS'])
 def submit_external_enquiry():
     """External API endpoint for submitting enquiries"""
     try:
         print(f"🔍 External enquiry submission requested")
+        # Handle CORS preflight
+        if request.method == 'OPTIONS':
+            return ('', 204)
         
         data = request.get_json()
         
