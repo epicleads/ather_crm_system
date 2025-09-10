@@ -13202,6 +13202,194 @@ def download_lead_master():
         flash(f'Error downloading lead master data: {str(e)}', 'error')
         return redirect(url_for('manage_leads'))
 
+@app.route('/download_walkin')
+@require_admin
+def download_walkin():
+    """Download walk-in leads from walkin_table filtered by created_at and branch.
+    Query params:
+      - branch: required, exact branch name
+      - date_filter: all|today|yesterday|this_week|this_month|last_month|range (default: today)
+      - start_date, end_date: required if date_filter == 'range' (YYYY-MM-DD)
+      - format: csv|excel (default: csv)
+    """
+    import io
+    import csv
+    from flask import send_file
+    try:
+        branch = request.args.get('branch', '').strip()
+        date_filter = request.args.get('date_filter', 'today')
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        format_ = request.args.get('format', 'csv').lower()
+
+        if not branch:
+            return jsonify({'success': False, 'message': 'Branch is required'}), 400
+
+        # Build date range
+        today = datetime.now().date()
+        range_start = None
+        range_end = None
+
+        def parse_ymd(d):
+            return datetime.strptime(d, '%Y-%m-%d').date()
+
+        if date_filter == 'today':
+            range_start = today
+            range_end = today
+        elif date_filter == 'yesterday':
+            y = today - timedelta(days=1)
+            range_start = y
+            range_end = y
+        elif date_filter == 'this_week':
+            week_start = today - timedelta(days=today.weekday())
+            range_start = week_start
+            range_end = today
+        elif date_filter == 'this_month':
+            month_start = today.replace(day=1)
+            range_start = month_start
+            range_end = today
+        elif date_filter == 'last_month':
+            last_month_end = today.replace(day=1) - timedelta(days=1)
+            last_month_start = last_month_end.replace(day=1)
+            range_start = last_month_start
+            range_end = last_month_end
+        elif date_filter == 'range':
+            if not start_date or not end_date:
+                return jsonify({'success': False, 'message': 'start_date and end_date are required for range filter'}), 400
+            try:
+                range_start = parse_ymd(start_date)
+                range_end = parse_ymd(end_date)
+            except ValueError:
+                return jsonify({'success': False, 'message': 'Invalid date format. Use YYYY-MM-DD'}), 400
+        else:
+            # 'all' or any other value
+            range_start = None
+            range_end = None
+
+        # Query Supabase
+        leads_data = []
+        try:
+            query = supabase.table('walkin_table').select('*').eq('branch', branch)
+            if range_start and range_end:
+                # Try a few common timestamp formats for compatibility
+                start_variants = [
+                    f"{range_start.strftime('%Y-%m-%d')} 00:00:00",
+                    f"{range_start.strftime('%Y-%m-%d')}T00:00:00",
+                    f"{range_start.strftime('%Y-%m-%d')}"
+                ]
+                end_variants = [
+                    f"{range_end.strftime('%Y-%m-%d')} 23:59:59",
+                    f"{range_end.strftime('%Y-%m-%d')}T23:59:59",
+                    f"{range_end.strftime('%Y-%m-%d')}"
+                ]
+                result_found = False
+                for sv in start_variants:
+                    for ev in end_variants:
+                        try:
+                            tmp_query = query.gte('created_at', sv).lte('created_at', ev)
+                            result = tmp_query.execute()
+                            if result.data:
+                                leads_data = result.data
+                                result_found = True
+                                break
+                        except Exception:
+                            continue
+                    if result_found:
+                        break
+                if not result_found:
+                    # Fall back to ISO date-only compare
+                    result = query.gte('created_at', range_start.strftime('%Y-%m-%d')).lte('created_at', range_end.strftime('%Y-%m-%d')).execute()
+                    leads_data = result.data or []
+            else:
+                # No date filter or 'all'
+                result = query.execute()
+                leads_data = result.data or []
+        except Exception as e:
+            print(f"Error querying walkin_table: {str(e)}")
+            return jsonify({'success': False, 'message': 'Database query failed'}), 500
+
+        # Prepare export columns
+        export_columns = [
+            ('uid', 'UID'),
+            ('customer_name', 'Customer Name'),
+            ('mobile_number', 'Mobile Number'),
+            ('model_interested', 'Model Interested'),
+            ('occupation', 'Occupation'),
+            ('lead_category', 'Lead Category'),
+            ('branch', 'Branch'),
+            ('ps_assigned', 'PS Assigned'),
+            ('status', 'Status'),
+            ('followup_no', 'Followup No'),
+            ('next_followup_date', 'Next Followup Date'),
+            ('first_call_date', 'First Call Date'),
+            ('first_call_remark', 'First Call Remark'),
+            ('second_call_date', 'Second Call Date'),
+            ('second_call_remark', 'Second Call Remark'),
+            ('third_call_date', 'Third Call Date'),
+            ('third_call_remark', 'Third Call Remark'),
+            ('fourth_call_date', 'Fourth Call Date'),
+            ('fourth_call_remark', 'Fourth Call Remark'),
+            ('fifth_call_date', 'Fifth Call Date'),
+            ('fifth_call_remark', 'Fifth Call Remark'),
+            ('sixth_call_date', 'Sixth Call Date'),
+            ('sixth_call_remark', 'Sixth Call Remark'),
+            ('seventh_call_date', 'Seventh Call Date'),
+            ('seventh_call_remark', 'Seventh Call Remark'),
+            ('created_at', 'Created At'),
+            ('updated_at', 'Updated At')
+        ]
+
+        if format_ == 'excel':
+            import openpyxl
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = 'Walk-in Leads'
+            ws.append([col[1] for col in export_columns])
+            for lead in leads_data:
+                row = []
+                for key, _ in export_columns:
+                    val = lead.get(key, '')
+                    # Normalize dates to YYYY-MM-DD where possible
+                    if isinstance(val, str) and ('date' in key or key.endswith('_at')):
+                        try:
+                            if 'T' in val:
+                                val = val.split('T')[0]
+                            elif ' ' in val:
+                                val = val.split(' ')[0]
+                        except Exception:
+                            pass
+                    row.append(val)
+                ws.append(row)
+            output = io.BytesIO()
+            wb.save(output)
+            output.seek(0)
+            filename = f"walkin_export_{branch}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            return send_file(output, as_attachment=True, download_name=filename, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        else:
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow([col[1] for col in export_columns])
+            for lead in leads_data:
+                row = []
+                for key, _ in export_columns:
+                    val = lead.get(key, '')
+                    if isinstance(val, str) and ('date' in key or key.endswith('_at')):
+                        try:
+                            if 'T' in val:
+                                val = val.split('T')[0]
+                            elif ' ' in val:
+                                val = val.split(' ')[0]
+                        except Exception:
+                            pass
+                    row.append(val)
+                writer.writerow(row)
+            output.seek(0)
+            filename = f"walkin_export_{branch}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            return send_file(io.BytesIO(output.getvalue().encode('utf-8')), as_attachment=True, download_name=filename, mimetype='text/csv')
+
+    except Exception as e:
+        print(f"Error downloading walk-in data: {str(e)}")
+        return jsonify({'success': False, 'message': 'Unexpected error occurred'}), 500
 @app.route('/api/export_branch_leads', methods=['POST'])
 def api_export_branch_leads():
     """Export leads data for branch head with date range and branch filtering"""

@@ -360,6 +360,65 @@
     <p class="mt-2">Loading leads...</p>
 </div>
 
+<div class="row mb-4" id="walkinExportSection">
+    <div class="col-12">
+        <div class="card border-success">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-walking"></i> Download Walk-in Data</h5>
+            </div>
+            <div class="card-body">
+                <div class="row align-items-end">
+                    <div class="col-md-3">
+                        <label for="walkinBranch" class="form-label">Branch</label>
+                        <select class="form-select" id="walkinBranch">
+                            <option value="">Loading branches...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="walkinDateFilter" class="form-label">Date Filter</label>
+                        <select class="form-select" id="walkinDateFilter" onchange="onWalkinDateFilterChange(this)">
+                            <option value="today">Today</option>
+                            <option value="yesterday">Yesterday</option>
+                            <option value="this_week">This Week</option>
+                            <option value="this_month">This Month</option>
+                            <option value="last_month">Last Month</option>
+                            <option value="range">Date Range</option>
+                            <option value="all">All Time</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-none" id="walkinStartWrap">
+                        <label for="walkinStartDate" class="form-label">Start Date</label>
+                        <input type="date" class="form-control" id="walkinStartDate">
+                    </div>
+                    <div class="col-md-2 d-none" id="walkinEndWrap">
+                        <label for="walkinEndDate" class="form-label">End Date</label>
+                        <input type="date" class="form-control" id="walkinEndDate">
+                    </div>
+                    <div class="col-md-1">
+                        <label for="walkinFormat" class="form-label">Format</label>
+                        <select class="form-select" id="walkinFormat">
+                            <option value="csv">CSV</option>
+                            <option value="excel">Excel</option>
+                        </select>
+                    </div>
+                    <div class="col-md-1">
+                        <button class="btn btn-success w-100" onclick="downloadWalkin()">
+                            <i class="fas fa-download"></i> Download
+                        </button>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="alert alert-success mb-0">
+                            <small><i class="fas fa-info-circle me-1"></i>This downloads data from the walkin_table filtered by Created At and Branch.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <style>
 /* Airbnb-style Cards */
 .airbnb-card {
@@ -1130,6 +1189,40 @@ function downloadLeadMaster() {
     showAlert('success', 'Download started! Check your downloads folder.');
 }
 
+// Walk-in Export Functions
+function onWalkinDateFilterChange(sel) {
+    const s = document.getElementById('walkinStartWrap');
+    const e = document.getElementById('walkinEndWrap');
+    if (sel.value === 'range') { s.classList.remove('d-none'); e.classList.remove('d-none'); }
+    else { s.classList.add('d-none'); e.classList.add('d-none'); }
+}
+
+function downloadWalkin() {
+    const branch = document.getElementById('walkinBranch').value;
+    const dateFilter = document.getElementById('walkinDateFilter').value;
+    const format = document.getElementById('walkinFormat').value;
+    const start = document.getElementById('walkinStartDate').value;
+    const end = document.getElementById('walkinEndDate').value;
+
+    if (!branch) { showAlert('warning', 'Please select a branch'); return; }
+    if (dateFilter === 'range') {
+        if (!start || !end) { showAlert('warning', 'Please select start and end dates'); return; }
+        if (new Date(start) > new Date(end)) { showAlert('warning', 'Start date cannot be after end date'); return; }
+    }
+
+    const params = new URLSearchParams();
+    params.set('branch', branch);
+    params.set('date_filter', dateFilter);
+    params.set('format', format);
+    if (dateFilter === 'range') {
+        params.set('start_date', start);
+        params.set('end_date', end);
+    }
+
+    const url = `/download_walkin?${params.toString()}`;
+    window.open(url, '_blank');
+}
+
 // Set default date to today
 document.addEventListener('DOMContentLoaded', function() {
     const today = new Date().toISOString().split('T')[0];
@@ -1138,6 +1231,24 @@ document.addEventListener('DOMContentLoaded', function() {
     // Set default dates for lead master date range
     document.getElementById('lmStartDate').value = today;
     document.getElementById('lmEndDate').value = today;
+
+    // Load branches
+    fetch('/api/branches').then(r => r.json()).then(data => {
+        const sel = document.getElementById('walkinBranch');
+        sel.innerHTML = '';
+        if (data.success && Array.isArray(data.branches) && data.branches.length) {
+            data.branches.forEach(b => {
+                const opt = document.createElement('option');
+                opt.value = b; opt.textContent = b; sel.appendChild(opt);
+            });
+        } else {
+            const opt = document.createElement('option');
+            opt.value = ''; opt.textContent = 'No branches found'; sel.appendChild(opt);
+        }
+    }).catch(() => {
+        const sel = document.getElementById('walkinBranch');
+        sel.innerHTML = '<option value="">Failed to load</option>';
+    });
 });
 </script>
 {% endblock %}
