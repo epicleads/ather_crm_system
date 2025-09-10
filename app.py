@@ -2091,8 +2091,8 @@ def assign_leads_dynamic_action():
                 update_data = {
                     'cre_name': cre['name'],
                     'assigned': 'Yes',
-                    'cre_assigned_at': datetime.now().isoformat()
-
+                    'cre_assigned_at': datetime.now().isoformat(),
+                    'lead_status': 'Pending'
                 }
 
                 try:
@@ -5629,8 +5629,8 @@ def assign_leads_dynamic_action():
                 update_data = {
                     'cre_name': cre['name'],
                     'assigned': 'Yes',
-                    'cre_assigned_at': datetime.now().isoformat()
-
+                    'cre_assigned_at': datetime.now().isoformat(),
+                    'lead_status': 'Pending'
                 }
 
                 try:
