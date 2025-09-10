@@ -8905,6 +8905,50 @@ def update_ps_lead(uid):
     status_filter = request.args.get('status_filter', '')
     category_filter = request.args.get('category_filter', '')
     try:
+        # Build persistent navigation for PS per section and filters
+        def build_ps_navigation_for_section(current_uid: str, section_key: str, status_f: str, category_f: str):
+            try:
+                ps_name = session.get('ps_name')
+                seq_key = f"ps_nav_seq_{section_key}_{status_f or 'all'}_{category_f or 'all'}"
+                uid_list = session.get(seq_key)
+                if not uid_list:
+                    ps_resp = supabase.table('ps_followup_master').select('lead_uid, final_status, lead_status, lead_category').eq('ps_name', ps_name).execute()
+                    leads = ps_resp.data or []
+                    def in_tab(lead):
+                        fs = lead.get('final_status')
+                        ls = lead.get('lead_status')
+                        cat = lead.get('lead_category')
+                        if section_key == 'won-leads':
+                            if fs != 'Won':
+                                return False
+                        elif section_key == 'lost-leads':
+                            if fs != 'Lost':
+                                return False
+                        else:
+                            if fs in ['Won', 'Lost']:
+                                return False
+                        if status_f and ls != status_f:
+                            return False
+                        if category_f and cat != category_f:
+                            return False
+                        return True
+                    uid_list = sorted([l.get('lead_uid') for l in leads if in_tab(l) and l.get('lead_uid')], key=lambda x: str(x))
+                    session[seq_key] = uid_list
+                    session.modified = True
+                if current_uid and uid_list and current_uid not in uid_list:
+                    uid_list = uid_list + [current_uid]
+                    session[seq_key] = uid_list
+                    session.modified = True
+                try:
+                    idx = uid_list.index(current_uid)
+                except ValueError:
+                    idx = -1
+                prev_uid = uid_list[idx-1] if idx > 0 else None
+                next_uid = uid_list[idx+1] if idx != -1 and idx+1 < len(uid_list) else None
+                return uid_list, idx, prev_uid, next_uid
+            except Exception:
+                return [], -1, None, None
+
         # Try to get PS followup data (regular leads)
         ps_result = supabase.table('ps_followup_master').select('*').eq('lead_uid', uid).execute()
         if ps_result.data:
@@ -9040,22 +9084,68 @@ def update_ps_lead(uid):
                         flash('Lead updated successfully', 'success')
                     else:
                         flash('No changes to update', 'info')
-                    redirect_url = url_for('ps_dashboard', tab=return_tab)
-                    if status_filter:
-                        redirect_url += f'&status_filter={status_filter}'
-                    if category_filter:
-                        redirect_url += f'&category_filter={category_filter}'
-                    return redirect(redirect_url)
+                    # Track updated list for read-only state
+                    upd_key = f"ps_updated_seq_{return_tab}"
+                    seq = session.get(upd_key, [])
+                    if uid not in seq:
+                        seq.append(uid)
+                        session[upd_key] = seq
+                        session.modified = True
+                    # After update, auto-advance to next lead if available
+                    _, _, prev_uid, next_uid_val = build_ps_navigation_for_section(uid, return_tab, status_filter, category_filter)
+                    if next_uid_val:
+                        return redirect(url_for('update_ps_lead', uid=next_uid_val, return_tab=return_tab, status_filter=status_filter, category_filter=category_filter))
+                    # If last one, fall back to render same screen with green button
+                    # Refresh current ps_data for rendering
+                    ps_result_after = supabase.table('ps_followup_master').select('*').eq('lead_uid', uid).execute()
+                    ps_data_after = ps_result_after.data[0] if ps_result_after.data else ps_data
+                    next_call_after, completed_calls_after = get_next_ps_call_info(ps_data_after)
+                    # Build CRE call summary again
+                    cre_call_summary_after = {}
+                    lead_result_after = supabase.table('lead_master').select('*').eq('uid', uid).execute()
+                    if lead_result_after.data:
+                        lead_after = lead_result_after.data[0]
+                        for call in ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']:
+                            cre_call_summary_after[call] = {
+                                'date': lead_after.get(f'{call}_call_date'),
+                                'remark': lead_after.get(f'{call}_remark')
+                            }
+                    # Compute navigation neighbors for rendering
+                    _, _, prev_uid2, next_uid2 = build_ps_navigation_for_section(uid, return_tab, status_filter, category_filter)
+                    return render_template('update_ps_lead.html',
+                                           lead=ps_data_after,
+                                           next_call=next_call_after,
+                                           completed_calls=completed_calls_after,
+                                           today=date.today(),
+                                           cre_call_summary=cre_call_summary_after,
+                                           test_drive_state=get_test_drive_state(uid),
+                                           return_tab=return_tab,
+                                           update_completed=True,
+                                           nav_prev_uid=prev_uid2,
+                                           nav_next_uid=next_uid2,
+                                           read_only=True)
                 except Exception as e:
                     flash(f'Error updating lead: {str(e)}', 'error')
             else:
+                # Compute navigation and read-only state for GET
+                _, _, prev_uid, next_uid_val = build_ps_navigation_for_section(uid, return_tab, status_filter, category_filter)
+                read_only = False
+                upd_key = f"ps_updated_seq_{return_tab}"
+                seq = session.get(upd_key, [])
+                if uid in seq:
+                    read_only = True
                 return render_template('update_ps_lead.html',
                                        lead=ps_data,
                                        next_call=next_call,
                                        completed_calls=completed_calls,
                                        today=date.today(),
                                        cre_call_summary=cre_call_summary,
-                                       test_drive_state=get_test_drive_state(uid))
+                                       test_drive_state=get_test_drive_state(uid),
+                                       return_tab=return_tab,
+                                       update_completed=False,
+                                       nav_prev_uid=prev_uid,
+                                       nav_next_uid=next_uid_val,
+                                       read_only=read_only)
         else:
             flash('Lead not found', 'error')
             redirect_url = url_for('ps_dashboard', tab=return_tab)
