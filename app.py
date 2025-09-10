@@ -7734,6 +7734,65 @@ def update_lead(uid):
             'Lost to Co Dealer', 'Call Disconnected', 'Wrong Number', 'Out of Station'
         ]
 
+        # Helper: build navigation list for the given section and compute neighbors
+        def build_navigation_for_section(current_uid: str, section_key: str):
+            try:
+                # Use a stable session-backed list so navigation persists after updates
+                seq_key = f"nav_seq_{section_key}"
+                section_uids_sorted = session.get(seq_key)
+                if not section_uids_sorted:
+                    # Build snapshot once when missing
+                    cre_name = session.get('cre_name')
+                    leads_resp = supabase.table('lead_master').select('uid, first_call_date, final_status, lead_status, assigned, follow_up_date').eq('cre_name', cre_name).execute()
+                    leads = leads_resp.data or []
+                    excluded_statuses = ['Lost to Codealer', 'Lost to Competition', 'Dropped', 'Booked', 'Retailed']
+                    def in_section(lead):
+                        fs = lead.get('final_status')
+                        ls = lead.get('lead_status')
+                        first = lead.get('first_call_date')
+                        if section_key in ['untouched-leads', 'called-leads', 'follow-up-leads']:
+                            if fs in ['Won', 'Lost']:
+                                return False
+                            if first:
+                                return False
+                            if section_key == 'follow-up-leads':
+                                return ls == 'Call me Back'
+                            if section_key == 'called-leads':
+                                return ls in ['RNR', 'Busy on another Call', 'Call Disconnected', 'Call not Connected']
+                            # untouched-leads
+                            return (not ls) or (ls not in ['RNR', 'Busy on another Call', 'Call Disconnected', 'Call not Connected', 'Call me Back'])
+                        elif section_key == 'pending':
+                            return (fs == 'Pending') and bool(first) and (not ls or ls not in excluded_statuses)
+                        elif section_key == 'ps-assigned':
+                            return lead.get('assigned') == 'Yes' and fs not in ['Won', 'Lost']
+                        elif section_key == 'won-leads':
+                            return fs == 'Won'
+                        elif section_key == 'followups':
+                            # Generic followups list: pending with follow_up_date set
+                            return (fs == 'Pending') and (lead.get('follow_up_date') is not None) and (not ls or ls not in excluded_statuses)
+                        else:
+                            # Default: all leads for CRE not won/lost
+                            return fs not in ['Won', 'Lost']
+
+                    section_uids = [l.get('uid') for l in leads if in_section(l)]
+                    section_uids_sorted = sorted([u for u in section_uids if u], key=lambda x: str(x))
+                    session[seq_key] = section_uids_sorted
+                    session.modified = True
+                # Ensure current uid is in the sequence to compute neighbors
+                if current_uid and section_uids_sorted and current_uid not in section_uids_sorted:
+                    section_uids_sorted = section_uids_sorted + [current_uid]
+                    session[seq_key] = section_uids_sorted
+                    session.modified = True
+                try:
+                    idx = section_uids_sorted.index(current_uid)
+                except ValueError:
+                    idx = -1
+                prev_uid = section_uids_sorted[idx-1] if idx > 0 else None
+                next_uid = section_uids_sorted[idx+1] if idx != -1 and idx+1 < len(section_uids_sorted) else None
+                return section_uids_sorted, idx, prev_uid, next_uid
+            except Exception:
+                return [], -1, None, None
+
         if request.method == 'POST':
             update_data = {}
             lead_status = request.form.get('lead_status', '')
@@ -7902,21 +7961,58 @@ def update_lead(uid):
                         pass
                 
                 # Redirect based on return_tab parameter
+                # Instead of redirecting, stay on page and enable next/prev navigation
+                # Track updated leads in session for this section
                 if return_tab:
-                    if return_tab in ['untouched-leads', 'called-leads', 'follow-up-leads']:
-                        return redirect(url_for('cre_dashboard', tab='fresh-leads', sub_tab=return_tab))
-                    elif return_tab == 'followups':
-                        return redirect(url_for('cre_dashboard', tab='followups'))
-                    elif return_tab == 'pending':
-                        return redirect(url_for('cre_dashboard', tab='pending'))
-                    elif return_tab == 'ps-assigned':
-                        return redirect(url_for('cre_dashboard', tab='ps-assigned'))
-                    elif return_tab == 'won-leads':
-                        return redirect(url_for('cre_dashboard', tab='won-leads'))
-                    else:
-                        return redirect(url_for('cre_dashboard'))
-                else:
-                    return redirect(url_for('cre_dashboard'))
+                    seq_key = f"updated_seq_{return_tab}"
+                    seq = session.get(seq_key, [])
+                    if uid not in seq:
+                        seq.append(uid)
+                        session[seq_key] = seq
+                        session.modified = True
+                # Recompute navigation
+                nav_list, nav_index, prev_uid, next_uid_val = build_navigation_for_section(uid, return_tab)
+                # Refresh lead data after update
+                lead_result_after = supabase.table('lead_master').select('*').eq('uid', uid).execute()
+                lead_data_after = lead_result_after.data[0] if lead_result_after.data else lead_data
+                # Build PS call summary for template consistency
+                ps_call_summary_post = {}
+                try:
+                    if (lead_data_after or {}).get('ps_name'):
+                        ps_result_post = supabase.table('ps_followup_master').select('*').eq('lead_uid', uid).execute()
+                        if ps_result_post.data:
+                            ps_followup_post = ps_result_post.data[0]
+                            for call in ['first', 'second', 'third']:
+                                date_key = f"{call}_call_date"
+                                remark_key = f"{call}_call_remark"
+                                ps_call_summary_post[call] = {
+                                    'date': ps_followup_post.get(date_key),
+                                    'remark': ps_followup_post.get(remark_key)
+                                }
+                except Exception:
+                    ps_call_summary_post = {}
+                # Auto-navigate to next lead if available
+                if next_uid_val:
+                    return redirect(url_for('update_lead', uid=next_uid_val, return_tab=return_tab))
+                # If this is the last lead in the list, stay on page with green state
+                return render_template(
+                    'update_lead.html',
+                    lead=lead_data_after,
+                    ps_users=ps_users,
+                    rizta_models=rizta_models,
+                    x450_models=x450_models,
+                    branches=branches,
+                    lead_statuses=lead_statuses,
+                    next_call=next_call,
+                    completed_calls=completed_calls,
+                    today=date.today(),
+                    ps_call_summary=ps_call_summary_post,
+                    test_drive_state=get_test_drive_state(uid),
+                    return_tab=return_tab,
+                    update_completed=True,
+                    nav_prev_uid=prev_uid,
+                    nav_next_uid=next_uid_val
+                )
             except Exception as e:
                 flash(f'Error updating lead: {str(e)}', 'error')
 
@@ -7935,6 +8031,16 @@ def update_lead(uid):
                         "remark": ps_followup.get(remark_key)
                     }
 
+        # Compute navigation for GET as well
+        nav_list, nav_index, prev_uid, next_uid_val = build_navigation_for_section(uid, return_tab)
+        # Determine read-only if updated in this session for this section
+        read_only = False
+        if return_tab:
+            seq_key = f"updated_seq_{return_tab}"
+            seq = session.get(seq_key, [])
+            if uid in seq:
+                read_only = True
+
         return render_template('update_lead.html',
                                lead=lead_data,
                                ps_users=ps_users,
@@ -7946,7 +8052,12 @@ def update_lead(uid):
                                completed_calls=completed_calls,
                                today=date.today(),
                                ps_call_summary=ps_call_summary,
-                               test_drive_state=get_test_drive_state(uid))
+                               test_drive_state=get_test_drive_state(uid),
+                               return_tab=return_tab,
+                               update_completed=False,
+                               read_only=read_only,
+                               nav_prev_uid=prev_uid,
+                               nav_next_uid=next_uid_val)
 
     except Exception as e:
         flash(f'Error loading lead: {str(e)}', 'error')

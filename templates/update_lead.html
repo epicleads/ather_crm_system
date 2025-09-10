@@ -19,6 +19,23 @@
     </div>
 </div>
 
+<!-- Edge Swipe Navigation Buttons -->
+<style>
+.nav-swipe-btn { position: fixed; top: 50%; transform: translateY(-50%); z-index: 1030; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: var(--airbnb-shadow); background: var(--airbnb-white); border: 1px solid var(--airbnb-gray-200); color: var(--airbnb-gray-700); }
+.nav-swipe-btn:hover { background: var(--airbnb-gray-100); }
+.nav-swipe-btn.left { left: 12px; }
+.nav-swipe-btn.right { right: 12px; }
+@media (max-width: 768px) { .nav-swipe-btn { width: 40px; height: 40px; } }
+</style>
+<button id="navPrev" class="nav-swipe-btn left" style="{% if not nav_prev_uid %}display:none;{% endif %}"
+        onclick="navigateTo('{{ url_for('update_lead', uid=nav_prev_uid, return_tab=return_tab) if nav_prev_uid else '#' }}')" aria-label="Previous lead">
+    <i class="fas fa-chevron-left"></i>
+</button>
+<button id="navNext" class="nav-swipe-btn right" style="{% if not nav_next_uid %}display:none;{% endif %}"
+        onclick="navigateTo('{{ url_for('update_lead', uid=nav_next_uid, return_tab=return_tab) if nav_next_uid else '#' }}')" aria-label="Next lead">
+    <i class="fas fa-chevron-right"></i>
+</button>
+
 <!-- Call Progress Indicator -->
 <div class="row mb-4">
     <div class="col-12">
@@ -537,8 +554,8 @@
         <a href="{{ url_for('cre_dashboard') }}" class="btn btn-secondary me-md-2">
             <i class="fas fa-arrow-left"></i> Back
         </a>
-        <button type="submit" class="btn btn-primary">
-            <i class="fas fa-save"></i> Update Lead
+        <button type="submit" id="updateBtn" class="btn {% if update_completed or read_only %}btn-success{% else %}btn-primary{% endif %}" {% if read_only %}disabled{% endif %}>
+            <i class="fas fa-save"></i> {% if update_completed or read_only %}Updated{% else %}Update Lead{% endif %}
         </button>
     </div>
 </form>
@@ -1406,6 +1423,50 @@ document.addEventListener('DOMContentLoaded', function() {
         // Initial check
         toggleFollowUpRequired();
     }
+    // Mark green and disable if update completed or read-only
+    const updatedNow = {{ 'true' if update_completed else 'false' }};
+    const readOnly = {{ 'true' if read_only else 'false' }};
+    const updateBtn = document.getElementById('updateBtn');
+    if (updatedNow || readOnly) {
+        if (updateBtn) {
+            updateBtn.classList.remove('btn-primary');
+            updateBtn.classList.add('btn-success');
+            updateBtn.disabled = true;
+            updateBtn.innerHTML = '<i class="fas fa-check"></i> Updated';
+        }
+        if (readOnly) {
+            const form = document.getElementById('leadUpdateForm');
+            if (form) { Array.from(form.elements).forEach(el => { el.disabled = true; }); }
+        }
+    }
+
+    // Swipe navigation handlers
+    function go(url) { if (url && url !== '#') { window.location.href = url; } }
+    window.navigateTo = go;
+    const nextUrl = '{{ url_for('update_lead', uid=nav_next_uid, return_tab=return_tab) if nav_next_uid else '' }}';
+    const prevUrl = '{{ url_for('update_lead', uid=nav_prev_uid, return_tab=return_tab) if nav_prev_uid else '' }}';
+    let touchStartX = 0; let touchStartY = 0; let touchEndX = 0; let touchEndY = 0;
+    const threshold = 60;
+    document.addEventListener('touchstart', function(e) {
+        if (!e.touches || e.touches.length === 0) return;
+        touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+    document.addEventListener('touchend', function(e) {
+        touchEndX = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientX : touchStartX;
+        touchEndY = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientY : touchStartY;
+        const dx = touchEndX - touchStartX; const dy = Math.abs(touchEndY - touchStartY);
+        if (Math.abs(dx) > threshold && dy < 80) {
+            if (dx < 0 && nextUrl) { go(nextUrl); }
+            else if (dx > 0 && prevUrl) { go(prevUrl); }
+        }
+    }, { passive: true });
+
+    // Keyboard arrows for desktop
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowRight' && nextUrl) { go(nextUrl); }
+        if (e.key === 'ArrowLeft' && prevUrl) { go(prevUrl); }
+    });
+
 });
 </script>
 {% endblock %}
