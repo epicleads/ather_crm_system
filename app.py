@@ -747,17 +747,95 @@ def allowed_file(filename):
 
 
 def send_email_to_ps(ps_email, ps_name, lead_data, cre_name):
-    """Send email notification to PS when a lead is assigned"""
+    """Send email notification to PS and Branch Head when a lead is assigned"""
+    print(f"=== DEBUG: send_email_to_ps called ===")
+    print(f"DEBUG: ps_email = {ps_email}")
+    print(f"DEBUG: ps_name = {ps_name}")
+    print(f"DEBUG: lead_data = {lead_data}")
+    print(f"DEBUG: cre_name = {cre_name}")
+    
     try:
+        print(f"DEBUG: EMAIL_USER = {EMAIL_USER}")
+        print(f"DEBUG: EMAIL_PASSWORD configured = {'Yes' if EMAIL_PASSWORD else 'No'}")
+        print(f"DEBUG: SMTP_SERVER = {SMTP_SERVER}")
+        print(f"DEBUG: SMTP_PORT = {SMTP_PORT}")
+        
         if not EMAIL_USER or not EMAIL_PASSWORD:
             print("Email credentials not configured. Skipping email notification.")
             return False
 
+        # Get branch from lead_data
+        branch = lead_data.get('branch', '')
+        print(f"DEBUG: Branch from lead_data = '{branch}'")
+        recipients = [ps_email]
+        print(f"DEBUG: Initial recipients = {recipients}")
+        
+        # Fetch branch head email if branch is available
+        branch_head_email = None
+        if branch:
+            print(f"DEBUG: Searching for branch head with branch = '{branch}'")
+            try:
+                # First, get all branch heads to see what's in the database
+                all_branch_heads = supabase.table('Branch Head').select('email, Name, Branch').execute()
+                print(f"DEBUG: All branch heads in database = {all_branch_heads.data}")
+                
+                # Try multiple approaches for case-insensitive matching
+                branch_head_result = None
+                
+                # Approach 1: Try exact match
+                branch_head_result = supabase.table('Branch Head').select('email, Name, Branch').eq('Branch', branch).execute()
+                print(f"DEBUG: Exact match result for '{branch}' = {branch_head_result.data}")
+                
+                # Approach 2: Try lowercase match
+                if not branch_head_result.data:
+                    branch_head_result = supabase.table('Branch Head').select('email, Name, Branch').eq('Branch', branch.lower()).execute()
+                    print(f"DEBUG: Lowercase match result for '{branch.lower()}' = {branch_head_result.data}")
+                
+                # Approach 3: Try title case match
+                if not branch_head_result.data:
+                    branch_head_result = supabase.table('Branch Head').select('email, Name, Branch').eq('Branch', branch.title()).execute()
+                    print(f"DEBUG: Title case match result for '{branch.title()}' = {branch_head_result.data}")
+                
+                # Approach 4: Manual case-insensitive search through all records
+                if not branch_head_result.data and all_branch_heads.data:
+                    print(f"DEBUG: Doing manual case-insensitive search for '{branch}'")
+                    for bh in all_branch_heads.data:
+                        if bh.get('Branch', '').lower() == branch.lower():
+                            branch_head_result.data = [bh]
+                            print(f"DEBUG: Manual search found match: {bh}")
+                            break
+                
+                if branch_head_result.data:
+                    branch_head_data = branch_head_result.data[0]
+                    print(f"DEBUG: Branch head data found = {branch_head_data}")
+                    branch_head_email = branch_head_data.get('email')
+                    print(f"DEBUG: Branch head email = '{branch_head_email}'")
+                    
+                    if branch_head_email:
+                        recipients.append(branch_head_email)
+                        print(f"Branch head email found for branch '{branch}': {branch_head_email}")
+                        print(f"DEBUG: Updated recipients = {recipients}")
+                    else:
+                        print(f"Branch head found for branch '{branch}' but no email configured")
+                else:
+                    print(f"No branch head found for branch '{branch}' after trying all approaches")
+                    
+            except Exception as e:
+                print(f"Error fetching branch head for branch '{branch}': {e}")
+                import traceback
+                print(f"DEBUG: Full traceback = {traceback.format_exc()}")
+        else:
+            print("DEBUG: No branch specified in lead_data")
+
         # Create message
+        print(f"DEBUG: Creating email message...")
         msg = MIMEMultipart()
         msg['From'] = EMAIL_USER
-        msg['To'] = ps_email
+        msg['To'] = ', '.join(recipients)
         msg['Subject'] = f"New Lead Assigned - {lead_data['customer_name']}"
+        print(f"DEBUG: Email From = {EMAIL_USER}")
+        print(f"DEBUG: Email To = {', '.join(recipients)}")
+        print(f"DEBUG: Email Subject = {msg['Subject']}")
 
         # Email body
         body = f"""
@@ -780,20 +858,31 @@ def send_email_to_ps(ps_email, ps_name, lead_data, cre_name):
         """
 
         msg.attach(MIMEText(body, 'plain'))
+        print(f"DEBUG: Email body attached")
 
-        # Send email
+        # Send email to all recipients
+        print(f"DEBUG: Connecting to SMTP server {SMTP_SERVER}:{SMTP_PORT}")
         server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        print(f"DEBUG: Starting TLS...")
         server.starttls()
+        print(f"DEBUG: Logging in with {EMAIL_USER}...")
         server.login(EMAIL_USER, EMAIL_PASSWORD)
         text = msg.as_string()
-        server.sendmail(EMAIL_USER, ps_email, text)
+        print(f"DEBUG: Sending email to {recipients}...")
+        server.sendmail(EMAIL_USER, recipients, text)
+        print(f"DEBUG: Email sent, closing connection...")
         server.quit()
 
-        print(f"Email sent successfully to {ps_email}")
+        recipient_list = f"{ps_email}" + (f" and branch head ({branch_head_email})" if branch_head_email else "")
+        print(f"Email sent successfully to {recipient_list}")
+        print(f"=== DEBUG: send_email_to_ps completed successfully ===")
         return True
 
     except Exception as e:
         print(f"Error sending email: {e}")
+        import traceback
+        print(f"DEBUG: Full error traceback = {traceback.format_exc()}")
+        print(f"=== DEBUG: send_email_to_ps failed ===")
         return False
 
 
@@ -3530,10 +3619,13 @@ def add_lead():
                         
                         # Send email notification to PS
                         try:
+                            print(f"DEBUG: About to call send_email_to_ps with ps_email={ps_user['email']}, ps_name={ps_user['name']}, lead_data={lead_data}, cre_name={cre_name}")
                             socketio.start_background_task(send_email_to_ps, ps_user['email'], ps_user['name'], lead_data, cre_name)
                             flash(f'Lead added successfully and assigned to {ps_name}! Email notification sent.', 'success')
                         except Exception as e:
                             print(f"Error sending email: {e}")
+                            import traceback
+                            print(f"DEBUG: Email send error traceback = {traceback.format_exc()}")
                             flash(f'Lead added successfully and assigned to {ps_name}! (Email notification failed)', 'warning')
                     else:
                         flash('Lead added successfully! (PS assignment failed)', 'warning')
@@ -4316,17 +4408,95 @@ def allowed_file(filename):
 
 
 def send_email_to_ps(ps_email, ps_name, lead_data, cre_name):
-    """Send email notification to PS when a lead is assigned"""
+    """Send email notification to PS and Branch Head when a lead is assigned"""
+    print(f"=== DEBUG: send_email_to_ps called ===")
+    print(f"DEBUG: ps_email = {ps_email}")
+    print(f"DEBUG: ps_name = {ps_name}")
+    print(f"DEBUG: lead_data = {lead_data}")
+    print(f"DEBUG: cre_name = {cre_name}")
+    
     try:
+        print(f"DEBUG: EMAIL_USER = {EMAIL_USER}")
+        print(f"DEBUG: EMAIL_PASSWORD configured = {'Yes' if EMAIL_PASSWORD else 'No'}")
+        print(f"DEBUG: SMTP_SERVER = {SMTP_SERVER}")
+        print(f"DEBUG: SMTP_PORT = {SMTP_PORT}")
+        
         if not EMAIL_USER or not EMAIL_PASSWORD:
             print("Email credentials not configured. Skipping email notification.")
             return False
 
+        # Get branch from lead_data
+        branch = lead_data.get('branch', '')
+        print(f"DEBUG: Branch from lead_data = '{branch}'")
+        recipients = [ps_email]
+        print(f"DEBUG: Initial recipients = {recipients}")
+        
+        # Fetch branch head email if branch is available
+        branch_head_email = None
+        if branch:
+            print(f"DEBUG: Searching for branch head with branch = '{branch}'")
+            try:
+                # First, get all branch heads to see what's in the database
+                all_branch_heads = supabase.table('Branch Head').select('email, Name, Branch').execute()
+                print(f"DEBUG: All branch heads in database = {all_branch_heads.data}")
+                
+                # Try multiple approaches for case-insensitive matching
+                branch_head_result = None
+                
+                # Approach 1: Try exact match
+                branch_head_result = supabase.table('Branch Head').select('email, Name, Branch').eq('Branch', branch).execute()
+                print(f"DEBUG: Exact match result for '{branch}' = {branch_head_result.data}")
+                
+                # Approach 2: Try lowercase match
+                if not branch_head_result.data:
+                    branch_head_result = supabase.table('Branch Head').select('email, Name, Branch').eq('Branch', branch.lower()).execute()
+                    print(f"DEBUG: Lowercase match result for '{branch.lower()}' = {branch_head_result.data}")
+                
+                # Approach 3: Try title case match
+                if not branch_head_result.data:
+                    branch_head_result = supabase.table('Branch Head').select('email, Name, Branch').eq('Branch', branch.title()).execute()
+                    print(f"DEBUG: Title case match result for '{branch.title()}' = {branch_head_result.data}")
+                
+                # Approach 4: Manual case-insensitive search through all records
+                if not branch_head_result.data and all_branch_heads.data:
+                    print(f"DEBUG: Doing manual case-insensitive search for '{branch}'")
+                    for bh in all_branch_heads.data:
+                        if bh.get('Branch', '').lower() == branch.lower():
+                            branch_head_result.data = [bh]
+                            print(f"DEBUG: Manual search found match: {bh}")
+                            break
+                
+                if branch_head_result.data:
+                    branch_head_data = branch_head_result.data[0]
+                    print(f"DEBUG: Branch head data found = {branch_head_data}")
+                    branch_head_email = branch_head_data.get('email')
+                    print(f"DEBUG: Branch head email = '{branch_head_email}'")
+                    
+                    if branch_head_email:
+                        recipients.append(branch_head_email)
+                        print(f"Branch head email found for branch '{branch}': {branch_head_email}")
+                        print(f"DEBUG: Updated recipients = {recipients}")
+                    else:
+                        print(f"Branch head found for branch '{branch}' but no email configured")
+                else:
+                    print(f"No branch head found for branch '{branch}' after trying all approaches")
+                    
+            except Exception as e:
+                print(f"Error fetching branch head for branch '{branch}': {e}")
+                import traceback
+                print(f"DEBUG: Full traceback = {traceback.format_exc()}")
+        else:
+            print("DEBUG: No branch specified in lead_data")
+
         # Create message
+        print(f"DEBUG: Creating email message...")
         msg = MIMEMultipart()
         msg['From'] = EMAIL_USER
-        msg['To'] = ps_email
+        msg['To'] = ', '.join(recipients)
         msg['Subject'] = f"New Lead Assigned - {lead_data['customer_name']}"
+        print(f"DEBUG: Email From = {EMAIL_USER}")
+        print(f"DEBUG: Email To = {', '.join(recipients)}")
+        print(f"DEBUG: Email Subject = {msg['Subject']}")
 
         # Email body
         body = f"""
@@ -4349,20 +4519,31 @@ def send_email_to_ps(ps_email, ps_name, lead_data, cre_name):
         """
 
         msg.attach(MIMEText(body, 'plain'))
+        print(f"DEBUG: Email body attached")
 
-        # Send email
+        # Send email to all recipients
+        print(f"DEBUG: Connecting to SMTP server {SMTP_SERVER}:{SMTP_PORT}")
         server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        print(f"DEBUG: Starting TLS...")
         server.starttls()
+        print(f"DEBUG: Logging in with {EMAIL_USER}...")
         server.login(EMAIL_USER, EMAIL_PASSWORD)
         text = msg.as_string()
-        server.sendmail(EMAIL_USER, ps_email, text)
+        print(f"DEBUG: Sending email to {recipients}...")
+        server.sendmail(EMAIL_USER, recipients, text)
+        print(f"DEBUG: Email sent, closing connection...")
         server.quit()
 
-        print(f"Email sent successfully to {ps_email}")
+        recipient_list = f"{ps_email}" + (f" and branch head ({branch_head_email})" if branch_head_email else "")
+        print(f"Email sent successfully to {recipient_list}")
+        print(f"=== DEBUG: send_email_to_ps completed successfully ===")
         return True
 
     except Exception as e:
         print(f"Error sending email: {e}")
+        import traceback
+        print(f"DEBUG: Full error traceback = {traceback.format_exc()}")
+        print(f"=== DEBUG: send_email_to_ps failed ===")
         return False
 
 
@@ -7053,10 +7234,13 @@ def add_lead():
                         
                         # Send email notification to PS
                         try:
+                            print(f"DEBUG: About to call send_email_to_ps with ps_email={ps_user['email']}, ps_name={ps_user['name']}, lead_data={lead_data}, cre_name={cre_name}")
                             socketio.start_background_task(send_email_to_ps, ps_user['email'], ps_user['name'], lead_data, cre_name)
                             flash(f'Lead added successfully and assigned to {ps_name}! Email notification sent.', 'success')
                         except Exception as e:
                             print(f"Error sending email: {e}")
+                            import traceback
+                            print(f"DEBUG: Email send error traceback = {traceback.format_exc()}")
                             flash(f'Lead added successfully and assigned to {ps_name}! (Email notification failed)', 'warning')
                     else:
                         flash('Lead added successfully! (PS assignment failed)', 'warning')
@@ -7861,10 +8045,13 @@ def update_lead(uid):
                 # Send email to PS
                 try:
                     lead_data_for_email = {**lead_data, **update_data}
+                    print(f"DEBUG: About to call send_email_to_ps for assignment with ps_email={ps_user['email']}, ps_name={ps_user['name']}, lead_data_for_email={lead_data_for_email}, cre_name={session.get('cre_name')}")
                     socketio.start_background_task(send_email_to_ps, ps_user['email'], ps_user['name'], lead_data_for_email, session.get('cre_name'))
                     flash(f'Lead assigned to {ps_name} and email notification sent', 'success')
                 except Exception as e:
                     print(f"Error sending email: {e}")
+                    import traceback
+                    print(f"DEBUG: Email send error traceback = {traceback.format_exc()}")
                     flash(f'Lead assigned to {ps_name} (email notification failed)', 'warning')
 
             if follow_up_date:
@@ -9302,10 +9489,13 @@ def update_lead_optimized(uid):
                     # Send email notification (non-blocking)
                     try:
                         lead_data_for_email = {**lead_data, **update_data}
+                        print(f"DEBUG: About to call send_email_to_ps for bulk assignment with ps_email={ps_user['email']}, ps_name={ps_user['name']}, lead_data_for_email={lead_data_for_email}, cre_name={session.get('cre_name')}")
                         socketio.start_background_task(send_email_to_ps, ps_user['email'], ps_user['name'], lead_data_for_email, session.get('cre_name'))
                         flash(f'Lead assigned to {ps_name} and email notification sent', 'success')
                     except Exception as e:
                         print(f"Error sending email: {e}")
+                        import traceback
+                        print(f"DEBUG: Email send error traceback = {traceback.format_exc()}")
                         flash(f'Lead assigned to {ps_name} (email notification failed)', 'warning')
 
             if follow_up_date:
