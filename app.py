@@ -19380,14 +19380,20 @@ def api_documentation():
 @app.route('/walkin-dashboard')
 def walkin_dashboard_embed():
     try:
-        # For Render deployment, use Flask-based dashboard
-        if os.getenv('PORT'):
-            return render_template('walkin_dashboard_flask.html')
-        else:
-            # Local development - use iframe with Streamlit
+        # If a dedicated Streamlit URL is provided (e.g., separate Render service), embed it directly
+        external_streamlit_url = os.getenv('STREAMLIT_URL')
+        if external_streamlit_url:
+            return render_template('walkin_dashboard_embed.html', streamlit_url=external_streamlit_url)
+
+        # Fallbacks
+        # On local development, spin up Streamlit as a subprocess and embed localhost
+        if not os.getenv('PORT'):
             start_streamlit()
             streamlit_url = 'http://localhost:8501'
             return render_template('walkin_dashboard_embed.html', streamlit_url=streamlit_url)
+
+        # On Render (no STREAMLIT_URL provided), use the Flask replica dashboard
+        return render_template('walkin_dashboard_flask.html')
     except Exception as _e:
         return f"Failed to load walk-in dashboard: {_e}", 500
 
