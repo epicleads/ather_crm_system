@@ -52,6 +52,38 @@ from werkzeug.security import generate_password_hash, check_password_hash
 load_dotenv()
 
 app = Flask(__name__)
+
+# Streamlit subprocess management
+import subprocess
+import threading
+
+streamlit_process = None
+
+def start_streamlit():
+    """Start Streamlit as a subprocess"""
+    global streamlit_process
+    try:
+        if streamlit_process is None or streamlit_process.poll() is not None:
+            # Start Streamlit on port 8501
+            streamlit_process = subprocess.Popen([
+                'streamlit', 'run', 'strapp.py', 
+                '--server.port=8501',
+                '--server.headless=true',
+                '--server.enableCORS=false',
+                '--server.enableXsrfProtection=false'
+            ])
+            print("Streamlit started on port 8501")
+    except Exception as e:
+        print(f"Failed to start Streamlit: {e}")
+
+def stop_streamlit():
+    """Stop Streamlit subprocess"""
+    global streamlit_process
+    if streamlit_process:
+        streamlit_process.terminate()
+        streamlit_process = None
+        print("Streamlit stopped")
+
 # Initialize Flask-SocketIO with better configuration
 socketio = SocketIO(
     app, 
@@ -19333,6 +19365,21 @@ def api_documentation():
 
 
 # =====================================================
+# WALK-IN STREAMLIT EMBED ROUTE
+# =====================================================
+@app.route('/walkin-dashboard')
+def walkin_dashboard_embed():
+    try:
+        # Start Streamlit if not running
+        start_streamlit()
+        # Use localhost since Streamlit runs on same server
+        streamlit_url = 'http://localhost:8501'
+        return render_template('walkin_dashboard_embed.html', streamlit_url=streamlit_url)
+    except Exception as _e:
+        return f"Failed to load walk-in dashboard: {_e}", 500
+
+
+# =====================================================
 # PS MANAGEMENT API ENDPOINTS FOR BRANCH HEADS
 # =====================================================
 
@@ -19636,10 +19683,18 @@ def api_ps_performance_analytics():
         }), 500
 
 
+# Startup and shutdown handlers
+import atexit
+atexit.register(stop_streamlit)
+
+# Start Streamlit immediately when app starts
+start_streamlit()
+
 if __name__ == '__main__':
     # socketio.run(app, debug=True)
     print(" Starting Ather CRM System...")
     print("📱 Server will be available at: http://127.0.0.1:5000")
     print("🌐 You can also try: http://localhost:5000")
+    print("📊 Streamlit dashboard will be available at: http://localhost:8501")
     # socketio.run(app, host='127.0.0.1', port=5000, debug=True)
     socketio.run(app, host='0.0.0.0', port=5000, debug=True, use_reloader=False)

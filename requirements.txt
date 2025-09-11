@@ -10,6 +10,7 @@ gunicorn
 Pillow==11.2.1
 requests
 pandas
+streamlit
 simple-salesforce==1.12.6
 matplotlib
 seaborn
