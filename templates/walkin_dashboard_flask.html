@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Walk-in Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .dashboard-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .filter-section {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .table-container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+        }
+        .stat-label {
+            font-size: 1rem;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <h1 class="text-center mb-4">🚶 Walk-in Leads Dashboard</h1>
+        
+        <!-- Date Filter Section -->
+        <div class="filter-section">
+            <h4>Date Filter</h4>
+            <div class="row">
+                <div class="col-md-6">
+                    <label for="dateFilter" class="form-label">Filter by Date Range</label>
+                    <select class="form-select" id="dateFilter" onchange="applyDateFilter()">
+                        <option value="mtd">Month to Date (MTD)</option>
+                        <option value="today">Today</option>
+                        <option value="custom">Custom Range</option>
+                        <option value="none">No Filter</option>
+                    </select>
+                </div>
+                <div class="col-md-3" id="startDateDiv" style="display: none;">
+                    <label for="startDate" class="form-label">Start Date</label>
+                    <input type="date" class="form-control" id="startDate">
+                </div>
+                <div class="col-md-3" id="endDateDiv" style="display: none;">
+                    <label for="endDate" class="form-label">End Date</label>
+                    <input type="date" class="form-control" id="endDate">
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="row" id="statsCards">
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-number" id="totalLeads">0</div>
+                    <div class="stat-label">Total Leads</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-number" id="pendingLeads">0</div>
+                    <div class="stat-label">Pending Leads</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-number" id="wonLeads">0</div>
+                    <div class="stat-label">Won Leads</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-number" id="lostLeads">0</div>
+                    <div class="stat-label">Lost Leads</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Branch-wise Lead Count Table -->
+        <div class="table-container">
+            <h4>Branch-wise Lead Count</h4>
+            <div class="table-responsive">
+                <table class="table table-striped" id="branchesTable">
+                    <thead>
+                        <tr>
+                            <th>Branch</th>
+                            <th>Leads Punched</th>
+                            <th>Pending Leads</th>
+                            <th>Touched Leads</th>
+                            <th>Untouched Leads</th>
+                            <th>Won Leads</th>
+                            <th>Lost Leads</th>
+                        </tr>
+                    </thead>
+                    <tbody id="branchesTableBody">
+                        <tr>
+                            <td colspan="7" class="text-center">Loading...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Toggle for Raw Data -->
+        <div class="mt-3">
+            <button class="btn btn-outline-primary" onclick="toggleRawData()" id="toggleBtn">
+                View Underlying Data
+            </button>
+        </div>
+
+        <!-- Raw Data Table (Hidden by default) -->
+        <div class="table-container mt-3" id="rawDataSection" style="display: none;">
+            <h4>Walk-in Table</h4>
+            <div class="table-responsive">
+                <table class="table table-striped" id="rawDataTable">
+                    <thead id="rawDataTableHead">
+                        <!-- Dynamic headers -->
+                    </thead>
+                    <tbody id="rawDataTableBody">
+                        <!-- Dynamic data -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let rawDataVisible = false;
+        let currentData = null;
+
+        // Load data on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDashboardData();
+        });
+
+        function loadDashboardData() {
+            fetch('/api/walkin-dashboard-data')
+                .then(response => response.json())
+                .then(data => {
+                    currentData = data;
+                    updateStats(data.stats);
+                    updateBranchesTable(data.branches);
+                    updateRawDataTable(data.raw_data);
+                })
+                .catch(error => {
+                    console.error('Error loading data:', error);
+                    document.getElementById('branchesTableBody').innerHTML = 
+                        '<tr><td colspan="7" class="text-center text-danger">Error loading data</td></tr>';
+                });
+        }
+
+        function updateStats(stats) {
+            document.getElementById('totalLeads').textContent = stats.total_leads || 0;
+            document.getElementById('pendingLeads').textContent = stats.pending_leads || 0;
+            document.getElementById('wonLeads').textContent = stats.won_leads || 0;
+            document.getElementById('lostLeads').textContent = stats.lost_leads || 0;
+        }
+
+        function updateBranchesTable(branches) {
+            const tbody = document.getElementById('branchesTableBody');
+            if (!branches || branches.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center">No data available</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = branches.map(branch => `
+                <tr>
+                    <td>${branch.branch || 'N/A'}</td>
+                    <td>${branch.leads_punched || 0}</td>
+                    <td>${branch.pending_leads || 0}</td>
+                    <td>${branch.touched_leads || 0}</td>
+                    <td>${branch.untouched_leads || 0}</td>
+                    <td>${branch.won_leads || 0}</td>
+                    <td>${branch.lost_leads || 0}</td>
+                </tr>
+            `).join('');
+        }
+
+        function updateRawDataTable(rawData) {
+            if (!rawData || rawData.length === 0) {
+                document.getElementById('rawDataTableHead').innerHTML = '';
+                document.getElementById('rawDataTableBody').innerHTML = 
+                    '<tr><td class="text-center">No data available</td></tr>';
+                return;
+            }
+
+            // Get headers from first row
+            const headers = Object.keys(rawData[0]);
+            document.getElementById('rawDataTableHead').innerHTML = 
+                `<tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
+
+            // Add data rows
+            document.getElementById('rawDataTableBody').innerHTML = rawData.map(row => 
+                `<tr>${headers.map(h => `<td>${row[h] || ''}</td>`).join('')}</tr>`
+            ).join('');
+        }
+
+        function toggleRawData() {
+            const section = document.getElementById('rawDataSection');
+            const btn = document.getElementById('toggleBtn');
+            
+            if (rawDataVisible) {
+                section.style.display = 'none';
+                btn.textContent = 'View Underlying Data';
+                rawDataVisible = false;
+            } else {
+                section.style.display = 'block';
+                btn.textContent = 'Hide Underlying Data';
+                rawDataVisible = true;
+            }
+        }
+
+        function applyDateFilter() {
+            const filter = document.getElementById('dateFilter').value;
+            const startDateDiv = document.getElementById('startDateDiv');
+            const endDateDiv = document.getElementById('endDateDiv');
+            
+            if (filter === 'custom') {
+                startDateDiv.style.display = 'block';
+                endDateDiv.style.display = 'block';
+            } else {
+                startDateDiv.style.display = 'none';
+                endDateDiv.style.display = 'none';
+            }
+            
+            // Reload data with new filter
+            loadDashboardData();
+        }
+    </script>
+</body>
+</html>

@@ -56,6 +56,7 @@ app = Flask(__name__)
 # Streamlit subprocess management
 import subprocess
 import threading
+import os
 
 streamlit_process = None
 
@@ -64,15 +65,24 @@ def start_streamlit():
     global streamlit_process
     try:
         if streamlit_process is None or streamlit_process.poll() is not None:
-            # Start Streamlit on port 8501
+            # Check if we're on Render (PORT env var exists)
+            if os.getenv('PORT'):
+                # On Render, use a different port that won't conflict
+                streamlit_port = '8501'
+            else:
+                # Local development
+                streamlit_port = '8501'
+            
+            # Start Streamlit
             streamlit_process = subprocess.Popen([
                 'streamlit', 'run', 'strapp.py', 
-                '--server.port=8501',
+                f'--server.port={streamlit_port}',
                 '--server.headless=true',
                 '--server.enableCORS=false',
-                '--server.enableXsrfProtection=false'
+                '--server.enableXsrfProtection=false',
+                '--server.address=0.0.0.0'  # Allow external access
             ])
-            print("Streamlit started on port 8501")
+            print(f"Streamlit started on port {streamlit_port}")
     except Exception as e:
         print(f"Failed to start Streamlit: {e}")
 
@@ -19370,13 +19380,80 @@ def api_documentation():
 @app.route('/walkin-dashboard')
 def walkin_dashboard_embed():
     try:
-        # Start Streamlit if not running
-        start_streamlit()
-        # Use localhost since Streamlit runs on same server
-        streamlit_url = 'http://localhost:8501'
-        return render_template('walkin_dashboard_embed.html', streamlit_url=streamlit_url)
+        # For Render deployment, use Flask-based dashboard
+        if os.getenv('PORT'):
+            return render_template('walkin_dashboard_flask.html')
+        else:
+            # Local development - use iframe with Streamlit
+            start_streamlit()
+            streamlit_url = 'http://localhost:8501'
+            return render_template('walkin_dashboard_embed.html', streamlit_url=streamlit_url)
     except Exception as _e:
         return f"Failed to load walk-in dashboard: {_e}", 500
+
+@app.route('/api/walkin-dashboard-data')
+def walkin_dashboard_data():
+    """API endpoint to get walk-in dashboard data"""
+    try:
+        # Fetch data from walkin_table
+        res = supabase.table("walkin_table").select("*").execute()
+        df = pd.DataFrame(res.data)
+        
+        if df.empty:
+            return jsonify({
+                'stats': {'total_leads': 0, 'pending_leads': 0, 'won_leads': 0, 'lost_leads': 0},
+                'branches': [],
+                'raw_data': []
+            })
+        
+        # Calculate statistics
+        total_leads = len(df)
+        pending_leads = len(df[df['status'].astype(str).str.strip().str.lower() == 'pending']) if 'status' in df.columns else 0
+        won_leads = len(df[df['status'].astype(str).str.strip().str.lower() == 'won']) if 'status' in df.columns else 0
+        lost_leads = len(df[df['status'].astype(str).str.strip().str.lower() == 'lost']) if 'status' in df.columns else 0
+        
+        # Calculate branch-wise data
+        branches_data = []
+        if 'branch' in df.columns:
+            unique_branches = df['branch'].dropna().astype(str).unique()
+            
+            for branch in unique_branches:
+                branch_df = df[df['branch'] == branch]
+                branch_data = {
+                    'branch': branch,
+                    'leads_punched': len(branch_df),
+                    'pending_leads': len(branch_df[branch_df['status'].astype(str).str.strip().str.lower() == 'pending']) if 'status' in df.columns else 0,
+                    'won_leads': len(branch_df[branch_df['status'].astype(str).str.strip().str.lower() == 'won']) if 'status' in df.columns else 0,
+                    'lost_leads': len(branch_df[branch_df['status'].astype(str).str.strip().str.lower() == 'lost']) if 'status' in df.columns else 0,
+                    'touched_leads': 0,
+                    'untouched_leads': 0
+                }
+                
+                # Calculate touched/untouched leads (pending only)
+                if 'first_call_date' in df.columns and 'status' in df.columns:
+                    pending_branch_df = branch_df[branch_df['status'].astype(str).str.strip().str.lower() == 'pending']
+                    touched_mask = pending_branch_df['first_call_date'].notna() & (pending_branch_df['first_call_date'].astype(str).str.strip() != "")
+                    branch_data['touched_leads'] = len(pending_branch_df[touched_mask])
+                    branch_data['untouched_leads'] = len(pending_branch_df[~touched_mask])
+                
+                branches_data.append(branch_data)
+        
+        # Prepare raw data (limit to 100 rows for performance)
+        raw_data = df.head(100).to_dict('records')
+        
+        return jsonify({
+            'stats': {
+                'total_leads': total_leads,
+                'pending_leads': pending_leads,
+                'won_leads': won_leads,
+                'lost_leads': lost_leads
+            },
+            'branches': branches_data,
+            'raw_data': raw_data
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 # =====================================================
