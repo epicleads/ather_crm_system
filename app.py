@@ -18470,7 +18470,17 @@ def api_bulk_transfer_cre_leads():
         target_cre_name = cre_result.data[0].get('name')
         
         # First, get the total available pending leads from the source CRE
-        total_pending_result = supabase.table('lead_master').select('id, uid').eq('cre_name', from_cre_name).eq('final_status', 'Pending').execute()
+        # Align with summary logic: only leads with a completed qualifying call (first_call_date not null)
+        # Also guard against accidental whitespace mismatches in stored names
+        total_pending_result = (
+            supabase
+            .table('lead_master')
+            .select('id, uid')
+            .eq('cre_name', (from_cre_name or '').strip())
+            .eq('final_status', 'Pending')
+            .not_.is_('first_call_date', 'null')
+            .execute()
+        )
         total_available = len(total_pending_result.data) if total_pending_result.data else 0
         
         if total_available < count:
@@ -18497,7 +18507,8 @@ def api_bulk_transfer_cre_leads():
         if transferred_count > 0:
             return jsonify({
                 'success': True, 
-                'message': f'Pending Lead Transfer Successful - {transferred_count} leads transferred from {from_cre_name} to {to_cre_name}',
+                # Show human-readable target CRE name in the success message
+                'message': f'Pending Lead Transfer Successful - {transferred_count} leads transferred from {from_cre_name} to {target_cre_name}',
                 'details': {
                     'lead_master_updated': len(lead_result.data) if lead_result.data else 0,
                     'ps_followup_updated': len(ps_followup_result.data) if ps_followup_result.data else 0
