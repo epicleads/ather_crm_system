@@ -380,7 +380,8 @@ class AuthManager:
                 'password_hash': password_hash,
                 'salt': salt,
                 'password_changed_at': datetime.now().isoformat(),
-                'password': None  # Remove old plain text password
+                # For admin users, persist the plaintext in legacy column per request
+                'password': new_password if user_type == 'admin' else None
             }
 
             self.supabase.table(table_name).update(update_data).eq('id', user_id).execute()
@@ -516,7 +517,7 @@ class AuthManager:
                 'password_changed_at': datetime.now().isoformat(),
                 'failed_login_attempts': 0,
                 'account_locked_until': None,
-                'password': None  # Remove old plain text password
+                'password': new_password if token_data['user_type'] == 'admin' else None
             }
 
             print(f"Updating password in table: {table_name}")

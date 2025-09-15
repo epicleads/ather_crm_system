@@ -1730,6 +1730,37 @@ def change_password():
     return redirect(url_for('security_settings'))
 
 
+@app.route('/admin/change_password', methods=['POST'])
+@require_admin
+def admin_change_password():
+    current_password = request.form.get('current_password', '').strip()
+    new_password = request.form.get('new_password', '').strip()
+    confirm_password = request.form.get('confirm_password', '').strip()
+
+    if not all([current_password, new_password, confirm_password]):
+        flash('All fields are required', 'error')
+        return redirect(url_for('security_settings'))
+
+    if new_password != confirm_password:
+        flash('New passwords do not match', 'error')
+        return redirect(url_for('security_settings'))
+
+    user_id = session.get('user_id')
+    user_type = 'admin'
+
+    if not user_id:
+        flash('Session information not found', 'error')
+        return redirect(url_for('security_settings'))
+
+    success, message = auth_manager.change_password(user_id, user_type, current_password, new_password)
+
+    if success:
+        flash('Password changed successfully', 'success')
+    else:
+        flash(message, 'error')
+
+    return redirect(url_for('security_settings'))
+
 @app.route('/change_cre_password', methods=['GET', 'POST'])
 @require_cre
 def change_cre_password():
