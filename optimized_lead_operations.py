@@ -37,6 +37,35 @@ class OptimizedLeadOperations:
         self.supabase = supabase_client
         self.cache = {}  # Simple in-memory cache for session data
 
+    # -----------------------------
+    # Bulk/batch helpers
+    # -----------------------------
+    def _chunk(self, items: List[Dict[str, Any]], chunk_size: int) -> List[List[Dict[str, Any]]]:
+        return [items[i:i + chunk_size] for i in range(0, len(items), chunk_size)]
+
+    @performance_monitor
+    def bulk_upsert(self, table_name: str, rows: List[Dict[str, Any]], conflict_target: str,
+                    chunk_size: int = 500) -> Dict[str, Any]:
+        """Batch upsert rows into a table using chunks to reduce round trips."""
+        results: Dict[str, Any] = { 'successful': 0, 'failed': 0, 'errors': [] }
+        if not rows:
+            return results
+
+        for chunk in self._chunk(rows, chunk_size):
+            try:
+                # supabase-py upsert supports on_conflict param in v1
+                self.supabase.table(table_name).upsert(chunk, on_conflict=conflict_target).execute()
+                results['successful'] += len(chunk)
+            except Exception as e:
+                # Fallback: try insert (may fail on conflict)
+                try:
+                    self.supabase.table(table_name).insert(chunk).execute()
+                    results['successful'] += len(chunk)
+                except Exception as e2:
+                    results['failed'] += len(chunk)
+                    results['errors'].append({'table': table_name, 'error': str(e2)})
+        return results
+
     @performance_monitor
     def create_lead_optimized(self, lead_data: Dict[str, Any], cre_name: str, 
                              ps_name: Optional[str] = None, ps_branch: Optional[str] = None) -> Dict[str, Any]:

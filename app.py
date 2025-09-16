@@ -1,7 +1,8 @@
 import eventlet
 eventlet.monkey_patch()
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Response, current_app
-from supabase.client import create_client, Client
+from supabase.client import Client
+from supabase_pool import get_supabase_client
 import csv
 import openpyxl
 import os
@@ -688,11 +689,10 @@ if not SUPABASE_KEY:
 app.secret_key = SECRET_KEY
 app.permanent_session_lifetime = timedelta(hours=24)
 
-# Initialize Supabase client
+# Initialize Supabase client (singleton with pooled HTTP)
 try:
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-    print("✅ Supabase client initialized successfully")
-    # Removed Supabase warm-up query for local development
+    supabase: Client = get_supabase_client()
+    print("✅ Supabase client (pooled) initialized successfully")
 except Exception as e:
     print(f"❌ Error initializing Supabase client: {e}")
     raise
