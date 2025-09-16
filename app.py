@@ -1,5 +1,4 @@
-import eventlet
-eventlet.monkey_patch()
+# eventlet disabled for local Windows dev to avoid greendns DNS issues
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Response, current_app
 from supabase.client import create_client, Client
 import csv
@@ -54,9 +53,9 @@ load_dotenv()
 app = Flask(__name__)
 # Initialize Flask-SocketIO with better configuration
 socketio = SocketIO(
-    app, 
+    app,
     cors_allowed_origins="*",
-    async_mode='eventlet',
+    async_mode='threading',
     logger=True,
     engineio_logger=True,
     ping_timeout=60,
@@ -4285,8 +4284,7 @@ def cre_dashboard():
         return_sub_tab=sub_tab  # Pass sub_tab parameter to template
     )
 
-import eventlet
-eventlet.monkey_patch()
+# eventlet disabled for local Windows dev to avoid greendns DNS issues
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Response, current_app
 from supabase.client import create_client, Client
 import csv
@@ -4339,7 +4337,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 load_dotenv()
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 # Reduce Flask log noise
 import logging
@@ -15573,47 +15571,104 @@ def cre_dashboard_leads():
 @app.route('/ps_dashboard_leads')
 @require_ps
 def ps_dashboard_leads():
-    """AJAX endpoint to get leads table HTML for Won/Lost toggle"""
+    """AJAX endpoint to get leads table HTML for Won/Lost toggle with date filters.
+
+    Filters (via query params):
+    - filter: 'mtd' (default), 'today', 'all', or 'range'
+    - from_date, to_date: when filter == 'range', format YYYY-MM-DD
+    Returns JSON: { html, won_count, lost_count }
+    """
     status = request.args.get('status', 'lost')
+    filter_opt = (request.args.get('filter') or 'mtd').lower()
+    from_date_str = request.args.get('from_date')
+    to_date_str = request.args.get('to_date')
     ps_name = session.get('ps_name')
-    
+
     try:
-        # Get all assigned leads for this PS (reuse logic from ps_dashboard)
+        # Helper: date range
+        from datetime import datetime, timedelta, date
+
+        def parse_date(date_str):
+            if not date_str:
+                return None
+            try:
+                return datetime.strptime(date_str, '%Y-%m-%d').date()
+            except Exception:
+                return None
+
+        today = datetime.now().date()
+
+        if filter_opt == 'today':
+            start_date: date = today
+            end_date: date = today
+        elif filter_opt == 'all':
+            start_date = None
+            end_date = None
+        elif filter_opt == 'range':
+            start_date = parse_date(from_date_str)
+            end_date = parse_date(to_date_str)
+        else:  # default MTD
+            start_date = today.replace(day=1)
+            end_date = today
+
+        def in_range(ts_str):
+            if not ts_str:
+                return False if start_date or end_date else True
+            try:
+                # Accept both ISO timestamps and 'YYYY-MM-DD'
+                ts = ts_str
+                if isinstance(ts_str, str):
+                    cleaned = ts_str.replace('Z', '+00:00')
+                    if 'T' in cleaned:
+                        dt = datetime.fromisoformat(cleaned)
+                    else:
+                        dt = datetime.strptime(cleaned[:10], '%Y-%m-%d')
+                else:
+                    dt = ts_str
+                d = dt.date() if hasattr(dt, 'date') else dt
+                if start_date and d < start_date:
+                    return False
+                if end_date and d > end_date:
+                    return False
+                return True
+            except Exception:
+                # If parsing fails, exclude when a date filter is applied; include if 'all'
+                return False if (start_date or end_date) else True
+
+        # Fetch sources
         assigned_leads = safe_get_data('ps_followup_master', {'ps_name': ps_name})
-        event_leads = safe_get_data('activity_leads', {'ps_name': ps_name})
-        
-        # Initialize lists
+        # Only keep rows that are Won/Lost with respective timestamps present
         won_leads = []
         lost_leads = []
-        
-        # Process regular assigned leads
+
         for lead in assigned_leads:
             lead_dict = dict(lead)
             lead_dict['lead_uid'] = lead.get('lead_uid')
             final_status = lead.get('final_status')
-            
-            if final_status == 'Won':
-                won_leads.append(lead_dict)
-            elif final_status == 'Lost':
-                lost_leads.append(lead_dict)
-        
 
-        
-        # Process event leads
-        for lead in event_leads:
-            lead_dict = dict(lead)
-            lead_dict['lead_uid'] = lead.get('activity_uid', '') or lead.get('uid', '')
-            lead_dict['customer_mobile_number'] = lead.get('customer_phone_number', '')
-            final_status = lead.get('final_status', '')
-            
             if final_status == 'Won':
+                ts = lead.get('won_timestamp')
+                if start_date or end_date:
+                    if not in_range(ts):
+                        continue
                 won_leads.append(lead_dict)
             elif final_status == 'Lost':
+                ts = lead.get('lost_timestamp')
+                if start_date or end_date:
+                    if not in_range(ts):
+                        continue
                 lost_leads.append(lead_dict)
-        
-        # Process walk-in leads
+
+        # Walk-in leads: filter by updated_at and status Won/Lost
         walkin_leads = safe_get_data('walkin_table', {'ps_assigned': ps_name})
         for lead in walkin_leads:
+            status_val = lead.get('status')
+            if status_val not in ['Won', 'Lost']:
+                continue
+            ts = lead.get('updated_at')
+            if start_date or end_date:
+                if not in_range(ts):
+                    continue
             lead_dict = dict(lead)
             lead_dict['lead_uid'] = lead.get('uid', f"W{lead.get('id')}")
             lead_dict['customer_mobile_number'] = lead.get('mobile_number', '')
@@ -15621,26 +15676,35 @@ def ps_dashboard_leads():
             lead_dict['is_walkin'] = True
             lead_dict['walkin_id'] = lead.get('id')
             lead_dict['cre_name'] = ''
-            final_status = lead.get('status')
-            
-            # Add timestamp for filtering
-            if final_status == 'Won':
-                lead_dict['won_timestamp'] = lead.get('updated_at') or datetime.now().isoformat()
+            if status_val == 'Won':
+                lead_dict['won_timestamp'] = ts or datetime.now().isoformat()
                 won_leads.append(lead_dict)
-            elif final_status == 'Lost':
-                lead_dict['lost_timestamp'] = lead.get('updated_at') or datetime.now().isoformat()
+            else:
+                lead_dict['lost_timestamp'] = ts or datetime.now().isoformat()
                 lost_leads.append(lead_dict)
-        
-        # Select the appropriate list based on status
+
+        # Sort for stable UI
+        if won_leads:
+            won_leads.sort(key=lambda x: x.get('won_timestamp') or '', reverse=True)
+        if lost_leads:
+            lost_leads.sort(key=lambda x: x.get('lost_timestamp') or '', reverse=True)
+
         leads_list = won_leads if status == 'won' else lost_leads
-        
-        # Render only the table HTML
-        return render_template('ps_dashboard_leads_table.html', 
-                             leads_list=leads_list, 
-                             status=status)
-    
+
+        html = render_template(
+            'ps_dashboard_leads_table.html',
+            leads_list=leads_list,
+            status=status
+        )
+
+        return jsonify({
+            'html': html,
+            'won_count': len(won_leads),
+            'lost_count': len(lost_leads)
+        })
+
     except Exception as e:
-        return f'<div class="alert alert-danger">Error loading leads: {str(e)}</div>'
+        return jsonify({'error': str(e)}), 500
 
 # Receptionist session key
 RECEPTIONIST_SESSION_KEY = 'rec_user_id'
