@@ -753,10 +753,49 @@ def send_email_to_ps(ps_email, ps_name, lead_data, cre_name):
             print("Email credentials not configured. Skipping email notification.")
             return False
 
+        # Get branch head email for CC
+        branch_head_email = None
+        try:
+            print(f"DEBUG: lead_data keys: {list(lead_data.keys())}")
+            print(f"DEBUG: lead_data branch value: {lead_data.get('branch', 'NOT_FOUND')}")
+            
+            if 'branch' in lead_data and lead_data['branch']:
+                branch_name = lead_data['branch']
+                print(f"DEBUG: Looking for branch head with branch name: '{branch_name}'")
+                
+                # Query Branch Head table to get email for the branch
+                branch_head_result = supabase.table('Branch Head').select('email, "Branch", "Name"').eq('Branch', branch_name).eq('Is Active', True).execute()
+                
+                print(f"DEBUG: Branch head query result: {branch_head_result.data}")
+                
+                if branch_head_result.data and len(branch_head_result.data) > 0:
+                    branch_head_email = branch_head_result.data[0]['email']
+                    branch_head_name = branch_head_result.data[0]['Name']
+                    print(f"Found branch head email: {branch_head_email} (Name: {branch_head_name}) for branch: {branch_name}")
+                else:
+                    print(f"No active branch head found for branch: {branch_name}")
+                    # Let's also check what branches are available
+                    all_branches = supabase.table('Branch Head').select('"Branch", "Name", email, "Is Active"').execute()
+                    print(f"DEBUG: All branch heads in database: {all_branches.data}")
+            else:
+                print("DEBUG: No branch information in lead_data or branch is empty")
+        except Exception as e:
+            print(f"Error fetching branch head email: {e}")
+            import traceback
+            traceback.print_exc()
+
         # Create message
         msg = MIMEMultipart()
         msg['From'] = EMAIL_USER
         msg['To'] = ps_email
+        
+        # Add CC if branch head email is found
+        if branch_head_email:
+            msg['Cc'] = branch_head_email
+            print(f"DEBUG: Added CC to email: {branch_head_email}")
+        else:
+            print("DEBUG: No branch head email found, skipping CC")
+        
         msg['Subject'] = f"New Lead Assigned - {lead_data['customer_name']}"
 
         # Email body
@@ -767,7 +806,6 @@ def send_email_to_ps(ps_email, ps_name, lead_data, cre_name):
 
         Lead Details:
         - Customer Name: {lead_data['customer_name']}
-        - Mobile Number: {lead_data['customer_mobile_number']}
         - Source: {lead_data['source']}
         - Lead Category: {lead_data.get('lead_category', 'Not specified')}
         - Model Interested: {lead_data.get('model_interested', 'Not specified')}
@@ -782,14 +820,23 @@ def send_email_to_ps(ps_email, ps_name, lead_data, cre_name):
         msg.attach(MIMEText(body, 'plain'))
 
         # Send email
+        print(f"DEBUG: SMTP Configuration - Server: {SMTP_SERVER}, Port: {SMTP_PORT}, User: {EMAIL_USER}")
         server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
         server.starttls()
         server.login(EMAIL_USER, EMAIL_PASSWORD)
         text = msg.as_string()
-        server.sendmail(EMAIL_USER, ps_email, text)
+        
+        # Prepare recipient list (TO + CC)
+        recipients = [ps_email]
+        if branch_head_email:
+            recipients.append(branch_head_email)
+        print(f"DEBUG: Final recipient list: {recipients}")
+        print(f"DEBUG: Email headers - From: {msg['From']}, To: {msg['To']}, CC: {msg.get('Cc', 'None')}")
+        
+        server.sendmail(EMAIL_USER, recipients, text)
         server.quit()
 
-        print(f"Email sent successfully to {ps_email}")
+        print(f"Email sent successfully to {ps_email}" + (f" and CC to {branch_head_email}" if branch_head_email else ""))
         return True
 
     except Exception as e:
@@ -4322,10 +4369,49 @@ def send_email_to_ps(ps_email, ps_name, lead_data, cre_name):
             print("Email credentials not configured. Skipping email notification.")
             return False
 
+        # Get branch head email for CC
+        branch_head_email = None
+        try:
+            print(f"DEBUG: lead_data keys: {list(lead_data.keys())}")
+            print(f"DEBUG: lead_data branch value: {lead_data.get('branch', 'NOT_FOUND')}")
+            
+            if 'branch' in lead_data and lead_data['branch']:
+                branch_name = lead_data['branch']
+                print(f"DEBUG: Looking for branch head with branch name: '{branch_name}'")
+                
+                # Query Branch Head table to get email for the branch
+                branch_head_result = supabase.table('Branch Head').select('email, "Branch", "Name"').eq('Branch', branch_name).eq('Is Active', True).execute()
+                
+                print(f"DEBUG: Branch head query result: {branch_head_result.data}")
+                
+                if branch_head_result.data and len(branch_head_result.data) > 0:
+                    branch_head_email = branch_head_result.data[0]['email']
+                    branch_head_name = branch_head_result.data[0]['Name']
+                    print(f"Found branch head email: {branch_head_email} (Name: {branch_head_name}) for branch: {branch_name}")
+                else:
+                    print(f"No active branch head found for branch: {branch_name}")
+                    # Let's also check what branches are available
+                    all_branches = supabase.table('Branch Head').select('"Branch", "Name", email, "Is Active"').execute()
+                    print(f"DEBUG: All branch heads in database: {all_branches.data}")
+            else:
+                print("DEBUG: No branch information in lead_data or branch is empty")
+        except Exception as e:
+            print(f"Error fetching branch head email: {e}")
+            import traceback
+            traceback.print_exc()
+
         # Create message
         msg = MIMEMultipart()
         msg['From'] = EMAIL_USER
         msg['To'] = ps_email
+        
+        # Add CC if branch head email is found
+        if branch_head_email:
+            msg['Cc'] = branch_head_email
+            print(f"DEBUG: Added CC to email: {branch_head_email}")
+        else:
+            print("DEBUG: No branch head email found, skipping CC")
+        
         msg['Subject'] = f"New Lead Assigned - {lead_data['customer_name']}"
 
         # Email body
@@ -4336,7 +4422,6 @@ def send_email_to_ps(ps_email, ps_name, lead_data, cre_name):
 
         Lead Details:
         - Customer Name: {lead_data['customer_name']}
-        - Mobile Number: {lead_data['customer_mobile_number']}
         - Source: {lead_data['source']}
         - Lead Category: {lead_data.get('lead_category', 'Not specified')}
         - Model Interested: {lead_data.get('model_interested', 'Not specified')}
@@ -4351,14 +4436,23 @@ def send_email_to_ps(ps_email, ps_name, lead_data, cre_name):
         msg.attach(MIMEText(body, 'plain'))
 
         # Send email
+        print(f"DEBUG: SMTP Configuration - Server: {SMTP_SERVER}, Port: {SMTP_PORT}, User: {EMAIL_USER}")
         server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
         server.starttls()
         server.login(EMAIL_USER, EMAIL_PASSWORD)
         text = msg.as_string()
-        server.sendmail(EMAIL_USER, ps_email, text)
+        
+        # Prepare recipient list (TO + CC)
+        recipients = [ps_email]
+        if branch_head_email:
+            recipients.append(branch_head_email)
+        print(f"DEBUG: Final recipient list: {recipients}")
+        print(f"DEBUG: Email headers - From: {msg['From']}, To: {msg['To']}, CC: {msg.get('Cc', 'None')}")
+        
+        server.sendmail(EMAIL_USER, recipients, text)
         server.quit()
 
-        print(f"Email sent successfully to {ps_email}")
+        print(f"Email sent successfully to {ps_email}" + (f" and CC to {branch_head_email}" if branch_head_email else ""))
         return True
 
     except Exception as e:
