@@ -15057,8 +15057,11 @@ def cre_dashboard_leads():
 @app.route('/ps_dashboard_leads')
 @require_ps
 def ps_dashboard_leads():
-    """AJAX endpoint to get leads table HTML for Won/Lost toggle"""
+    """AJAX endpoint to get leads table HTML for Won/Lost toggle, with date filters"""
     status = request.args.get('status', 'lost')
+    wonlost_filter = request.args.get('wonlost_filter', 'mtd')  # today | range | all | mtd(default)
+    range_start = request.args.get('start_date')
+    range_end = request.args.get('end_date')
     ps_name = session.get('ps_name')
     
     try:
@@ -15070,6 +15073,33 @@ def ps_dashboard_leads():
         won_leads = []
         lost_leads = []
         
+        # Helper to check if a timestamp passes the selected filter
+        def _in_filter(ts_str: str) -> bool:
+            if wonlost_filter == 'all':
+                return True
+            today = datetime.now().date()
+            # default mtd
+            start_date = today.replace(day=1)
+            end_date = today
+            if wonlost_filter == 'today':
+                start_date = today
+                end_date = today
+            elif wonlost_filter == 'range':
+                try:
+                    if range_start:
+                        start_date = datetime.strptime(range_start[:10], '%Y-%m-%d').date()
+                    if range_end:
+                        end_date = datetime.strptime(range_end[:10], '%Y-%m-%d').date()
+                except Exception:
+                    pass
+            if not ts_str:
+                return False
+            try:
+                ts_date = datetime.fromisoformat(str(ts_str).replace('Z', '+00:00')).date() if 'T' in str(ts_str) else datetime.strptime(str(ts_str)[:10], '%Y-%m-%d').date()
+                return start_date <= ts_date <= end_date
+            except Exception:
+                return False
+
         # Process regular assigned leads
         for lead in assigned_leads:
             lead_dict = dict(lead)
@@ -15077,13 +15107,15 @@ def ps_dashboard_leads():
             final_status = lead.get('final_status')
             
             if final_status == 'Won':
-                won_leads.append(lead_dict)
+                if _in_filter(lead.get('won_timestamp')):
+                    won_leads.append(lead_dict)
             elif final_status == 'Lost':
-                lost_leads.append(lead_dict)
+                if _in_filter(lead.get('lost_timestamp')):
+                    lost_leads.append(lead_dict)
         
 
         
-        # Process event leads
+        # Process event leads (include if they have timestamps and pass filter; otherwise skip)
         for lead in event_leads:
             lead_dict = dict(lead)
             lead_dict['lead_uid'] = lead.get('activity_uid', '') or lead.get('uid', '')
@@ -15091,9 +15123,11 @@ def ps_dashboard_leads():
             final_status = lead.get('final_status', '')
             
             if final_status == 'Won':
-                won_leads.append(lead_dict)
+                if _in_filter(lead.get('won_timestamp')):
+                    won_leads.append(lead_dict)
             elif final_status == 'Lost':
-                lost_leads.append(lead_dict)
+                if _in_filter(lead.get('lost_timestamp')):
+                    lost_leads.append(lead_dict)
         
         # Process walk-in leads
         walkin_leads = safe_get_data('walkin_table', {'ps_assigned': ps_name})
@@ -15110,10 +15144,12 @@ def ps_dashboard_leads():
             # Add timestamp for filtering
             if final_status == 'Won':
                 lead_dict['won_timestamp'] = lead.get('updated_at') or datetime.now().isoformat()
-                won_leads.append(lead_dict)
+                if _in_filter(lead_dict['won_timestamp']):
+                    won_leads.append(lead_dict)
             elif final_status == 'Lost':
                 lead_dict['lost_timestamp'] = lead.get('updated_at') or datetime.now().isoformat()
-                lost_leads.append(lead_dict)
+                if _in_filter(lead_dict['lost_timestamp']):
+                    lost_leads.append(lead_dict)
         
         # Select the appropriate list based on status
         leads_list = won_leads if status == 'won' else lost_leads
@@ -15125,6 +15161,61 @@ def ps_dashboard_leads():
     
     except Exception as e:
         return f'<div class="alert alert-danger">Error loading leads: {str(e)}</div>'
+
+@app.route('/ps_dashboard_leads_counts')
+@require_ps
+def ps_dashboard_leads_counts():
+    """Return JSON counts for won/lost with date filters to update KPI cards."""
+    wonlost_filter = request.args.get('wonlost_filter', 'mtd')
+    range_start = request.args.get('start_date')
+    range_end = request.args.get('end_date')
+    ps_name = session.get('ps_name')
+    try:
+        assigned_leads = safe_get_data('ps_followup_master', {'ps_name': ps_name})
+        walkin_leads = safe_get_data('walkin_table', {'ps_assigned': ps_name})
+
+        def _in_filter(ts_str: str) -> bool:
+            if wonlost_filter == 'all':
+                return True
+            today = datetime.now().date()
+            start_date = today.replace(day=1)
+            end_date = today
+            if wonlost_filter == 'today':
+                start_date = today
+                end_date = today
+            elif wonlost_filter == 'range':
+                try:
+                    if range_start:
+                        start_date = datetime.strptime(range_start[:10], '%Y-%m-%d').date()
+                    if range_end:
+                        end_date = datetime.strptime(range_end[:10], '%Y-%m-%d').date()
+                except Exception:
+                    pass
+            if not ts_str:
+                return False
+            try:
+                ts_date = datetime.fromisoformat(str(ts_str).replace('Z', '+00:00')).date() if 'T' in str(ts_str) else datetime.strptime(str(ts_str)[:10], '%Y-%m-%d').date()
+                return start_date <= ts_date <= end_date
+            except Exception:
+                return False
+
+        won_count = 0
+        lost_count = 0
+        for lead in assigned_leads:
+            if lead.get('final_status') == 'Won' and _in_filter(lead.get('won_timestamp')):
+                won_count += 1
+            elif lead.get('final_status') == 'Lost' and _in_filter(lead.get('lost_timestamp')):
+                lost_count += 1
+
+        for lead in walkin_leads:
+            if lead.get('status') == 'Won' and _in_filter(lead.get('updated_at')):
+                won_count += 1
+            elif lead.get('status') == 'Lost' and _in_filter(lead.get('updated_at')):
+                lost_count += 1
+
+        return jsonify({'success': True, 'won_count': won_count, 'lost_count': lost_count})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
 
 # Receptionist session key
 RECEPTIONIST_SESSION_KEY = 'rec_user_id'
