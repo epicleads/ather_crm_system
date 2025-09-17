@@ -105,7 +105,7 @@
         <div class="stats-card bg-info text-white p-3 rounded h-100">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <h4 class="mb-1 text-white">{{ won_leads|length }}</h4>
+                    <h4 class="mb-1 text-white"><span id="kpiWon">{{ won_leads|length }}</span></h4>
                     <small class="text-white">Won Leads</small>
                 </div>
                 <i class="fas fa-trophy fa-2x text-white"></i>
@@ -116,7 +116,7 @@
         <div class="stats-card bg-danger text-white p-3 rounded h-100">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <h4 class="mb-1 text-white">{{ lost_leads|length }}</h4>
+                    <h4 class="mb-1 text-white"><span id="kpiLost">{{ lost_leads|length }}</span></h4>
                     <small class="text-white">Lost Leads</small>
                 </div>
                 <i class="fas fa-ban fa-2x text-white"></i>
@@ -690,7 +690,18 @@
                             </label>
                         </div>
                     </div>
-                    <div class="d-flex gap-2">
+                    <div class="d-flex gap-2 align-items-center">
+                        <div class="input-group" style="max-width: 420px;">
+                            <select class="form-select" id="wonLostDateFilter" title="Filter">
+                                <option value="today">Today</option>
+                                <option value="range">Date Range</option>
+                                <option value="all">All Time</option>
+                            </select>
+                            <input type="date" id="wonLostStart" class="form-control d-none">
+                            <input type="date" id="wonLostEnd" class="form-control d-none">
+                            <button class="btn btn-outline-secondary" id="wonLostApply" type="button">Apply</button>
+                            <span class="badge bg-secondary align-self-center ms-2" id="wonLostActiveLabel">MTD</span>
+                        </div>
                         <div class="input-group" style="max-width: 300px;">
                             <input type="text" class="form-control" id="wonLostLeadSearchInput" placeholder="Search by UID, name, mobile...">
                             <button class="btn btn-outline-secondary" type="button" id="wonLostLeadSearchButton">
@@ -1860,23 +1871,23 @@ document.addEventListener('DOMContentLoaded', function() {
     const wonLostTabContent = document.getElementById('won-lost');
 
     if (wonLostToggle && wonLostTabContent) {
-        wonLostToggle.addEventListener('change', function() {
-            const status = this.checked ? 'won' : 'lost';
-            
+        function fetchWonLost(status, wonlostFilter, startDate, endDate) {
             // Show loading state
             const tableContainer = wonLostTabContent.querySelector('.table-responsive') || wonLostTabContent.querySelector('.text-center');
             if (tableContainer) {
                 tableContainer.innerHTML = '<div class="text-center py-5"><i class="fas fa-spinner fa-spin fa-2x text-primary"></i><p class="mt-2">Loading...</p></div>';
             }
-            
             // Update the header text
             const headerText = wonLostTabContent.querySelector('h5');
             if (headerText) {
                 headerText.textContent = `${status === 'won' ? 'Won' : 'Lost'} Leads (Loading...)`;
             }
-            
-            // Fetch new data via AJAX
-            fetch(`/ps_dashboard_leads?status=${status}`)
+            const params = new URLSearchParams({ status, wonlost_filter: wonlostFilter || 'mtd' });
+            if (wonlostFilter === 'range') {
+                if (startDate) params.set('start_date', startDate);
+                if (endDate) params.set('end_date', endDate);
+            }
+            fetch(`/ps_dashboard_leads?${params.toString()}`)
                 .then(response => response.text())
                 .then(html => {
                     // Replace the table content
@@ -1884,23 +1895,29 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (tableContainer) {
                         tableContainer.outerHTML = html;
                     }
-                    
                     // Update the header text with count
                     const newTable = wonLostTabContent.querySelector('#wonLostLeadsTable');
-                    const newEmptyMessage = wonLostTabContent.querySelector('.text-center');
                     const count = newTable ? newTable.querySelectorAll('tbody tr').length : 0;
-                    
                     if (headerText) {
                         headerText.textContent = `${status === 'won' ? 'Won' : 'Lost'} Leads (${count})`;
                     }
-                    
-                    // Re-initialize search functionality for the new table
+                    // Re-init search
                     const searchInput = document.getElementById('wonLostLeadSearchInput');
                     const searchButton = document.getElementById('wonLostLeadSearchButton');
                     const clearButton = document.getElementById('wonLostLeadClearButton');
-                    
                     if (searchInput && searchButton && clearButton) {
                         setupSearch('wonLostLeadSearchInput', 'wonLostLeadSearchButton', 'wonLostLeadClearButton', 'wonLostLeadsTable');
+                    }
+                    // Update KPI cards
+                    return fetch(`/ps_dashboard_leads_counts?${params.toString()}`)
+                })
+                .then(res => res ? res.json() : null)
+                .then(data => {
+                    if (data && data.success) {
+                        const wonEl = document.getElementById('kpiWon');
+                        const lostEl = document.getElementById('kpiLost');
+                        if (wonEl) wonEl.textContent = data.won_count;
+                        if (lostEl) lostEl.textContent = data.lost_count;
                     }
                 })
                 .catch(error => {
@@ -1910,11 +1927,63 @@ document.addEventListener('DOMContentLoaded', function() {
                         tableContainer.innerHTML = '<div class="alert alert-danger">Error loading leads. Please try again.</div>';
                     }
                 });
+        }
+
+        wonLostToggle.addEventListener('change', function() {
+            const status = this.checked ? 'won' : 'lost';
+            const filterSel = document.getElementById('wonLostDateFilter');
+            const startInput = document.getElementById('wonLostStart');
+            const endInput = document.getElementById('wonLostEnd');
+            fetchWonLost(status, filterSel ? filterSel.value : 'mtd', startInput ? startInput.value : '', endInput ? endInput.value : '');
         });
 
         // Set initial toggle state
         const currentStatus = window.location.search.includes('status=won') ? 'won' : 'lost';
         wonLostToggle.checked = currentStatus === 'won';
+
+        // Date filter controls for Won/Lost
+        const filterSel = document.getElementById('wonLostDateFilter');
+        const startInput = document.getElementById('wonLostStart');
+        const endInput = document.getElementById('wonLostEnd');
+        const applyBtn = document.getElementById('wonLostApply');
+        const activeLabel = document.getElementById('wonLostActiveLabel');
+
+        function updateRangeInputs() {
+            const show = filterSel && filterSel.value === 'range';
+            if (startInput) startInput.classList.toggle('d-none', !show);
+            if (endInput) endInput.classList.toggle('d-none', !show);
+            if (activeLabel) {
+                activeLabel.textContent = filterSel.value === 'today' ? 'Today' : (filterSel.value === 'all' ? 'All' : (filterSel.value === 'range' ? 'Range' : 'MTD'));
+            }
+        }
+        if (filterSel) {
+            filterSel.addEventListener('change', updateRangeInputs);
+            updateRangeInputs();
+        }
+        if (applyBtn) {
+            applyBtn.addEventListener('click', function() {
+                const status = wonLostToggle && wonLostToggle.checked ? 'won' : 'lost';
+                fetchWonLost(status, filterSel ? filterSel.value : 'mtd', startInput ? startInput.value : '', endInput ? endInput.value : '');
+            });
+        }
+
+        // Initialize default view to MTD as a date range (1st of month to today)
+        const urlHasCustom = new URLSearchParams(window.location.search).has('wonlost_filter');
+        if (!urlHasCustom && filterSel && startInput && endInput) {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const today = String(now.getDate()).padStart(2, '0');
+            const firstOfMonth = `${year}-${month}-01`;
+            const todayStr = `${year}-${month}-${today}`;
+            filterSel.value = 'range';
+            startInput.value = firstOfMonth;
+            endInput.value = todayStr;
+            if (activeLabel) activeLabel.textContent = 'MTD';
+            updateRangeInputs();
+            const status = wonLostToggle && wonLostToggle.checked ? 'won' : 'lost';
+            fetchWonLost(status, 'range', firstOfMonth, todayStr);
+        }
     }
 
     // Handle tab parameter from URL to set active tab
