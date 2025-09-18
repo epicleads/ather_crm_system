@@ -12565,150 +12565,150 @@ def lead_journey(uid):
     except Exception as e:
         print(f"Error in lead_journey: {e}")
         return jsonify({'success': False, 'message': str(e)})
-@app.route('/lead_journey_report/<uid>')
-@require_admin
-def lead_journey_report(uid):
-    """Generate a PDF report for the lead journey, including static charts (Seaborn/Matplotlib)."""
-    try:
-        # Fetch journey data using the same logic as /lead_journey/<uid>
-        lead_result = supabase.table('lead_master').select('*').eq('uid', uid).execute()
-        if not lead_result.data:
-            return 'Lead not found', 404
-        lead = lead_result.data[0]
-        cre_calls_result = supabase.table('cre_call_attempt_history').select('*').eq('uid', uid).order('created_at', desc=False).execute()
-        cre_calls = cre_calls_result.data if cre_calls_result.data else []
-        ps_calls_result = supabase.table('ps_call_attempt_history').select('*').eq('uid', uid).order('created_at', desc=False).execute()
-        ps_calls = ps_calls_result.data if ps_calls_result.data else []
-        ps_followup_result = supabase.table('ps_followup_master').select(
-            'lead_uid, ps_name, follow_up_date, final_status, source, lead_status, customer_name, customer_mobile_number, ps_assigned_at, '
-            'first_call_remark, first_call_date, '
-            'second_call_remark, second_call_date, '
-            'third_call_remark, third_call_date, '
-            'fourth_call_remark, fourth_call_date, '
-            'fifth_call_remark, fifth_call_date, '
-            'sixth_call_remark, sixth_call_date, '
-            'seventh_call_remark, seventh_call_date'
-        ).eq('lead_uid', uid).execute()
-        ps_followup = ps_followup_result.data[0] if ps_followup_result.data else None
-        assignment_history = []
-        if lead.get('cre_name'):
-            assignment_history.append({'role': 'CRE','name': lead.get('cre_name'),'assigned_at': lead.get('cre_assigned_at')})
-        if lead.get('ps_name'):
-            assignment_history.append({'role': 'PS','name': lead.get('ps_name'),'assigned_at': lead.get('ps_assigned_at')})
-        status_timeline = []
-        for call in ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']:
-            call_date = lead.get(f'{call}_call_date')
-            call_remark = lead.get(f'{call}_remark')
-            if call_date or call_remark:
-                status_timeline.append({'by': 'CRE','call_no': call,'date': call_date,'remark': call_remark})
-        if ps_followup:
-            for call in ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']:
-                call_date = ps_followup.get(f'{call}_call_date')
-                call_remark = ps_followup.get(f'{call}_call_remark')
-                if call_date or call_remark:
-                    status_timeline.append({'by': 'PS','call_no': call,'date': call_date,'remark': call_remark})
-        if lead.get('final_status'):
-            status_timeline.append({'by': 'System','status': lead.get('final_status'),'date': lead.get('won_timestamp') or lead.get('lost_timestamp')})
-        conversation_log = []
-        for call in cre_calls:
-            conversation_log.append({'by': 'CRE','name': call.get('cre_name'),'call_no': call.get('call_no'),'attempt': call.get('attempt'),'status': call.get('status'),'remark': call.get('remarks'),'follow_up_date': call.get('follow_up_date'),'timestamp': call.get('update_ts') or call.get('created_at')})
-        for call in ps_calls:
-            conversation_log.append({'by': 'PS','name': call.get('ps_name'),'call_no': call.get('call_no'),'attempt': call.get('attempt'),'status': call.get('status'),'remark': call.get('remarks'),'follow_up_date': call.get('follow_up_date'),'timestamp': call.get('created_at')})
-        conversation_log = [c for c in conversation_log if c['timestamp']]
-        conversation_log.sort(key=lambda x: x['timestamp'])
-        outcome = {'final_status': lead.get('final_status'),'timestamp': lead.get('won_timestamp') or lead.get('lost_timestamp'),'reason': lead.get('lost_reason') if lead.get('final_status') == 'Lost' else None}
-        # --- PDF Generation ---
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmpfile:
-            pdf_path = tmpfile.name
-        with PdfPages(pdf_path) as pdf:
-            # Title Page
-            plt.figure(figsize=(8.3, 11.7))
-            plt.axis('off')
-            plt.text(0.5, 0.9, 'Lead Journey Report', fontsize=22, ha='center', fontweight='bold')
-            plt.text(0.5, 0.85, f"Lead UID: {uid}", fontsize=14, ha='center')
-            plt.text(0.5, 0.8, f"Customer: {lead.get('customer_name','')}", fontsize=12, ha='center')
-            plt.text(0.5, 0.75, f"Mobile: {lead.get('customer_mobile_number','')}", fontsize=12, ha='center')
-            plt.text(0.5, 0.7, f"Source: {lead.get('source','')}", fontsize=12, ha='center')
-            plt.text(0.5, 0.65, f"CRE: {lead.get('cre_name','')}", fontsize=12, ha='center')
-            plt.text(0.5, 0.6, f"PS: {lead.get('ps_name','')}", fontsize=12, ha='center')
-            plt.text(0.5, 0.5, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}", fontsize=10, ha='center', color='gray')
-            pdf.savefig(); plt.close()
-            # Assignment History
-            plt.figure(figsize=(8.3, 2))
-            plt.axis('off')
-            plt.title('Assignment History', fontsize=14, loc='left')
-            y = 0.7
-            for a in assignment_history:
-                plt.text(0.05, y, f"{a['role']}: {a['name']} ({a['assigned_at'] or 'N/A'})", fontsize=11)
-                y -= 0.2
-            pdf.savefig(); plt.close()
-            # Status Timeline Chart
-            if status_timeline:
-                dates = [s['date'] for s in status_timeline if s.get('date')]
-                labels = [s.get('status') or s.get('remark') or '' for s in status_timeline]
-                bys = [s.get('by') for s in status_timeline]
-                plt.figure(figsize=(8, 3))
-                plt.title('Status Timeline')
-                plt.plot(dates, range(len(dates)), marker='o')
-                for i, (d, l, b) in enumerate(zip(dates, labels, bys)):
-                    plt.text(d, i, f"{l} ({b})", fontsize=8, va='bottom', ha='left')
-                plt.yticks(range(len(dates)), dates)
-                plt.xlabel('Date')
-                plt.ylabel('Status Change')
-                plt.tight_layout()
-                pdf.savefig(); plt.close()
-            # Bar Chart: Call Attempts
-            plt.figure(figsize=(6, 3))
-            plt.title('Number of Call Attempts')
-            plt.bar(['CRE', 'PS'], [len(cre_calls), len(ps_calls)], color=['#007bff', '#28a745'])
-            plt.ylabel('Attempts')
-            plt.tight_layout()
-            pdf.savefig(); plt.close()
-            # Pie Chart: Status Distribution
-            status_counts = {}
-            for c in conversation_log:
-                s = c['status'] or 'Unknown'
-                status_counts[s] = status_counts.get(s, 0) + 1
-            if status_counts:
-                plt.figure(figsize=(6, 4))
-                plt.title('Status Distribution (CRE + PS)')
-                plt.pie(list(status_counts.values()), labels=list(status_counts.keys()), autopct='%1.1f%%', startangle=140)
-                plt.tight_layout()
-                pdf.savefig(); plt.close()
-            # Conversation Log Table (first 20 rows)
-            plt.figure(figsize=(8.3, min(10, 0.4*len(conversation_log)+1)))
-            plt.axis('off')
-            plt.title('Conversation Log (first 20 rows)', fontsize=12, loc='left')
-            table_data = [['By','Name','Call No','Attempt','Status','Remark','Follow-up','Timestamp']]
-            for c in conversation_log[:20]:
-                table_data.append([
-                    c.get('by',''), c.get('name',''), c.get('call_no',''), str(c.get('attempt','')),
-                    c.get('status',''), c.get('remark',''), c.get('follow_up_date',''), c.get('timestamp','')
-                ])
-            table = plt.table(cellText=table_data, loc='center', cellLoc='left', colWidths=[0.11]*8)
-            table.auto_set_font_size(False)
-            table.set_fontsize(7)
-            table.scale(1, 1.2)
-            plt.tight_layout()
-            pdf.savefig(); plt.close()
-            # Outcome
-            plt.figure(figsize=(8.3, 2))
-            plt.axis('off')
-            plt.title('Final Outcome', fontsize=14, loc='left')
-            y = 0.7
-            plt.text(0.05, y, f"Status: {outcome.get('final_status','')}", fontsize=11)
-            y -= 0.2
-            plt.text(0.05, y, f"Timestamp: {outcome.get('timestamp','')}", fontsize=11)
-            y -= 0.2
-            if outcome.get('reason'):
-                plt.text(0.05, y, f"Reason: {outcome.get('reason','')}", fontsize=11)
-            pdf.savefig(); plt.close()
-        # Serve the PDF
-        from flask import send_file
-        return send_file(pdf_path, as_attachment=True, download_name=f"Lead_Journey_{uid}.pdf", mimetype='application/pdf')
-    except Exception as e:
-        print(f"Error generating lead journey PDF: {e}")
-        return f"Error generating PDF: {str(e)}", 500
+# @app.route('/lead_journey_report/<uid>')
+# @require_admin
+# def lead_journey_report(uid):
+#     """Generate a PDF report for the lead journey, including static charts (Seaborn/Matplotlib)."""
+#     try:
+#         # Fetch journey data using the same logic as /lead_journey/<uid>
+#         lead_result = supabase.table('lead_master').select('*').eq('uid', uid).execute()
+#         if not lead_result.data:
+#             return 'Lead not found', 404
+#         lead = lead_result.data[0]
+#         cre_calls_result = supabase.table('cre_call_attempt_history').select('*').eq('uid', uid).order('created_at', desc=False).execute()
+#         cre_calls = cre_calls_result.data if cre_calls_result.data else []
+#         ps_calls_result = supabase.table('ps_call_attempt_history').select('*').eq('uid', uid).order('created_at', desc=False).execute()
+#         ps_calls = ps_calls_result.data if ps_calls_result.data else []
+#         ps_followup_result = supabase.table('ps_followup_master').select(
+#             'lead_uid, ps_name, follow_up_date, final_status, source, lead_status, customer_name, customer_mobile_number, ps_assigned_at, '
+#             'first_call_remark, first_call_date, '
+#             'second_call_remark, second_call_date, '
+#             'third_call_remark, third_call_date, '
+#             'fourth_call_remark, fourth_call_date, '
+#             'fifth_call_remark, fifth_call_date, '
+#             'sixth_call_remark, sixth_call_date, '
+#             'seventh_call_remark, seventh_call_date'
+#         ).eq('lead_uid', uid).execute()
+#         ps_followup = ps_followup_result.data[0] if ps_followup_result.data else None
+#         assignment_history = []
+#         if lead.get('cre_name'):
+#             assignment_history.append({'role': 'CRE','name': lead.get('cre_name'),'assigned_at': lead.get('cre_assigned_at')})
+#         if lead.get('ps_name'):
+#             assignment_history.append({'role': 'PS','name': lead.get('ps_name'),'assigned_at': lead.get('ps_assigned_at')})
+#         status_timeline = []
+#         for call in ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']:
+#             call_date = lead.get(f'{call}_call_date')
+#             call_remark = lead.get(f'{call}_remark')
+#             if call_date or call_remark:
+#                 status_timeline.append({'by': 'CRE','call_no': call,'date': call_date,'remark': call_remark})
+#         if ps_followup:
+#             for call in ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']:
+#                 call_date = ps_followup.get(f'{call}_call_date')
+#                 call_remark = ps_followup.get(f'{call}_call_remark')
+#                 if call_date or call_remark:
+#                     status_timeline.append({'by': 'PS','call_no': call,'date': call_date,'remark': call_remark})
+#         if lead.get('final_status'):
+#             status_timeline.append({'by': 'System','status': lead.get('final_status'),'date': lead.get('won_timestamp') or lead.get('lost_timestamp')})
+#         conversation_log = []
+#         for call in cre_calls:
+#             conversation_log.append({'by': 'CRE','name': call.get('cre_name'),'call_no': call.get('call_no'),'attempt': call.get('attempt'),'status': call.get('status'),'remark': call.get('remarks'),'follow_up_date': call.get('follow_up_date'),'timestamp': call.get('update_ts') or call.get('created_at')})
+#         for call in ps_calls:
+#             conversation_log.append({'by': 'PS','name': call.get('ps_name'),'call_no': call.get('call_no'),'attempt': call.get('attempt'),'status': call.get('status'),'remark': call.get('remarks'),'follow_up_date': call.get('follow_up_date'),'timestamp': call.get('created_at')})
+#         conversation_log = [c for c in conversation_log if c['timestamp']]
+#         conversation_log.sort(key=lambda x: x['timestamp'])
+#         outcome = {'final_status': lead.get('final_status'),'timestamp': lead.get('won_timestamp') or lead.get('lost_timestamp'),'reason': lead.get('lost_reason') if lead.get('final_status') == 'Lost' else None}
+#         # --- PDF Generation ---
+#         with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmpfile:
+#             pdf_path = tmpfile.name
+#         with PdfPages(pdf_path) as pdf:
+#             # Title Page
+#             plt.figure(figsize=(8.3, 11.7))
+#             plt.axis('off')
+#             plt.text(0.5, 0.9, 'Lead Journey Report', fontsize=22, ha='center', fontweight='bold')
+#             plt.text(0.5, 0.85, f"Lead UID: {uid}", fontsize=14, ha='center')
+#             plt.text(0.5, 0.8, f"Customer: {lead.get('customer_name','')}", fontsize=12, ha='center')
+#             plt.text(0.5, 0.75, f"Mobile: {lead.get('customer_mobile_number','')}", fontsize=12, ha='center')
+#             plt.text(0.5, 0.7, f"Source: {lead.get('source','')}", fontsize=12, ha='center')
+#             plt.text(0.5, 0.65, f"CRE: {lead.get('cre_name','')}", fontsize=12, ha='center')
+#             plt.text(0.5, 0.6, f"PS: {lead.get('ps_name','')}", fontsize=12, ha='center')
+#             plt.text(0.5, 0.5, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}", fontsize=10, ha='center', color='gray')
+#             pdf.savefig(); plt.close()
+#             # Assignment History
+#             plt.figure(figsize=(8.3, 2))
+#             plt.axis('off')
+#             plt.title('Assignment History', fontsize=14, loc='left')
+#             y = 0.7
+#             for a in assignment_history:
+#                 plt.text(0.05, y, f"{a['role']}: {a['name']} ({a['assigned_at'] or 'N/A'})", fontsize=11)
+#                 y -= 0.2
+#             pdf.savefig(); plt.close()
+#             # Status Timeline Chart
+#             if status_timeline:
+#                 dates = [s['date'] for s in status_timeline if s.get('date')]
+#                 labels = [s.get('status') or s.get('remark') or '' for s in status_timeline]
+#                 bys = [s.get('by') for s in status_timeline]
+#                 plt.figure(figsize=(8, 3))
+#                 plt.title('Status Timeline')
+#                 plt.plot(dates, range(len(dates)), marker='o')
+#                 for i, (d, l, b) in enumerate(zip(dates, labels, bys)):
+#                     plt.text(d, i, f"{l} ({b})", fontsize=8, va='bottom', ha='left')
+#                 plt.yticks(range(len(dates)), dates)
+#                 plt.xlabel('Date')
+#                 plt.ylabel('Status Change')
+#                 plt.tight_layout()
+#                 pdf.savefig(); plt.close()
+#             # Bar Chart: Call Attempts
+#             plt.figure(figsize=(6, 3))
+#             plt.title('Number of Call Attempts')
+#             plt.bar(['CRE', 'PS'], [len(cre_calls), len(ps_calls)], color=['#007bff', '#28a745'])
+#             plt.ylabel('Attempts')
+#             plt.tight_layout()
+#             pdf.savefig(); plt.close()
+#             # Pie Chart: Status Distribution
+#             status_counts = {}
+#             for c in conversation_log:
+#                 s = c['status'] or 'Unknown'
+#                 status_counts[s] = status_counts.get(s, 0) + 1
+#             if status_counts:
+#                 plt.figure(figsize=(6, 4))
+#                 plt.title('Status Distribution (CRE + PS)')
+#                 plt.pie(list(status_counts.values()), labels=list(status_counts.keys()), autopct='%1.1f%%', startangle=140)
+#                 plt.tight_layout()
+#                 pdf.savefig(); plt.close()
+#             # Conversation Log Table (first 20 rows)
+#             plt.figure(figsize=(8.3, min(10, 0.4*len(conversation_log)+1)))
+#             plt.axis('off')
+#             plt.title('Conversation Log (first 20 rows)', fontsize=12, loc='left')
+#             table_data = [['By','Name','Call No','Attempt','Status','Remark','Follow-up','Timestamp']]
+#             for c in conversation_log[:20]:
+#                 table_data.append([
+#                     c.get('by',''), c.get('name',''), c.get('call_no',''), str(c.get('attempt','')),
+#                     c.get('status',''), c.get('remark',''), c.get('follow_up_date',''), c.get('timestamp','')
+#                 ])
+#             table = plt.table(cellText=table_data, loc='center', cellLoc='left', colWidths=[0.11]*8)
+#             table.auto_set_font_size(False)
+#             table.set_fontsize(7)
+#             table.scale(1, 1.2)
+#             plt.tight_layout()
+#             pdf.savefig(); plt.close()
+#             # Outcome
+#             plt.figure(figsize=(8.3, 2))
+#             plt.axis('off')
+#             plt.title('Final Outcome', fontsize=14, loc='left')
+#             y = 0.7
+#             plt.text(0.05, y, f"Status: {outcome.get('final_status','')}", fontsize=11)
+#             y -= 0.2
+#             plt.text(0.05, y, f"Timestamp: {outcome.get('timestamp','')}", fontsize=11)
+#             y -= 0.2
+#             if outcome.get('reason'):
+#                 plt.text(0.05, y, f"Reason: {outcome.get('reason','')}", fontsize=11)
+#             pdf.savefig(); plt.close()
+#         # Serve the PDF
+#         from flask import send_file
+#         return send_file(pdf_path, as_attachment=True, download_name=f"Lead_Journey_{uid}.pdf", mimetype='application/pdf')
+#     except Exception as e:
+#         print(f"Error generating lead journey PDF: {e}")
+#         return f"Error generating PDF: {str(e)}", 500
 
 @app.route('/export_filtered_leads')
 @require_admin
