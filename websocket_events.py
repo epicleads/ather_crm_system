@@ -1,8 +1,10 @@
-from flask_socketio import emit, join_room, leave_room
+from flask_socketio import emit, join_room, leave_room, disconnect
 from flask import session, request
 import json
 from datetime import datetime
 from auth import AuthManager
+import time
+from collections import deque, defaultdict
 
 class WebSocketManager:
     def __init__(self, socketio, supabase, auth_manager):
@@ -10,6 +12,10 @@ class WebSocketManager:
         self.supabase = supabase
         self.auth_manager = auth_manager
         self.active_users = {}  # Track active users and their rooms
+        # Simple in-memory IP-based rate limit for socket connections
+        self.ip_connect_events = defaultdict(lambda: deque())
+        self.max_connects_per_window = 20  # connections
+        self.connect_window_seconds = 60   # per 60 seconds
         
     def register_events(self):
         """Register all WebSocket event handlers"""
@@ -17,7 +23,22 @@ class WebSocketManager:
         @self.socketio.on('connect')
         def handle_connect():
             """Handle client connection"""
-            print(f"Client connected: {request.sid}")
+            client_ip = request.headers.get('X-Forwarded-For', request.remote_addr) or 'unknown'
+            now = time.time()
+            q = self.ip_connect_events[client_ip]
+            # Evict old entries
+            while q and now - q[0] > self.connect_window_seconds:
+                q.popleft()
+            q.append(now)
+            if len(q) > self.max_connects_per_window:
+                print(f"[WS-RATE-LIMIT] Too many connections from {client_ip}; disconnecting SID {request.sid}")
+                try:
+                    emit('rate_limited', {'message': 'Too many socket connections. Please slow down.'})
+                except Exception:
+                    pass
+                disconnect()
+                return
+            print(f"[WS-CONNECT] sid={request.sid} ip={client_ip} recent_connects={len(q)}/{self.max_connects_per_window}")
             emit('connection_status', {'status': 'connected', 'sid': request.sid})
         
         @self.socketio.on('disconnect')
@@ -25,6 +46,7 @@ class WebSocketManager:
             """Handle client disconnection"""
             user_id = session.get('user_id')
             user_type = session.get('user_type')
+            client_ip = request.headers.get('X-Forwarded-For', request.remote_addr) or 'unknown'
             
             if user_id and user_type:
                 # Remove from active users
@@ -41,7 +63,7 @@ class WebSocketManager:
                 
                 leave_room(room)
             
-            print(f"Client disconnected: {request.sid}")
+            print(f"[WS-DISCONNECT] sid={request.sid} ip={client_ip}")
         
         @self.socketio.on('authenticate')
         def handle_authentication(data):
