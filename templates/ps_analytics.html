@@ -311,18 +311,23 @@ document.addEventListener('DOMContentLoaded', function() {
         const d = String(now.getDate()).padStart(2, '0');
         fromDate = `${y}-${m}-01`;
         toDate = `${y}-${m}-${d}`;
-        // Update URL to include defaults so backend uses same range
-        const params = new URLSearchParams(window.location.search);
-        params.set('from_date', fromDate);
-        params.set('to_date', toDate);
-        const newUrl = `${window.location.pathname}?${params.toString()}`;
-        if (!window.location.search.includes('from_date') || !window.location.search.includes('to_date')) {
-            window.history.replaceState({}, '', newUrl);
+
+        // Only auto-apply default dates if URL doesn't have any date parameters
+        if (!window.location.search.includes('from_date') && !window.location.search.includes('to_date')) {
+            const params = new URLSearchParams();
+            params.set('from_date', fromDate);
+            params.set('to_date', toDate);
+            if (branch && branch !== 'All') {
+                params.set('branch', branch);
+            }
+            window.location.href = `${window.location.pathname}?${params.toString()}`;
+            return;
         }
     }
 
-    document.getElementById('fromDate').value = fromDate;
-    document.getElementById('toDate').value = toDate;
+    // Set form values from URL parameters
+    document.getElementById('fromDate').value = fromDate || '';
+    document.getElementById('toDate').value = toDate || '';
     if (branch) {
         document.getElementById('ps_branch_filter').value = branch;
         document.getElementById('selectedBranch').textContent = branch;
