@@ -52,16 +52,18 @@ from werkzeug.security import generate_password_hash, check_password_hash
 load_dotenv()
 
 app = Flask(__name__)
-# Initialize Flask-SocketIO with better configuration
+# Enable Socket.IO but disable WebSocket transport (force long-polling only)
 socketio = SocketIO(
-    app, 
+    app,
     cors_allowed_origins="*",
     async_mode='eventlet',
     logger=False,
     engineio_logger=False,
     ping_timeout=60,
     ping_interval=25,
-    max_http_buffer_size=1e8
+    max_http_buffer_size=1e8,
+    allow_upgrades=False,
+    transports=['polling']
 )
 
 # CORS configuration for external submission endpoints
@@ -19596,9 +19598,7 @@ def api_ps_performance_analytics():
 
 
 if __name__ == '__main__':
-    # socketio.run(app, debug=True)
     print(" Starting Ather CRM System...")
     print("📱 Server will be available at: http://127.0.0.1:5000")
     print("🌐 You can also try: http://localhost:5000")
-    # socketio.run(app, host='127.0.0.1', port=5000, debug=True)
     socketio.run(app, host='0.0.0.0', port=5000, debug=True, use_reloader=False)

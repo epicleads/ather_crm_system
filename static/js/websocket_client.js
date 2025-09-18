@@ -3,6 +3,34 @@
  * Handles real-time communication between frontend and backend
  */
 
+// Lightweight logger with levels
+const CRM_LOG_LEVELS = { error: 0, warn: 1, info: 2, debug: 3 };
+class CRMLogger {
+    constructor(namespace = 'CRM', level = null) {
+        const saved = (typeof window !== 'undefined' && window.localStorage)
+            ? window.localStorage.getItem('crmLogLevel')
+            : null;
+        const envLevel = (typeof window !== 'undefined' && window.CRM_LOG_LEVEL)
+            ? window.CRM_LOG_LEVEL
+            : null;
+        const initial = (level || envLevel || saved || 'warn').toLowerCase();
+        this.level = CRM_LOG_LEVELS[initial] !== undefined ? initial : 'warn';
+        this.namespace = namespace;
+    }
+    setLevel(level) {
+        const lvl = (level || '').toLowerCase();
+        if (CRM_LOG_LEVELS[lvl] === undefined) return;
+        this.level = lvl;
+        try { window.localStorage && window.localStorage.setItem('crmLogLevel', lvl); } catch (e) {}
+    }
+    shouldLog(target) { return CRM_LOG_LEVELS[target] <= CRM_LOG_LEVELS[this.level]; }
+    fmt(args) { return [`[${this.namespace}]`, ...args]; }
+    debug(...args) { if (this.shouldLog('debug')) console.debug(...this.fmt(args)); }
+    info(...args)  { if (this.shouldLog('info'))  console.info(...this.fmt(args)); }
+    warn(...args)  { if (this.shouldLog('warn'))  console.warn(...this.fmt(args)); }
+    error(...args) { if (this.shouldLog('error')) console.error(...this.fmt(args)); }
+}
+
 class CRMWebSocketClient {
     constructor() {
         this.socket = null;
@@ -13,6 +41,7 @@ class CRMWebSocketClient {
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 5;
         this.reconnectDelay = 1000;
+        this.log = new CRMLogger('WS');
         
         // Initialize connection
         this.init();
@@ -22,23 +51,23 @@ class CRMWebSocketClient {
         try {
             // Connect to WebSocket server
             this.socket = io({
-                transports: ['websocket', 'polling'],
-                upgrade: true,
-                rememberUpgrade: true,
+                transports: ['polling'],
+                upgrade: false,
+                rememberUpgrade: false,
                 timeout: 20000
             });
             
             this.setupEventHandlers();
             
         } catch (error) {
-            console.error('Failed to initialize WebSocket client:', error);
+            this.log.error('Failed to initialize WebSocket client:', error);
         }
     }
     
     setupEventHandlers() {
         // Connection events
         this.socket.on('connect', () => {
-            console.log('WebSocket connected');
+            this.log.info('WebSocket connected');
             this.isConnected = true;
             this.reconnectAttempts = 0;
             this.triggerEvent('connected', { sid: this.socket.id });
@@ -50,7 +79,7 @@ class CRMWebSocketClient {
         });
         
         this.socket.on('disconnect', (reason) => {
-            console.log('WebSocket disconnected:', reason);
+            this.log.warn('WebSocket disconnected:', reason);
             this.isConnected = false;
             this.isAuthenticated = false;
             this.triggerEvent('disconnected', { reason });
@@ -65,19 +94,19 @@ class CRMWebSocketClient {
         });
         
         this.socket.on('connect_error', (error) => {
-            console.error('WebSocket connection error:', error);
+            this.log.error('WebSocket connection error:', error);
             this.triggerEvent('connection_error', { error });
         });
         
         // Authentication events
         this.socket.on('auth_success', (data) => {
-            console.log('WebSocket authentication successful');
+            this.log.info('WebSocket authentication successful');
             this.isAuthenticated = true;
             this.triggerEvent('auth_success', data);
         });
         
         this.socket.on('auth_error', (data) => {
-            console.error('WebSocket authentication failed:', data);
+            this.log.warn('WebSocket authentication failed:', data);
             this.isAuthenticated = false;
             this.triggerEvent('auth_error', data);
         });
@@ -145,16 +174,16 @@ class CRMWebSocketClient {
         
         // Lead room events
         this.socket.on('joined_lead_room', (data) => {
-            console.log('Joined lead room:', data.lead_uid);
+            this.log.debug('Joined lead room:', data.lead_uid);
         });
         
         this.socket.on('left_lead_room', (data) => {
-            console.log('Left lead room:', data.lead_uid);
+            this.log.debug('Left lead room:', data.lead_uid);
         });
         
         // Error handling
         this.socket.on('dashboard_data_error', (data) => {
-            console.error('Dashboard data error:', data);
+            this.log.error('Dashboard data error:', data);
             this.triggerEvent('dashboard_data_error', data);
         });
     }
@@ -202,7 +231,7 @@ class CRMWebSocketClient {
                 try {
                     handler(data);
                 } catch (error) {
-                    console.error(`Error in event handler for ${event}:`, error);
+                    this.log.error(`Error in event handler for ${event}:`, error);
                 }
             });
         }
