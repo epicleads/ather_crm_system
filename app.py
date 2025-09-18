@@ -14701,6 +14701,10 @@ def ps_analytics():
         to_date = request.args.get('to_date')
         selected_branch = request.args.get('branch', 'All')
 
+        # Debug: Print filter parameters
+        print(f"DEBUG PS Analytics: from_date={from_date}, to_date={to_date}, selected_branch={selected_branch}")
+        print(f"DEBUG PS Analytics: PS name={ps_name}, PS branch={ps_branch}")
+
         from datetime import datetime
         import pandas as pd
 
@@ -14709,13 +14713,14 @@ def ps_analytics():
                 return False
             try:
                 dt = datetime.fromisoformat(ts.replace('Z', '+00:00')) if 'T' in ts else datetime.strptime(ts, '%Y-%m-%d')
+                dt_date = dt.date()  # Extract just the date part for comparison
                 if from_date:
-                    from_dt = datetime.strptime(from_date, '%Y-%m-%d')
-                    if dt < from_dt:
+                    from_dt = datetime.strptime(from_date, '%Y-%m-%d').date()
+                    if dt_date < from_dt:
                         return False
                 if to_date:
-                    to_dt = datetime.strptime(to_date, '%Y-%m-%d')
-                    if dt > to_dt:
+                    to_dt = datetime.strptime(to_date, '%Y-%m-%d').date()
+                    if dt_date > to_dt:
                         return False
                 return True
             except Exception:
@@ -14734,6 +14739,7 @@ def ps_analytics():
             won_ps_followups = [lead for lead in ps_followups if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Won' and in_date_range(lead.get('won_timestamp'))]
             won_activities = [lead for lead in activity_leads if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Won' and in_date_range(lead.get('won_timestamp'))]
         total_won_cases = len(won_ps_followups) + len(won_activities)
+        print(f"DEBUG: Won cases - ps_followups: {len(won_ps_followups)}, activities: {len(won_activities)}, total: {total_won_cases}")
 
         # Conversion Rate (live, not date filtered)
         total_won_all = len([lead for lead in ps_followups if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Won']) \
@@ -14748,21 +14754,28 @@ def ps_analytics():
                 return False
             try:
                 dt = datetime.fromisoformat(ts.replace('Z', '+00:00')) if 'T' in ts else datetime.strptime(ts, '%Y-%m-%d')
+                dt_date = dt.date()  # Extract just the date part for comparison
                 if from_date:
-                    from_dt = datetime.strptime(from_date, '%Y-%m-%d')
-                    if dt < from_dt:
+                    from_dt = datetime.strptime(from_date, '%Y-%m-%d').date()
+                    if dt_date < from_dt:
                         return False
                 if to_date:
-                    to_dt = datetime.strptime(to_date, '%Y-%m-%d')
-                    if dt > to_dt:
+                    to_dt = datetime.strptime(to_date, '%Y-%m-%d').date()
+                    if dt_date > to_dt:
                         return False
                 return True
             except Exception:
                 return False
 
-        assigned_ps_followups = [lead for lead in ps_followups if lead.get('ps_name') == ps_name and in_assigned_range(lead.get('ps_assigned_at'))]
-        assigned_activities = [lead for lead in activity_leads if lead.get('ps_name') == ps_name and in_assigned_range(lead.get('ps_assigned_at'))]
+        # Apply date filter to assigned leads or include all if no filter
+        if from_date or to_date:
+            assigned_ps_followups = [lead for lead in ps_followups if lead.get('ps_name') == ps_name and in_assigned_range(lead.get('ps_assigned_at'))]
+            assigned_activities = [lead for lead in activity_leads if lead.get('ps_name') == ps_name and in_assigned_range(lead.get('ps_assigned_at'))]
+        else:
+            assigned_ps_followups = [lead for lead in ps_followups if lead.get('ps_name') == ps_name]
+            assigned_activities = [lead for lead in activity_leads if lead.get('ps_name') == ps_name]
         total_assigned = len(assigned_ps_followups) + len(assigned_activities)
+        print(f"DEBUG: Assigned leads - ps_followups: {len(assigned_ps_followups)}, activities: {len(assigned_activities)}, total: {total_assigned}")
 
         # Total Pending Cases (not date filtered)
         pending_ps_followups = [lead for lead in ps_followups if lead.get('ps_name') == ps_name and lead.get('final_status') == 'Pending']
@@ -14783,36 +14796,38 @@ def ps_analytics():
 
         # Calculate PS Performance (Digital) metrics
         ps_digital_performance = []
-        if ps_filtered:
-            # Calculate metrics for the logged-in PS only
-            assigned_count = len(ps_filtered)
 
-            # Untouched leads (final_status='Pending' and (first_call_date is null or empty))
-            untouched_count = len([lead for lead in ps_filtered
-                                 if lead.get('final_status') == 'Pending' and
-                                    not lead.get('first_call_date')])
+        # Always show PS performance row, even if no data in date range
+        # Calculate metrics for the logged-in PS only
+        assigned_count = len(ps_filtered)
 
-            # Pending leads
-            pending_count = len([lead for lead in ps_filtered if lead.get('final_status') == 'Pending'])
+        # Untouched leads (final_status='Pending' and (first_call_date is null or empty))
+        untouched_count = len([lead for lead in ps_filtered
+                             if lead.get('final_status') == 'Pending' and
+                                not lead.get('first_call_date')])
 
-            # Won leads
-            won_count = len([lead for lead in ps_filtered if lead.get('final_status') == 'Won'])
+        # Pending leads
+        pending_count = len([lead for lead in ps_filtered if lead.get('final_status') == 'Pending'])
 
-            # Lost leads
-            lost_count = len([lead for lead in ps_filtered if lead.get('final_status') == 'Lost'])
+        # Won leads
+        won_count = len([lead for lead in ps_filtered if lead.get('final_status') == 'Won'])
 
-            # Conversion percentage
-            conversion_pct = round((won_count / assigned_count * 100), 2) if assigned_count > 0 else 0.0
+        # Lost leads
+        lost_count = len([lead for lead in ps_filtered if lead.get('final_status') == 'Lost'])
 
-            ps_digital_performance.append({
-                'ps_name': ps_name,
-                'assigned': assigned_count,
-                'untouched': untouched_count,
-                'pending_leads': pending_count,
-                'won': won_count,
-                'lost': lost_count,
-                'conversion_pct': conversion_pct
-            })
+        # Conversion percentage
+        conversion_pct = round((won_count / assigned_count * 100), 2) if assigned_count > 0 else 0.0
+
+        ps_digital_performance.append({
+            'ps_name': ps_name,
+            'assigned': assigned_count,
+            'untouched': untouched_count,
+            'pending_leads': pending_count,
+            'won': won_count,
+            'lost': lost_count,
+            'conversion_pct': conversion_pct
+        })
+        print(f"DEBUG Digital Performance: assigned={assigned_count}, won={won_count}, pending={pending_count}, conversion={conversion_pct}%")
 
         # ===== PS PERFORMANCE (WALKIN) LOGIC =====
         # Filter walkin data for logged-in PS only
@@ -14825,13 +14840,14 @@ def ps_analytics():
                     return False
                 try:
                     dt = datetime.fromisoformat(ts.replace('Z', '+00:00')) if 'T' in ts else datetime.strptime(ts, '%Y-%m-%d')
+                    dt_date = dt.date()  # Extract just the date part for comparison
                     if from_date:
-                        from_dt = datetime.strptime(from_date, '%Y-%m-%d')
-                        if dt < from_dt:
+                        from_dt = datetime.strptime(from_date, '%Y-%m-%d').date()
+                        if dt_date < from_dt:
                             return False
                     if to_date:
-                        to_dt = datetime.strptime(to_date, '%Y-%m-%d')
-                        if dt > to_dt:
+                        to_dt = datetime.strptime(to_date, '%Y-%m-%d').date()
+                        if dt_date > to_dt:
                             return False
                     return True
                 except Exception:
@@ -14844,56 +14860,59 @@ def ps_analytics():
 
         # Calculate PS Performance (Walkin) metrics
         ps_walkin_performance = []
-        if walkin_filtered:
-            # Calculate metrics for the logged-in PS only
-            punched_count = len(walkin_filtered)
 
-            # Untouched (first_call_date is null)
-            untouched_count = len([lead for lead in walkin_filtered if not lead.get('first_call_date')])
+        # Always show PS walkin performance row, even if no data in date range
+        # Calculate metrics for the logged-in PS only
+        punched_count = len(walkin_filtered)
 
-            # Pending leads
-            pending_count = len([lead for lead in walkin_filtered if lead.get('status') == 'Pending'])
+        # Untouched (first_call_date is null)
+        untouched_count = len([lead for lead in walkin_filtered if not lead.get('first_call_date')])
 
-            # Won leads (filter on updated_at for date range)
-            if from_date or to_date:
-                def in_updated_range(ts):
-                    if not ts:
-                        return False
-                    try:
-                        dt = datetime.fromisoformat(ts.replace('Z', '+00:00')) if 'T' in ts else datetime.strptime(ts, '%Y-%m-%d')
-                        if from_date:
-                            from_dt = datetime.strptime(from_date, '%Y-%m-%d')
-                            if dt < from_dt:
-                                return False
-                        if to_date:
-                            to_dt = datetime.strptime(to_date, '%Y-%m-%d')
-                            if dt > to_dt:
-                                return False
-                        return True
-                    except Exception:
-                        return False
-                won_count = len([lead for lead in walkin_data
-                               if lead.get('ps_assigned') == ps_name and
-                                  lead.get('status') == 'Won' and
-                                  in_updated_range(lead.get('updated_at'))])
-            else:
-                won_count = len([lead for lead in walkin_filtered if lead.get('status') == 'Won'])
+        # Pending leads
+        pending_count = len([lead for lead in walkin_filtered if lead.get('status') == 'Pending'])
 
-            # Lost leads
-            lost_count = len([lead for lead in walkin_filtered if lead.get('status') == 'Lost'])
+        # Won leads (filter on updated_at for date range)
+        if from_date or to_date:
+            def in_updated_range(ts):
+                if not ts:
+                    return False
+                try:
+                    dt = datetime.fromisoformat(ts.replace('Z', '+00:00')) if 'T' in ts else datetime.strptime(ts, '%Y-%m-%d')
+                    dt_date = dt.date()  # Extract just the date part for comparison
+                    if from_date:
+                        from_dt = datetime.strptime(from_date, '%Y-%m-%d').date()
+                        if dt_date < from_dt:
+                            return False
+                    if to_date:
+                        to_dt = datetime.strptime(to_date, '%Y-%m-%d').date()
+                        if dt_date > to_dt:
+                            return False
+                    return True
+                except Exception:
+                    return False
+            won_count = len([lead for lead in walkin_data
+                           if lead.get('ps_assigned') == ps_name and
+                              lead.get('status') == 'Won' and
+                              in_updated_range(lead.get('updated_at'))])
+        else:
+            won_count = len([lead for lead in walkin_filtered if lead.get('status') == 'Won'])
 
-            # Conversion percentage
-            conversion_pct = round((won_count / punched_count * 100), 2) if punched_count > 0 else 0.0
+        # Lost leads
+        lost_count = len([lead for lead in walkin_filtered if lead.get('status') == 'Lost'])
 
-            ps_walkin_performance.append({
-                'ps_name': ps_name,
-                'punched': punched_count,
-                'untouched': untouched_count,
-                'pending': pending_count,
-                'won': won_count,
-                'lost': lost_count,
-                'conversion_pct': conversion_pct
-            })
+        # Conversion percentage
+        conversion_pct = round((won_count / punched_count * 100), 2) if punched_count > 0 else 0.0
+
+        ps_walkin_performance.append({
+            'ps_name': ps_name,
+            'punched': punched_count,
+            'untouched': untouched_count,
+            'pending': pending_count,
+            'won': won_count,
+            'lost': lost_count,
+            'conversion_pct': conversion_pct
+        })
+        print(f"DEBUG Walkin Performance: punched={punched_count}, won={won_count}, pending={pending_count}, conversion={conversion_pct}%")
 
         # Get branches for filter dropdown (only PS's own branch)
         branches = [ps_branch] if ps_branch else []
