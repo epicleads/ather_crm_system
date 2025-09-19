@@ -9785,22 +9785,6 @@ def analytics():
                 'percentage': percentage
             })
 
-        # Branch performance
-        branch_performance = []
-        branches = set([ps.get('branch') for ps in all_ps if ps.get('branch') and ps.get('branch') != 'TEST'])
-        for branch in branches:
-            branch_ps = [ps for ps in all_ps if ps.get('branch') == branch]
-            ps_names = [ps['name'] for ps in branch_ps]
-            branch_leads = [l for l in leads if l.get('ps_name') in ps_names]
-            branch_won = len([l for l in branch_leads if l.get('final_status') == 'Won'])
-            success_rate = round((branch_won / len(branch_leads) * 100) if branch_leads else 0, 1)
-            branch_performance.append({
-                'name': branch,
-                'ps_count': len(branch_ps),
-                'assigned_leads': len(branch_leads),
-                'won_leads': branch_won,
-                'success_rate': success_rate
-            })
 
         # Funnel data
         assigned_cre = len([l for l in leads if l.get('cre_name')])
@@ -9962,7 +9946,6 @@ def analytics():
             'top_cres': top_cres,
             'lead_categories': lead_categories,
             'model_interest': model_interest,
-            'branch_performance': branch_performance,
             'funnel': funnel,
             'recent_activities': recent_activities,
             'campaign_platform_counts': campaign_platform_counts,
@@ -10002,7 +9985,6 @@ def analytics():
             'top_cres': [],
             'lead_categories': [],
             'model_interest': [],
-            'branch_performance': [],
             'funnel': {
                 'total': 0,
                 'assigned_cre': 0,
@@ -10020,7 +10002,7 @@ def analytics():
         }
         return render_template('analytics.html', analytics=empty_analytics)
 
-# ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------------------------------------------------------
 @app.route('/branch_head_dashboard')
 def branch_head_dashboard():
     if 'branch_head_id' not in session:
@@ -11135,124 +11117,6 @@ def api_lead_call_history(uid):
     except Exception as e:
         return jsonify({'success': False, 'message': str(e), 'history': []})
 
-@app.route('/branch_performance/<branch_name>')
-@require_admin
-def branch_performance(branch_name):
-    """Get detailed PS performance for a specific branch"""
-    try:
-        # Get all PS users in this branch
-        branch_ps_users = safe_get_data('ps_users', {'branch': branch_name})
-
-        if not branch_ps_users:
-            return jsonify({
-                'success': False,
-                'message': f'No PS users found in {branch_name} branch'
-            })
-
-        # Get all leads and PS followups
-        all_leads = safe_get_data('lead_master')
-        all_ps_followups = safe_get_data('ps_followup_master')
-
-        # Calculate performance for each PS in the branch
-        ps_performance = []
-        total_branch_leads = 0
-        total_branch_won = 0
-
-        for ps_user in branch_ps_users:
-            ps_name = ps_user['name']
-
-            # Get PS followup data for this PS
-            ps_leads = [f for f in all_ps_followups if f.get('ps_name') == ps_name]
-
-            # Calculate metrics
-            total_leads = len(ps_leads)
-            pending_leads = len([l for l in ps_leads if l.get('final_status') == 'Pending'])
-            in_progress_leads = len([l for l in ps_leads if l.get('final_status') == 'In Progress'])
-            won_leads = len([l for l in ps_leads if l.get('final_status') == 'Won'])
-            lost_leads = len([l for l in ps_leads if l.get('final_status') == 'Lost'])
-
-            # Calculate success rate
-            success_rate = round((won_leads / total_leads * 100) if total_leads > 0 else 0, 1)
-
-            # Calculate average calls
-            total_calls = 0
-            for lead in ps_leads:
-                call_count = 0
-                for call_num in ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']:
-                    if lead.get(f'{call_num}_call_date'):
-                        call_count += 1
-                total_calls += call_count
-
-            avg_calls = round(total_calls / total_leads, 1) if total_leads > 0 else 0
-
-            # Get last activity (most recent call date)
-            last_activity = None
-            for lead in ps_leads:
-                for call_num in ['seventh', 'sixth', 'fifth', 'fourth', 'third', 'second', 'first']:  # Check in reverse order
-                    call_date = lead.get(f'{call_num}_call_date')
-                    if call_date:
-                        try:
-                            activity_date = datetime.strptime(call_date, '%Y-%m-%d').date()
-                            if not last_activity or activity_date > last_activity:
-                                last_activity = activity_date
-                        except (ValueError, TypeError):
-                            continue
-                        break
-
-            last_activity_str = last_activity.strftime('%Y-%m-%d') if last_activity else None
-
-            ps_performance.append({
-                'name': ps_user['name'],
-                'username': ps_user['username'],
-                'phone': ps_user.get('phone', 'N/A'),
-                'email': ps_user.get('email', 'N/A'),
-                'total_leads': total_leads,
-                'pending_leads': pending_leads,
-                'in_progress_leads': in_progress_leads,
-                'won_leads': won_leads,
-                'lost_leads': lost_leads,
-                'success_rate': success_rate,
-                'avg_calls': avg_calls,
-                'last_activity': last_activity_str
-            })
-
-            total_branch_leads += total_leads
-            total_branch_won += won_leads
-
-        # Calculate branch summary
-        branch_success_rate = round((total_branch_won / total_branch_leads * 100) if total_branch_leads > 0 else 0, 1)
-
-        summary = {
-            'total_ps': len(branch_ps_users),
-            'total_leads': total_branch_leads,
-            'won_leads': total_branch_won,
-            'success_rate': branch_success_rate
-        }
-
-        # Log branch performance access
-        auth_manager.log_audit_event(
-            user_id=session.get('user_id'),
-            user_type=session.get('user_type'),
-            action='BRANCH_PERFORMANCE_ACCESS',
-            resource='branch_performance',
-            details={'branch': branch_name}
-        )
-
-        return jsonify({
-            'success': True,
-            'data': {
-                'branch_name': branch_name,
-                'summary': summary,
-                'ps_performance': ps_performance
-            }
-        })
-
-    except Exception as e:
-        print(f"Error getting branch performance for {branch_name}: {e}")
-        return jsonify({
-            'success': False,
-            'message': f'Error loading branch performance: {str(e)}'
-        })
 
 
 @app.route('/export_leads')
