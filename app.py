@@ -10020,7 +10020,7 @@ def analytics():
         }
         return render_template('analytics.html', analytics=empty_analytics)
 
-
+# ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 @app.route('/branch_head_dashboard')
 def branch_head_dashboard():
     if 'branch_head_id' not in session:
@@ -12403,138 +12403,6 @@ def get_unassigned_leads_by_source():
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
-@app.route('/lead_journey/<uid>')
-@require_admin
-def lead_journey(uid):
-    """Return the complete journey of a lead as JSON for analysis and visualization."""
-    try:
-        # Fetch lead info
-        lead_result = supabase.table('lead_master').select('*').eq('uid', uid).execute()
-        if not lead_result.data:
-            return jsonify({'success': False, 'message': 'Lead not found'}), 404
-        lead = lead_result.data[0]
-
-        # Fetch CRE call attempts (all attempts, all calls)
-        cre_calls_result = supabase.table('cre_call_attempt_history').select('*').eq('uid', uid).order('created_at', desc=False).execute()
-        cre_calls = cre_calls_result.data if cre_calls_result.data else []
-
-        # Fetch PS call attempts (all attempts, all calls)
-        ps_calls_result = supabase.table('ps_call_attempt_history').select('*').eq('uid', uid).order('created_at', desc=False).execute()
-        ps_calls = ps_calls_result.data if ps_calls_result.data else []
-
-        # Fetch PS followup (if any)
-        ps_followup_result = supabase.table('ps_followup_master').select(
-            'lead_uid, ps_name, follow_up_date, final_status, source, lead_status, customer_name, customer_mobile_number, ps_assigned_at, '
-            'first_call_remark, first_call_date, '
-            'second_call_remark, second_call_date, '
-            'third_call_remark, third_call_date, '
-            'fourth_call_remark, fourth_call_date, '
-            'fifth_call_remark, fifth_call_date, '
-            'sixth_call_remark, sixth_call_date, '
-            'seventh_call_remark, seventh_call_date'
-        ).eq('lead_uid', uid).execute()
-        ps_followup = ps_followup_result.data[0] if ps_followup_result.data else None
-
-        # Assignment history (CRE, PS)
-        assignment_history = []
-        if lead.get('cre_name'):
-            assignment_history.append({
-                'role': 'CRE',
-                'name': lead.get('cre_name'),
-                'assigned_at': lead.get('cre_assigned_at')
-            })
-        if lead.get('ps_name'):
-            assignment_history.append({
-                'role': 'PS',
-                'name': lead.get('ps_name'),
-                'assigned_at': lead.get('ps_assigned_at')
-            })
-
-        # Status timeline (CRE and PS status changes)
-        status_timeline = []
-        # From lead_master: initial, final, and call statuses
-        for call in ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']:
-            call_date = lead.get(f'{call}_call_date')
-            call_remark = lead.get(f'{call}_remark')
-            if call_date or call_remark:
-                status_timeline.append({
-                    'by': 'CRE',
-                    'call_no': call,
-                    'date': call_date,
-                    'remark': call_remark
-                })
-        # From PS followup: call dates/remarks
-        if ps_followup:
-            for call in ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']:
-                call_date = ps_followup.get(f'{call}_call_date')
-                call_remark = ps_followup.get(f'{call}_call_remark')
-                if call_date or call_remark:
-                    status_timeline.append({
-                        'by': 'PS',
-                        'call_no': call,
-                        'date': call_date,
-                        'remark': call_remark
-                    })
-        # Final status
-        if lead.get('final_status'):
-            status_timeline.append({
-                'by': 'System',
-                'status': lead.get('final_status'),
-                'date': lead.get('won_timestamp') or lead.get('lost_timestamp')
-            })
-
-        # Conversation log (all remarks, CRE and PS, with timestamps)
-        conversation_log = []
-        # CRE call attempts
-        for call in cre_calls:
-            conversation_log.append({
-                'by': 'CRE',
-                'name': call.get('cre_name'),
-                'call_no': call.get('call_no'),
-                'attempt': call.get('attempt'),
-                'status': call.get('status'),
-                'remark': call.get('remarks'),
-                'follow_up_date': call.get('follow_up_date'),
-                'timestamp': call.get('update_ts') or call.get('created_at')
-            })
-        # PS call attempts
-        for call in ps_calls:
-            conversation_log.append({
-                'by': 'PS',
-                'name': call.get('ps_name'),
-                'call_no': call.get('call_no'),
-                'attempt': call.get('attempt'),
-                'status': call.get('status'),
-                'remark': call.get('remarks'),
-                'follow_up_date': call.get('follow_up_date'),
-                'timestamp': call.get('created_at')
-            })
-        # Sort conversation log by timestamp
-        conversation_log = [c for c in conversation_log if c['timestamp']]  # Remove None timestamps
-        conversation_log.sort(key=lambda x: x['timestamp'])
-
-        # Final outcome
-        outcome = {
-            'final_status': lead.get('final_status'),
-            'timestamp': lead.get('won_timestamp') or lead.get('lost_timestamp'),
-            'reason': lead.get('lost_reason') if lead.get('final_status') == 'Lost' else None
-        }
-
-        # Compose response
-        journey = {
-            'lead': lead,
-            'assignment_history': assignment_history,
-            'status_timeline': status_timeline,
-            'cre_calls': cre_calls,
-            'ps_calls': ps_calls,
-            'ps_followup': ps_followup,
-            'conversation_log': conversation_log,
-            'outcome': outcome
-        }
-        return jsonify({'success': True, 'journey': journey})
-    except Exception as e:
-        print(f"Error in lead_journey: {e}")
-        return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/export_filtered_leads')
 @require_admin
@@ -19425,6 +19293,5 @@ def api_ps_performance_analytics():
 
 if __name__ == '__main__':
     print(" Starting Ather CRM System...")
-    
     print("🌐 You can also try: http://localhost:5000")
     socketio.run(app, host='0.0.0.0', port=5000, debug=True, use_reloader=False)
