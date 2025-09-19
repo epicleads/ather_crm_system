@@ -23,7 +23,7 @@ from flask_limiter.util import get_remote_address
 from security_verification import run_security_verification
 import time
 import gc
-from flask_socketio import SocketIO, emit
+# from flask_socketio import SocketIO, emit  # DISABLED: WebSocket functionality
 import math
 # from redis import Redis  # REMOVE this line for local development
 
@@ -52,19 +52,20 @@ from werkzeug.security import generate_password_hash, check_password_hash
 load_dotenv()
 
 app = Flask(__name__)
+# DISABLED: WebSocket functionality
 # Enable Socket.IO but disable WebSocket transport (force long-polling only)
-socketio = SocketIO(
-    app,
-    cors_allowed_origins="*",
-    async_mode='eventlet',
-    logger=False,
-    engineio_logger=False,
-    ping_timeout=60,
-    ping_interval=25,
-    max_http_buffer_size=1e8,
-    allow_upgrades=False,
-    transports=['polling']
-)
+# socketio = SocketIO(
+#     app,
+#     cors_allowed_origins="*",
+#     async_mode='eventlet',
+#     logger=False,
+#     engineio_logger=False,
+#     ping_timeout=60,
+#     ping_interval=25,
+#     max_http_buffer_size=1e8,
+#     allow_upgrades=False,
+#     transports=['polling']
+# )
 
 # CORS configuration for external submission endpoints
 ALLOWED_CORS_ORIGINS = {
@@ -707,19 +708,23 @@ auth_manager = AuthManager(supabase)
 # Store auth_manager in app config instead of direct attribute
 app.config['AUTH_MANAGER'] = auth_manager
 
+# DISABLED: WebSocket Manager initialization
 # Initialize WebSocket Manager
-try:
-    from websocket_events import WebSocketManager
-    websocket_manager = WebSocketManager(socketio, supabase, auth_manager)
-    websocket_manager.register_events()
-    app.config['WEBSOCKET_MANAGER'] = websocket_manager
-    print("✅ WebSocket manager initialized successfully")
-    print(f"✅ WebSocket manager instance: {websocket_manager}")
-except Exception as e:
-    print(f"❌ Error initializing WebSocket manager: {e}")
-    import traceback
-    traceback.print_exc()
-    websocket_manager = None
+# try:
+#     from websocket_events import WebSocketManager
+#     websocket_manager = WebSocketManager(socketio, supabase, auth_manager)
+#     websocket_manager.register_events()
+#     app.config['WEBSOCKET_MANAGER'] = websocket_manager
+#     print("✅ WebSocket manager initialized successfully")
+#     print(f"✅ WebSocket manager instance: {websocket_manager}")
+# except Exception as e:
+#     print(f"❌ Error initializing WebSocket manager: {e}")
+#     import traceback
+#     traceback.print_exc()
+#     websocket_manager = None
+
+# Set websocket_manager to None since WebSocket is disabled
+websocket_manager = None
 
 # Initialize rate limiter
 limiter = Limiter(
@@ -1213,17 +1218,17 @@ def track_cre_call_attempt(uid, cre_name, call_no, lead_status, call_was_recorde
         insert_result = supabase.table('cre_call_attempt_history').insert(attempt_data).execute()
         print(f"Tracked call attempt: {uid} - {call_no} call, attempt {next_attempt}, status: {lead_status}")
         
-        # Send WebSocket notification for real-time updates
-        if websocket_manager:
-            websocket_manager.broadcast_lead_update(uid, {
-                'call_attempt': {
-                    'call_no': call_no,
-                    'attempt': next_attempt,
-                    'status': lead_status,
-                    'cre_name': cre_name,
-                    'timestamp': datetime.now().isoformat()
-                }
-            })
+        # DISABLED: WebSocket notification for real-time updates
+        # if websocket_manager:
+        #     websocket_manager.broadcast_lead_update(uid, {
+        #         'call_attempt': {
+        #             'call_no': call_no,
+        #             'attempt': next_attempt,
+        #             'status': lead_status,
+        #             'cre_name': cre_name,
+        #             'timestamp': datetime.now().isoformat()
+        #         }
+        #     })
 
         # --- TAT Calculation and Update ---
         if call_no == 'first' and next_attempt == 1:
@@ -1318,17 +1323,17 @@ def track_ps_call_attempt(uid, ps_name, call_no, lead_status, call_was_recorded=
         supabase.table('ps_call_attempt_history').insert(attempt_data).execute()
         print(f"Tracked PS call attempt: {uid} - {call_no} call, attempt {next_attempt}, status: {lead_status}")
         
-        # Send WebSocket notification for real-time updates
-        if websocket_manager:
-            websocket_manager.broadcast_lead_update(uid, {
-                'ps_call_attempt': {
-                    'call_no': call_no,
-                    'attempt': next_attempt,
-                    'status': lead_status,
-                    'ps_name': ps_name,
-                    'timestamp': datetime.now().isoformat()
-                }
-            })
+        # DISABLED: WebSocket notification for real-time updates
+        # if websocket_manager:
+        #     websocket_manager.broadcast_lead_update(uid, {
+        #         'ps_call_attempt': {
+        #             'call_no': call_no,
+        #             'attempt': next_attempt,
+        #             'status': lead_status,
+        #             'ps_name': ps_name,
+        #             'timestamp': datetime.now().isoformat()
+        #         }
+        #     })
     except Exception as e:
         print(f"Error tracking PS call attempt: {e}")
 
@@ -2143,19 +2148,19 @@ def assign_leads_dynamic_action():
                     total_assigned += 1
                     print(f"Assigned lead {lead['uid']} to CRE {cre['name']} for source {source}")
                     
-                    # Send WebSocket notification for real-time updates
-                    if websocket_manager:
-                        websocket_manager.notify_user(
-                            user_id=cre.get('id'),
-                            user_type='cre',
-                            event='lead_assigned_notification',
-                            data={
-                                'lead_uid': lead['uid'],
-                                'source': source,
-                                'assigned_at': datetime.now().isoformat(),
-                                'message': f'New lead {lead["uid"]} assigned to you from {source}'
-                            }
-                        )
+                    # DISABLED: WebSocket notification for real-time updates
+                    # if websocket_manager:
+                    #     websocket_manager.notify_user(
+                    #         user_id=cre.get('id'),
+                    #         user_type='cre',
+                    #         event='lead_assigned_notification',
+                    #         data={
+                    #             'lead_uid': lead['uid'],
+                    #             'source': source,
+                    #             'assigned_at': datetime.now().isoformat(),
+                    #             'message': f'New lead {lead["uid"]} assigned to you from {source}'
+                    #         }
+                    #     )
                     
                     if total_assigned % 100 == 0:
                         time.sleep(0.1)
@@ -3573,7 +3578,10 @@ def add_lead():
                         
                         # Send email notification to PS
                         try:
-                            socketio.start_background_task(send_email_to_ps, ps_user['email'], ps_user['name'], lead_data, cre_name)
+                            # DISABLED: WebSocket background task
+                            # socketio.start_background_task(send_email_to_ps, ps_user['email'], ps_user['name'], lead_data, cre_name)
+                            # Run email task directly instead
+                            send_email_to_ps(ps_user['email'], ps_user['name'], lead_data, cre_name)
                             flash(f'Lead added successfully and assigned to {ps_name}! Email notification sent.', 'success')
                         except Exception as e:
                             print(f"Error sending email: {e}")
@@ -4230,7 +4238,7 @@ from flask_limiter.util import get_remote_address
 from security_verification import run_security_verification
 import time
 import gc
-from flask_socketio import SocketIO, emit
+# from flask_socketio import SocketIO, emit  # DISABLED: WebSocket functionality
 import math
 # from redis import Redis  # REMOVE this line for local development
 
@@ -4259,7 +4267,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 load_dotenv()
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
+# DISABLED: WebSocket functionality
+# socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Reduce Flask log noise
 import logging
@@ -7119,7 +7128,10 @@ def add_lead():
                         
                         # Send email notification to PS
                         try:
-                            socketio.start_background_task(send_email_to_ps, ps_user['email'], ps_user['name'], lead_data, cre_name)
+                            # DISABLED: WebSocket background task
+                            # socketio.start_background_task(send_email_to_ps, ps_user['email'], ps_user['name'], lead_data, cre_name)
+                            # Run email task directly instead
+                            send_email_to_ps(ps_user['email'], ps_user['name'], lead_data, cre_name)
                             flash(f'Lead added successfully and assigned to {ps_name}! Email notification sent.', 'success')
                         except Exception as e:
                             print(f"Error sending email: {e}")
@@ -7868,7 +7880,10 @@ def update_lead(uid):
                 # Send email to PS
                 try:
                     lead_data_for_email = {**lead_data, **update_data}
-                    socketio.start_background_task(send_email_to_ps, ps_user['email'], ps_user['name'], lead_data_for_email, session.get('cre_name'))
+                    # DISABLED: WebSocket background task
+                    # socketio.start_background_task(send_email_to_ps, ps_user['email'], ps_user['name'], lead_data_for_email, session.get('cre_name'))
+                    # Run email task directly instead
+                    send_email_to_ps(ps_user['email'], ps_user['name'], lead_data_for_email, session.get('cre_name'))
                     flash(f'Lead assigned to {ps_name} and email notification sent', 'success')
                 except Exception as e:
                     print(f"Error sending email: {e}")
@@ -9167,7 +9182,10 @@ def update_lead_optimized(uid):
                     # Send email notification (non-blocking)
                     try:
                         lead_data_for_email = {**lead_data, **update_data}
-                        socketio.start_background_task(send_email_to_ps, ps_user['email'], ps_user['name'], lead_data_for_email, session.get('cre_name'))
+                        # DISABLED: WebSocket background task
+                        # socketio.start_background_task(send_email_to_ps, ps_user['email'], ps_user['name'], lead_data_for_email, session.get('cre_name'))
+                        # Run email task directly instead
+                        send_email_to_ps(ps_user['email'], ps_user['name'], lead_data_for_email, session.get('cre_name'))
                         flash(f'Lead assigned to {ps_name} and email notification sent', 'success')
                     except Exception as e:
                         print(f"Error sending email: {e}")
@@ -18627,57 +18645,58 @@ def fix_event_leads_final_status():
 
 
 # =====================================================
-# WEBSOCKET ROUTES - Added at the end to ensure registration
+# DISABLED: WEBSOCKET ROUTES - Added at the end to ensure registration
 # =====================================================
 
 @app.route('/test_route')
 def test_route():
     return "Test route working!"
 
-@app.route('/api/websocket_user_info')
-@require_auth()
-def websocket_user_info():
-    """Get user information for WebSocket authentication"""
-    try:
-        print(f"🔍 WebSocket user info requested - Session: {dict(session)}")
-        user_id = session.get('user_id')
-        user_type = session.get('user_type')
-        username = session.get('username')
-        
-        print(f"🔍 User info: ID={user_id}, Type={user_type}, Username={username}")
-        
-        # Get additional user info based on type
-        user_info = {
-            'user_id': user_id,
-            'user_type': user_type,
-            'username': username
-        }
-        
-        if user_type in ['ps', 'branch_head', 'rec']:
-            if user_type == 'ps':
-                user_data = supabase.table('ps_users').select('branch').eq('id', user_id).execute()
-            elif user_type == 'branch_head':
-                user_data = supabase.table('Branch Head').select('Branch').eq('id', user_id).execute()
-            elif user_type == 'rec':
-                user_data = supabase.table('rec_users').select('branch').eq('id', user_id).execute()
-            
-            if user_data.data:
-                user_info['branch'] = user_data.data[0].get('branch') or user_data.data[0].get('Branch')
-        
-        print(f"🔍 Returning user info: {user_info}")
-        return jsonify({
-            'success': True,
-            'user_info': user_info
-        })
-        
-    except Exception as e:
-        print(f"❌ Error getting WebSocket user info: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({
-            'success': False,
-            'message': str(e)
-        }), 500
+# DISABLED: WebSocket user info route
+# @app.route('/api/websocket_user_info')
+# @require_auth()
+# def websocket_user_info():
+#     """Get user information for WebSocket authentication"""
+#     try:
+#         print(f"🔍 WebSocket user info requested - Session: {dict(session)}")
+#         user_id = session.get('user_id')
+#         user_type = session.get('user_type')
+#         username = session.get('username')
+#         
+#         print(f"🔍 User info: ID={user_id}, Type={user_type}, Username={username}")
+#         
+#         # Get additional user info based on type
+#         user_info = {
+#             'user_id': user_id,
+#             'user_type': user_type,
+#             'username': username
+#         }
+#         
+#         if user_type in ['ps', 'branch_head', 'rec']:
+#             if user_type == 'ps':
+#                 user_data = supabase.table('ps_users').select('branch').eq('id', user_id).execute()
+#             elif user_type == 'branch_head':
+#                 user_data = supabase.table('Branch Head').select('Branch').eq('id', user_id).execute()
+#             elif user_type == 'rec':
+#                 user_data = supabase.table('rec_users').select('branch').eq('id', user_id).execute()
+#             
+#             if user_data.data:
+#                 user_info['branch'] = user_data.data[0].get('branch') or user_data.data[0].get('Branch')
+#         
+#         print(f"🔍 Returning user info: {user_info}")
+#         return jsonify({
+#             'success': True,
+#             'user_info': user_info
+#         })
+#         
+#     except Exception as e:
+#         print(f"❌ Error getting WebSocket user info: {e}")
+#         import traceback
+#         traceback.print_exc()
+#         return jsonify({
+#             'success': False,
+#             'message': str(e)
+#         }), 500
 
 
 # =====================================================
@@ -18757,17 +18776,17 @@ def submit_external_lead():
         if result.data:
             print(f"✅ Lead saved to database with UID: {uid}")
             
-            # Send WebSocket notification (same as CRE)
-            if websocket_manager:
-                websocket_manager.broadcast_lead_update(uid, {
-                    'new_lead': {
-                        'uid': uid,
-                        'name': data['customer_name'],
-                        'source': data['source'],
-                        'timestamp': datetime.now().isoformat()
-                    }
-                })
-                print(f"🔔 WebSocket notification sent for new lead: {uid}")
+            # DISABLED: WebSocket notification (same as CRE)
+            # if websocket_manager:
+            #     websocket_manager.broadcast_lead_update(uid, {
+            #         'new_lead': {
+            #             'uid': uid,
+            #             'name': data['customer_name'],
+            #             'source': data['source'],
+            #             'timestamp': datetime.now().isoformat()
+            #         }
+            #     })
+            #     print(f"🔔 WebSocket notification sent for new lead: {uid}")
             
             return jsonify({
                 'success': True,
@@ -19294,4 +19313,8 @@ def api_ps_performance_analytics():
 if __name__ == '__main__':
     print(" Starting Ather CRM System...")
     print("🌐 You can also try: http://localhost:5000")
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True, use_reloader=False)
+    # DISABLED: WebSocket functionality
+    # socketio.run(app, host='0.0.0.0', port=5000, debug=True, use_reloader=False)
+    
+    # Run Flask app without WebSocket
+    app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
