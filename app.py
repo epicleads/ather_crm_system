@@ -9690,14 +9690,6 @@ def analytics():
         source_labels = list(source_counts.keys())
         source_data = list(source_counts.values())
 
-        # Lead trends (last 30 days)
-        trend_data = []
-        trend_labels = []
-        for i in range(29, -1, -1):
-            date = today - timedelta(days=i)
-            count = len([l for l in leads if l.get('date') == str(date)])
-            trend_data.append(count)
-            trend_labels.append(date.strftime('%m/%d'))
 
         # Top performing CREs with new parameters
         cre_performance = defaultdict(lambda: {'total': 0, 'hot': 0, 'warm': 0, 'cold': 0, 'won': 0, 'lost': 0, 'calls': []})
@@ -9941,8 +9933,6 @@ def analytics():
             'total_cres': total_cres,
             'source_labels': source_labels,
             'source_data': source_data,
-            'trend_labels': trend_labels,
-            'trend_data': trend_data,
             'top_cres': top_cres,
             'lead_categories': lead_categories,
             'model_interest': model_interest,
@@ -9980,8 +9970,6 @@ def analytics():
             'total_cres': 0,
             'source_labels': [],
             'source_data': [],
-            'trend_labels': [],
-            'trend_data': [],
             'top_cres': [],
             'lead_categories': [],
             'model_interest': [],
