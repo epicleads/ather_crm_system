@@ -41,15 +41,6 @@ import math
 
 # Import optimized operations for faster lead updates
 from optimized_lead_operations import create_optimized_operations
-
-# PDF / reporting libs
-from reportlab.lib.pagesizes import letter, A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-
 import tempfile
 import matplotlib
 matplotlib.use('Agg')  # For headless environments
@@ -99,20 +90,29 @@ ALLOWED_CORS_ORIGINS = {
 def add_cors_headers(response):
     try:
         origin = request.headers.get('Origin')
-        if origin and origin in ALLOWED_CORS_ORIGINS:
-            # Apply CORS to all API routes
-            if request.path.startswith('/api/'):
-                requested_headers = request.headers.get('Access-Control-Request-Headers', 'Content-Type, Authorization')
-                response.headers['Access-Control-Allow-Origin'] = origin
-                response.headers['Vary'] = 'Origin'
-                response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-                response.headers['Access-Control-Allow-Headers'] = requested_headers
-                response.headers['Access-Control-Max-Age'] = '86400'
-    except Exception:
-        pass
-    return response
+        if not origin or origin not in ALLOWED_CORS_ORIGINS:
+            return response
 
-# Routes moved to end of file for proper registration
+        # Apply CORS only to API routes
+        if not request.path.startswith('/api/'):
+            return response
+
+        # Use requested headers only for preflight; default for others
+        if request.method == 'OPTIONS':
+            requested_headers = request.headers.get('Access-Control-Request-Headers', 'Content-Type, Authorization')
+        else:
+            requested_headers = 'Content-Type, Authorization'
+
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Vary'] = 'Origin'
+        response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = requested_headers
+        response.headers['Access-Control-Max-Age'] = '86400'
+        return response
+    except Exception:
+        # Preserve original behavior: do not block the response on errors
+        return response
+
 
 # Reduce Flask log noise
 import logging
@@ -135,19 +135,85 @@ def is_valid_uid(uid):
     """Validate UID format"""
     if not uid:
         return False
-    # Add your UID validation logic here
     return True
 
 
 # ==============================
 # Unified Test Drive management
 # ==============================
+def set_test_drive_state(lead_uid: str, user_type: str, user_name: str, test_drive_value) -> dict:
+    """
+    Set test drive state for a lead and sync to alltest_drive table
+    Returns: { success: bool, value: bool, locked: bool, message: str }
+    """
+    try:
+        # Normalize test drive value
+        if test_drive_value in ['Yes', 'True', True, 1, '1']:
+            normalized_value = 'Yes'
+            bool_value = True
+        elif test_drive_value in ['No', 'False', False, 0, '0']:
+            normalized_value = 'No'
+            bool_value = False
+        else:
+            return {'success': False, 'value': False, 'locked': False, 'message': 'Invalid test drive value'}
+
+        # Check current state to see if it's locked
+        current_state = get_test_drive_state(lead_uid)
+        if current_state['locked']:
+            return {
+                'success': False, 
+                'value': current_state['value'], 
+                'locked': True, 
+                'message': 'Test drive status is locked and cannot be changed'
+            }
+
+        # Update the appropriate table based on user_type
+        update_data = {
+            'test_drive_done': normalized_value,
+            'updated_at': datetime.now().isoformat()
+        }
+
+        if user_type == 'cre':
+            # Update lead_master table
+            result = supabase.table('lead_master').update(update_data).eq('uid', lead_uid).execute()
+            if result.data:
+                # Sync to alltest_drive
+                lead_data = result.data[0]
+                sync_test_drive_to_alltest_drive_enhanced('lead_master', lead_uid, lead_data)
+        elif user_type == 'ps':
+            # Update ps_followup_master table
+            result = supabase.table('ps_followup_master').update(update_data).eq('lead_uid', lead_uid).execute()
+            if result.data:
+                # Sync to alltest_drive
+                lead_data = result.data[0]
+                sync_test_drive_to_alltest_drive_enhanced('ps_followup_master', lead_uid, lead_data)
+        else:
+            return {'success': False, 'value': False, 'locked': False, 'message': 'Invalid user type'}
+
+        return {
+            'success': True,
+            'value': bool_value,
+            'locked': bool_value,  # Yes means locked
+            'message': 'Test drive status updated successfully'
+        }
+
+    except Exception as e:
+        print(f"Error setting test drive state: {e}")
+        return {'success': False, 'value': False, 'locked': False, 'message': str(e)}
+
+
 def get_test_drive_state(lead_uid: str) -> dict:
     """Return current test drive state for a lead from alltest_drive table.
     Structure: { value: bool, locked: bool, updated_at: str, updated_by: str }
     Fallbacks to False/Unlocked if not present.
     """
     try:
+        def is_truthy(raw) -> bool:
+            if raw is None:
+                return False
+            s = str(raw).strip().lower()
+            return s in ('true', 'yes', '1')
+
         merged_value = False
         merged_locked = False
         merged_updated_at = None
@@ -161,14 +227,11 @@ def get_test_drive_state(lead_uid: str) -> dict:
                 at_row = result.data[0]
         except Exception as _ea:
             print(f"[WARN] alltest_drive lookup failed for {lead_uid}: {_ea}")
-            # Table might not exist, continue without it
 
         if at_row:
-            # Map the alltest_drive table fields to our expected structure
-            at_value = bool(at_row.get('test_drive_done') == 'Yes' or at_row.get('test_drive_done') == 'True')
-            at_locked = bool(at_row.get('test_drive_done') == 'Yes' or at_row.get('test_drive_done') == 'True')  # Yes is treated as locked
-            merged_value = at_value
-            merged_locked = at_locked
+            at_bool = is_truthy(at_row.get('test_drive_done'))
+            merged_value = at_bool
+            merged_locked = at_bool  # Yes/True treated as locked
             merged_updated_at = at_row.get('updated_at')
             merged_updated_by = at_row.get('cre_name') or at_row.get('ps_name') or ''
 
@@ -182,16 +245,13 @@ def get_test_drive_state(lead_uid: str) -> dict:
             print(f"[WARN] ps_followup_master lookup failed for {lead_uid}: {_e2}")
 
         if ps_row is not None:
-            ps_raw = ps_row.get('test_drive_done')
-            if ps_raw is not None:
-                ps_bool = True if str(ps_raw).lower() in ['true', 'yes', '1'] else False
-                # Promote Yes from PS even if alltestdrive says No/False
-                if ps_bool:
-                    merged_value = True
-                    merged_locked = True
-                    merged_updated_at = merged_updated_at or ps_row.get('updated_at')
-                    if not merged_updated_by:
-                        merged_updated_by = ps_row.get('ps_name') or ''
+            if is_truthy(ps_row.get('test_drive_done')):
+                merged_value = True
+                merged_locked = True
+                if merged_updated_at is None:
+                    merged_updated_at = ps_row.get('updated_at')
+                if not merged_updated_by:
+                    merged_updated_by = ps_row.get('ps_name') or ''
 
         # 3) activity_leads table (for event leads)
         al_row = None
@@ -203,23 +263,21 @@ def get_test_drive_state(lead_uid: str) -> dict:
             print(f"[WARN] activity_leads lookup failed for {lead_uid}: {_e3}")
 
         if al_row is not None:
-            al_raw = al_row.get('test_drive_done')
-            if al_raw is not None:
-                al_bool = True if str(al_raw).lower() in ['true', 'yes', '1'] else False
-                # If activity_leads has a value, use it and determine lock status
-                if al_bool:
-                    merged_value = True
-                    merged_locked = True  # Lock when test drive is done
-                    merged_updated_at = merged_updated_at or al_row.get('created_at')
+            al_bool = is_truthy(al_row.get('test_drive_done'))
+            if al_bool:
+                merged_value = True
+                merged_locked = True  # Lock when test drive is done
+                if merged_updated_at is None:
+                    merged_updated_at = al_row.get('created_at')
+                if not merged_updated_by:
+                    merged_updated_by = al_row.get('cre_assigned') or al_row.get('ps_name') or ''
+            else:
+                if not merged_locked:
+                    merged_value = False
+                    if merged_updated_at is None:
+                        merged_updated_at = al_row.get('created_at')
                     if not merged_updated_by:
                         merged_updated_by = al_row.get('cre_assigned') or al_row.get('ps_name') or ''
-                else:
-                    # If test drive is not done, don't override existing locked status
-                    if not merged_locked:
-                        merged_value = False
-                        merged_updated_at = merged_updated_at or al_row.get('created_at')
-                        if not merged_updated_by:
-                            merged_updated_by = al_row.get('cre_assigned') or al_row.get('ps_name') or ''
 
         # 4) ps_followup_master - try to find by phone number for event leads
         if not merged_value and al_row and al_row.get('customer_phone_number'):
@@ -228,15 +286,13 @@ def get_test_drive_state(lead_uid: str) -> dict:
                 ps_row_res = supabase.table('ps_followup_master').select('test_drive_done, updated_at, ps_name').eq('customer_mobile_number', phone).limit(1).execute()
                 if ps_row_res.data:
                     ps_row = ps_row_res.data[0]
-                    ps_raw = ps_row.get('test_drive_done')
-                    if ps_raw is not None:
-                        ps_bool = True if str(ps_raw).lower() in ['true', 'yes', '1'] else False
-                        if ps_bool:
-                            merged_value = True
-                            merged_locked = True
-                            merged_updated_at = merged_updated_at or ps_row.get('updated_at')
-                            if not merged_updated_by:
-                                merged_updated_by = ps_row.get('ps_name') or ''
+                    if is_truthy(ps_row.get('test_drive_done')):
+                        merged_value = True
+                        merged_locked = True
+                        if merged_updated_at is None:
+                            merged_updated_at = ps_row.get('updated_at')
+                        if not merged_updated_by:
+                            merged_updated_by = ps_row.get('ps_name') or ''
             except Exception as _e2:
                 print(f"[WARN] ps_followup_master phone lookup failed for {lead_uid}: {_e2}")
 
@@ -250,15 +306,13 @@ def get_test_drive_state(lead_uid: str) -> dict:
             print(f"[WARN] lead_master lookup failed for {lead_uid}: {_e4}")
 
         if lm_row is not None and not merged_value:
-            lm_raw = lm_row.get('test_drive_done')
-            if lm_raw is not None:
-                lm_bool = True if str(lm_raw).lower() in ['true', 'yes', '1'] else False
-                if lm_bool:
-                    merged_value = True
-                    merged_locked = True
-                    merged_updated_at = merged_updated_at or lm_row.get('updated_at')
-                    if not merged_updated_by:
-                        merged_updated_by = lm_row.get('cre_name') or ''
+            if is_truthy(lm_row.get('test_drive_done')):
+                merged_value = True
+                merged_locked = True
+                if merged_updated_at is None:
+                    merged_updated_at = lm_row.get('updated_at')
+                if not merged_updated_by:
+                    merged_updated_by = lm_row.get('cre_name') or ''
 
         return {
             'value': bool(merged_value),
@@ -269,413 +323,252 @@ def get_test_drive_state(lead_uid: str) -> dict:
     except Exception as _e:
         print(f"[WARN] get_test_drive_state failed for {lead_uid}: {_e}")
         return {'value': False, 'locked': False, 'updated_at': None, 'updated_by': ''}
-
-
-def set_test_drive_state(lead_uid: str, actor_role: str, actor_name: str, new_value_raw) -> dict:
-    """Set test drive state with locking and cross-entity sync.
-    - If current is True (locked), further changes are blocked.
-    - If setting to True: lock the state and propagate to related tables.
-    - If setting to False: allowed only when not locked; remains required until True.
-    Returns: { success: bool, locked: bool, value: bool, message: str }
-    """
-    try:
-        desired = None
-        if new_value_raw is not None:
-            s = str(new_value_raw).strip().lower()
-            if s in ['true', 'yes', '1', 'y']: desired = True
-            elif s in ['false', 'no', '0', 'n', '']: desired = False
-        if desired is None:
-            return {'success': True, 'locked': get_test_drive_state(lead_uid)['locked'], 'value': get_test_drive_state(lead_uid)['value'], 'message': 'No change'}
-
-        current = get_test_drive_state(lead_uid)
-        if current['locked']:
-            # Already locked - cannot change
-            return {'success': False, 'locked': True, 'value': current['value'], 'message': 'Test Drive status is locked and cannot be changed'}
-
-        locked = False
-        value_to_store = bool(desired)
-        # Lock when setting to "Yes", keep unlocked when setting to "No"
-        if value_to_store:
-            locked = True
-
-        # Use enhanced sync function to update alltest_drive table
-        try:
-            # Determine source table based on lead_uid pattern
-            if 'AC-' in lead_uid:
-                source_table = 'activity_leads'
-            elif lead_uid.startswith('W'):
-                source_table = 'walkin_table'
-            else:
-                source_table = 'lead_master'
-            
-            # Fetch complete lead data for comprehensive sync
-            lead_data = {'test_drive_done': 'Yes' if value_to_store else 'No'}
-            
-            # Add actor information
-            if actor_role == 'cre':
-                lead_data['cre_name'] = actor_name
-            elif actor_role == 'ps':
-                lead_data['ps_name'] = actor_name
-            
-            # Try to fetch complete lead data for better sync
-            try:
-                if source_table == 'activity_leads':
-                    complete_data = supabase.table('activity_leads').select('*').eq('activity_uid', lead_uid).execute()
-                elif source_table == 'walkin_table':
-                    complete_data = supabase.table('walkin_table').select('*').eq('uid', lead_uid).execute()
-                else:  # lead_master
-                    complete_data = supabase.table('lead_master').select('*').eq('uid', lead_uid).execute()
-                
-                if complete_data.data:
-                    # Merge complete data with test drive info
-                    lead_data.update(complete_data.data[0])
-                    lead_data['test_drive_done'] = 'Yes' if value_to_store else 'No'
-            except Exception as fetch_error:
-                print(f"Warning: Could not fetch complete lead data for sync: {fetch_error}")
-                # Continue with basic data
-            
-            # Use enhanced sync function
-            sync_test_drive_to_alltest_drive_enhanced(source_table, lead_uid, lead_data)
-            
-        except Exception as _e:
-            print(f"[WARN] Enhanced sync to alltest_drive failed: {_e}")
-            # Fallback to simple sync
-            try:
-                payload = {
-                    'source_table': 'activity_leads' if 'AC-' in lead_uid else 'lead_master',
-                    'original_id': lead_uid,
-                    'test_drive_done': 'Yes' if value_to_store else 'No',
-                    'updated_at': datetime.now().isoformat(),
-                    'cre_name': actor_name if actor_role == 'cre' else None,
-                    'ps_name': actor_name if actor_role == 'ps' else None
-                }
-                supabase.table('alltest_drive').insert(payload).execute()
-            except Exception as _e2:
-                print(f"[WARN] Fallback sync to alltest_drive also failed: {_e2}")
-
-        # Propagate to lead_master, ps_followup_master, and activity_leads for this lead if available
-        try:
-            supabase.table('lead_master').update({'test_drive_done': value_to_store}).eq('uid', lead_uid).execute()
-            print(f"[DEBUG] Successfully updated lead_master.test_drive_done to {value_to_store}")
-        except Exception as _e:
-            print(f"[WARN] propagate lead_master test_drive_done failed: {_e}")
-            # Check if the column exists
-            try:
-                # Try to get the table structure to see if test_drive_done column exists
-                result = supabase.table('lead_master').select('*').limit(1).execute()
-                if result.data:
-                    columns = list(result.data[0].keys())
-                    if 'test_drive_done' not in columns:
-                        print(f"[INFO] lead_master table doesn't have test_drive_done column. Available columns: {columns}")
-                    else:
-                        print(f"[DEBUG] test_drive_done column exists in lead_master")
-            except Exception as col_check_error:
-                print(f"[WARN] Could not check lead_master table structure: {col_check_error}")
-        
-        # Try to update ps_followup_master - handle both regular leads and event leads
-        try:
-            print(f"[DEBUG] Attempting to update ps_followup_master for lead_uid: {lead_uid}")
-            # First try with lead_uid (for regular leads)
-            result = supabase.table('ps_followup_master').update({'test_drive_done': value_to_store}).eq('lead_uid', lead_uid).execute()
-            print(f"[DEBUG] ps_followup_master update by lead_uid result: {result.data}")
-            
-            if not result.data:
-                print(f"[DEBUG] No ps_followup_master record found by lead_uid, trying phone number lookup")
-                # If no update, try to find by customer phone number from activity_leads
-                al_result = supabase.table('activity_leads').select('customer_phone_number').eq('activity_uid', lead_uid).execute()
-                print(f"[DEBUG] activity_leads phone lookup result: {al_result.data}")
-                
-                if al_result.data and al_result.data[0].get('customer_phone_number'):
-                    phone = al_result.data[0]['customer_phone_number']
-                    print(f"[DEBUG] Found phone number: {phone}, attempting update by phone")
-                    # Try to update ps_followup_master by phone number
-                    phone_result = supabase.table('ps_followup_master').update({'test_drive_done': value_to_store}).eq('customer_mobile_number', phone).execute()
-                    print(f"[DEBUG] ps_followup_master update by phone result: {phone_result.data}")
-                else:
-                    print(f"[DEBUG] No phone number found in activity_leads for {lead_uid}")
-            else:
-                print(f"[DEBUG] Successfully updated ps_followup_master by lead_uid")
-        except Exception as _e:
-            print(f"[WARN] propagate ps_followup_master test_drive_done failed: {_e}")
-            import traceback
-            traceback.print_exc()
-        
-        try:
-            result = supabase.table('activity_leads').update({'test_drive_done': value_to_store}).eq('activity_uid', lead_uid).execute()
-            print(f"[DEBUG] Successfully updated activity_leads.test_drive_done to {value_to_store}")
-        except Exception as _e:
-            print(f"[WARN] propagate activity_leads test_drive_done failed: {_e}")
-            # Check if this is an event lead or regular lead
-            try:
-                al_result = supabase.table('activity_leads').select('activity_uid').eq('activity_uid', lead_uid).limit(1).execute()
-                if al_result.data:
-                    print(f"[DEBUG] This is an event lead (activity_uid: {lead_uid})")
-                else:
-                    print(f"[DEBUG] This is not an event lead (no activity_uid: {lead_uid})")
-            except Exception as check_error:
-                print(f"[WARN] Could not check if this is an event lead: {check_error}")
-
-        # Audit
-        try:
-            auth_manager.log_audit_event(
-                user_id=session.get('user_id'),
-                user_type=session.get('user_type'),
-                action='TEST_DRIVE_UPDATE',
-                resource='alltest_drive',
-                resource_id=lead_uid,
-                details={'value': value_to_store, 'locked': locked, 'actor_role': actor_role}
-            )
-        except Exception:
-            pass
-
-        return {'success': True, 'locked': locked, 'value': value_to_store, 'message': 'Updated'}
-    except Exception as e:
-        print(f"[ERROR] set_test_drive_state failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return {'success': False, 'locked': False, 'value': False, 'message': str(e)}
-
-
 def sync_test_drive_to_alltest_drive_enhanced(source_table, original_id, lead_data):
     """
     Enhanced sync test drive data to alltest_drive table when test_drive_done is updated
     Ensures all columns are properly populated and created_at is set on first creation
     """
     try:
-        # Check if test_drive_done is not null and is Yes/No or True/False
-        test_drive_done = lead_data.get('test_drive_done')
-        
-        # Handle both boolean and string values
+        from datetime import datetime, timezone
+
+        def now_iso():
+            return datetime.now(timezone.utc).isoformat()
+
+        def norm_bool_to_yes_no(value):
+            if value is True:
+                return 'Yes'
+            if value is False:
+                return 'No'
+            if isinstance(value, str):
+                s = value.strip()
+                if s in ('Yes', 'No'):
+                    return s
+                low = s.lower()
+                if low in ('true', '1', 'y'):
+                    return 'Yes'
+                if low in ('false', '0', 'n'):
+                    return 'No'
+            return None
+
+        def safe_get(obj, key):
+            return obj.get(key) if isinstance(obj, dict) else None
+
+        allowed_sources = {'walkin_table', 'ps_followup_master', 'activity_leads', 'lead_master'}
+        if source_table not in allowed_sources:
+            print(f"[DEBUG] Unsupported source_table: {source_table}")
+            return
+
+        test_drive_done = norm_bool_to_yes_no(safe_get(lead_data, 'test_drive_done'))
         if test_drive_done is None:
-            print(f"[DEBUG] No test_drive_done value found in lead_data: {lead_data}")
+            print(f"[DEBUG] No/invalid test_drive_done in lead_data for {source_table}-{original_id}")
             return
-        
-        # Convert boolean to string if needed
-        if test_drive_done is True:
-            test_drive_done = 'Yes'
-        elif test_drive_done is False:
-            test_drive_done = 'No'
-        elif test_drive_done not in ['Yes', 'No']:
-            print(f"[DEBUG] Invalid test_drive_done value: {test_drive_done}")
-            return
-        
+
         print(f"[DEBUG] Syncing test drive data for {source_table} - {original_id}: {test_drive_done}")
-        
-        # Check if record already exists in alltest_drive
-        existing_record = supabase.table('alltest_drive').select('*').eq('source_table', source_table).eq('original_id', str(original_id)).execute()
-        
-        # Prepare base data for alltest_drive table
+
+        # Normalize original_id once (walk-in uses uid)
+        normalized_original_id = str(
+            safe_get(lead_data, 'uid') if source_table == 'walkin_table' else original_id
+        )
+
+        existing_record = supabase.table('alltest_drive') \
+            .select('*') \
+            .eq('source_table', source_table) \
+            .eq('original_id', normalized_original_id) \
+            .execute()
+
         alltest_drive_data = {
             'source_table': source_table,
-            'original_id': str(original_id),
+            'original_id': normalized_original_id,
             'test_drive_done': test_drive_done,
-            'updated_at': datetime.now().isoformat()
+            'updated_at': now_iso()
         }
-        
-        print(f"[DEBUG] Base alltest_drive_data: {alltest_drive_data}")
-        print(f"[DEBUG] Lead data keys: {list(lead_data.keys())}")
-        
-        # Map fields based on source table with comprehensive data extraction
+
+        # Per-source mappings
         if source_table == 'walkin_table':
-            walkin_mapping = {
-                'customer_name': lead_data.get('customer_name'),
-                'mobile_number': lead_data.get('mobile_number'),
-                'lead_status': lead_data.get('lead_status'),
-                'lead_category': lead_data.get('lead_category'),
-                'model_interested': lead_data.get('model_interested'),
-                'final_status': lead_data.get('status'),
-                'ps_name': lead_data.get('ps_assigned'),
-                'branch': lead_data.get('branch'),
-                'remarks': lead_data.get('remarks'),
+            alltest_drive_data.update({
+                'customer_name': safe_get(lead_data, 'customer_name'),
+                'mobile_number': safe_get(lead_data, 'mobile_number'),
+                'lead_status': safe_get(lead_data, 'lead_status'),
+                'lead_category': safe_get(lead_data, 'lead_category'),
+                'model_interested': safe_get(lead_data, 'model_interested'),
+                'final_status': safe_get(lead_data, 'status'),
+                'ps_name': safe_get(lead_data, 'ps_assigned'),
+                'branch': safe_get(lead_data, 'branch'),
+                'remarks': safe_get(lead_data, 'remarks'),
                 'source': 'Walk-in',
                 'lead_source': 'Walk-in'
-            }
-            alltest_drive_data.update(walkin_mapping)
-            # For walkin_table, use uid instead of id
-            alltest_drive_data['original_id'] = lead_data.get('uid', str(original_id))
-            print(f"[DEBUG] Walk-in mapping: {walkin_mapping}")
-            
+            })
         elif source_table == 'ps_followup_master':
-            ps_mapping = {
-                'customer_name': lead_data.get('customer_name'),
-                'mobile_number': lead_data.get('customer_mobile_number'),
-                'lead_status': lead_data.get('lead_status'),
-                'lead_category': lead_data.get('lead_category'),
-                'model_interested': lead_data.get('model_interested'),
-                'final_status': lead_data.get('final_status'),
-                'ps_name': lead_data.get('ps_name'),
-                'branch': lead_data.get('branch') or lead_data.get('ps_branch'),
-                'lead_source': lead_data.get('lead_source'),
-                'cre_name': lead_data.get('cre_name'),
-                'ps_branch': lead_data.get('ps_branch'),
-                'remarks': lead_data.get('remarks'),
-                'source': lead_data.get('source')
-            }
-            alltest_drive_data.update(ps_mapping)
-            print(f"[DEBUG] PS followup mapping: {ps_mapping}")
-            
+            alltest_drive_data.update({
+                'customer_name': safe_get(lead_data, 'customer_name'),
+                'mobile_number': safe_get(lead_data, 'customer_mobile_number'),
+                'lead_status': safe_get(lead_data, 'lead_status'),
+                'lead_category': safe_get(lead_data, 'lead_category'),
+                'model_interested': safe_get(lead_data, 'model_interested'),
+                'final_status': safe_get(lead_data, 'final_status'),
+                'ps_name': safe_get(lead_data, 'ps_name'),
+                'branch': safe_get(lead_data, 'branch') or safe_get(lead_data, 'ps_branch'),
+                'lead_source': safe_get(lead_data, 'lead_source'),
+                'cre_name': safe_get(lead_data, 'cre_name'),
+                'ps_branch': safe_get(lead_data, 'ps_branch'),
+                'remarks': safe_get(lead_data, 'remarks'),
+                'source': safe_get(lead_data, 'source')
+            })
         elif source_table == 'activity_leads':
-            activity_mapping = {
-                'customer_name': lead_data.get('customer_name'),
-                'mobile_number': lead_data.get('customer_phone_number'),
-                'lead_status': lead_data.get('lead_status'),
-                'lead_category': lead_data.get('lead_category'),
-                'model_interested': lead_data.get('interested_model'),
-                'final_status': lead_data.get('final_status'),
-                'ps_name': lead_data.get('ps_name'),
-                'branch': lead_data.get('location'),
-                'remarks': lead_data.get('remarks'),
-                'activity_name': lead_data.get('activity_name'),
-                'activity_location': lead_data.get('activity_location'),
-                'customer_location': lead_data.get('customer_location'),
-                'customer_profession': lead_data.get('customer_profession'),
-                'gender': lead_data.get('gender'),
-                'lead_source': lead_data.get('lead_source'),
-                'cre_name': lead_data.get('cre_assigned'),
-                'source': lead_data.get('source')
-            }
-            alltest_drive_data.update(activity_mapping)
-            print(f"[DEBUG] Activity mapping: {activity_mapping}")
-            
+            alltest_drive_data.update({
+                'customer_name': safe_get(lead_data, 'customer_name'),
+                'mobile_number': safe_get(lead_data, 'customer_phone_number'),
+                'lead_status': safe_get(lead_data, 'lead_status'),
+                'lead_category': safe_get(lead_data, 'lead_category'),
+                'model_interested': safe_get(lead_data, 'interested_model'),
+                'final_status': safe_get(lead_data, 'final_status'),
+                'ps_name': safe_get(lead_data, 'ps_name'),
+                'branch': safe_get(lead_data, 'location'),
+                'remarks': safe_get(lead_data, 'remarks'),
+                'activity_name': safe_get(lead_data, 'activity_name'),
+                'activity_location': safe_get(lead_data, 'activity_location'),
+                'customer_location': safe_get(lead_data, 'customer_location'),
+                'customer_profession': safe_get(lead_data, 'customer_profession'),
+                'gender': safe_get(lead_data, 'gender'),
+                'lead_source': safe_get(lead_data, 'lead_source'),
+                'cre_name': safe_get(lead_data, 'cre_assigned'),
+                'source': safe_get(lead_data, 'source')
+            })
         elif source_table == 'lead_master':
-            lead_master_mapping = {
-                'customer_name': lead_data.get('customer_name'),
-                'mobile_number': lead_data.get('mobile_number'),
-                'lead_status': lead_data.get('lead_status'),
-                'lead_category': lead_data.get('lead_category'),
-                'model_interested': lead_data.get('model_interested'),
-                'final_status': lead_data.get('final_status'),
-                'ps_name': lead_data.get('ps_name'),
-                'branch': lead_data.get('branch'),
-                'lead_source': lead_data.get('lead_source'),
-                'cre_name': lead_data.get('cre_name'),
-                'ps_branch': lead_data.get('ps_branch'),
-                'remarks': lead_data.get('remarks'),
-                'source': lead_data.get('source')
-            }
-            alltest_drive_data.update(lead_master_mapping)
-            print(f"[DEBUG] Lead master mapping: {lead_master_mapping}")
-        
-        # Handle created_at timestamp - set only if record doesn't exist
-        if not existing_record.data:
-            # New record - set created_at to current timestamp
-            alltest_drive_data['created_at'] = datetime.now().isoformat()
-        else:
-            # Existing record - preserve original created_at
-            alltest_drive_data['created_at'] = existing_record.data[0].get('created_at')
-        
-        # Insert or update record in alltest_drive table
+            alltest_drive_data.update({
+                'customer_name': safe_get(lead_data, 'customer_name'),
+                'mobile_number': safe_get(lead_data, 'mobile_number'),
+                'lead_status': safe_get(lead_data, 'lead_status'),
+                'lead_category': safe_get(lead_data, 'lead_category'),
+                'model_interested': safe_get(lead_data, 'model_interested'),
+                'final_status': safe_get(lead_data, 'final_status'),
+                'ps_name': safe_get(lead_data, 'ps_name'),
+                'branch': safe_get(lead_data, 'branch'),
+                'lead_source': safe_get(lead_data, 'lead_source'),
+                'cre_name': safe_get(lead_data, 'cre_name'),
+                'ps_branch': safe_get(lead_data, 'ps_branch'),
+                'remarks': safe_get(lead_data, 'remarks'),
+                'source': safe_get(lead_data, 'source')
+            })
+
+        # created_at handling
         if existing_record.data:
-            # Update existing record - preserve created_at
+            created_at = safe_get(existing_record.data[0], 'created_at')
+            alltest_drive_data['created_at'] = created_at
+        else:
+            alltest_drive_data['created_at'] = now_iso()
+
+        # Persist
+        if existing_record.data:
             update_data = {k: v for k, v in alltest_drive_data.items() if k != 'created_at'}
             print(f"[DEBUG] Updating existing record with data: {update_data}")
-            result = supabase.table('alltest_drive').update(update_data).eq('source_table', source_table).eq('original_id', str(original_id)).execute()
+            supabase.table('alltest_drive') \
+                .update(update_data) \
+                .eq('source_table', source_table) \
+                .eq('original_id', normalized_original_id) \
+                .execute()
             print(f"Updated existing test drive record for {source_table} - {original_id}")
         else:
-            # Insert new record with created_at
             print(f"[DEBUG] Inserting new record with data: {alltest_drive_data}")
-            result = supabase.table('alltest_drive').insert(alltest_drive_data).execute()
+            supabase.table('alltest_drive').insert(alltest_drive_data).execute()
             print(f"Created new test drive record for {source_table} - {original_id}")
-            
+
         print(f"Successfully synced test drive data for {source_table} - {original_id}")
-        
+
     except Exception as e:
         print(f"Error syncing test drive data to alltest_drive: {e}")
         import traceback
         traceback.print_exc()
 
-
-# Debug route to check test drive status
 @app.route('/debug/test_drive/<lead_uid>')
 def debug_test_drive(lead_uid):
     """Debug route to check test drive status for a lead"""
     try:
         print(f"[DEBUG] Checking test drive status for: {lead_uid}")
-        
+
+        def safe_query(table, select_cols, key, value):
+            try:
+                res = supabase.table(table).select(select_cols).eq(key, value).execute()
+                print(f"[DEBUG] {table} result: {res.data}")
+                return res
+            except Exception as e:
+                print(f"[DEBUG] {table} check failed: {e}")
+                return None
+
         # Check activity_leads
-        al_result = supabase.table('activity_leads').select('test_drive_done, customer_phone_number').eq('activity_uid', lead_uid).execute()
-        print(f"[DEBUG] activity_leads result: {al_result.data}")
-        
+        al_result = safe_query('activity_leads', 'test_drive_done, customer_phone_number', 'activity_uid', lead_uid)
+
         # Check ps_followup_master by lead_uid
-        ps_result = supabase.table('ps_followup_master').select('test_drive_done').eq('lead_uid', lead_uid).execute()
-        print(f"[DEBUG] ps_followup_master by lead_uid result: {ps_result.data}")
-        
+        ps_result = safe_query('ps_followup_master', 'test_drive_done', 'lead_uid', lead_uid)
+
         # Check ps_followup_master by phone number
         ps_phone_result = None
-        if al_result.data and al_result.data[0].get('customer_phone_number'):
-            phone = al_result.data[0]['customer_phone_number']
-            ps_phone_result = supabase.table('ps_followup_master').select('test_drive_done').eq('customer_mobile_number', phone).execute()
-            print(f"[DEBUG] ps_followup_master by phone {phone} result: {ps_phone_result.data}")
-        
+        if al_result and al_result.data:
+            first_al = al_result.data[0] if len(al_result.data) > 0 else None
+            phone = first_al.get('customer_phone_number') if isinstance(first_al, dict) else None
+            if phone:
+                ps_phone_result = safe_query('ps_followup_master', 'test_drive_done', 'customer_mobile_number', phone)
+
         # Check lead_master
-        lm_result = None
-        try:
-            lm_result = supabase.table('lead_master').select('test_drive_done').eq('uid', lead_uid).execute()
-            print(f"[DEBUG] lead_master result: {lm_result.data}")
-        except Exception as e:
-            print(f"[DEBUG] lead_master check failed: {e}")
-        
+        lm_result = safe_query('lead_master', 'test_drive_done', 'uid', lead_uid)
+
         # Check alltest_drive table
-        at_result = None
-        try:
-            at_result = supabase.table('alltest_drive').select('*').eq('original_id', lead_uid).execute()
-            print(f"[DEBUG] alltest_drive result: {at_result.data}")
-        except Exception as e:
-            print(f"[DEBUG] alltest_drive check failed: {e}")
-        
+        at_result = safe_query('alltest_drive', '*', 'original_id', lead_uid)
+
         # Get test drive state
         test_drive_state = get_test_drive_state(lead_uid)
         print(f"[DEBUG] Final test drive state: {test_drive_state}")
-        
+
         return {
             'lead_uid': lead_uid,
-            'activity_leads': al_result.data,
-            'ps_followup_master_by_uid': ps_result.data,
+            'activity_leads': al_result.data if al_result else None,
+            'ps_followup_master_by_uid': ps_result.data if ps_result else None,
             'ps_followup_master_by_phone': ps_phone_result.data if ps_phone_result else None,
             'lead_master': lm_result.data if lm_result else None,
             'alltest_drive': at_result.data if at_result else None,
             'final_state': test_drive_state
         }
-        
+
     except Exception as e:
         print(f"[ERROR] Debug route failed: {e}")
         import traceback
         traceback.print_exc()
         return {'error': str(e)}
-
-
-# Debug route to check alltest_drive table directly
 @app.route('/debug/alltest_drive')
 def debug_alltest_drive():
     """Debug route to check alltest_drive table contents"""
     try:
         print(f"[DEBUG] Checking alltest_drive table contents")
-        
-        # Get all records from alltest_drive table
+
+        # Get recent records
         result = supabase.table('alltest_drive').select('*').order('updated_at', desc=True).limit(10).execute()
-        print(f"[DEBUG] alltest_drive table result: {result.data}")
-        
-        # Get table structure
-        structure_result = supabase.table('alltest_drive').select('*').limit(1).execute()
+        recent = result.data or []
+        print(f"[DEBUG] alltest_drive table result: {recent}")
+
+        # Derive columns from recent if possible; otherwise fallback to a light probe
         columns = []
-        if structure_result.data:
-            columns = list(structure_result.data[0].keys())
-        
+        if recent and isinstance(recent[0], dict):
+            columns = list(recent[0].keys())
+        else:
+            try:
+                structure_result = supabase.table('alltest_drive').select('*').limit(1).execute()
+                if structure_result and structure_result.data:
+                    columns = list(structure_result.data[0].keys())
+            except Exception as e:
+                print(f"[DEBUG] structure probe failed: {e}")
+
         return {
             'table_name': 'alltest_drive',
             'columns': columns,
-            'recent_records': result.data,
-            'total_records': len(result.data) if result.data else 0
+            'recent_records': recent,
+            'total_records': len(recent)
         }
-        
+
     except Exception as e:
         print(f"[ERROR] Debug alltest_drive route failed: {e}")
         import traceback
         traceback.print_exc()
         return {'error': str(e)}
-
-
-# Using Flask's built-in tojson filter
 
 # Get environment variables with fallback values for testing
 SUPABASE_URL = os.environ.get('SUPABASE_URL')
@@ -753,7 +646,6 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
 def generate_uid(source, mobile_number, sequence):
     """Generate UID based on source, mobile number, and sequence"""
     source_map = {
@@ -768,47 +660,81 @@ def generate_uid(source, mobile_number, sequence):
         'Walkin': 'W'    # Walkin mapping (without hyphen)
     }
 
-    source_char = source_map.get(source, 'X')
+    # Robust source lookup (case-insensitive; fallback 'X')
+    source_str = '' if source is None else str(source)
+    source_char = 'X'
+    for k, v in source_map.items():
+        if source_str.lower() == k.lower():
+            source_char = v
+            break
 
-    # Get sequence character (A-Z)
-    sequence_char = chr(65 + (sequence % 26))  # A=65 in ASCII
+    # Coerce sequence to non-negative int
+    try:
+        seq_int = int(sequence)
+    except Exception:
+        seq_int = 0
+    if seq_int < 0:
+        seq_int = -seq_int
 
-    # Get last 4 digits of mobile number
-    mobile_str = str(mobile_number).replace(' ', '').replace('-', '')
-    mobile_last4 = mobile_str[-4:] if len(mobile_str) >= 4 else mobile_str.zfill(4)
+    # Sequence character A-Z (wrap every 26)
+    sequence_char = chr(65 + (seq_int % 26))  # A=65
 
-    # Generate sequence number (0001, 0002, etc.)
-    seq_num = f"{(sequence % 9999) + 1:04d}"
+    # Keep only digits from mobile_number and take last 4 (left-pad if shorter)
+    mobile_str = ''.join(ch for ch in str(mobile_number) if ch.isdigit())
+    mobile_last4 = (mobile_str[-4:] if len(mobile_str) >= 4 else mobile_str.zfill(4))
+
+    # Sequence number 0001..9999 (wrap with modulo, never 0000)
+    seq_num = f"{(seq_int % 9999) + 1:04d}"
 
     return f"{source_char}{sequence_char}-{mobile_last4}-{seq_num}"
-
-
 def get_next_call_info(lead_data):
     """Determine the next available call number and which calls are completed"""
     call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
     completed_calls = []
     next_call = 'first'
 
+    # Guard against None/non-dict inputs
+    data = lead_data if isinstance(lead_data, dict) else {}
+
     for call_num in call_order:
-        call_date_key = f'{call_num}_call_date'
-        if lead_data.get(call_date_key):
+        key = f'{call_num}_call_date'
+        value = data.get(key)
+
+        # Treat empty strings or whitespace as not set
+        is_set = False
+        if value is not None:
+            if isinstance(value, str):
+                is_set = value.strip() != ''
+            else:
+                is_set = bool(value)
+
+        if is_set:
             completed_calls.append(call_num)
         else:
             next_call = call_num
             break
 
     return next_call, completed_calls
-
-
 def get_next_ps_call_info(ps_data):
     """Determine the next available PS call number and which calls are completed (now 7 calls)"""
     call_order = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
     completed_calls = []
     next_call = 'first'
 
+    data = ps_data if isinstance(ps_data, dict) else {}
+
     for call_num in call_order:
         call_date_key = f'{call_num}_call_date'
-        if ps_data.get(call_date_key):
+        val = data.get(call_date_key)
+
+        is_set = False
+        if val is not None:
+            if isinstance(val, str):
+                is_set = val.strip() != ''
+            else:
+                is_set = bool(val)
+
+        if is_set:
             completed_calls.append(call_num)
         else:
             next_call = call_num
@@ -816,11 +742,14 @@ def get_next_ps_call_info(ps_data):
 
     return next_call, completed_calls
 
-
 def get_accurate_count(table_name, filters=None):
     """Get accurate count from Supabase table"""
     try:
-        query = supabase.table(table_name).select('id')
+        if not table_name or not isinstance(table_name, str):
+            return 0
+
+        # Use count() method for better performance - O(1) instead of O(n)
+        query = supabase.table(table_name).select('*', count='exact')
 
         if filters:
             for key, value in filters.items():
@@ -828,133 +757,59 @@ def get_accurate_count(table_name, filters=None):
                     query = query.eq(key, value)
 
         result = query.execute()
-
-        # Count the returned data
-        return len(result.data) if result.data else 0
+        
+        # Return the count from the result metadata
+        return result.count if hasattr(result, 'count') and result.count is not None else 0
 
     except Exception as e:
         print(f"Error getting count from {table_name}: {e}")
         return 0
 
-
 def safe_get_data(table_name, filters=None, select_fields='*', limit=10000):
     """Safely get data from Supabase with error handling"""
     try:
+        # Input validation
+        if not table_name or not isinstance(table_name, str):
+            return []
+        
+        if not isinstance(limit, int) or limit <= 0:
+            limit = 10000
+
+        # Build query with validation
         query = supabase.table(table_name).select(select_fields)
 
-        if filters:
+        # Apply filters efficiently
+        if filters and isinstance(filters, dict):
             for key, value in filters.items():
-                if value is not None:
+                if value is not None and key:  # Skip empty keys
                     query = query.eq(key, value)
 
-        # Add limit to prevent default 1000 row limitation
-        if limit:
-            query = query.limit(limit)
+        # Add ordering for consistent results and apply limit
+        query = query.order('id', desc=True).limit(limit)
 
         result = query.execute()
         return result.data or []
+
     except Exception as e:
         print(f"Error fetching data from {table_name}: {e}")
         return []
 
-
-# def sync_test_drive_to_alltest_drive(source_table, original_id, lead_data):
-#     """
-#     Sync test drive data to alltest_drive table when test_drive_done is updated
-#     """
-#     try:
-#         # Check if test_drive_done is not null and is Yes/No or True/False
-#         test_drive_done = lead_data.get('test_drive_done')
-        
-#         # Handle both boolean and string values
-#         if test_drive_done is None:
-#             return
-        
-#         # Convert boolean to string if needed
-#         if test_drive_done is True:
-#             test_drive_done = 'Yes'
-#         elif test_drive_done is False:
-#             test_drive_done = 'No'
-#         elif test_drive_done not in ['Yes', 'No']:
-#             return
-        
-#         # Check if record already exists in alltest_drive
-#         existing_record = supabase.table('alltest_drive').select('*').eq('source_table', source_table).eq('original_id', str(original_id)).execute()
-        
-#         # Prepare data for alltest_drive table
-#         alltest_drive_data = {
-#             'source_table': source_table,
-#             'original_id': str(original_id),
-#             'test_drive_done': test_drive_done,
-#             'updated_at': datetime.now().isoformat()
-#         }
-        
-#         # Map fields based on source table
-#         if source_table == 'walkin_table':
-#             alltest_drive_data.update({
-#                 'customer_name': lead_data.get('customer_name'),
-#                 'mobile_number': lead_data.get('mobile_number'),
-#                 'lead_status': lead_data.get('lead_status'),
-#                 'lead_category': lead_data.get('lead_category'),
-#                 'model_interested': lead_data.get('model_interested'),
-#                 'final_status': lead_data.get('status'),
-#                 'ps_name': lead_data.get('ps_assigned'),
-#                 'branch': lead_data.get('branch'),
-#                 'created_at': lead_data.get('created_at')
-#             })
-#             # For walkin_table, use uid instead of id
-#             alltest_drive_data['original_id'] = lead_data.get('uid', str(original_id))
-#         elif source_table == 'ps_followup_master':
-#             alltest_drive_data.update({
-#                 'customer_name': lead_data.get('customer_name'),
-#                 'mobile_number': lead_data.get('customer_mobile_number'),
-#                 'lead_status': lead_data.get('lead_status'),
-#                 'lead_category': lead_data.get('lead_category'),
-#                 'model_interested': lead_data.get('model_interested'),
-#                 'final_status': lead_data.get('final_status'),
-#                 'ps_name': lead_data.get('ps_name'),
-#                 'branch': lead_data.get('branch') or lead_data.get('ps_branch'),
-#                 'created_at': lead_data.get('created_at'),
-#                 'lead_source': lead_data.get('lead_source'),
-#                 'cre_name': lead_data.get('cre_name')
-#             })
-#         elif source_table == 'activity_leads':
-#             alltest_drive_data.update({
-#                 'customer_name': lead_data.get('customer_name'),
-#                 'mobile_number': lead_data.get('customer_phone_number'),
-#                 'lead_status': lead_data.get('lead_status'),
-#                 'lead_category': lead_data.get('lead_category'),
-#                 'model_interested': lead_data.get('interested_model'),
-#                 'final_status': lead_data.get('final_status'),
-#                 'ps_name': lead_data.get('ps_name'),
-#                 'branch': lead_data.get('location'),
-#                 'created_at': lead_data.get('created_at'),
-#                 'remarks': lead_data.get('remarks'),
-#                 'activity_name': lead_data.get('activity_name'),
-#                 'activity_location': lead_data.get('activity_location'),
-#                 'customer_location': lead_data.get('customer_location'),
-#                 'customer_profession': lead_data.get('customer_profession'),
-#                 'gender': lead_data.get('gender')
-#             })
-        
-#         # Insert or update record in alltest_drive table
-#         if existing_record.data:
-#             # Update existing record
-#             supabase.table('alltest_drive').update(alltest_drive_data).eq('source_table', source_table).eq('original_id', str(original_id)).execute()
-#         else:
-#             # Insert new record
-#             supabase.table('alltest_drive').insert(alltest_drive_data).execute()
-            
-#         print(f"Successfully synced test drive data for {source_table} - {original_id}")
-        
-#     except Exception as e:
-#         print(f"Error syncing test drive data to alltest_drive: {e}")
-
-
 def create_or_update_ps_followup(lead_data, ps_name, ps_branch):
     from datetime import datetime
     try:
-        existing = supabase.table('ps_followup_master').select('*').eq('lead_uid', lead_data['uid']).execute()
+        # Input validation
+        if not lead_data or not isinstance(lead_data, dict) or not lead_data.get('uid'):
+            print("Error: Invalid lead_data or missing uid")
+            return
+        
+        if not ps_name or not ps_branch:
+            print("Error: ps_name and ps_branch are required")
+            return
+
+        # Get current timestamp once
+        now_iso = datetime.now().isoformat()
+        
+        # Prepare data once
         ps_followup_data = {
             'lead_uid': lead_data['uid'],
             'ps_name': ps_name,
@@ -966,31 +821,39 @@ def create_or_update_ps_followup(lead_data, ps_name, ps_branch):
             'lead_category': lead_data.get('lead_category'),
             'model_interested': lead_data.get('model_interested'),
             'final_status': 'Pending',
-            'ps_assigned_at': datetime.now().isoformat(),  # Always set when PS is assigned
-            'created_at': lead_data.get('created_at') or datetime.now().isoformat(),
-            'first_call_date': None  # Ensure fresh leads start without first_call_date
+            'ps_assigned_at': now_iso,
+            'created_at': lead_data.get('created_at') or now_iso,
+            'first_call_date': None
         }
-        if existing.data:
-            supabase.table('ps_followup_master').update(ps_followup_data).eq('lead_uid', lead_data['uid']).execute()
-        else:
-            supabase.table('ps_followup_master').insert(ps_followup_data).execute()
+
+        # Use upsert for better performance (1 query instead of 2)
+        supabase.table('ps_followup_master').upsert(ps_followup_data, on_conflict='lead_uid').execute()
+        
     except Exception as e:
         print(f"Error creating/updating PS followup: {e}")
-
 def track_cre_call_attempt(uid, cre_name, call_no, lead_status, call_was_recorded=False, follow_up_date=None, remarks=None):
     """Track CRE call attempt in the history table and update TAT for first attempt"""
     try:
-        # Get the next attempt number for this call
+        from datetime import datetime
+        
+        # Get current timestamp once
+        now_iso = datetime.now().isoformat()
+        
+        # Combine lead data queries into one
+        lead_result = supabase.table('lead_master').select('final_status, created_at').eq('uid', uid).limit(1).execute()
+        final_status = None
+        created_at_str = None
+        
+        if lead_result.data:
+            lead_data = lead_result.data[0]
+            final_status = lead_data.get('final_status')
+            created_at_str = lead_data.get('created_at')
+
+        # Get next attempt number
         attempt_result = supabase.table('cre_call_attempt_history').select('attempt').eq('uid', uid).eq('call_no', call_no).order('attempt', desc=True).limit(1).execute()
         next_attempt = 1
         if attempt_result.data:
             next_attempt = attempt_result.data[0]['attempt'] + 1
-
-        # Fetch the current final_status from lead_master
-        final_status = None
-        lead_result = supabase.table('lead_master').select('final_status').eq('uid', uid).limit(1).execute()
-        if lead_result.data and 'final_status' in lead_result.data[0]:
-            final_status = lead_result.data[0]['final_status']
 
         # Prepare attempt data
         attempt_data = {
@@ -1002,7 +865,8 @@ def track_cre_call_attempt(uid, cre_name, call_no, lead_status, call_was_recorde
             'call_was_recorded': call_was_recorded,
             'follow_up_date': follow_up_date,
             'remarks': remarks,
-            'final_status': final_status
+            'final_status': final_status,
+            'updated_at': now_iso
         }
 
         # Insert the attempt record
@@ -1017,70 +881,56 @@ def track_cre_call_attempt(uid, cre_name, call_no, lead_status, call_was_recorde
                     'attempt': next_attempt,
                     'status': lead_status,
                     'cre_name': cre_name,
-                    'timestamp': datetime.now().isoformat()
+                    'timestamp': now_iso
                 }
             })
 
-        # --- TAT Calculation and Update ---
-        if call_no == 'first' and next_attempt == 1:
-            # Fetch lead's created_at
-            lead_result = supabase.table('lead_master').select('created_at').eq('uid', uid).limit(1).execute()
-            if lead_result.data and lead_result.data[0].get('created_at'):
-                created_at_str = lead_result.data[0]['created_at']
-                from datetime import datetime
-                try:
-                    if 'T' in created_at_str:
-                        created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
-                    else:
-                        created_at = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S')
-                except Exception:
-                    created_at = None
-                # Get updated_at from inserted attempt (if available), else use now
-                updated_at_str = None
-                if insert_result.data and insert_result.data[0].get('updated_at'):
-                    updated_at_str = insert_result.data[0]['updated_at']
+        # TAT Calculation and Update (simplified)
+        if call_no == 'first' and next_attempt == 1 and created_at_str:
+            try:
+                # Parse created_at
+                if 'T' in created_at_str:
+                    created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
                 else:
-                    from datetime import datetime
-                    updated_at_str = datetime.now().isoformat()
-                try:
-                    if 'T' in updated_at_str:
-                        updated_at = datetime.fromisoformat(updated_at_str.replace('Z', '+00:00'))
-                    else:
-                        updated_at = datetime.strptime(updated_at_str, '%Y-%m-%d %H:%M:%S')
-                except Exception:
-                    updated_at = datetime.now()
-                if created_at:
-                    tat_seconds = (updated_at - created_at).total_seconds()
-                    # Update lead_master with TAT
-                    supabase.table('lead_master').update({'tat': tat_seconds}).eq('uid', uid).execute()
-                    print(f"TAT updated for lead {uid}: {tat_seconds} seconds")
+                    created_at = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S')
+                
+                # Calculate TAT
+                tat_seconds = (datetime.now() - created_at).total_seconds()
+                
+                # Update lead_master with TAT
+                supabase.table('lead_master').update({'tat': tat_seconds}).eq('uid', uid).execute()
+                print(f"TAT updated for lead {uid}: {tat_seconds} seconds")
+                
+            except Exception as e:
+                print(f"Error calculating TAT for lead {uid}: {e}")
+
     except Exception as e:
         print(f"Error tracking CRE call attempt: {e}")
-
 def track_ps_call_attempt(uid, ps_name, call_no, lead_status, call_was_recorded=False, follow_up_date=None, remarks=None):
     """Track PS call attempt in the history table"""
     try:
+        from datetime import datetime
+        
+        # Get current timestamp once
+        now_iso = datetime.now().isoformat()
+        
         # Get the next attempt number for this call
         attempt_result = supabase.table('ps_call_attempt_history').select('attempt').eq('uid', uid).eq('call_no', call_no).order('attempt', desc=True).limit(1).execute()
         next_attempt = 1
         if attempt_result.data:
             next_attempt = attempt_result.data[0]['attempt'] + 1
 
-        # Fetch the current final_status from multiple tables
+        # Optimized table lookup - prioritize most common tables first
         final_status = None
-        
-        # Try all possible tables and field combinations
         tables_to_check = [
-            # (table_name, uid_field, status_field, uid_value)
+            # Most likely tables first (based on usage patterns)
             ('ps_followup_master', 'lead_uid', 'final_status', uid),
             ('lead_master', 'uid', 'final_status', uid),
             ('walkin_table', 'uid', 'status', uid),
             ('activity_leads', 'activity_uid', 'final_status', uid),
-            # Also try with different UID formats for walkin and activity
-            ('walkin_table', 'uid', 'status', uid.replace('WB-', 'W')),
-            ('activity_leads', 'activity_uid', 'final_status', uid.replace('WB-', 'A'))
         ]
         
+        # Try tables in order of likelihood
         for table_name, uid_field, status_field, uid_value in tables_to_check:
             try:
                 result = supabase.table(table_name).select(status_field).eq(uid_field, uid_value).limit(1).execute()
@@ -1092,7 +942,25 @@ def track_ps_call_attempt(uid, ps_name, call_no, lead_status, call_was_recorded=
                 print(f"Error checking {table_name}: {e}")
                 continue
         
-        # If still not found, set a default
+        # If still not found, try alternative UID formats (less common)
+        if not final_status:
+            alt_tables = [
+                ('walkin_table', 'uid', 'status', uid.replace('WB-', 'W')),
+                ('activity_leads', 'activity_uid', 'final_status', uid.replace('WB-', 'A'))
+            ]
+            
+            for table_name, uid_field, status_field, uid_value in alt_tables:
+                try:
+                    result = supabase.table(table_name).select(status_field).eq(uid_field, uid_value).limit(1).execute()
+                    if result.data and result.data[0].get(status_field):
+                        final_status = result.data[0][status_field]
+                        print(f"Found final_status '{final_status}' in {table_name} for {uid_value}")
+                        break
+                except Exception as e:
+                    print(f"Error checking {table_name}: {e}")
+                    continue
+        
+        # Set default if still not found
         if not final_status:
             final_status = 'Pending'
             print(f"No final_status found for {uid}, defaulting to 'Pending'")
@@ -1107,7 +975,8 @@ def track_ps_call_attempt(uid, ps_name, call_no, lead_status, call_was_recorded=
             'call_was_recorded': call_was_recorded,
             'follow_up_date': follow_up_date,
             'remarks': remarks,
-            'final_status': final_status
+            'final_status': final_status,
+            'updated_at': now_iso
         }
 
         # Insert the attempt record
@@ -1122,7 +991,7 @@ def track_ps_call_attempt(uid, ps_name, call_no, lead_status, call_was_recorded=
                     'attempt': next_attempt,
                     'status': lead_status,
                     'ps_name': ps_name,
-                    'timestamp': datetime.now().isoformat()
+                    'timestamp': now_iso
                 }
             })
     except Exception as e:
@@ -1134,98 +1003,52 @@ def filter_leads_by_date(leads, filter_type, date_field='created_at'):
     if filter_type == 'all':
         return leads
 
+    # Input validation
+    if not leads or not isinstance(leads, list):
+        return []
+
+    from datetime import datetime, timedelta
+    
+    # Get current date once
     today = datetime.now().date()
-
-    if filter_type == 'today':
-        start_date = today
-        end_date = today
-    elif filter_type == 'mtd':  # Month to Date
-        start_date = today.replace(day=1)
-        end_date = today
-    elif filter_type == 'week':
-        start_date = today - timedelta(days=today.weekday())  # Start of current week (Monday)
-        end_date = today
-    elif filter_type == 'month':
-        start_date = today - timedelta(days=30)
-        end_date = today
-    elif filter_type == 'quarter':
-        start_date = today - timedelta(days=90)
-        end_date = today
-    elif filter_type == 'year':
-        start_date = today - timedelta(days=365)
-        end_date = today
-    else:
+    
+    # Pre-calculate date ranges for better performance
+    date_ranges = {
+        'today': (today, today),
+        'mtd': (today.replace(day=1), today),
+        'week': (today - timedelta(days=today.weekday()), today),
+        'month': (today - timedelta(days=30), today),
+        'quarter': (today - timedelta(days=90), today),
+        'year': (today - timedelta(days=365), today)
+    }
+    
+    if filter_type not in date_ranges:
         return leads
-
-    filtered_leads = []
-    for lead in leads:
-        lead_date_str = lead.get(date_field)
-        if lead_date_str:
-            try:
-                # Handle different date formats
-                if 'T' in lead_date_str:  # ISO format with time
-                    lead_date = datetime.fromisoformat(lead_date_str.replace('Z', '+00:00')).date()
-                else:  # Date only format
-                    lead_date = datetime.strptime(lead_date_str, '%Y-%m-%d').date()
-
-                if start_date <= lead_date <= end_date:
-                    filtered_leads.append(lead)
-            except (ValueError, TypeError):
-                # If date parsing fails, include the lead
-                filtered_leads.append(lead)
-        else:
-            # If no date field, include the lead
-            filtered_leads.append(lead)
-
+    
+    start_date, end_date = date_ranges[filter_type]
+    
+    # Pre-compile date parsing patterns for better performance
+    def parse_date(date_str):
+        if not date_str:
+            return None
+        try:
+            if 'T' in date_str:  # ISO format with time
+                return datetime.fromisoformat(date_str.replace('Z', '+00:00')).date()
+            else:  # Date only format
+                return datetime.strptime(date_str, '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            return None
+    
+    # Use list comprehension for better performance
+    filtered_leads = [
+        lead for lead in leads
+        if not lead.get(date_field) or  # Include if no date field
+        (lambda date_val: date_val and start_date <= date_val <= end_date)(
+            parse_date(lead.get(date_field))
+        )
+    ]
+    
     return filtered_leads
-
-
-def fix_missing_timestamps():
-    """
-    Fix missing timestamps for existing leads that have final_status but missing won_timestamp or lost_timestamp
-    """
-    try:
-        # Fix lead_master table
-        # Get leads with final_status = 'Won' but no won_timestamp
-        won_leads = supabase.table('lead_master').select('uid, final_status, won_timestamp, lost_timestamp, updated_at').eq('final_status', 'Won').is_('won_timestamp', 'null').execute()
-        
-        for lead in won_leads.data:
-            supabase.table('lead_master').update({
-                'won_timestamp': lead.get('updated_at') or datetime.now().isoformat()
-            }).eq('uid', lead['uid']).execute()
-        
-        # Get leads with final_status = 'Lost' but no lost_timestamp
-        lost_leads = supabase.table('lead_master').select('uid, final_status, won_timestamp, lost_timestamp, updated_at').eq('final_status', 'Lost').is_('lost_timestamp', 'null').execute()
-        
-        for lead in lost_leads.data:
-            supabase.table('lead_master').update({
-                'lost_timestamp': lead.get('updated_at') or datetime.now().isoformat()
-            }).eq('uid', lead['uid']).execute()
-        
-        # Fix ps_followup_master table
-        # Get PS leads with final_status = 'Won' but no won_timestamp
-        ps_won_leads = supabase.table('ps_followup_master').select('lead_uid, final_status, won_timestamp, lost_timestamp, updated_at').eq('final_status', 'Won').is_('won_timestamp', 'null').execute()
-        
-        for lead in ps_won_leads.data:
-            supabase.table('ps_followup_master').update({
-                'won_timestamp': lead.get('updated_at') or datetime.now().isoformat()
-            }).eq('lead_uid', lead['lead_uid']).execute()
-        
-        # Get PS leads with final_status = 'Lost' but no lost_timestamp
-        ps_lost_leads = supabase.table('ps_followup_master').select('lead_uid, final_status, won_timestamp, lost_timestamp, updated_at').eq('final_status', 'Lost').is_('lost_timestamp', 'null').execute()
-        
-        for lead in ps_lost_leads.data:
-            supabase.table('ps_followup_master').update({
-                'lost_timestamp': lead.get('updated_at') or datetime.now().isoformat()
-            }).eq('lead_uid', lead['lead_uid']).execute()
-        
-        print(f"Fixed {len(won_leads.data)} won leads, {len(lost_leads.data)} lost leads in lead_master")
-        print(f"Fixed {len(ps_won_leads.data)} won leads, {len(ps_lost_leads.data)} lost leads in ps_followup_master")
-        
-    except Exception as e:
-        print(f"Error fixing timestamps: {str(e)}")
-
-# Routes moved to after app initialization
 
 # Import branch head decorator
 from auth import require_branch_head
@@ -1235,6 +1058,7 @@ from auth import require_branch_head
 def index():
     # Do not clear session on homepage to avoid accidental logout via redirects
     return render_template('index.html')
+
 @app.route('/unified_login', methods=['POST'])
 @limiter.limit("100000 per minute")
 def unified_login() -> Response:
@@ -1243,96 +1067,102 @@ def unified_login() -> Response:
     password = request.form.get('password', '').strip()
     user_type = request.form.get('user_type', '').strip().lower()
 
+    # Input validation
+    if not username or not password or not user_type:
+        flash('Please fill in all fields', 'error')
+        return redirect(url_for('index'))
+
     valid_user_types = ['admin', 'cre', 'ps', 'branch_head', 'rec']
     if user_type not in valid_user_types:
         flash('Please select a valid role (Admin, CRE, PS, Branch Head, or Receptionist)', 'error')
         return redirect(url_for('index'))
 
+    # Handle branch_head authentication
     if user_type == 'branch_head':
-        bh = supabase.table('Branch Head').select('*').eq('Username', username).execute().data
-        if not bh:
-            flash('Invalid username or password', 'error')
+        try:
+            bh = supabase.table('Branch Head').select('*').eq('Username', username).execute().data
+            if not bh or not bh[0]['Is Active'] or bh[0]['Password'] != password:
+                flash('Invalid credentials or inactive user', 'error')
+                return redirect(url_for('index'))
+            
+            bh = bh[0]
+            session.clear()
+            session.update({
+                'branch_head_id': bh['id'],
+                'branch_head_name': bh['Name'],
+                'branch_head_branch': bh['Branch'],
+                'user_type': 'branch_head',
+                'username': username
+            })
+            flash('Welcome! Logged in as Branch Head', 'success')
+            return redirect('/branch_head_dashboard')
+        except Exception as e:
+            print(f"Branch head login error: {e}")
+            flash('Login error', 'error')
             return redirect(url_for('index'))
-        bh = bh[0]
-        if not bh['Is Active']:
-            flash('User is inactive', 'error')
-            return redirect(url_for('index'))
-        # Use plain text password comparison for Branch Head
-        if bh['Password'] != password:
-            flash('Incorrect password', 'error')
-            return redirect(url_for('index'))
-        session['branch_head_id'] = bh['id']
-        session['branch_head_name'] = bh['Name']
-        session['branch_head_branch'] = bh['Branch']
-        session['user_type'] = 'branch_head'  # Add this line to set user_type
-        session['username'] = username  # Add username for consistency
-        flash('Welcome! Logged in as Branch Head', 'success')
-        return redirect('/branch_head_dashboard')
 
+    # Handle receptionist authentication
     elif user_type == 'rec':
-        # Receptionist authentication
-        rec_user = supabase.table('rec_users').select('*').eq('username', username).execute().data
-        if not rec_user:
+        try:
+            rec_user = supabase.table('rec_users').select('*').eq('username', username).execute().data
+            if not rec_user or not rec_user[0].get('is_active', True):
+                flash('Invalid credentials or inactive user', 'error')
+                return redirect(url_for('index'))
+            
+            rec_user = rec_user[0]
+            if not check_password_hash(rec_user['password_hash'], password):
+                flash('Incorrect password', 'error')
+                return redirect(url_for('index'))
+            
+            session.clear()
+            session.update({
+                'rec_user_id': rec_user['id'],
+                'rec_branch': rec_user['branch'],
+                'rec_name': rec_user.get('name', username),
+                'user_type': 'rec',
+                'username': username
+            })
+            flash('Welcome! Logged in as Receptionist', 'success')
+            return redirect(url_for('add_walkin_lead'))
+        except Exception as e:
+            print(f"Receptionist login error: {e}")
+            flash('Login error', 'error')
+            return redirect(url_for('index'))
+
+    # Handle admin, cre, ps authentication
+    try:
+        success, message, user_data = auth_manager.authenticate_user(username, password, user_type)
+        if not success:
             flash('Invalid username or password', 'error')
             return redirect(url_for('index'))
-        rec_user = rec_user[0]
-        if not rec_user.get('is_active', True):
-            flash('User is inactive', 'error')
-            return redirect(url_for('index'))
-        # Check password using werkzeug
-        if not check_password_hash(rec_user['password_hash'], password):
-            flash('Incorrect password', 'error')
-            return redirect(url_for('index'))
-        session.clear()
-        session['rec_user_id'] = rec_user['id']
-        session['rec_branch'] = rec_user['branch']
-        session['rec_name'] = rec_user.get('name', username)
-        session['user_type'] = 'rec'
-        session['username'] = username
-        flash('Welcome! Logged in as Receptionist', 'success')
-        return redirect(url_for('add_walkin_lead'))
 
-    # Existing logic for admin, cre, ps
-    t_user = time.time()
-    success, message, user_data = auth_manager.authenticate_user(username, password, user_type)
-    print(f"[PERF] unified_login: authenticate_user({user_type}) took {time.time() - t_user:.3f} seconds")
-    if success:
-        t2 = time.time()
         session_id = auth_manager.create_session(user_data['id'], user_type, user_data)
-        print(f"DEBUG: Logged in as user_type={user_type}, session.user_type={session.get('user_type')}")
-        print(f"[PERF] unified_login: create_session took {time.time() - t2:.3f} seconds")
-        if session_id:
-            flash(f'Welcome! Logged in as {user_type.upper()}', 'success')
-            t3 = time.time()
-            # Redirect to appropriate dashboard
-            if user_type == 'admin':
-                print(f"[PERF] unified_login: redirect to admin_dashboard after {time.time() - t3:.3f} seconds")
-                print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
-                return redirect(url_for('admin_dashboard'))
-            elif user_type == 'cre':
-                print(f"[PERF] unified_login: redirect to cre_dashboard after {time.time() - t3:.3f} seconds")
-                print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
-                return redirect(url_for('cre_dashboard'))
-            elif user_type == 'ps':
-                print(f"[PERF] unified_login: redirect to ps_dashboard after {time.time() - t3:.3f} seconds")
-                print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
-                return redirect(url_for('ps_dashboard'))
-        else:
+        if not session_id:
             flash('Error creating session', 'error')
-            print(f"[PERF] unified_login: session creation failed after {time.time() - t2:.3f} seconds")
-            print(f"[PERF] unified_login TOTAL took {time.time() - start_time:.3f} seconds")
             return redirect(url_for('index'))
-    else:
-        flash('Invalid username or password', 'error')
-        print(f"[PERF] unified_login TOTAL (invalid login) took {time.time() - start_time:.3f} seconds")
+
+        flash(f'Welcome! Logged in as {user_type.upper()}', 'success')
+        
+        # Redirect to appropriate dashboard
+        dashboard_routes = {
+            'admin': 'admin_dashboard',
+            'cre': 'cre_dashboard',
+            'ps': 'ps_dashboard'
+        }
+        
+        return redirect(url_for(dashboard_routes[user_type]))
+        
+    except Exception as e:
+        print(f"Authentication error: {e}")
+        flash('Login error', 'error')
         return redirect(url_for('index'))
-# Keep the old login routes for backward compatibility (redirect to unified login)
+
+# Backward compatibility routes
 @app.route('/admin_login', methods=['GET', 'POST'])
 def admin_login():
     if request.method == 'POST':
         return unified_login()
     return redirect(url_for('index'))
-
 
 @app.route('/cre_login', methods=['GET', 'POST'])
 def cre_login():
@@ -1340,13 +1170,11 @@ def cre_login():
         return unified_login()
     return redirect(url_for('index'))
 
-
 @app.route('/ps_login', methods=['GET', 'POST'])
 def ps_login():
     if request.method == 'POST':
         return unified_login()
     return redirect(url_for('index'))
-
 
 @app.route('/password_reset_request', methods=['GET', 'POST'])
 @limiter.limit("5 per minute")
@@ -1355,80 +1183,98 @@ def password_reset_request():
         username = request.form.get('username', '').strip()
         user_type = request.form.get('user_type', '').strip()
 
+        # Input validation
         if not username or not user_type:
             flash('Please enter username and select user type', 'error')
             return render_template('password_reset_request.html')
 
+        # Validate user type
+        valid_user_types = ['admin', 'cre', 'ps']
+        if user_type not in valid_user_types:
+            flash('Invalid user type', 'error')
+            return render_template('password_reset_request.html')
+
+        # Generate reset token
         success, message, token = auth_manager.generate_password_reset_token(username, user_type)
+        if not success:
+            flash(message, 'error')
+            return render_template('password_reset_request.html')
 
-        if success:
-            # Send the reset link via email
-            # Fetch user email from the appropriate table
-            user_email = None
+        # Fetch user email efficiently
+        user_email = None
+        try:
+            table_map = {
+                'admin': 'admin_users',
+                'cre': 'cre_users', 
+                'ps': 'ps_users'
+            }
+            
+            table_name = table_map[user_type]
+            user_result = supabase.table(table_name).select('email').eq('username', username).execute()
+            
+            if user_result and user_result.data and user_result.data[0].get('email'):
+                user_email = user_result.data[0]['email']
+        except Exception as e:
+            print(f"Error fetching user email for password reset: {e}")
+
+        # Send reset email
+        reset_url = url_for('password_reset', token=token, _external=True)
+        email_sent = False
+        
+        if user_email:
             try:
-                if user_type == 'admin':
-                    user_result = supabase.table('admin_users').select('email').eq('username', username).execute()
-                elif user_type == 'cre':
-                    user_result = supabase.table('cre_users').select('email').eq('username', username).execute()
-                elif user_type == 'ps':
-                    user_result = supabase.table('ps_users').select('email').eq('username', username).execute()
-                else:
-                    user_result = None
-                if user_result and user_result.data and user_result.data[0].get('email'):
-                    user_email = user_result.data[0]['email']
-            except Exception as e:
-                print(f"Error fetching user email for password reset: {e}")
-                user_email = None
+                # Create email message
+                msg = MIMEMultipart()
+                msg['From'] = EMAIL_USER
+                msg['To'] = user_email
+                msg['Subject'] = 'Ather CRM Password Reset Request'
+                
+                # Email body template
+                body = f"""Dear {username},
 
-            reset_url = url_for('password_reset', token=token, _external=True)
-            email_sent = False
-            if user_email:
-                try:
-                    msg = MIMEMultipart()
-                    msg['From'] = EMAIL_USER
-                    msg['To'] = user_email
-                    msg['Subject'] = 'Ather CRM Password Reset Request'
-                    body = f"""
-                    Dear {username},
+We received a request to reset your password for your Ather CRM account.
 
-                    We received a request to reset your password for your Ather CRM account.
+Please click the link below to reset your password:
+{reset_url}
 
-                    Please click the link below to reset your password:
-                    {reset_url}
+This link will expire in 1 hour for security reasons.
 
-                    If you did not request this, please ignore this email.
+If you did not request this, please ignore this email.
 
-                    Best regards,\nAther CRM System
-                    """
-                    msg.attach(MIMEText(body, 'plain'))
-                    server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+Best regards,
+Ather CRM System"""
+                
+                msg.attach(MIMEText(body, 'plain'))
+                
+                # Send email
+                with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
                     server.starttls()
                     server.login(EMAIL_USER, EMAIL_PASSWORD)
-                    text = msg.as_string()
-                    server.sendmail(EMAIL_USER, user_email, text)
-                    server.quit()
-                    print(f"Password reset email sent to {user_email}")
-                    email_sent = True
-                except Exception as e:
-                    print(f"Error sending password reset email: {e}")
-                    email_sent = False
-            if email_sent:
-                flash('If the username exists and is valid, a password reset link has been sent to the registered email address.', 'success')
-            else:
-                flash('If the username exists and is valid, a password reset link has been sent to the registered email address.', 'success')
-                # Optionally, log or alert admin if email sending failed
-        else:
-            flash(message, 'error')
+                    server.sendmail(EMAIL_USER, user_email, msg.as_string())
+                
+                print(f"Password reset email sent to {user_email}")
+                email_sent = True
+                
+            except Exception as e:
+                print(f"Error sending password reset email: {e}")
+                email_sent = False
+
+        # Always show success message for security (don't reveal if user exists)
+        flash('If the username exists and is valid, a password reset link has been sent to the registered email address.', 'success')
 
     return render_template('password_reset_request.html')
-
-
 @app.route('/password_reset/<token>', methods=['GET', 'POST'])
 def password_reset(token):
+    # Validate token first (optional - can be done in auth_manager)
+    if not token or len(token) < 10:  # Basic token validation
+        flash('Invalid or expired reset token', 'error')
+        return redirect(url_for('index'))
+    
     if request.method == 'POST':
         new_password = request.form.get('new_password', '').strip()
         confirm_password = request.form.get('confirm_password', '').strip()
 
+        # Input validation
         if not new_password or not confirm_password:
             flash('Please enter and confirm your new password', 'error')
             return render_template('password_reset.html', token=token)
@@ -1437,6 +1283,30 @@ def password_reset(token):
             flash('Passwords do not match', 'error')
             return render_template('password_reset.html', token=token)
 
+        # Password strength validation
+        if len(new_password) < 8:
+            flash('Password must be at least 8 characters long', 'error')
+            return render_template('password_reset.html', token=token)
+
+        if not any(c.isupper() for c in new_password):
+            flash('Password must contain at least one uppercase letter', 'error')
+            return render_template('password_reset.html', token=token)
+
+        if not any(c.islower() for c in new_password):
+            flash('Password must contain at least one lowercase letter', 'error')
+            return render_template('password_reset.html', token=token)
+
+        if not any(c.isdigit() for c in new_password):
+            flash('Password must contain at least one number', 'error')
+            return render_template('password_reset.html', token=token)
+
+        # Check for common weak passwords
+        weak_passwords = ['password', '123456', 'qwerty', 'abc123', 'password123']
+        if new_password.lower() in weak_passwords:
+            flash('Please choose a stronger password', 'error')
+            return render_template('password_reset.html', token=token)
+
+        # Reset password
         success, message = auth_manager.reset_password_with_token(token, new_password)
 
         if success:
@@ -1446,8 +1316,6 @@ def password_reset(token):
             flash(message, 'error')
 
     return render_template('password_reset.html', token=token)
-
-
 @app.route('/change_password', methods=['POST'])
 @require_auth()
 def change_password():
@@ -1455,6 +1323,7 @@ def change_password():
     new_password = request.form.get('new_password', '').strip()
     confirm_password = request.form.get('confirm_password', '').strip()
 
+    # Input validation
     if not all([current_password, new_password, confirm_password]):
         flash('All fields are required', 'error')
         return redirect(url_for('security_settings'))
@@ -1463,6 +1332,35 @@ def change_password():
         flash('New passwords do not match', 'error')
         return redirect(url_for('security_settings'))
 
+    # Password strength validation
+    if len(new_password) < 8:
+        flash('New password must be at least 8 characters long', 'error')
+        return redirect(url_for('security_settings'))
+
+    if not any(c.isupper() for c in new_password):
+        flash('New password must contain at least one uppercase letter', 'error')
+        return redirect(url_for('security_settings'))
+
+    if not any(c.islower() for c in new_password):
+        flash('New password must contain at least one lowercase letter', 'error')
+        return redirect(url_for('security_settings'))
+
+    if not any(c.isdigit() for c in new_password):
+        flash('New password must contain at least one number', 'error')
+        return redirect(url_for('security_settings'))
+
+    # Check for common weak passwords
+    weak_passwords = ['password', '123456', 'qwerty', 'abc123', 'password123']
+    if new_password.lower() in weak_passwords:
+        flash('Please choose a stronger password', 'error')
+        return redirect(url_for('security_settings'))
+
+    # Check if new password is same as current
+    if current_password == new_password:
+        flash('New password must be different from current password', 'error')
+        return redirect(url_for('security_settings'))
+
+    # Session validation
     user_id = session.get('user_id')
     user_type = session.get('user_type')
 
@@ -1470,6 +1368,7 @@ def change_password():
         flash('Session information not found', 'error')
         return redirect(url_for('security_settings'))
 
+    # Change password
     success, message = auth_manager.change_password(user_id, user_type, current_password, new_password)
 
     if success:
@@ -1478,8 +1377,6 @@ def change_password():
         flash(message, 'error')
 
     return redirect(url_for('security_settings'))
-
-
 @app.route('/change_cre_password', methods=['GET', 'POST'])
 @require_cre
 def change_cre_password():
@@ -1488,6 +1385,7 @@ def change_cre_password():
         new_password = request.form.get('new_password', '').strip()
         confirm_password = request.form.get('confirm_password', '').strip()
 
+        # Input validation
         if not all([current_password, new_password, confirm_password]):
             flash('All fields are required', 'error')
             return render_template('change_cre_password.html')
@@ -1496,6 +1394,35 @@ def change_cre_password():
             flash('New passwords do not match', 'error')
             return render_template('change_cre_password.html')
 
+        # Password strength validation
+        if len(new_password) < 8:
+            flash('New password must be at least 8 characters long', 'error')
+            return render_template('change_cre_password.html')
+
+        if not any(c.isupper() for c in new_password):
+            flash('New password must contain at least one uppercase letter', 'error')
+            return render_template('change_cre_password.html')
+
+        if not any(c.islower() for c in new_password):
+            flash('New password must contain at least one lowercase letter', 'error')
+            return render_template('change_cre_password.html')
+
+        if not any(c.isdigit() for c in new_password):
+            flash('New password must contain at least one number', 'error')
+            return render_template('change_cre_password.html')
+
+        # Check for common weak passwords
+        weak_passwords = ['password', '123456', 'qwerty', 'abc123', 'password123']
+        if new_password.lower() in weak_passwords:
+            flash('Please choose a stronger password', 'error')
+            return render_template('change_cre_password.html')
+
+        # Check if new password is same as current
+        if current_password == new_password:
+            flash('New password must be different from current password', 'error')
+            return render_template('change_cre_password.html')
+
+        # Session validation
         user_id = session.get('user_id')
         user_type = session.get('user_type')
 
@@ -1503,6 +1430,7 @@ def change_cre_password():
             flash('Session information not found', 'error')
             return render_template('change_cre_password.html')
 
+        # Change password
         success, message = auth_manager.change_password(user_id, user_type, current_password, new_password)
 
         if success:
@@ -1512,8 +1440,6 @@ def change_cre_password():
             flash(message, 'error')
 
     return render_template('change_cre_password.html')
-
-
 @app.route('/change_ps_password', methods=['GET', 'POST'])
 @require_ps
 def change_ps_password():
@@ -1522,6 +1448,7 @@ def change_ps_password():
         new_password = request.form.get('new_password', '').strip()
         confirm_password = request.form.get('confirm_password', '').strip()
 
+        # Input validation
         if not all([current_password, new_password, confirm_password]):
             flash('All fields are required', 'error')
             return render_template('change_ps_password.html')
@@ -1530,6 +1457,35 @@ def change_ps_password():
             flash('New passwords do not match', 'error')
             return render_template('change_ps_password.html')
 
+        # Password strength validation
+        if len(new_password) < 8:
+            flash('New password must be at least 8 characters long', 'error')
+            return render_template('change_ps_password.html')
+
+        if not any(c.isupper() for c in new_password):
+            flash('New password must contain at least one uppercase letter', 'error')
+            return render_template('change_ps_password.html')
+
+        if not any(c.islower() for c in new_password):
+            flash('New password must contain at least one lowercase letter', 'error')
+            return render_template('change_ps_password.html')
+
+        if not any(c.isdigit() for c in new_password):
+            flash('New password must contain at least one number', 'error')
+            return render_template('change_ps_password.html')
+
+        # Check for common weak passwords
+        weak_passwords = ['password', '123456', 'qwerty', 'abc123', 'password123']
+        if new_password.lower() in weak_passwords:
+            flash('Please choose a stronger password', 'error')
+            return render_template('change_ps_password.html')
+
+        # Check if new password is same as current
+        if current_password == new_password:
+            flash('New password must be different from current password', 'error')
+            return render_template('change_ps_password.html')
+
+        # Session validation
         user_id = session.get('user_id')
         user_type = session.get('user_type')
 
@@ -1537,6 +1493,7 @@ def change_ps_password():
             flash('Session information not found', 'error')
             return render_template('change_ps_password.html')
 
+        # Change password
         success, message = auth_manager.change_password(user_id, user_type, current_password, new_password)
 
         if success:
@@ -1546,26 +1503,45 @@ def change_ps_password():
             flash(message, 'error')
 
     return render_template('change_ps_password.html')
-
-
 @app.route('/security_settings')
 @require_auth()
 def security_settings():
     user_id = session.get('user_id')
     user_type = session.get('user_type')
 
+    # Input validation
     if not user_id or not user_type:
         flash('Session information not found', 'error')
         return redirect(url_for('index'))
 
-    # Get active sessions
-    sessions = auth_manager.get_user_sessions(user_id, user_type)
+    # Validate user_type
+    valid_user_types = ['admin', 'cre', 'ps', 'branch_head', 'rec']
+    if user_type not in valid_user_types:
+        flash('Invalid user type', 'error')
+        return redirect(url_for('index'))
 
-    # Get audit logs
-    audit_logs = auth_manager.get_audit_logs(user_id, user_type, limit=20)
+    try:
+        # Get active sessions with error handling
+        sessions = auth_manager.get_user_sessions(user_id, user_type)
+        if sessions is None:
+            sessions = []
+            print(f"Warning: Could not fetch sessions for user {user_id}")
 
-    return render_template('security_settings.html', sessions=sessions, audit_logs=audit_logs)
+        # Get audit logs with error handling
+        audit_logs = auth_manager.get_audit_logs(user_id, user_type, limit=20)
+        if audit_logs is None:
+            audit_logs = []
+            print(f"Warning: Could not fetch audit logs for user {user_id}")
 
+        return render_template('security_settings.html', 
+                             sessions=sessions, 
+                             audit_logs=audit_logs,
+                             user_type=user_type)
+
+    except Exception as e:
+        print(f"Error in security_settings: {e}")
+        flash('Error loading security settings', 'error')
+        return redirect(url_for('index'))
 
 # WebSocket user info route moved to top of file to avoid conflicts with parameterized routes
 
@@ -1575,20 +1551,52 @@ def security_audit():
     """Security audit dashboard"""
     return render_template('security_audit.html')
 
-
 @app.route('/run_security_audit', methods=['POST'])
 @require_admin
+@limiter.limit("5 per hour")  # Rate limit security audits
 def run_security_audit():
     """Run comprehensive security audit"""
     try:
-        # Run security verification
-        audit_results = run_security_verification(supabase)
-
-        # Log the security audit
+        # Validate session data
         user_id = session.get('user_id')
         user_type = session.get('user_type')
         
-        if user_id and user_type:
+        if not user_id or not user_type:
+            return jsonify({
+                'success': False,
+                'message': 'Session information not found'
+            }), 401
+
+        # Check if recent audit exists (cache for 1 hour)
+        cache_key = f"security_audit_{user_id}_{user_type}"
+        cached_result = getattr(app, 'audit_cache', {}).get(cache_key)
+        
+        if cached_result and (time.time() - cached_result.get('timestamp', 0)) < 3600:
+            return jsonify({
+                'success': True,
+                'results': cached_result['data'],
+                'cached': True
+            })
+
+        # Run security verification
+        audit_results = run_security_verification(supabase)
+        
+        if not audit_results:
+            return jsonify({
+                'success': False,
+                'message': 'Security verification failed to return results'
+            }), 500
+
+        # Cache the results
+        if not hasattr(app, 'audit_cache'):
+            app.audit_cache = {}
+        app.audit_cache[cache_key] = {
+            'data': audit_results,
+            'timestamp': time.time()
+        }
+
+        # Log the security audit
+        try:
             auth_manager.log_audit_event(
                 user_id=user_id,
                 user_type=user_type,
@@ -1596,84 +1604,156 @@ def run_security_audit():
                 resource='security_audit',
                 details={'overall_score': audit_results.get('overall_score', 0)}
             )
+        except Exception as log_error:
+            print(f"Warning: Failed to log audit event: {log_error}")
 
         return jsonify({
             'success': True,
-            'results': audit_results
+            'results': audit_results,
+            'cached': False
         })
+
     except Exception as e:
         print(f"Error running security audit: {e}")
         return jsonify({
             'success': False,
-            'message': str(e)
-        })
-
-
+            'message': 'Internal server error during security audit'
+        }), 500
 @app.route('/terminate_session', methods=['POST'])
 @require_auth()
+@limiter.limit("10 per minute")  # Rate limit session terminations
 def terminate_session():
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': 'Invalid JSON data'}), 400
+
         session_id = data.get('session_id')
+        if not session_id or not isinstance(session_id, str):
+            return jsonify({'success': False, 'message': 'Valid session ID required'}), 400
 
-        if not session_id:
-            return jsonify({'success': False, 'message': 'Session ID required'})
-
-        auth_manager.deactivate_session(session_id)
-
-        user_id = session.get('user_id')
-        user_type = session.get('user_type')
+        # Validate session ownership
+        current_user_id = session.get('user_id')
+        current_user_type = session.get('user_type')
         
-        if user_id and user_type:
+        if not current_user_id or not current_user_type:
+            return jsonify({'success': False, 'message': 'Session information not found'}), 401
+
+        # Check if session belongs to current user
+        try:
+            session_info = auth_manager.get_session_info(session_id)
+            if not session_info:
+                return jsonify({'success': False, 'message': 'Session not found'}), 404
+
+            if session_info.get('user_id') != current_user_id:
+                return jsonify({'success': False, 'message': 'Unauthorized to terminate this session'}), 403
+
+        except Exception as e:
+            print(f"Error validating session ownership: {e}")
+            return jsonify({'success': False, 'message': 'Error validating session'}), 500
+
+        # Terminate the session
+        try:
+            auth_manager.deactivate_session(session_id)
+        except Exception as e:
+            print(f"Error deactivating session: {e}")
+            return jsonify({'success': False, 'message': 'Failed to terminate session'}), 500
+
+        # Log the termination event
+        try:
             auth_manager.log_audit_event(
-                user_id=user_id,
-                user_type=user_type,
+                user_id=current_user_id,
+                user_type=current_user_type,
                 action='SESSION_TERMINATED',
                 details={'terminated_session': session_id}
             )
+        except Exception as log_error:
+            print(f"Warning: Failed to log session termination: {log_error}")
 
         return jsonify({'success': True, 'message': 'Session terminated successfully'})
+
     except Exception as e:
-        return jsonify({'success': False, 'message': str(e)})
-
-
+        print(f"Error in terminate_session: {e}")
+        return jsonify({'success': False, 'message': 'Internal server error'}), 500
 @app.route('/terminate_all_sessions', methods=['POST'])
 @require_auth()
+@limiter.limit("3 per hour")  # Rate limit mass session termination
 def terminate_all_sessions():
     try:
+        # Validate session data
         user_id = session.get('user_id')
         user_type = session.get('user_type')
         current_session = session.get('session_id')
 
-        if user_id and user_type and current_session:
-            auth_manager.deactivate_all_user_sessions(user_id, user_type, current_session)
+        if not user_id or not user_type or not current_session:
+            return jsonify({'success': False, 'message': 'Session information not found'}), 401
+
+        # Validate user_type
+        valid_user_types = ['admin', 'cre', 'ps', 'branch_head', 'rec']
+        if user_type not in valid_user_types:
+            return jsonify({'success': False, 'message': 'Invalid user type'}), 400
+
+        # Get confirmation from request data
+        data = request.get_json() or {}
+        confirmed = data.get('confirmed', False)
+        
+        if not confirmed:
+            return jsonify({'success': False, 'message': 'Confirmation required for this action'}), 400
+
+        # Terminate all sessions except current
+        try:
+            result = auth_manager.deactivate_all_user_sessions(user_id, user_type, current_session)
+            
+            if not result:
+                return jsonify({'success': False, 'message': 'Failed to terminate sessions'}), 500
+
+        except Exception as e:
+            print(f"Error deactivating sessions: {e}")
+            return jsonify({'success': False, 'message': 'Failed to terminate sessions'}), 500
+
+        # Log the event
+        try:
             auth_manager.log_audit_event(
                 user_id=user_id,
                 user_type=user_type,
                 action='ALL_SESSIONS_TERMINATED',
                 details={'except_session': current_session}
             )
-        else:
-            return jsonify({'success': False, 'message': 'Session information not found'})
+        except Exception as log_error:
+            print(f"Warning: Failed to log session termination: {log_error}")
 
         return jsonify({'success': True, 'message': 'All other sessions terminated successfully'})
+
     except Exception as e:
-        return jsonify({'success': False, 'message': str(e)})
-
-
+        print(f"Error in terminate_all_sessions: {e}")
+        return jsonify({'success': False, 'message': 'Internal server error'}), 500
 @app.route('/admin_dashboard')
 @require_admin
 def admin_dashboard():
     # Get counts for dashboard with better error handling and actual queries
     try:
-        # Get actual counts from database with proper queries
-        cre_count = get_accurate_count('cre_users')
-        ps_count = get_accurate_count('ps_users')
-        leads_count = get_accurate_count('lead_master')
-        unassigned_leads = get_accurate_count('lead_master', {'assigned': 'No'})
-
-        print(
-            f"Dashboard counts - CRE: {cre_count}, PS: {ps_count}, Total Leads: {leads_count}, Unassigned: {unassigned_leads}")
+        # Use single query to get all counts at once (if database supports it)
+        # Otherwise, use parallel queries for better performance
+        from concurrent.futures import ThreadPoolExecutor
+        import time as time_module
+        
+        start_time = time_module.time()
+        
+        # Parallel count queries for better performance
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            cre_future = executor.submit(get_accurate_count, 'cre_users')
+            ps_future = executor.submit(get_accurate_count, 'ps_users')
+            leads_future = executor.submit(get_accurate_count, 'lead_master')
+            unassigned_future = executor.submit(get_accurate_count, 'lead_master', {'assigned': 'No'})
+            
+            # Wait for all queries to complete
+            cre_count = cre_future.result()
+            ps_count = ps_future.result()
+            leads_count = leads_future.result()
+            unassigned_leads = unassigned_future.result()
+        
+        query_time = time_module.time() - start_time
+        print(f"Dashboard counts - CRE: {cre_count}, PS: {ps_count}, Total Leads: {leads_count}, Unassigned: {unassigned_leads} (took {query_time:.3f}s)")
 
     except Exception as e:
         print(f"Error getting dashboard counts: {e}")
@@ -1683,22 +1763,24 @@ def admin_dashboard():
     user_id = session.get('user_id')
     user_type = session.get('user_type')
     if user_id and user_type:
-        auth_manager.log_audit_event(
-            user_id=user_id,
-            user_type=user_type,
-            action='DASHBOARD_ACCESS',
-            resource='admin_dashboard'
-        )
+        try:
+            auth_manager.log_audit_event(
+                user_id=user_id,
+                user_type=user_type,
+                action='DASHBOARD_ACCESS',
+                resource='admin_dashboard'
+            )
+        except Exception as log_error:
+            print(f"Warning: Failed to log dashboard access: {log_error}")
 
     return render_template('admin_dashboard.html',
                            cre_count=cre_count,
                            ps_count=ps_count,
                            leads_count=leads_count,
                            unassigned_leads=unassigned_leads)
-
-
 @app.route('/upload_data', methods=['GET', 'POST'])
 @require_admin
+@limiter.limit("5 per hour")  # Rate limit uploads
 def upload_data():
     if request.method == 'POST':
         if 'file' not in request.files:
@@ -1708,6 +1790,7 @@ def upload_data():
         file = request.files['file']
         source = request.form.get('source', '').strip()
 
+        # Input validation
         if not source:
             flash('Please select a data source', 'error')
             return redirect(request.url)
@@ -1716,83 +1799,118 @@ def upload_data():
             flash('No file selected', 'error')
             return redirect(request.url)
 
-        if file and file.filename and allowed_file(file.filename):
-            filename = secure_filename(str(file.filename))
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        if not file or not file.filename or not allowed_file(file.filename):
+            flash('Invalid file format. Please upload CSV or Excel files only.', 'error')
+            return redirect(request.url)
 
+        filename = secure_filename(str(file.filename))
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
+        try:
+            file.save(filepath)
+
+            # Check file size
+            file_size = os.path.getsize(filepath)
+            if file_size > 50 * 1024 * 1024:  # 50MB limit
+                flash('File too large. Maximum size is 50MB.', 'error')
+                os.remove(filepath)
+                return redirect(request.url)
+
+            print(f"Processing file: {filename} ({file_size / 1024 / 1024:.2f} MB)")
+
+            # Read the file based on extension
+            if filename.lower().endswith('.csv'):
+                data = read_csv_file(filepath)
+            else:
+                data = read_excel_file(filepath)
+
+            if not data:
+                flash('No valid data found in file', 'error')
+                os.remove(filepath)
+                return redirect(request.url)
+
+            print(f"Read {len(data)} rows from file")
+
+            # Validate file headers
+            required_fields = ['customer_name', 'customer_mobile_number', 'date']
+            if not all(field in data[0] for field in required_fields):
+                flash(f'File must contain columns: {", ".join(required_fields)}', 'error')
+                os.remove(filepath)
+                return redirect(request.url)
+
+            # Get current sequence number for UID generation (optimized)
             try:
-                file.save(filepath)
-
-                # Check file size
-                file_size = os.path.getsize(filepath)
-                if file_size > 50 * 1024 * 1024:  # 50MB limit
-                    flash('File too large. Maximum size is 50MB.', 'error')
-                    os.remove(filepath)
-                    return redirect(request.url)
-
-                print(f"Processing file: {filename} ({file_size / 1024 / 1024:.2f} MB)")
-
-                # Read the file based on extension
-                if filename.lower().endswith('.csv'):
-                    data = read_csv_file(filepath)
-                else:
-                    data = read_excel_file(filepath)
-
-                if not data:
-                    flash('No valid data found in file', 'error')
-                    os.remove(filepath)
-                    return redirect(request.url)
-
-                print(f"Read {len(data)} rows from file")
-
-                # Get current sequence number for UID generation
-                result = supabase.table('lead_master').select('uid').execute()
+                result = supabase.table('lead_master').select('uid').order('created_at', desc=True).limit(1).execute()
                 current_count = len(result.data) if result.data else 0
+            except Exception as e:
+                print(f"Warning: Could not get current count: {e}")
+                current_count = 0
 
-                # Prepare leads data for batch insert
-                leads_to_insert = []
-                skipped_rows = 0
+            # Prepare leads data for batch insert
+            leads_to_insert = []
+            skipped_rows = 0
+            duplicate_count = 0
 
-                for index, row in enumerate(data):
-                    try:
-                        # Validate required fields
-                        required_fields = ['customer_name', 'customer_mobile_number', 'date']
-                        if not all(key in row and str(row[key]).strip() for key in required_fields):
-                            skipped_rows += 1
-                            continue
+            # Get existing mobile numbers for duplicate check
+            existing_mobiles = set()
+            try:
+                existing_result = supabase.table('lead_master').select('customer_mobile_number').execute()
+                existing_mobiles = {row['customer_mobile_number'] for row in existing_result.data if row.get('customer_mobile_number')}
+            except Exception as e:
+                print(f"Warning: Could not check for duplicates: {e}")
 
-                        uid = generate_uid(source, row['customer_mobile_number'],
-                                           current_count + len(leads_to_insert) + 1)
-
-                        lead_data = {
-                            'uid': uid,
-                            'date': str(row['date']).strip(),
-                            'customer_name': str(row['customer_name']).strip(),
-                            'customer_mobile_number': str(row['customer_mobile_number']).strip(),
-                            'source': source,
-                            'assigned': 'No',
-                            'final_status': 'Pending'
-                        }
-
-                        leads_to_insert.append(lead_data)
-
-
-                    except Exception as e:
-                        print(f"Error processing row {index}: {e}")
+            for index, row in enumerate(data):
+                try:
+                    # Validate required fields
+                    if not all(key in row and str(row[key]).strip() for key in required_fields):
                         skipped_rows += 1
                         continue
 
-                if not leads_to_insert:
-                    flash('No valid leads found to insert', 'error')
-                    os.remove(filepath)
-                    return redirect(request.url)
+                    mobile = str(row['customer_mobile_number']).strip()
+                    
+                    # Check for duplicates
+                    if mobile in existing_mobiles:
+                        duplicate_count += 1
+                        continue
 
-                print(f"Prepared {len(leads_to_insert)} leads for insertion")
+                    uid = generate_uid(source, mobile, current_count + len(leads_to_insert) + 1)
 
-                # Batch insert leads
+                    lead_data = {
+                        'uid': uid,
+                        'date': str(row['date']).strip(),
+                        'customer_name': str(row['customer_name']).strip(),
+                        'customer_mobile_number': mobile,
+                        'source': source,
+                        'assigned': 'No',
+                        'final_status': 'Pending'
+                    }
+
+                    leads_to_insert.append(lead_data)
+                    existing_mobiles.add(mobile)  # Add to set to prevent duplicates in same batch
+
+                except Exception as e:
+                    print(f"Error processing row {index}: {e}")
+                    skipped_rows += 1
+                    continue
+
+            if not leads_to_insert:
+                flash('No valid leads found to insert', 'error')
+                os.remove(filepath)
+                return redirect(request.url)
+
+            print(f"Prepared {len(leads_to_insert)} leads for insertion")
+
+            # Batch insert leads with transaction support
+            try:
                 success_count = batch_insert_leads(leads_to_insert)
+            except Exception as e:
+                print(f"Error in batch insert: {e}")
+                flash('Error inserting leads into database', 'error')
+                os.remove(filepath)
+                return redirect(request.url)
 
-                # Log data upload
+            # Log data upload
+            try:
                 auth_manager.log_audit_event(
                     user_id=session.get('user_id'),
                     user_type=session.get('user_type'),
@@ -1803,70 +1921,143 @@ def upload_data():
                         'records_uploaded': success_count,
                         'filename': filename,
                         'file_size_mb': round(file_size / 1024 / 1024, 2),
-                        'skipped_rows': skipped_rows
+                        'skipped_rows': skipped_rows,
+                        'duplicate_count': duplicate_count
                     }
                 )
+            except Exception as log_error:
+                print(f"Warning: Failed to log upload event: {log_error}")
 
-                # Create success message
-                message = f'Successfully uploaded {success_count} leads'
-                if skipped_rows > 0:
-                    message += f' ({skipped_rows} rows skipped due to missing data)'
-                message += '. Please go to "Assign Leads" to assign them to CREs.'
+            # Create success message
+            message = f'Successfully uploaded {success_count} leads'
+            if skipped_rows > 0:
+                message += f' ({skipped_rows} rows skipped due to missing data)'
+            if duplicate_count > 0:
+                message += f' ({duplicate_count} duplicates skipped)'
+            message += '. Please go to "Assign Leads" to assign them to CREs.'
 
-                flash(message, 'success')
+            flash(message, 'success')
 
-                # Clean up uploaded file
+            # Clean up uploaded file
+            os.remove(filepath)
+
+        except Exception as e:
+            print(f"Error processing file: {e}")
+            flash(f'Error processing file: {str(e)}', 'error')
+            if os.path.exists(filepath):
                 os.remove(filepath)
-
-            except Exception as e:
-                print(f"Error processing file: {e}")
-                flash(f'Error processing file: {str(e)}', 'error')
-                if os.path.exists(filepath):
-                    os.remove(filepath)
         else:
             flash('Invalid file format. Please upload CSV or Excel files only.', 'error')
 
     return render_template('upload_data.html')
 
+
 @app.route('/assign_leads')
 @require_admin
 def assign_leads():
     try:
-        # Fetch all unassigned leads in batches of 1000
-        all_unassigned_leads = []
-        batch_size = 1000
-        offset = 0
-        while True:
-            result = supabase.table('lead_master').select('*').eq('assigned', 'No').range(offset, offset + batch_size - 1).execute()
-            batch = result.data or []
-            all_unassigned_leads.extend(batch)
-            if len(batch) < batch_size:
-                break
-            offset += batch_size
+        # Get pagination parameters
+        page = request.args.get('page', 1, type=int)
+        per_page = 100  # Reduced from loading all leads
+        offset = (page - 1) * per_page
+
+        # Get filter parameters
+        source_filter = request.args.get('source', '')
+        date_from = request.args.get('date_from', '')
+        date_to = request.args.get('date_to', '')
+
+        # Build query with filters
+        query = supabase.table('lead_master').select('*').eq('assigned', 'No')
+        
+        if source_filter:
+            query = query.eq('source', source_filter)
+        
+        if date_from:
+            query = query.gte('date', date_from)
+        
+        if date_to:
+            query = query.lte('date', date_to)
+
+        # Get paginated results
+        result = query.order('created_at', desc=True).range(offset, offset + per_page - 1).execute()
+        unassigned_leads = result.data or []
+
+        # Get total count for pagination
+        total_count = get_accurate_count('lead_master', {
+            'assigned': 'No',
+            'source': source_filter if source_filter else None,
+            'date_from': date_from if date_from else None,
+            'date_to': date_to if date_to else None
+        })
 
         # Organize by source
         leads_by_source = {}
-        for lead in all_unassigned_leads:
+        for lead in unassigned_leads:
             source = lead.get('source', 'Unknown')
             leads_by_source.setdefault(source, []).append(lead)
 
-        # Get CREs
-        cres = safe_get_data('cre_users')
+        # Get CREs with error handling
+        try:
+            cres = safe_get_data('cre_users')
+        except Exception as e:
+            print(f"Error fetching CREs: {e}")
+            cres = []
 
-        # Get accurate total unassigned count
-        actual_unassigned_count = get_accurate_count('lead_master', {'assigned': 'No'})
-
-        # Get accurate per-source unassigned counts
+        # Get source counts efficiently
         source_unassigned_counts = {}
-        for source in leads_by_source.keys():
-            source_unassigned_counts[source] = get_accurate_count('lead_master', {'assigned': 'No', 'source': source})
+        if not source_filter:  # Only get source counts if no specific source filter
+            try:
+                # Get all sources from current page
+                sources = set(lead.get('source', 'Unknown') for lead in unassigned_leads)
+                
+                # Get counts for each source in parallel
+                from concurrent.futures import ThreadPoolExecutor
+                with ThreadPoolExecutor(max_workers=4) as executor:
+                    future_to_source = {
+                        executor.submit(get_accurate_count, 'lead_master', {'assigned': 'No', 'source': source}): source
+                        for source in sources
+                    }
+                    
+                    for future in future_to_source:
+                        source = future_to_source[future]
+                        try:
+                            count = future.result()
+                            source_unassigned_counts[source] = count
+                        except Exception as e:
+                            print(f"Error getting count for source {source}: {e}")
+                            source_unassigned_counts[source] = 0
+            except Exception as e:
+                print(f"Error getting source counts: {e}")
+                source_unassigned_counts = {}
+
+        # Get available sources for filter dropdown
+        try:
+            sources_result = supabase.table('lead_master').select('source').eq('assigned', 'No').execute()
+            available_sources = list(set(row['source'] for row in sources_result.data if row.get('source')))
+        except Exception as e:
+            print(f"Error getting available sources: {e}")
+            available_sources = []
+
+        # Calculate pagination info
+        total_pages = (total_count + per_page - 1) // per_page
+        has_prev = page > 1
+        has_next = page < total_pages
 
         return render_template('assign_leads.html',
-                               unassigned_leads=all_unassigned_leads,
-                               actual_unassigned_count=actual_unassigned_count,
+                               unassigned_leads=unassigned_leads,
+                               actual_unassigned_count=total_count,
                                cres=cres,
                                leads_by_source=leads_by_source,
-                               source_unassigned_counts=source_unassigned_counts)
+                               source_unassigned_counts=source_unassigned_counts,
+                               available_sources=available_sources,
+                               current_page=page,
+                               total_pages=total_pages,
+                               has_prev=has_prev,
+                               has_next=has_next,
+                               source_filter=source_filter,
+                               date_from=date_from,
+                               date_to=date_to)
+
     except Exception as e:
         print(f"Error loading assign leads data: {e}")
         flash(f'Error loading data: {str(e)}', 'error')
@@ -1964,8 +2155,10 @@ def assign_leads_dynamic_action():
     except Exception as e:
         print(f"Error in dynamic lead assignment: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
+
 @app.route('/add_cre', methods=['GET', 'POST'])
 @require_admin
+@limiter.limit("10 per hour")  # Rate limit CRE creation
 def add_cre():
     if request.method == 'POST':
         name = request.form.get('name', '').strip()
@@ -1974,27 +2167,55 @@ def add_cre():
         phone = request.form.get('phone', '').strip()
         email = request.form.get('email', '').strip()
 
+        # Input validation
         if not all([name, username, password, phone, email]):
             flash('All fields are required', 'error')
             return render_template('add_cre.html')
 
+        # Validate email format
+        import re
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, email):
+            flash('Please enter a valid email address', 'error')
+            return render_template('add_cre.html')
+
+        # Validate phone format (basic validation)
+        phone_digits = ''.join(filter(str.isdigit, phone))
+        if len(phone_digits) < 10:
+            flash('Please enter a valid phone number (at least 10 digits)', 'error')
+            return render_template('add_cre.html')
+
+        # Validate username format
+        if len(username) < 3:
+            flash('Username must be at least 3 characters long', 'error')
+            return render_template('add_cre.html')
+
+        if not username.replace('_', '').replace('-', '').isalnum():
+            flash('Username can only contain letters, numbers, hyphens, and underscores', 'error')
+            return render_template('add_cre.html')
+
+        # Validate password strength
         if not auth_manager.validate_password_strength(password):
-            flash(
-                'Password must be at least 8 characters long and contain uppercase, lowercase, number, and special character',
-                'error')
+            flash('Password must be at least 8 characters long and contain uppercase, lowercase, number, and special character', 'error')
             return render_template('add_cre.html')
 
         try:
             # Check if username already exists
-            existing = supabase.table('cre_users').select('username').eq('username', username).execute()
-            if existing.data:
+            existing_username = supabase.table('cre_users').select('username').eq('username', username).execute()
+            if existing_username.data:
                 flash('Username already exists', 'error')
+                return render_template('add_cre.html')
+
+            # Check if email already exists
+            existing_email = supabase.table('cre_users').select('email').eq('email', email).execute()
+            if existing_email.data:
+                flash('Email already exists', 'error')
                 return render_template('add_cre.html')
 
             # Hash password
             password_hash, salt = auth_manager.hash_password(password)
 
-            # Replace the existing cre_data creation with this:
+            # Prepare CRE data
             cre_data = {
                 'name': name,
                 'username': username,
@@ -2005,29 +2226,42 @@ def add_cre():
                 'email': email,
                 'is_active': True,
                 'role': 'cre',
-                'failed_login_attempts': 0
+                'failed_login_attempts': 0,
+                'created_at': datetime.now().isoformat()
             }
 
+            # Insert CRE user
             result = supabase.table('cre_users').insert(cre_data).execute()
+            
+            if not result.data:
+                flash('Error creating CRE user', 'error')
+                return render_template('add_cre.html')
 
             # Log CRE creation
-            auth_manager.log_audit_event(
-                user_id=session.get('user_id'),
-                user_type=session.get('user_type'),
-                action='CRE_CREATED',
-                resource='cre_users',
-                resource_id=str(result.data[0]['id']) if result.data else None,
-                details={'cre_name': name, 'username': username}
-            )
+            try:
+                auth_manager.log_audit_event(
+                    user_id=session.get('user_id'),
+                    user_type=session.get('user_type'),
+                    action='CRE_CREATED',
+                    resource='cre_users',
+                    resource_id=str(result.data[0]['id']),
+                    details={'cre_name': name, 'username': username, 'email': email}
+                )
+            except Exception as log_error:
+                print(f"Warning: Failed to log CRE creation: {log_error}")
 
             flash('CRE added successfully', 'success')
             return redirect(url_for('manage_cre'))
+
         except Exception as e:
-            flash(f'Error adding CRE: {str(e)}', 'error')
+            print(f"Error adding CRE: {e}")
+            flash('Error adding CRE. Please try again.', 'error')
 
     return render_template('add_cre.html')
+
 @app.route('/add_ps', methods=['GET', 'POST'])
 @require_admin
+@limiter.limit("10 per hour")  # Rate limit PS creation
 def add_ps():
     branches = get_system_branches()
 
@@ -2039,27 +2273,60 @@ def add_ps():
         email = request.form.get('email', '').strip()
         branch = request.form.get('branch', '').strip()
 
+        # Input validation
         if not all([name, username, password, phone, email, branch]):
             flash('All fields are required', 'error')
             return render_template('add_ps.html', branches=branches)
 
+        # Validate email format
+        import re
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, email):
+            flash('Please enter a valid email address', 'error')
+            return render_template('add_ps.html', branches=branches)
+
+        # Validate phone format (basic validation)
+        phone_digits = ''.join(filter(str.isdigit, phone))
+        if len(phone_digits) < 10:
+            flash('Please enter a valid phone number (at least 10 digits)', 'error')
+            return render_template('add_ps.html', branches=branches)
+
+        # Validate username format
+        if len(username) < 3:
+            flash('Username must be at least 3 characters long', 'error')
+            return render_template('add_ps.html', branches=branches)
+
+        if not username.replace('_', '').replace('-', '').isalnum():
+            flash('Username can only contain letters, numbers, hyphens, and underscores', 'error')
+            return render_template('add_ps.html', branches=branches)
+
+        # Validate branch
+        if branch not in [b['name'] for b in branches]:
+            flash('Please select a valid branch', 'error')
+            return render_template('add_ps.html', branches=branches)
+
+        # Validate password strength
         if not auth_manager.validate_password_strength(password):
-            flash(
-                'Password must be at least 8 characters long and contain uppercase, lowercase, number, and special character',
-                'error')
+            flash('Password must be at least 8 characters long and contain uppercase, lowercase, number, and special character', 'error')
             return render_template('add_ps.html', branches=branches)
 
         try:
             # Check if username already exists
-            existing = supabase.table('ps_users').select('username').eq('username', username).execute()
-            if existing.data:
+            existing_username = supabase.table('ps_users').select('username').eq('username', username).execute()
+            if existing_username.data:
                 flash('Username already exists', 'error')
+                return render_template('add_ps.html', branches=branches)
+
+            # Check if email already exists
+            existing_email = supabase.table('ps_users').select('email').eq('email', email).execute()
+            if existing_email.data:
+                flash('Email already exists', 'error')
                 return render_template('add_ps.html', branches=branches)
 
             # Hash password
             password_hash, salt = auth_manager.hash_password(password)
 
-            # Replace the existing ps_data creation with this:
+            # Prepare PS data
             ps_data = {
                 'name': name,
                 'username': username,
@@ -2071,28 +2338,38 @@ def add_ps():
                 'branch': branch,
                 'is_active': True,
                 'role': 'ps',
-                'failed_login_attempts': 0
+                'failed_login_attempts': 0,
+                'created_at': datetime.now().isoformat()
             }
 
+            # Insert PS user
             result = supabase.table('ps_users').insert(ps_data).execute()
+            
+            if not result.data:
+                flash('Error creating PS user', 'error')
+                return render_template('add_ps.html', branches=branches)
 
             # Log PS creation
-            auth_manager.log_audit_event(
-                user_id=session.get('user_id'),
-                user_type=session.get('user_type'),
-                action='PS_CREATED',
-                resource='ps_users',
-                resource_id=str(result.data[0]['id']) if result.data else None,
-                details={'ps_name': name, 'username': username, 'branch': branch}
-            )
+            try:
+                auth_manager.log_audit_event(
+                    user_id=session.get('user_id'),
+                    user_type=session.get('user_type'),
+                    action='PS_CREATED',
+                    resource='ps_users',
+                    resource_id=str(result.data[0]['id']),
+                    details={'ps_name': name, 'username': username, 'email': email, 'branch': branch}
+                )
+            except Exception as log_error:
+                print(f"Warning: Failed to log PS creation: {log_error}")
 
             flash('Product Specialist added successfully', 'success')
             return redirect(url_for('manage_ps'))
+
         except Exception as e:
-            flash(f'Error adding Product Specialist: {str(e)}', 'error')
+            print(f"Error adding PS: {e}")
+            flash('Error adding Product Specialist. Please try again.', 'error')
 
     return render_template('add_ps.html', branches=branches)
-
 
 @app.route('/manage_cre')
 @require_admin
@@ -3386,7 +3663,6 @@ def add_lead():
     return render_template('add_lead.html', branches=branches, ps_users=ps_users)
 
 # Add import for optimized operations
-from optimized_lead_operations import create_optimized_operations
 
 @app.route('/add_lead_optimized', methods=['POST'])
 @require_cre
@@ -4219,14 +4495,14 @@ def batch_insert_leads(leads_data, batch_size=100):
     return total_inserted
 
 
-
 @app.route('/update_lead/<uid>', methods=['GET', 'POST'])
 @require_cre
 def update_lead(uid):
     # Get return_tab parameter for redirection
     return_tab = request.args.get('return_tab', '')
+    
     try:
-        # Get lead data
+        # Single query to get all required data
         lead_result = supabase.table('lead_master').select('*').eq('uid', uid).execute()
         if not lead_result.data:
             flash('Lead not found', 'error')
@@ -4239,33 +4515,44 @@ def update_lead(uid):
             flash('Access denied - This lead is not assigned to you', 'error')
             return redirect(url_for('cre_dashboard'))
 
-        # Get next call info
+        # Get next call info (optimized)
         next_call, completed_calls = get_next_call_info(lead_data)
 
-        # Get PS users for branch selection
-        ps_users = safe_get_data('ps_users')
+        # Pre-fetch all required data in parallel
+        from concurrent.futures import ThreadPoolExecutor
+        import time as time_module
+        
+        start_time = time_module.time()
+        
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            # Fetch PS users, branches, and PS followup data in parallel
+            ps_users_future = executor.submit(safe_get_data, 'ps_users')
+            branches_future = executor.submit(get_system_branches)
+            ps_followup_future = executor.submit(
+                lambda: supabase.table('ps_followup_master').select('*').eq('lead_uid', uid).execute().data[0] 
+                if lead_data.get('ps_name') else None
+            )
+            
+            ps_users = ps_users_future.result()
+            branches = branches_future.result()
+            ps_followup = ps_followup_future.result()
 
-        # Model options
+        fetch_time = time_module.time() - start_time
+        print(f"Data fetch took {fetch_time:.3f}s")
+
+        # Static data (no need to fetch from DB)
         rizta_models = [
-            'Rizta S Mono (2.9 kWh)',
-            'Rizta S Super Matte (2.9 kWh)',
-            'Rizta Z Mono (2.9 kWh)',
-            'Rizta Z Duo (2.9 kWh)',
-            'Rizta Z Super Matte (2.9 kWh)',
-            'Rizta Z Mono (3.7 kWh)',
-            'Rizta Z Duo (3.7 kWh)',
-            'Rizta Z Super Matte (3.7 kWh)'
+            'Rizta S Mono (2.9 kWh)', 'Rizta S Super Matte (2.9 kWh)',
+            'Rizta Z Mono (2.9 kWh)', 'Rizta Z Duo (2.9 kWh)',
+            'Rizta Z Super Matte (2.9 kWh)', 'Rizta Z Mono (3.7 kWh)',
+            'Rizta Z Duo (3.7 kWh)', 'Rizta Z Super Matte (3.7 kWh)'
         ]
 
         x450_models = [
-            '450 X (2.9 kWh)',
-            '450 X (3.7 kWh)',
-            '450 X (2.9 kWh) Pro Pack',
-            '450 X (3.7 kWh) Pro Pack',
+            '450 X (2.9 kWh)', '450 X (3.7 kWh)',
+            '450 X (2.9 kWh) Pro Pack', '450 X (3.7 kWh) Pro Pack',
             '450 Apex STD'
         ]
-
-        branches = get_system_branches()
 
         lead_statuses = [
             'Busy on another Call', 'RNR', 'Call me Back', 'Interested',
@@ -4274,53 +4561,62 @@ def update_lead(uid):
         ]
 
         if request.method == 'POST':
+            # Process form data efficiently
+            form_data = request.form
             update_data = {}
-            lead_status = request.form.get('lead_status', '')
-            follow_up_date = request.form.get('follow_up_date', '')
-            call_remark = request.form.get('call_remark', '')
+            
+            # Extract form values once
+            lead_status = form_data.get('lead_status', '').strip()
+            follow_up_date = form_data.get('follow_up_date', '').strip()
+            call_remark = form_data.get('call_remark', '').strip()
+            ps_name = form_data.get('ps_name', '').strip()
+            cre_test_drive_raw = form_data.get('test_drive_done', '').strip()
 
-            # Lock follow_up_date and set final_status for certain statuses
-            lock_statuses = ['Booked', 'Retailed']
-            lost_statuses = ['Not Interested', 'Lost to Codealer', 'Lost to Competition', 'Out of Station']
+            # Pre-define status categories for faster lookup
+            lock_statuses = {'Booked', 'Retailed'}
+            lost_statuses = {'Not Interested', 'Lost to Codealer', 'Lost to Competition', 'Out of Station'}
+            rnr_statuses = {'RNR', 'Call me Back'}
+
+            # Process status updates efficiently
             if lead_status in lock_statuses:
-                update_data['lead_status'] = lead_status
-                update_data['follow_up_date'] = follow_up_date or lead_data.get('follow_up_date')
-                update_data['final_status'] = 'Won' if lead_status in ['Booked', 'Retailed'] else lead_data.get('final_status')
+                update_data.update({
+                    'lead_status': lead_status,
+                    'follow_up_date': follow_up_date or lead_data.get('follow_up_date'),
+                    'final_status': 'Won' if lead_status in lock_statuses else lead_data.get('final_status')
+                })
             elif lead_status in lost_statuses:
-                update_data['lead_status'] = lead_status
-                update_data['follow_up_date'] = follow_up_date or lead_data.get('follow_up_date')
-                update_data['final_status'] = 'Lost'
+                update_data.update({
+                    'lead_status': lead_status,
+                    'follow_up_date': follow_up_date or lead_data.get('follow_up_date'),
+                    'final_status': 'Lost'
+                })
                 
-                # Handle Out of Station specific logic
                 if lead_status == 'Out of Station':
-                    out_of_station_location = request.form.get('out_of_station_location', '').strip()
+                    out_of_station_location = form_data.get('out_of_station_location', '').strip()
                     if not out_of_station_location:
                         flash('Location is required when lead status is "Out of Station"', 'error')
                         return redirect(url_for('update_lead', uid=uid, return_tab=return_tab))
                     update_data['out_of_station_location'] = out_of_station_location
-            else:
-                if lead_status:
-                    update_data['lead_status'] = lead_status
+            elif lead_status:
+                update_data['lead_status'] = lead_status
 
-            if request.form.get('customer_name'):
-                update_data['customer_name'] = request.form['customer_name']
+            # Process other fields efficiently
+            field_mappings = {
+                'customer_name': 'customer_name',
+                'source': 'source',
+                'lead_category': 'lead_category',
+                'model_interested': 'model_interested',
+                'branch': 'branch',
+                'final_status': 'final_status'
+            }
 
-            if request.form.get('source'):
-                update_data['source'] = request.form['source']
+            for form_key, db_key in field_mappings.items():
+                if form_data.get(form_key):
+                    update_data[db_key] = form_data[form_key]
 
-            if request.form.get('lead_category'):
-                update_data['lead_category'] = request.form['lead_category']
-
-            if request.form.get('model_interested'):
-                update_data['model_interested'] = request.form['model_interested']
-
-            if request.form.get('branch'):
-                update_data['branch'] = request.form['branch']
-
-            # Handle PS assignment and email notification
-            ps_name = request.form.get('ps_name')
+            # Handle PS assignment efficiently
             if ps_name and ps_name != lead_data.get('ps_name'):
-                # Check if PS is active before assignment
+                # Use pre-fetched ps_users data
                 ps_user = next((ps for ps in ps_users if ps['name'] == ps_name), None)
                 if not ps_user:
                     flash(f'Product Specialist {ps_name} not found', 'error')
@@ -4330,15 +4626,17 @@ def update_lead(uid):
                     flash(f'Product Specialist {ps_name} is unavailable for today (inactive status)', 'error')
                     return redirect(url_for('update_lead', uid=uid))
                 
-                update_data['ps_name'] = ps_name
-                update_data['assigned'] = 'Yes'
-                update_data['ps_assigned_at'] = datetime.now().isoformat()
+                update_data.update({
+                    'ps_name': ps_name,
+                    'assigned': 'Yes',
+                    'ps_assigned_at': datetime.now().isoformat()
+                })
 
                 # Create PS followup record
                 updated_lead_data = {**lead_data, **update_data}
                 create_or_update_ps_followup(updated_lead_data, ps_name, ps_user['branch'])
 
-                # Send email to PS
+                # Send email notification asynchronously
                 try:
                     lead_data_for_email = {**lead_data, **update_data}
                     socketio.start_background_task(send_email_to_ps, ps_user['email'], ps_user['name'], lead_data_for_email, session.get('cre_name'))
@@ -4347,40 +4645,37 @@ def update_lead(uid):
                     print(f"Error sending email: {e}")
                     flash(f'Lead assigned to {ps_name} (email notification failed)', 'warning')
 
+            # Handle follow-up date
             if follow_up_date:
                 update_data['follow_up_date'] = follow_up_date
 
-            if request.form.get('final_status'):
-                final_status = request.form['final_status']
-                update_data['final_status'] = final_status
+            # Handle final status timestamps
+            if 'final_status' in update_data:
+                final_status = update_data['final_status']
                 if final_status == 'Won':
                     update_data['won_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 elif final_status == 'Lost':
                     update_data['lost_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-            # If lead status is RNR or Call me Back, ensure first_call_date is NULL
-            if lead_status in ['RNR', 'Call me Back']:
+            # Handle RNR status
+            if lead_status in rnr_statuses:
                 update_data['first_call_date'] = None
-                # Also relax follow_up_date if final_status Pending
                 if update_data.get('final_status', lead_data.get('final_status')) == 'Pending':
                     update_data['follow_up_date'] = update_data.get('follow_up_date') or None
 
-            # Handle call dates and remarks - record for all statuses including RNR
-            if request.form.get('call_date') and call_remark:
+            # Handle call tracking efficiently
+            if form_data.get('call_date') and call_remark:
                 combined_remark = f"{lead_status}, {call_remark}"
-                # For all 7 calls, use the correct schema columns
                 call_names = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
                 if next_call in call_names:
-                    update_data[f'{next_call}_call_date'] = request.form['call_date']
+                    update_data[f'{next_call}_call_date'] = form_data['call_date']
                     update_data[f'{next_call}_remark'] = combined_remark
-                # Notification removed - no longer sending notifications between PS and CRE
 
+            # Execute updates efficiently
             try:
-                # Track the call attempt before updating the lead - ALWAYS track regardless of status
+                # Track call attempt if needed
                 if lead_status:
-                    # Determine if this attempt resulted in a recorded call
-                    call_was_recorded = bool(request.form.get('call_date') and call_remark)
-                    # Track the attempt - this ensures RNR and other statuses are properly tracked
+                    call_was_recorded = bool(form_data.get('call_date') and call_remark)
                     track_cre_call_attempt(
                         uid=uid,
                         cre_name=session.get('cre_name'),
@@ -4391,88 +4686,89 @@ def update_lead(uid):
                         remarks=call_remark if call_remark else None
                     )
 
+                # Batch update operations
                 if update_data:
+                    # Update lead_master
                     supabase.table('lead_master').update(update_data).eq('uid', uid).execute()
 
-                    # Keep ps_followup_master.final_status in sync if final_status is updated and PS followup exists
+                    # Sync PS followup if needed
                     if 'final_status' in update_data and lead_data.get('ps_name'):
-                        ps_result = supabase.table('ps_followup_master').select('lead_uid').eq('lead_uid', uid).execute()
-                        if ps_result.data:
-                            supabase.table('ps_followup_master').update({'final_status': update_data['final_status']}).eq('lead_uid', uid).execute()
+                        supabase.table('ps_followup_master').update({'final_status': update_data['final_status']}).eq('lead_uid', uid).execute()
 
-                    # Log lead update
-                    auth_manager.log_audit_event(
-                        user_id=session.get('user_id'),
-                        user_type=session.get('user_type'),
-                        action='LEAD_UPDATED',
-                        resource='lead_master',
-                        resource_id=uid,
-                        details={'updated_fields': list(update_data.keys())}
-                    )
+                    # Log audit event
+                    try:
+                        auth_manager.log_audit_event(
+                            user_id=session.get('user_id'),
+                            user_type=session.get('user_type'),
+                            action='LEAD_UPDATED',
+                            resource='lead_master',
+                            resource_id=uid,
+                            details={'updated_fields': list(update_data.keys())}
+                        )
+                    except Exception as log_error:
+                        print(f"Warning: Failed to log audit event: {log_error}")
 
                     flash('Lead updated successfully', 'success')
                 else:
                     flash('No changes to update', 'info')
 
-                # Apply test drive update after main update
-                cre_test_drive_raw = request.form.get('test_drive_done')
+                # Handle test drive update
                 if cre_test_drive_raw:
-                    # Check test drive state and validate
                     test_drive_state = get_test_drive_state(uid)
                     if test_drive_state['locked']:
                         flash('Test Drive status is locked and cannot be changed.', 'error')
                         return redirect(url_for('update_lead', uid=uid, return_tab=return_tab))
                 
-                td_result = set_test_drive_state(uid, 'cre', session.get('cre_name',''), cre_test_drive_raw)
-                if td_result.get('success') and td_result.get('value'):
-                    # Notify counterpart (log)
-                    try:
-                        ps_name_notify = (lead_data.get('ps_name') or update_data.get('ps_name'))
-                        if ps_name_notify:
-                            auth_manager.log_audit_event(
-                                user_id=session.get('user_id'),
-                                user_type='cre',
-                                action='TEST_DRIVE_SYNCED_TO_PS',
-                                resource='lead_master',
-                                resource_id=uid,
-                                details={'ps_name': ps_name_notify}
-                            )
-                    except Exception:
-                        pass
+                    td_result = set_test_drive_state(uid, 'cre', session.get('cre_name',''), cre_test_drive_raw)
+                    if td_result.get('success') and td_result.get('value'):
+                        try:
+                            ps_name_notify = (lead_data.get('ps_name') or update_data.get('ps_name'))
+                            if ps_name_notify:
+                                auth_manager.log_audit_event(
+                                    user_id=session.get('user_id'),
+                                    user_type='cre',
+                                    action='TEST_DRIVE_SYNCED_TO_PS',
+                                    resource='lead_master',
+                                    resource_id=uid,
+                                    details={'ps_name': ps_name_notify}
+                                )
+                        except Exception:
+                            pass
+
+                # Optimized redirect logic
+                redirect_map = {
+                    'untouched-leads': 'fresh-leads',
+                    'called-leads': 'fresh-leads', 
+                    'follow-up-leads': 'fresh-leads',
+                    'followups': 'followups',
+                    'pending': 'pending',
+                    'ps-assigned': 'ps-assigned',
+                    'won-leads': 'won-leads'
+                }
                 
-                # Redirect based on return_tab parameter
-                if return_tab:
+                if return_tab in redirect_map:
                     if return_tab in ['untouched-leads', 'called-leads', 'follow-up-leads']:
                         return redirect(url_for('cre_dashboard', tab='fresh-leads', sub_tab=return_tab))
-                    elif return_tab == 'followups':
-                        return redirect(url_for('cre_dashboard', tab='followups'))
-                    elif return_tab == 'pending':
-                        return redirect(url_for('cre_dashboard', tab='pending'))
-                    elif return_tab == 'ps-assigned':
-                        return redirect(url_for('cre_dashboard', tab='ps-assigned'))
-                    elif return_tab == 'won-leads':
-                        return redirect(url_for('cre_dashboard', tab='won-leads'))
                     else:
-                        return redirect(url_for('cre_dashboard'))
+                        return redirect(url_for('cre_dashboard', tab=redirect_map[return_tab]))
                 else:
                     return redirect(url_for('cre_dashboard'))
+                    
             except Exception as e:
+                print(f"Error updating lead: {e}")
                 flash(f'Error updating lead: {str(e)}', 'error')
 
-        # Fetch PS call summary from ps_followup_master
+        # Build PS call summary efficiently
         ps_call_summary = {}
-        if lead_data.get('ps_name'):
-            ps_result = supabase.table('ps_followup_master').select('*').eq('lead_uid', uid).execute()
-            if ps_result.data:
-                ps_followup = ps_result.data[0]
-                call_order = ['first', 'second', 'third']
-                for call in call_order:
-                    date_key = f"{call}_call_date"
-                    remark_key = f"{call}_call_remark"
-                    ps_call_summary[call] = {
-                        "date": ps_followup.get(date_key),
-                        "remark": ps_followup.get(remark_key)
-                    }
+        if ps_followup:
+            call_order = ['first', 'second', 'third']
+            for call in call_order:
+                date_key = f"{call}_call_date"
+                remark_key = f"{call}_call_remark"
+                ps_call_summary[call] = {
+                    "date": ps_followup.get(date_key),
+                    "remark": ps_followup.get(remark_key)
+                }
 
         return render_template('update_lead.html',
                                lead=lead_data,
@@ -4488,6 +4784,7 @@ def update_lead(uid):
                                test_drive_state=get_test_drive_state(uid))
 
     except Exception as e:
+        print(f"Error loading lead: {e}")
         flash(f'Error loading lead: {str(e)}', 'error')
         return redirect(url_for('cre_dashboard'))
 @app.route('/ps_dashboard')
@@ -6010,6 +6307,8 @@ def analytics():
             'all_leads_count': 0
         }
         return render_template('analytics.html', analytics=empty_analytics)
+
+
 @app.route('/branch_head_dashboard')
 def branch_head_dashboard():
     if 'branch_head_id' not in session:
@@ -7515,8 +7814,7 @@ def export_leads_by_date_csv():
     except Exception as e:
         print(f"Error exporting date range CSV: {e}")
         return jsonify({'success': False, 'message': str(e)})
-
-
+#-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 @app.route('/get_test_drive_leads')
 @require_admin
 def get_test_drive_leads():
@@ -14097,14 +14395,6 @@ def api_bulk_transfer_ps_leads():
     except Exception as e:
         print(f"Error in api_bulk_transfer_ps_leads: {str(e)}")
         return jsonify({'success': False, 'message': 'Error transferring leads'})
-
-@app.route('/fix_timestamps', methods=['POST'])
-@require_admin
-def fix_timestamps():
-    """Admin route to fix missing timestamps"""
-    fix_missing_timestamps()
-    flash('Timestamps fixed successfully', 'success')
-    return redirect(url_for('admin_dashboard'))
 
 @app.route('/debug_analytics_data')
 @require_admin
