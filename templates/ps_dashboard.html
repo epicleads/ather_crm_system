@@ -1271,6 +1271,252 @@ input:checked + .slider:before {
     .nav-tabs::-webkit-scrollbar {
         display: none; /* Chrome, Safari and Opera */
     }
+
+    /* Compact, mobile-first filter controls across all sections */
+    .date-filter-controls,
+    #psLeadTabsContent .d-flex.align-items-center.mb-3,
+    #psLeadTabsContent .d-flex.justify-content-between.align-items-center.mb-3,
+    #psLeadTabsContent .d-flex.gap-2,
+    #psLeadTabsContent .input-group {
+        gap: 0.5rem !important;
+        flex-wrap: wrap !important;
+    }
+
+    /* Make filter groups span full width on small screens */
+    #psLeadTabsContent .input-group {
+        max-width: 100% !important;
+        width: 100% !important;
+    }
+
+    /* Compact heights and font sizes for controls */
+    #psLeadTabsContent .form-control,
+    #psLeadTabsContent .form-select,
+    #psLeadTabsContent .btn {
+        min-height: 36px;
+        height: 36px;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+        line-height: 1.2;
+    }
+
+    /* Fresh Leads filter bar specific */
+    #psFilterBar-fresh .form-control,
+    #psFilterBar-fresh .btn {
+        flex: 1 1 auto;
+    }
+
+    /* Won/Lost date filter row */
+    #won-lost .input-group {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-auto-rows: minmax(36px, auto);
+        gap: 0.5rem;
+        width: 100%;
+        max-width: 100% !important;
+    }
+    #won-lost .input-group select,
+    #won-lost .input-group input,
+    #won-lost .input-group button,
+    #wonLostActiveLabel {
+        width: 100%;
+        min-height: 36px;
+        height: 36px;
+        font-size: 0.875rem;
+    }
+    #wonLostActiveLabel {
+        justify-self: start;
+        align-self: center;
+    }
+
+    /* Event, Pending, Followups, Walkin search bars full-width */
+    #followups .input-group,
+    #pending .input-group,
+    #event-leads .input-group,
+    #walkin-leads .input-group {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    /* ===== Mobile card-like view for lead tables ===== */
+    /* Applies to Fresh (all three), Pending, Event, Walkin, Today's Follow-ups, Won/Lost tables */
+    #untouchedLeadsTable thead,
+    #calledLeadsTable thead,
+    #followUpLeadsTable thead,
+    #followupTable thead,
+    #pendingLeadsTable thead,
+    #eventLeadsTable thead,
+    #walkinLeadsTable thead,
+    #wonLostLeadsTable thead {
+        display: none;
+    }
+
+    #untouchedLeadsTable tbody tr,
+    #calledLeadsTable tbody tr,
+    #followUpLeadsTable tbody tr,
+    #followupTable tbody tr,
+    #pendingLeadsTable tbody tr,
+    #eventLeadsTable tbody tr,
+    #walkinLeadsTable tbody tr,
+    #wonLostLeadsTable tbody tr {
+        display: block;
+        padding: 2rem 0.75rem 0.75rem 0.75rem; /* extra top space for pinned actions/badges */
+        margin-bottom: 0.75rem;
+        background: #fff;
+        border: 1px solid #e9ecef;
+        border-radius: 10px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        position: relative;
+    }
+
+    /* Reduce padding inside cells and stack neatly */
+    #untouchedLeadsTable td,
+    #calledLeadsTable td,
+    #followUpLeadsTable td,
+    #followupTable td,
+    #pendingLeadsTable td,
+    #eventLeadsTable td,
+    #walkinLeadsTable td,
+    #wonLostLeadsTable td {
+        display: block;
+        padding: 4px 0 !important;
+        border: none !important;
+    }
+
+    /* Emphasize key fields: Customer Name and Mobile */
+    #untouchedLeadsTable td:nth-child(3),
+    #calledLeadsTable td:nth-child(3),
+    #followUpLeadsTable td:nth-child(3),
+    #followupTable td:nth-child(3),
+    #pendingLeadsTable td:nth-child(3),
+    #walkinLeadsTable td:nth-child(3),
+    #wonLostLeadsTable td:nth-child(3) {
+        font-weight: 700;
+        font-size: 0.95rem;
+        color: #1f2d3d;
+    }
+    #untouchedLeadsTable td:nth-child(4),
+    #calledLeadsTable td:nth-child(4),
+    #followUpLeadsTable td:nth-child(4),
+    #followupTable td:nth-child(4),
+    #pendingLeadsTable td:nth-child(4),
+    #walkinLeadsTable td:nth-child(4),
+    #wonLostLeadsTable td:nth-child(4) {
+        color: #6c757d;
+        font-size: 0.9rem;
+        margin-top: -2px;
+    }
+
+    /* Hide less relevant columns on mobile (keep Status and Date visible) */
+    #untouchedLeadsTable td:nth-child(6),
+    #untouchedLeadsTable td:nth-child(10) { display: none; }
+
+    #calledLeadsTable td:nth-child(6),
+    #calledLeadsTable td:nth-child(10) { display: none; }
+
+    #followUpLeadsTable td:nth-child(6),
+    #followUpLeadsTable td:nth-child(10) { display: none; }
+
+    /* today's followups table keeps status and follow-up date (9) */
+    #followupTable td:nth-child(5) { display: none; }
+
+    #pendingLeadsTable td:nth-child(9),
+    #pendingLeadsTable td:nth-child(10) { display: none; }
+
+    /* Event/WalKin tables: hide heavy columns */
+    #eventLeadsTable td:nth-child(5),
+    #eventLeadsTable td:nth-child(6),
+    #eventLeadsTable td:nth-child(11),
+    #eventLeadsTable td:nth-child(12),
+    #eventLeadsTable td:nth-child(13),
+    #eventLeadsTable td:nth-child(14),
+    #eventLeadsTable td:nth-child(15),
+    #eventLeadsTable td:nth-child(16) { display: none; }
+
+    #walkinLeadsTable td:nth-child(8),
+    #walkinLeadsTable td:nth-child(9),
+    #walkinLeadsTable td:nth-child(10) { display: none; }
+
+    /* Lead status badge placement */
+    #untouchedLeadsTable td:nth-child(2),
+    #calledLeadsTable td:nth-child(2),
+    #followUpLeadsTable td:nth-child(2),
+    #followupTable td:nth-child(2),
+    #pendingLeadsTable td:nth-child(2),
+    #wonLostLeadsTable td:nth-child(2) {
+        position: absolute;
+        top: 10px;
+        right: 48px;
+        font-size: 0.75rem;
+    }
+
+    /* Created/Follow-up date small text at bottom */
+    #untouchedLeadsTable td:nth-child(9),
+    #calledLeadsTable td:nth-child(9),
+    #followUpLeadsTable td:nth-child(9),
+    #followupTable td:nth-child(9) {
+        color: #6c757d;
+        font-size: 0.75rem;
+        margin-top: 4px;
+    }
+
+    /* Hide update button column on mobile - entire card will be clickable */
+    #untouchedLeadsTable td:nth-child(1),
+    #calledLeadsTable td:nth-child(1),
+    #followUpLeadsTable td:nth-child(1),
+    #followupTable td:nth-child(1),
+    #pendingLeadsTable td:nth-child(1),
+    #eventLeadsTable td:nth-child(1),
+    #walkinLeadsTable td:nth-child(1),
+    #wonLostLeadsTable td:nth-child(1) {
+        display: none !important;
+    }
+
+    /* Consistent spacing between chips/buttons to avoid clutter */
+    #untouchedLeadsTable .badge, #untouchedLeadsTable .btn-sm,
+    #calledLeadsTable .badge, #calledLeadsTable .btn-sm,
+    #followUpLeadsTable .badge, #followUpLeadsTable .btn-sm,
+    #followupTable .badge, #followupTable .btn-sm,
+    #pendingLeadsTable .badge, #pendingLeadsTable .btn-sm,
+    #eventLeadsTable .badge, #eventLeadsTable .btn-sm,
+    #walkinLeadsTable .badge, #walkinLeadsTable .btn-sm,
+    #wonLostLeadsTable .badge, #wonLostLeadsTable .btn-sm {
+        margin-right: 6px;
+        margin-bottom: 6px;
+    }
+
+    /* Make mobile cards clickable with hover effect */
+    #untouchedLeadsTable tbody tr,
+    #calledLeadsTable tbody tr,
+    #followUpLeadsTable tbody tr,
+    #followupTable tbody tr,
+    #pendingLeadsTable tbody tr,
+    #eventLeadsTable tbody tr,
+    #walkinLeadsTable tbody tr,
+    #wonLostLeadsTable tbody tr {
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    #untouchedLeadsTable tbody tr:hover,
+    #calledLeadsTable tbody tr:hover,
+    #followUpLeadsTable tbody tr:hover,
+    #followupTable tbody tr:hover,
+    #pendingLeadsTable tbody tr:hover,
+    #eventLeadsTable tbody tr:hover,
+    #walkinLeadsTable tbody tr:hover,
+    #wonLostLeadsTable tbody tr:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    }
+
+    /* Overdue highlight: stronger border and background tint */
+    #followupTable tbody tr.table-danger {
+        border-left: 4px solid #dc3545 !important;
+        background-color: #fff5f5 !important;
+    }
+    #followupTable tbody tr.table-danger .badge { background-color: #dc3545 !important; }
+    /* Ensure badges and small metadata look tidy */
+    .badge { font-size: 0.75rem; }
 }
 
 /* iPad and Tablet Specific Optimizations (768px - 991px) */
@@ -1589,6 +1835,43 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeDateInputs();
     initializeStatusFilter();
     setupFreshLeadsDateFilter();
+
+    // Make mobile cards clickable to redirect to update lead page
+    function setupMobileCardClicks() {
+        const tables = [
+            '#untouchedLeadsTable', '#calledLeadsTable', '#followUpLeadsTable',
+            '#followupTable', '#pendingLeadsTable', '#eventLeadsTable',
+            '#walkinLeadsTable', '#wonLostLeadsTable'
+        ];
+        
+        tables.forEach(tableId => {
+            const table = document.querySelector(tableId);
+            if (table) {
+                table.addEventListener('click', function(e) {
+                    // Only trigger on mobile (screen width < 768px)
+                    if (window.innerWidth >= 768) return;
+                    
+                    // Don't redirect if clicking on view history button
+                    if (e.target.closest('.view-call-history-btn') || 
+                        e.target.closest('.view-ps-call-history-btn')) {
+                        return;
+                    }
+                    
+                    const row = e.target.closest('tr');
+                    if (!row) return;
+                    
+                    // Find the update link in the row
+                    const updateLink = row.querySelector('a[href*="update"]');
+                    if (updateLink) {
+                        e.preventDefault();
+                        window.location.href = updateLink.href;
+                    }
+                });
+            }
+        });
+    }
+    
+    setupMobileCardClicks();
 
     // Generic search function
     function setupSearch(inputId, buttonId, clearId, tableId) {
