@@ -37,28 +37,54 @@
 
 {% block content %}
 
+<!-- PS Profile Card -->
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <div class="d-flex flex-wrap align-items-center gap-4">
+            <div class="d-flex align-items-center">
+                <div class="bg-info text-white rounded-circle p-3 me-3">
+                    <i class="fas fa-user-tie fa-2x"></i>
+                </div>
+                <div>
+                    <h5 class="mb-1">{{ ps_name or session.ps_name or 'Unknown' }}</h5>
+                    <p class="text-muted mb-0">Product Specialist</p>
+                </div>
+            </div>
+            <div class="border-start ps-4 d-none d-md-block">
+                <p class="mb-1"><i class="fas fa-building me-2"></i>Branch: {{ session.branch or 'Unknown' }}</p>
+                <!-- <p class="mb-0"><i class="fas fa-clock me-2"></i>Last Login: {{ session.last_login|default('N/A', true) }}</p> -->
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
-                <h2><i class="fas fa-user-tie text-info"></i> Product Specialist Dashboard</h2>
-                <p class="text-muted">Welcome, {{ ps_name or session.ps_name or 'Unknown' }} | Branch: {{ session.branch or 'Unknown' }}</p>
+                <h2 class="mb-0">Dashboard Overview</h2>
+                <p class="text-muted mb-0">Manage your leads and activities</p>
             </div>
-            <div class="btn-group">
-                <a href="{{ url_for('ps_analytics') }}" class="btn btn-outline-primary">
+            <!-- Button container: vertical on mobile, horizontal on tablet/desktop -->
+            <!-- mt-3 adds top margin on mobile, removed on larger screens (mt-sm-0) -->
+            <div class="d-flex flex-column flex-sm-row gap-2 mt-3 mt-sm-0">
+                <!-- w-100 makes buttons full width on mobile, w-sm-auto returns to normal width on larger screens -->
+                <a href="{{ url_for('ps_analytics') }}" class="btn btn-outline-primary w-100 w-sm-auto">
                     <i class="fas fa-chart-line"></i> Analytics
                 </a>
-                <button type="button" class="btn btn-primary" id="psAddWalkinBtn" onclick="window.location.href='{{ url_for('add_walkin_lead') }}'">
+                <a href="{{ url_for('add_walkin_lead') }}" class="btn btn-primary w-100 w-sm-auto" id="psAddWalkinBtn">
                     <i class="fas fa-plus"></i> Add Walk-in Lead
-                </button>
+                </a>
             </div>
         </div>
     </div>
 </div>
 
 <!-- Quick Stats -->
-<div class="row g-3 mb-4">
-    <div class="col-md-2" id="fresh-leads-stats">
+<!-- Optimized grid layout for mobile with minimal gaps -->
+<!-- Using smaller gaps on mobile (g-1) and standard gaps (g-md-3) on desktop -->
+<div class="row row-cols-2 row-cols-md-5 g-1 g-md-3 mb-3">
+    <div class="col-6 col-md-2 h-100" id="fresh-leads-stats">
         <div class="stats-card bg-primary text-white p-3 rounded h-100">
             <div class="d-flex flex-column h-100">
                 <div class="mb-2">
@@ -79,7 +105,7 @@
             </div>
         </div>
     </div>
-    <div class="col-md-2">
+    <div class="col-6 col-md-2 h-100">
         <div class="stats-card bg-warning text-dark p-3 rounded h-100">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
@@ -90,7 +116,7 @@
             </div>
         </div>
     </div>
-    <div class="col-md-2">
+    <div class="col-6 col-md-2 h-100">
         <div class="stats-card bg-success text-white p-3 rounded h-100">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
@@ -101,7 +127,7 @@
             </div>
         </div>
     </div>
-    <div class="col-md-2">
+    <div class="col-6 col-md-2 h-100">
         <div class="stats-card bg-info text-white p-3 rounded h-100">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
@@ -112,7 +138,7 @@
             </div>
         </div>
     </div>
-    <div class="col-md-2">
+    <div class="col-6 col-md-2 h-100">
         <div class="stats-card bg-danger text-white p-3 rounded h-100">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
@@ -126,6 +152,60 @@
 </div>
 
 
+<style>
+    /* PS Dashboard tabs: allow labels to wrap and reduce size on small screens */
+    #psLeadTabs {
+        flex-wrap: wrap;
+        gap: 0.25rem;
+    }
+    #psLeadTabs .nav-link,
+    #freshLeadsSubTab .nav-link {
+        white-space: normal;
+        line-height: 1.2;
+        font-size: 0.95rem;
+        text-align: center;
+        word-break: normal;           /* avoid breaking inside words */
+        overflow-wrap: break-word;    /* allow breaking between words */
+        hyphens: none;
+        padding-top: 0.5rem;
+        padding-bottom: 0.5rem;
+    }
+
+    /* Active tab styling: white background for selected section */
+    #psLeadTabs .nav-link.active,
+    #freshLeadsSubTab .nav-link.active {
+        background-color: #ffffff !important;
+        color: #222 !important;
+        border: 1px solid #ddd !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    @media (max-width: 576px) {
+        #psLeadTabs .nav-link,
+        #freshLeadsSubTab .nav-link {
+            font-size: 0.8rem;       /* slightly smaller to avoid wrapping mid-word */
+            line-height: 1.15;
+        }
+    }
+
+    /* 3x2 grid layout for main tabs on small screens */
+    @media (max-width: 576px) {
+        #psLeadTabs {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+        }
+        #psLeadTabs .nav-item {
+            width: 100%;
+        }
+        #psLeadTabs .nav-link {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 44px;
+            padding: 0.4rem 0.35rem;
+        }
+    }
+</style>
 
 <!-- Tabs for different lead views -->
 <div class="card shadow mb-4">
@@ -925,9 +1005,19 @@
     background-color: #e9ecef;
 }
 
+/* Stats Card Base Styling */
+/* Optimized flexbox layout with efficient space usage */
 .stats-card {
     transition: all 0.3s ease;
-    border-radius: 10px;
+    border-radius: 8px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 110px;
+    padding: 1rem;
+    margin: 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .stats-card:hover {
@@ -1096,6 +1186,107 @@ input:checked + .slider:before {
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+}
+
+/* ====== Responsive Design Rules ====== */
+
+/* Tablet and Large Mobile Adjustments (<=991px) */
+/* Optimizes card sizing and content for medium-sized screens */
+@media (max-width: 991px) {
+    /* Reduce card padding for better content fit */
+    .stats-card {
+        padding: 1rem !important;
+    }
+    
+    /* Adjust main stat number size */
+    .stats-card .fs-4 {
+        font-size: 1.25rem !important;
+    }
+    
+    /* Scale down icons proportionally */
+    .stats-card i.fa-2x {
+        font-size: 1.5rem !important;
+    }
+    
+    /* Reduce label text size */
+    .stats-card small {
+        font-size: 0.75rem;
+    }
+}
+
+/* Mobile Specific Adjustments (<=767px) */
+/* Optimized for space efficiency on mobile screens */
+@media (max-width: 767px) {
+    /* Reduce content padding on mobile */
+    .container-fluid {
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+    }
+
+    /* Optimize spacing for stacked items */
+    .d-flex.justify-content-between.align-items-center {
+        flex-direction: column;
+        align-items: stretch !important;
+        gap: 0.5rem;
+    }
+    
+    /* Streamlined card layout for mobile */
+    .stats-card {
+        text-align: center;
+        padding: 0.75rem !important;
+        min-height: 100px;
+    }
+    
+    /* Efficient space usage in cards */
+    .stats-card .d-flex {
+        justify-content: center;
+        gap: 0.5rem;
+    }
+
+    /* Optimize font sizes for mobile */
+    .stats-card .fs-4 {
+        font-size: 1.15rem !important;
+    }
+
+    .stats-card small {
+        font-size: 0.7rem;
+    }
+
+    /* Optimize nav tabs for mobile */
+    .nav-tabs .nav-link {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.85rem;
+        white-space: nowrap;
+    }
+
+    /* Allow nav tabs to scroll horizontally */
+    .nav-tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none;  /* IE and Edge */
+    }
+
+    .nav-tabs::-webkit-scrollbar {
+        display: none; /* Chrome, Safari and Opera */
+    }
+}
+
+/* iPad and Tablet Specific Optimizations (768px - 991px) */
+/* Fine-tunes layout specifically for tablet devices */
+/* Balances content size and touch targets for optimal tablet experience */
+@media (min-width: 768px) and (max-width: 991px) {
+    /* Ensure consistent card height on tablets */
+    .stats-card {
+        min-height: 140px;
+    }
+    
+    /* Optimize button size for tablet touch targets */
+    .btn {
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+    }
 }
 </style>
 

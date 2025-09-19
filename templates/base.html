@@ -1,7 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon_resized.png') }}">
+    <!--- Navbar Collapse function for Max 775 PX --->
+    <link rel="icon" type="image/png" href="        /* Custom navbar breakpoint */
+        @media (max-width: 775px) {
+            .navbar-collapse { url_for('static', filename='images/favicon_resized.png') }}">
 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -57,6 +60,36 @@
             padding: 0;
         }
 
+        /* Custom navbar expand point */
+        .navbar-expand-custom {
+            flex-wrap: nowrap;
+            justify-content: flex-start;
+        }
+        
+        @media (min-width: 776px) {
+            .navbar-expand-custom {
+                flex-wrap: nowrap;
+                justify-content: flex-start;
+            }
+            .navbar-expand-custom .navbar-nav {
+                flex-direction: row;
+            }
+            .navbar-expand-custom .navbar-nav .dropdown-menu {
+                position: absolute;
+            }
+            .navbar-expand-custom .navbar-nav .nav-link {
+                padding-right: 0.5rem;
+                padding-left: 0.5rem;
+            }
+            .navbar-expand-custom .navbar-collapse {
+                display: flex !important;
+                flex-basis: auto;
+            }
+            .navbar-expand-custom .navbar-toggler {
+                display: none;
+            }
+        }
+
         /* Navbar Styling */
         .navbar {
             background-color: var(--airbnb-white) !important;
@@ -66,6 +99,163 @@
             position: sticky;
             top: 0;
             z-index: 1000;
+        }
+
+        /* Mobile Navbar Styling */
+        .navbar-toggler {
+            padding: 0.5rem;
+            color: var(--airbnb-red);
+            transition: all 0.2s ease;
+            position: relative;
+            z-index: 1050;
+        }
+
+        /* Navbar collapse styling */
+        .navbar-collapse {
+            background: transparent;
+            padding: 0;
+            margin: 0;
+        }
+
+        /* Welcome text and dropdown styling */
+        .navbar .dropdown-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            color: var(--airbnb-gray-700);
+            text-decoration: none;
+            background: transparent;
+            border: none;
+            font-weight: 500;
+        }
+
+        .navbar .dropdown-toggle:hover,
+        .navbar .dropdown-toggle:focus {
+            color: var(--airbnb-red);
+        }
+
+        .navbar .dropdown-menu {
+            border: 1px solid var(--airbnb-gray-200);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+        }
+
+        .navbar .dropdown-item {
+            padding: 0.5rem 1rem;
+            color: var(--airbnb-gray-700);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 500;
+        }
+
+        .navbar .dropdown-item:hover {
+            background-color: var(--airbnb-gray-100);
+            color: var(--airbnb-red);
+        }
+
+        .navbar .btn-outline-primary {
+            border: none;
+            padding: 0.5rem 1rem;
+            color: var(--airbnb-gray-700);
+            background: transparent;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .navbar .btn-outline-primary:hover {
+            color: var(--airbnb-red);
+            background: transparent;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Mobile menu items spacing */
+        @media (max-width: 775px) {
+            .navbar-collapse {
+                position: absolute;
+                top: 100%;
+                left: 0;
+                right: 0;
+                z-index: 1040;
+                background: var(--airbnb-white);
+                padding: 1rem;
+                border-top: 1px solid var(--airbnb-gray-200);
+            }
+
+            .navbar-nav {
+                gap: 0.5rem;
+            }
+
+            .navbar .dropdown-menu {
+                border: none;
+                background: var(--airbnb-gray-100);
+                margin-top: 0.5rem;
+                border-radius: var(--airbnb-border-radius);
+            }
+
+            .navbar .btn {
+                width: 100%;
+                justify-content: center;
+                margin-top: 0.5rem;
+            }
+
+            .navbar-nav .dropdown-toggle::after {
+                margin-left: auto;
+            }
+
+            .dropdown-toggle {
+                justify-content: space-between;
+                width: 100%;
+                background: var(--airbnb-gray-100);
+            }
+        }
+
+        .navbar-toggler:focus {
+            outline: none;
+            box-shadow: none;
+        }
+
+        .navbar-toggler i {
+            font-size: 1.5rem;
+        }
+
+        @media (max-width: 775px) {
+            .navbar-collapse {
+                margin-top: 1rem;
+                padding: 1rem;
+                background: var(--airbnb-gray-100);
+                border-radius: var(--airbnb-border-radius);
+            }
+
+            .navbar-nav {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .navbar-nav .btn {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .dropdown {
+                width: 100%;
+            }
+
+            .dropdown-menu {
+                width: 100%;
+                margin-top: 0.5rem;
+            }
+
+            .notification-bell {
+                margin: 1rem 0;
+            }
         }
 
         .navbar-brand {
@@ -120,6 +310,50 @@
             padding: 2rem;
             max-width: 1200px;
             border: 1px solid var(--airbnb-gray-200);
+        }
+
+        /* Mobile responsive container styling */
+        @media screen and (max-width: 932px) {
+            /* For all mobile devices including iPhone 14 Pro Max */
+            .container-main {
+                margin: 0;
+                padding: 0;
+                border-radius: 0;
+                border: none;
+                box-shadow: none;
+                width: 100%;
+            }
+
+            /* Remove Bootstrap container side padding on mobile for full-bleed layout */
+            .container,
+            .navbar .container {
+                padding-left: 0.75rem !important; /* ~12px */
+                padding-right: 0.75rem !important;
+            }
+
+            /* Remove any extra spacing */
+            body {
+                padding: 0;
+                margin: 0;
+            }
+
+            /* Adjust card margins and padding for mobile */
+            .card {
+                border-radius: 0;
+                margin: 0.5rem 0;
+                box-shadow: none;
+            }
+
+            .card-body {
+                padding: 1rem;
+            }
+        }
+
+        /* Additional adjustments for very small devices */
+        @media screen and (max-width: 360px) {
+            .container-main {
+                padding: 0.25rem;
+            }
         }
 
         /* Card Styling */
@@ -552,8 +786,8 @@
             }
 
             .container-main {
-                margin: 1rem;
-                padding: 1.5rem;
+                margin: 0;
+                padding: 0;
             }
 
             .navbar-brand {
@@ -667,31 +901,40 @@
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg">
-        <div class="container">
+    <nav class="navbar navbar-expand-custom">
+        <div class="container px-3">
             <a class="navbar-brand" href="{{ url_for('index') }}">
                 <i class="fas fa-bolt"></i>
                 EPIC CRM
             </a>
+            
+            <!-- Hamburger Menu Button -->
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+                <i class="fas fa-bars"></i>
+            </button>
 
             {% if session.user_type %}
-            <div class="navbar-nav ms-auto d-flex align-items-center">
-                {% if session.user_type == 'admin' %}
-                <div class="notification-bell" id="notificationBell" title="Hot Duplicate Leads">
-                    <i class="fas fa-bell"></i>
-                    <span class="badge" id="notificationCount">0</span>
-                </div>
-                <div class="notification-dropdown" id="notificationDropdown">
-                    <div id="notificationList">
-                        <div style="padding: 16px; text-align: center; color: #888;">Loading...</div>
+            <div class="collapse navbar-collapse" id="navbarContent">
+                <div class="navbar-nav ms-auto">
+                    {% if session.user_type == 'admin' %}
+                    <div class="nav-item position-relative me-3">
+                        <div class="notification-bell" id="notificationBell" title="Hot Duplicate Leads">
+                            <i class="fas fa-bell"></i>
+                            <span class="badge" id="notificationCount">0</span>
+                        </div>
+                        <div class="notification-dropdown" id="notificationDropdown">
+                            <div id="notificationList">
+                                <div style="padding: 16px; text-align: center; color: #888;">Loading...</div>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                {% endif %}
-                <div class="dropdown">
-                    <button class="btn btn-link text-dark dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false" style="text-decoration: none;">
-                        <i class="fas fa-user-circle"></i> Welcome, {{ session.username }}
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                    {% endif %}
+                    <div class="nav-item dropdown me-3">
+                        <button class="dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-user-circle"></i>
+                            <span>Welcome, {{ session.username }}</span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
                         {% if session.user_type == 'cre' %}
                         <li><a class="dropdown-item" href="{{ url_for('change_cre_password') }}"><i class="fas fa-key"></i> Change Password</a></li>
                         {% elif session.user_type == 'ps' %}
@@ -704,6 +947,7 @@
                 <a class="btn btn-outline-primary" href="{{ url_for('logout') }}">
                     <i class="fas fa-sign-out-alt"></i> Logout
                 </a>
+            </div>
             </div>
             {% endif %}
         </div>
@@ -828,13 +1072,22 @@ fetchHotLeads();
     <!-- WebSocket Client Script -->
     <script src="{{ url_for('static', filename='js/websocket_client.js') }}"></script>
     
+    <!-- Session JSON for JS (avoids embedding Jinja inside JS) -->
+    <script id="session-json" type="application/json">{{ session | tojson }}</script>
+    
     <!-- Initialize WebSocket with user info -->
+    {% if session.user_id %}
     <script>
         // Get user info for WebSocket authentication
-        {% if session.user_id %}
         (function() {
             console.log('🔍 Fetching WebSocket user info...');
-            console.log('🔍 Session data:', {{ session | tojson }});
+            try {
+                var sessionJsonEl = document.getElementById('session-json');
+                var sessionData = sessionJsonEl ? JSON.parse(sessionJsonEl.textContent) : null;
+                console.log('🔍 Session data:', sessionData);
+            } catch (e) {
+                console.warn('🔶 Could not parse session JSON:', e);
+            }
             
             fetch('/api/websocket_user_info')
                 .then(function(response) { 
@@ -862,10 +1115,12 @@ fetchHotLeads();
                     console.error('❌ Error details:', error.message);
                 });
         })();
-        {% else %}
-        console.log('🔍 No user_id in session, skipping WebSocket user info fetch');
-        {% endif %}
     </script>
+    {% else %}
+    <script>
+        console.log('🔍 No user_id in session, skipping WebSocket user info fetch');
+    </script>
+    {% endif %}
     
 
 </body>
