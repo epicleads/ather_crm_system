@@ -149,9 +149,6 @@
                                                 <i class="fas fa-undo"></i>
                                             </button>
                                             {% endif %}
-                                            <button type="button" class="btn btn-sm btn-info lead-journey-btn" data-uid="{{ lead.uid }}" title="View Lead Journey">
-                                                <i class="fas fa-route"></i> Journey
-                                            </button>
                                         </div>
                                     </td>
                                 </tr>
@@ -167,22 +164,6 @@
                     {% endif %}
                 </div>
                 </form>
-            </div>
-            <!-- Add Lead Journey Modal -->
-            <div class="modal fade" id="leadJourneyModal" tabindex="-1" aria-labelledby="leadJourneyModalLabel" aria-hidden="true">
-              <div class="modal-dialog modal-xl">
-                <div class="modal-content">
-                  <div class="modal-header">
-                    <h5 class="modal-title" id="leadJourneyModalLabel">Lead Journey</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                  </div>
-                  <div class="modal-body">
-                    <div id="lead-journey-content">
-                      <div class="text-center"><span class="spinner-border"></span> Loading journey...</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
 
 
@@ -335,150 +316,6 @@ document.addEventListener('DOMContentLoaded', function() {
             form.appendChild(input);
             document.body.appendChild(form);
             form.submit();
-        });
-    });
-    // Lead Journey modal logic
-    document.querySelectorAll('.lead-journey-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            var uid = btn.getAttribute('data-uid');
-            var modal = new bootstrap.Modal(document.getElementById('leadJourneyModal'));
-            var content = document.getElementById('lead-journey-content');
-            content.innerHTML = '<div class="text-center"><span class="spinner-border"></span> Loading journey...</div>';
-            modal.show();
-            fetch('/lead_journey/' + uid)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success && data.journey) {
-                        var j = data.journey;
-                        // Assignment History
-                        var assignmentHtml = '<h6>Assignment History</h6><ul>';
-                        if (j.assignment_history && j.assignment_history.length > 0) {
-                            j.assignment_history.forEach(function(a) {
-                                assignmentHtml += `<li><b>${a.role}:</b> ${a.name || ''} <span class='text-muted'>(${a.assigned_at || 'N/A'})</span></li>`;
-                            });
-                    } else {
-                            assignmentHtml += '<li>No assignment history.</li>';
-                        }
-                        assignmentHtml += '</ul>';
-                        // Status Timeline
-                        var statusHtml = '<h6>Status Timeline</h6><table class="table table-sm table-bordered"><thead><tr><th>By</th><th>Call No</th><th>Status/Remark</th><th>Date</th></tr></thead><tbody>';
-                        if (j.status_timeline && j.status_timeline.length > 0) {
-                            j.status_timeline.forEach(function(s) {
-                                statusHtml += `<tr><td>${s.by || ''}</td><td>${s.call_no || ''}</td><td>${s.status || s.remark || ''}</td><td>${s.date || ''}</td></tr>`;
-                            });
-                        } else {
-                            statusHtml += '<tr><td colspan="4">No status timeline.</td></tr>';
-                        }
-                        statusHtml += '</tbody></table>';
-                        // Conversation Log
-                        var convHtml = '<h6>Conversation Log</h6><table class="table table-sm table-bordered"><thead><tr><th>By</th><th>Name</th><th>Call No</th><th>Attempt</th><th>Status</th><th>Remark</th><th>Follow-up Date</th><th>Timestamp</th></tr></thead><tbody>';
-                        if (j.conversation_log && j.conversation_log.length > 0) {
-                            j.conversation_log.forEach(function(c) {
-                                convHtml += `<tr><td>${c.by || ''}</td><td>${c.name || ''}</td><td>${c.call_no || ''}</td><td>${c.attempt || ''}</td><td>${c.status || ''}</td><td>${c.remark || ''}</td><td>${c.follow_up_date || ''}</td><td>${c.timestamp || ''}</td></tr>`;
-                            });
-                        } else {
-                            convHtml += '<tr><td colspan="8">No conversation log.</td></tr>';
-                        }
-                        convHtml += '</tbody></table>';
-                        // Outcome
-                        var outcomeHtml = '<h6>Final Outcome</h6>';
-                        if (j.outcome) {
-                            outcomeHtml += `<b>Status:</b> ${j.outcome.final_status || ''}<br>`;
-                            outcomeHtml += `<b>Timestamp:</b> ${j.outcome.timestamp || ''}<br>`;
-                            if (j.outcome.reason) outcomeHtml += `<b>Reason:</b> ${j.outcome.reason}<br>`;
-                        } else {
-                            outcomeHtml += 'No outcome data.';
-                        }
-                        // Plotly placeholder
-                        var plotlyHtml = '<div id="lead-journey-charts" style="margin:20px 0;"></div>';
-                        // Download PDF button
-                        var pdfBtnHtml = `<button class="btn btn-outline-secondary mb-3" onclick="window.open('/lead_journey_report/${uid}', '_blank')"><i class='fas fa-file-pdf'></i> Download PDF Report</button>`;
-                        // Compose all
-                        content.innerHTML = pdfBtnHtml + assignmentHtml + statusHtml + convHtml + outcomeHtml + plotlyHtml;
-                        // Plotly.js charts
-                        if (window.Plotly === undefined) {
-                            var plotlyScript = document.createElement('script');
-                            plotlyScript.src = 'https://cdn.plot.ly/plotly-latest.min.js';
-                            document.head.appendChild(plotlyScript);
-                            plotlyScript.onload = function() { renderLeadJourneyCharts(j); };
-                        } else {
-                            renderLeadJourneyCharts(j);
-                        }
-                        function renderLeadJourneyCharts(journey) {
-                            var chartsDiv = document.getElementById('lead-journey-charts');
-                            if (!chartsDiv) return;
-                            chartsDiv.innerHTML = '';
-                            // Timeline chart: status changes and call attempts
-                            var timelineData = [];
-                            if (journey.status_timeline && journey.status_timeline.length > 0) {
-                                var x = journey.status_timeline.map(s => s.date || '');
-                                var y = journey.status_timeline.map(s => (s.status || s.remark || ''));
-                                var by = journey.status_timeline.map(s => s.by || '');
-                                timelineData.push({
-                                    x: x,
-                                    y: y,
-                                    text: by,
-                                    mode: 'lines+markers+text',
-                                    type: 'scatter',
-                                    name: 'Status/Remark',
-                                    textposition: 'top center',
-                                    marker: { size: 10 }
-                                });
-                                Plotly.newPlot(chartsDiv, timelineData, {
-                                    title: 'Status Timeline',
-                                    xaxis: { title: 'Date' },
-                                    yaxis: { title: 'Status/Remark' },
-                                    height: 350
-                                });
-                            }
-                            // Bar chart: call attempts by CRE and PS
-                            var creAttempts = 0, psAttempts = 0;
-                            if (journey.cre_calls) creAttempts = journey.cre_calls.length;
-                            if (journey.ps_calls) psAttempts = journey.ps_calls.length;
-                            var barDiv = document.createElement('div');
-                            barDiv.id = 'lead-journey-bar';
-                            barDiv.style.height = '300px';
-                            chartsDiv.appendChild(barDiv);
-                            Plotly.newPlot(barDiv, [{
-                                x: ['CRE', 'PS'],
-                                y: [creAttempts, psAttempts],
-                                type: 'bar',
-                                marker: { color: ['#007bff', '#28a745'] }
-                            }], {
-                                title: 'Number of Call Attempts',
-                                yaxis: { title: 'Attempts' }
-                            });
-                            // Pie chart: status distribution
-                            var statusCounts = {};
-                            if (journey.conversation_log) {
-                                journey.conversation_log.forEach(function(c) {
-                                    var s = c.status || 'Unknown';
-                                    statusCounts[s] = (statusCounts[s] || 0) + 1;
-                                });
-                            }
-                            var pieDiv = document.createElement('div');
-                            pieDiv.id = 'lead-journey-pie';
-                            pieDiv.style.height = '300px';
-                            chartsDiv.appendChild(pieDiv);
-                            var pieLabels = Object.keys(statusCounts);
-                            var pieValues = Object.values(statusCounts);
-                            Plotly.newPlot(pieDiv, [{
-                                labels: pieLabels,
-                                values: pieValues,
-                                type: 'pie',
-                                textinfo: 'label+percent',
-                                marker: { colors: Plotly.d3.schemeCategory10 }
-                            }], {
-                                title: 'Status Distribution (CRE + PS)'
-                            });
-                        }
-                    } else {
-                        content.innerHTML = '<div class="alert alert-danger">Failed to load lead journey.</div>';
-                    }
-                })
-                .catch(function() {
-                    content.innerHTML = '<div class="alert alert-danger">Failed to load lead journey.</div>';
-                });
         });
     });
     // Live UID search filtering
