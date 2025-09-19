@@ -16,6 +16,7 @@ seaborn
 reportlab
 aiohttp
 flask-socketio
+redis>=4.0.0
 # For production use, eventlet is recommended for async workers
 # (if using gevent, you can add gevent instead)
 eventlet

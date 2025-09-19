@@ -51,9 +51,9 @@ class CRMWebSocketClient {
         try {
             // Connect to WebSocket server
             this.socket = io({
-                transports: ['polling'],
-                upgrade: false,
-                rememberUpgrade: false,
+                transports: ['websocket', 'polling'],
+                upgrade: true,
+                rememberUpgrade: true,
                 timeout: 20000
             });
             

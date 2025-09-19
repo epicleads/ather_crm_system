@@ -17,6 +17,21 @@
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Socket.IO Client -->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+        // Mute frontend console noise in production; enable via localStorage.crmDebug=true
+        (function () {
+            try {
+                var debugEnabled = false;
+                try { debugEnabled = !!(window.localStorage && window.localStorage.getItem('crmDebug')); } catch (e) {}
+                if (debugEnabled) return;
+                var noop = function () {};
+                console.log = noop;
+                console.info = noop;
+                console.debug = noop;
+                // Keep warnings and errors visible
+            } catch (e) {}
+        })();
+    </script>
 
     <style>
         :root {
