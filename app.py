@@ -5711,14 +5711,6 @@ def analytics():
         source_labels = list(source_counts.keys())
         source_data = list(source_counts.values())
 
-        # Lead trends (last 30 days)
-        trend_data = []
-        trend_labels = []
-        for i in range(29, -1, -1):
-            date = today - timedelta(days=i)
-            count = len([l for l in leads if l.get('date') == str(date)])
-            trend_data.append(count)
-            trend_labels.append(date.strftime('%m/%d'))
 
         # Top performing CREs with new parameters
         cre_performance = defaultdict(lambda: {'total': 0, 'hot': 0, 'warm': 0, 'cold': 0, 'won': 0, 'lost': 0, 'calls': []})
@@ -5806,22 +5798,6 @@ def analytics():
                 'percentage': percentage
             })
 
-        # Branch performance
-        branch_performance = []
-        branches = set([ps.get('branch') for ps in all_ps if ps.get('branch') and ps.get('branch') != 'TEST'])
-        for branch in branches:
-            branch_ps = [ps for ps in all_ps if ps.get('branch') == branch]
-            ps_names = [ps['name'] for ps in branch_ps]
-            branch_leads = [l for l in leads if l.get('ps_name') in ps_names]
-            branch_won = len([l for l in branch_leads if l.get('final_status') == 'Won'])
-            success_rate = round((branch_won / len(branch_leads) * 100) if branch_leads else 0, 1)
-            branch_performance.append({
-                'name': branch,
-                'ps_count': len(branch_ps),
-                'assigned_leads': len(branch_leads),
-                'won_leads': branch_won,
-                'success_rate': success_rate
-            })
 
         # Funnel data
         assigned_cre = len([l for l in leads if l.get('cre_name')])
@@ -5978,12 +5954,9 @@ def analytics():
             'total_cres': total_cres,
             'source_labels': source_labels,
             'source_data': source_data,
-            'trend_labels': trend_labels,
-            'trend_data': trend_data,
             'top_cres': top_cres,
             'lead_categories': lead_categories,
             'model_interest': model_interest,
-            'branch_performance': branch_performance,
             'funnel': funnel,
             'recent_activities': recent_activities,
             'campaign_platform_counts': campaign_platform_counts,
@@ -6018,12 +5991,9 @@ def analytics():
             'total_cres': 0,
             'source_labels': [],
             'source_data': [],
-            'trend_labels': [],
-            'trend_data': [],
             'top_cres': [],
             'lead_categories': [],
             'model_interest': [],
-            'branch_performance': [],
             'funnel': {
                 'total': 0,
                 'assigned_cre': 0,
@@ -7154,124 +7124,6 @@ def api_lead_call_history(uid):
     except Exception as e:
         return jsonify({'success': False, 'message': str(e), 'history': []})
 
-@app.route('/branch_performance/<branch_name>')
-@require_admin
-def branch_performance(branch_name):
-    """Get detailed PS performance for a specific branch"""
-    try:
-        # Get all PS users in this branch
-        branch_ps_users = safe_get_data('ps_users', {'branch': branch_name})
-
-        if not branch_ps_users:
-            return jsonify({
-                'success': False,
-                'message': f'No PS users found in {branch_name} branch'
-            })
-
-        # Get all leads and PS followups
-        all_leads = safe_get_data('lead_master')
-        all_ps_followups = safe_get_data('ps_followup_master')
-
-        # Calculate performance for each PS in the branch
-        ps_performance = []
-        total_branch_leads = 0
-        total_branch_won = 0
-
-        for ps_user in branch_ps_users:
-            ps_name = ps_user['name']
-
-            # Get PS followup data for this PS
-            ps_leads = [f for f in all_ps_followups if f.get('ps_name') == ps_name]
-
-            # Calculate metrics
-            total_leads = len(ps_leads)
-            pending_leads = len([l for l in ps_leads if l.get('final_status') == 'Pending'])
-            in_progress_leads = len([l for l in ps_leads if l.get('final_status') == 'In Progress'])
-            won_leads = len([l for l in ps_leads if l.get('final_status') == 'Won'])
-            lost_leads = len([l for l in ps_leads if l.get('final_status') == 'Lost'])
-
-            # Calculate success rate
-            success_rate = round((won_leads / total_leads * 100) if total_leads > 0 else 0, 1)
-
-            # Calculate average calls
-            total_calls = 0
-            for lead in ps_leads:
-                call_count = 0
-                for call_num in ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']:
-                    if lead.get(f'{call_num}_call_date'):
-                        call_count += 1
-                total_calls += call_count
-
-            avg_calls = round(total_calls / total_leads, 1) if total_leads > 0 else 0
-
-            # Get last activity (most recent call date)
-            last_activity = None
-            for lead in ps_leads:
-                for call_num in ['seventh', 'sixth', 'fifth', 'fourth', 'third', 'second', 'first']:  # Check in reverse order
-                    call_date = lead.get(f'{call_num}_call_date')
-                    if call_date:
-                        try:
-                            activity_date = datetime.strptime(call_date, '%Y-%m-%d').date()
-                            if not last_activity or activity_date > last_activity:
-                                last_activity = activity_date
-                        except (ValueError, TypeError):
-                            continue
-                        break
-
-            last_activity_str = last_activity.strftime('%Y-%m-%d') if last_activity else None
-
-            ps_performance.append({
-                'name': ps_user['name'],
-                'username': ps_user['username'],
-                'phone': ps_user.get('phone', 'N/A'),
-                'email': ps_user.get('email', 'N/A'),
-                'total_leads': total_leads,
-                'pending_leads': pending_leads,
-                'in_progress_leads': in_progress_leads,
-                'won_leads': won_leads,
-                'lost_leads': lost_leads,
-                'success_rate': success_rate,
-                'avg_calls': avg_calls,
-                'last_activity': last_activity_str
-            })
-
-            total_branch_leads += total_leads
-            total_branch_won += won_leads
-
-        # Calculate branch summary
-        branch_success_rate = round((total_branch_won / total_branch_leads * 100) if total_branch_leads > 0 else 0, 1)
-
-        summary = {
-            'total_ps': len(branch_ps_users),
-            'total_leads': total_branch_leads,
-            'won_leads': total_branch_won,
-            'success_rate': branch_success_rate
-        }
-
-        # Log branch performance access
-        auth_manager.log_audit_event(
-            user_id=session.get('user_id'),
-            user_type=session.get('user_type'),
-            action='BRANCH_PERFORMANCE_ACCESS',
-            resource='branch_performance',
-            details={'branch': branch_name}
-        )
-
-        return jsonify({
-            'success': True,
-            'data': {
-                'branch_name': branch_name,
-                'summary': summary,
-                'ps_performance': ps_performance
-            }
-        })
-
-    except Exception as e:
-        print(f"Error getting branch performance for {branch_name}: {e}")
-        return jsonify({
-            'success': False,
-            'message': f'Error loading branch performance: {str(e)}'
-        })
 
 
 @app.route('/export_leads')
@@ -8422,138 +8274,6 @@ def get_unassigned_leads_by_source():
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
-@app.route('/lead_journey/<uid>')
-@require_admin
-def lead_journey(uid):
-    """Return the complete journey of a lead as JSON for analysis and visualization."""
-    try:
-        # Fetch lead info
-        lead_result = supabase.table('lead_master').select('*').eq('uid', uid).execute()
-        if not lead_result.data:
-            return jsonify({'success': False, 'message': 'Lead not found'}), 404
-        lead = lead_result.data[0]
-
-        # Fetch CRE call attempts (all attempts, all calls)
-        cre_calls_result = supabase.table('cre_call_attempt_history').select('*').eq('uid', uid).order('created_at', desc=False).execute()
-        cre_calls = cre_calls_result.data if cre_calls_result.data else []
-
-        # Fetch PS call attempts (all attempts, all calls)
-        ps_calls_result = supabase.table('ps_call_attempt_history').select('*').eq('uid', uid).order('created_at', desc=False).execute()
-        ps_calls = ps_calls_result.data if ps_calls_result.data else []
-
-        # Fetch PS followup (if any)
-        ps_followup_result = supabase.table('ps_followup_master').select(
-            'lead_uid, ps_name, follow_up_date, final_status, source, lead_status, customer_name, customer_mobile_number, ps_assigned_at, '
-            'first_call_remark, first_call_date, '
-            'second_call_remark, second_call_date, '
-            'third_call_remark, third_call_date, '
-            'fourth_call_remark, fourth_call_date, '
-            'fifth_call_remark, fifth_call_date, '
-            'sixth_call_remark, sixth_call_date, '
-            'seventh_call_remark, seventh_call_date'
-        ).eq('lead_uid', uid).execute()
-        ps_followup = ps_followup_result.data[0] if ps_followup_result.data else None
-
-        # Assignment history (CRE, PS)
-        assignment_history = []
-        if lead.get('cre_name'):
-            assignment_history.append({
-                'role': 'CRE',
-                'name': lead.get('cre_name'),
-                'assigned_at': lead.get('cre_assigned_at')
-            })
-        if lead.get('ps_name'):
-            assignment_history.append({
-                'role': 'PS',
-                'name': lead.get('ps_name'),
-                'assigned_at': lead.get('ps_assigned_at')
-            })
-
-        # Status timeline (CRE and PS status changes)
-        status_timeline = []
-        # From lead_master: initial, final, and call statuses
-        for call in ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']:
-            call_date = lead.get(f'{call}_call_date')
-            call_remark = lead.get(f'{call}_remark')
-            if call_date or call_remark:
-                status_timeline.append({
-                    'by': 'CRE',
-                    'call_no': call,
-                    'date': call_date,
-                    'remark': call_remark
-                })
-        # From PS followup: call dates/remarks
-        if ps_followup:
-            for call in ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']:
-                call_date = ps_followup.get(f'{call}_call_date')
-                call_remark = ps_followup.get(f'{call}_call_remark')
-                if call_date or call_remark:
-                    status_timeline.append({
-                        'by': 'PS',
-                        'call_no': call,
-                        'date': call_date,
-                        'remark': call_remark
-                    })
-        # Final status
-        if lead.get('final_status'):
-            status_timeline.append({
-                'by': 'System',
-                'status': lead.get('final_status'),
-                'date': lead.get('won_timestamp') or lead.get('lost_timestamp')
-            })
-
-        # Conversation log (all remarks, CRE and PS, with timestamps)
-        conversation_log = []
-        # CRE call attempts
-        for call in cre_calls:
-            conversation_log.append({
-                'by': 'CRE',
-                'name': call.get('cre_name'),
-                'call_no': call.get('call_no'),
-                'attempt': call.get('attempt'),
-                'status': call.get('status'),
-                'remark': call.get('remarks'),
-                'follow_up_date': call.get('follow_up_date'),
-                'timestamp': call.get('update_ts') or call.get('created_at')
-            })
-        # PS call attempts
-        for call in ps_calls:
-            conversation_log.append({
-                'by': 'PS',
-                'name': call.get('ps_name'),
-                'call_no': call.get('call_no'),
-                'attempt': call.get('attempt'),
-                'status': call.get('status'),
-                'remark': call.get('remarks'),
-                'follow_up_date': call.get('follow_up_date'),
-                'timestamp': call.get('created_at')
-            })
-        # Sort conversation log by timestamp
-        conversation_log = [c for c in conversation_log if c['timestamp']]  # Remove None timestamps
-        conversation_log.sort(key=lambda x: x['timestamp'])
-
-        # Final outcome
-        outcome = {
-            'final_status': lead.get('final_status'),
-            'timestamp': lead.get('won_timestamp') or lead.get('lost_timestamp'),
-            'reason': lead.get('lost_reason') if lead.get('final_status') == 'Lost' else None
-        }
-
-        # Compose response
-        journey = {
-            'lead': lead,
-            'assignment_history': assignment_history,
-            'status_timeline': status_timeline,
-            'cre_calls': cre_calls,
-            'ps_calls': ps_calls,
-            'ps_followup': ps_followup,
-            'conversation_log': conversation_log,
-            'outcome': outcome
-        }
-        return jsonify({'success': True, 'journey': journey})
-    except Exception as e:
-        print(f"Error in lead_journey: {e}")
-        return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/export_filtered_leads')
 @require_admin
@@ -15444,6 +15164,5 @@ def api_ps_performance_analytics():
 
 if __name__ == '__main__':
     print(" Starting Ather CRM System...")
-    
     print("🌐 You can also try: http://localhost:5000")
     socketio.run(app, host='0.0.0.0', port=5000, debug=True, use_reloader=False)
