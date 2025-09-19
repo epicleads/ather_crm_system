@@ -1156,14 +1156,6 @@
                     <canvas id="sourceChart" width="600" height="350"></canvas>
                 </div>
             </div>
-            <div class="col-md-6">
-                <div class="chart-container">
-                    <h5 style="color: var(--airbnb-gray-700); font-weight: 600; margin-bottom: 1rem;">
-                        <i class="fas fa-line-chart" style="color: var(--airbnb-red);"></i> Lead Trends
-                    </h5>
-                    <canvas id="trendChart" width="600" height="350"></canvas>
-                </div>
-            </div>
         </div>
 
         <!-- Performance Tables -->
@@ -2462,57 +2454,6 @@
             }
         });
 
-        // Lead Trends Line Chart
-        const trendCtx = document.getElementById('trendChart').getContext('2d');
-        new Chart(trendCtx, {
-            type: 'line',
-            data: {
-                labels: {{ analytics.trend_labels | tojson | safe }},
-                datasets: [{
-                    label: 'Daily Leads',
-                    data: {{ analytics.trend_data | tojson | safe }},
-                    borderColor: '#FF385C',
-                    backgroundColor: 'rgba(255, 56, 92, 0.1)',
-                    tension: 0.4,
-                    fill: true,
-                    pointBackgroundColor: '#FF385C',
-                    pointBorderColor: '#FFFFFF',
-                    pointBorderWidth: 2
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        grid: {
-                            color: 'rgba(0,0,0,0.1)'
-                        },
-                        ticks: {
-                            font: {
-                                family: 'Lexend'
-                            }
-                        }
-                    },
-                    x: {
-                        grid: {
-                            color: 'rgba(0,0,0,0.1)'
-                        },
-                        ticks: {
-                            font: {
-                                family: 'Lexend'
-                            }
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: false
-                    }
-                }
-            }
-        });
 
 
         function metricNumberCell(val, cls) {
