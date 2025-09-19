@@ -30,66 +30,110 @@ class WebSocketManager:
         
         @self.socketio.on('connect')
         def on_connect():
-            self._handle_connect()
+            try:
+                self._handle_connect()
+            except Exception as e:
+                self.logger.error(f"Error in connect handler: {e}")
+                import traceback
+                traceback.print_exc()
             
         @self.socketio.on('disconnect')
         def on_disconnect():
-            self._handle_disconnect()
+            try:
+                self._handle_disconnect()
+            except Exception as e:
+                self.logger.error(f"Error in disconnect handler: {e}")
+                import traceback
+                traceback.print_exc()
             
         @self.socketio.on('authenticate')
         def on_authenticate(data):
-            self._handle_authenticate(data)
+            try:
+                self._handle_authenticate(data)
+            except Exception as e:
+                self.logger.error(f"Error in authenticate handler: {e}")
+                import traceback
+                traceback.print_exc()
             
         @self.socketio.on('join_lead_room')
         def on_join_lead_room(data):
-            self._handle_join_lead_room(data)
+            try:
+                self._handle_join_lead_room(data)
+            except Exception as e:
+                self.logger.error(f"Error in join_lead_room handler: {e}")
+                import traceback
+                traceback.print_exc()
             
         @self.socketio.on('leave_lead_room')
         def on_leave_lead_room(data):
-            self._handle_leave_lead_room(data)
+            try:
+                self._handle_leave_lead_room(data)
+            except Exception as e:
+                self.logger.error(f"Error in leave_lead_room handler: {e}")
+                import traceback
+                traceback.print_exc()
             
         @self.socketio.on('dashboard_data_request')
         def on_dashboard_request(data):
-            self._handle_dashboard_request(data)
+            try:
+                self._handle_dashboard_request(data)
+            except Exception as e:
+                self.logger.error(f"Error in dashboard_request handler: {e}")
+                import traceback
+                traceback.print_exc()
 
     def _handle_connect(self):
         """Handle new WebSocket connection."""
-        self.connection_count += 1
-        self.logger.info(f"User connected: {self.socketio.request.sid} (Total: {self.connection_count})")
-        
-        # Check connection limits
-        if self.connection_count > self.max_connections:
-            self.logger.warning(f"Connection limit exceeded: {self.connection_count}")
-            self.socketio.emit('error', {'message': 'Server at capacity'})
-            self.socketio.disconnect()
-            return
+        try:
+            from flask import request
+            sid = request.sid
+            self.connection_count += 1
+            self.logger.info(f"User connected: {sid} (Total: {self.connection_count})")
             
-        # Store basic connection info
-        self.active_users[self.socketio.request.sid] = {
-            'connected_at': datetime.now(),
-            'authenticated': False,
-            'user_id': None,
-            'user_type': None,
-            'rooms': set()
-        }
+            # Check connection limits
+            if self.connection_count > self.max_connections:
+                self.logger.warning(f"Connection limit exceeded: {self.connection_count}")
+                self.socketio.emit('error', {'message': 'Server at capacity'})
+                self.socketio.disconnect()
+                return
+                
+            # Store basic connection info
+            self.active_users[sid] = {
+                'connected_at': datetime.now(),
+                'authenticated': False,
+                'user_id': None,
+                'user_type': None,
+                'rooms': set()
+            }
+        except Exception as e:
+            self.logger.error(f"Error in _handle_connect: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _handle_disconnect(self):
         """Handle WebSocket disconnection."""
-        sid = self.socketio.request.sid
-        if sid in self.active_users:
-            user_info = self.active_users[sid]
-            self.logger.info(f"User disconnected: {sid} (User: {user_info.get('user_id', 'unknown')})")
-            
-            # Leave all rooms
-            for room in user_info.get('rooms', set()):
-                self.socketio.leave_room(room, sid=sid)
+        try:
+            from flask import request
+            sid = request.sid
+            if sid in self.active_users:
+                user_info = self.active_users[sid]
+                self.logger.info(f"User disconnected: {sid} (User: {user_info.get('user_id', 'unknown')})")
                 
-            del self.active_users[sid]
-            self.connection_count = max(0, self.connection_count - 1)
+                # Leave all rooms
+                for room in user_info.get('rooms', set()):
+                    self.socketio.leave_room(room, sid=sid)
+                    
+                del self.active_users[sid]
+                self.connection_count = max(0, self.connection_count - 1)
+        except Exception as e:
+            self.logger.error(f"Error in _handle_disconnect: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _handle_authenticate(self, data):
         """Handle user authentication."""
         try:
+            from flask import request
             user_id = data.get('user_id')
             user_type = data.get('user_type')
             username = data.get('username')
@@ -100,7 +144,7 @@ class WebSocketManager:
                 return
                 
             # Store user info
-            sid = self.socketio.request.sid
+            sid = request.sid
             if sid in self.active_users:
                 self.active_users[sid].update({
                     'authenticated': True,
@@ -134,11 +178,12 @@ class WebSocketManager:
     def _handle_join_lead_room(self, data):
         """Handle joining a specific lead room."""
         try:
+            from flask import request
             lead_uid = data.get('lead_uid')
             if not lead_uid:
                 return
                 
-            sid = self.socketio.request.sid
+            sid = request.sid
             if sid in self.active_users and self.active_users[sid]['authenticated']:
                 room_name = f"lead_{lead_uid}"
                 self.socketio.join_room(room_name, sid=sid)
@@ -151,11 +196,12 @@ class WebSocketManager:
     def _handle_leave_lead_room(self, data):
         """Handle leaving a specific lead room."""
         try:
+            from flask import request
             lead_uid = data.get('lead_uid')
             if not lead_uid:
                 return
                 
-            sid = self.socketio.request.sid
+            sid = request.sid
             if sid in self.active_users:
                 room_name = f"lead_{lead_uid}"
                 self.socketio.leave_room(room_name, sid=sid)
@@ -168,6 +214,7 @@ class WebSocketManager:
     def _handle_dashboard_request(self, data):
         """Handle dashboard data requests - move to background task."""
         try:
+            from flask import request
             user_type = data.get('user_type')
             user_id = data.get('user_id')
             
@@ -278,7 +325,7 @@ class WebSocketManager:
             return result.count if hasattr(result, 'count') else 0
         except Exception as e:
             self.logger.error(f"Error getting count from {table_name}: {e}")
-            return 0
+        return 0
 
     def broadcast_lead_update(self, lead_uid, update_data):
         """Legacy method - now uses room-based notifications."""
