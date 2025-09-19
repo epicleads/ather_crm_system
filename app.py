@@ -52,19 +52,46 @@ from werkzeug.security import generate_password_hash, check_password_hash
 load_dotenv()
 
 app = Flask(__name__)
-# Enable Socket.IO but disable WebSocket transport (force long-polling only)
-socketio = SocketIO(
-    app,
-    cors_allowed_origins="*",
-    async_mode='eventlet',
-    logger=False,
-    engineio_logger=False,
-    ping_timeout=60,
-    ping_interval=25,
-    max_http_buffer_size=1e8,
-    allow_upgrades=False,
-    transports=['polling']
-)
+# Enable Socket.IO with WebSocket support and optional Redis message queue
+import os
+redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+
+# Test Redis connection
+redis_available = False
+try:
+    import redis
+    r = redis.from_url(redis_url, socket_connect_timeout=2, socket_timeout=2)
+    r.ping()
+    redis_available = True
+    print("✅ Redis connected successfully")
+except Exception as e:
+    print(f"⚠️ Redis not available: {e}")
+    print("📝 Running in single-worker mode (no Redis)")
+
+# Configure SocketIO with or without Redis
+socketio_config = {
+    'cors_allowed_origins': "*",
+    'async_mode': 'eventlet',
+    'logger': True,
+    'engineio_logger': False,
+    'ping_timeout': 10,
+    'ping_interval': 5,
+    'max_http_buffer_size': 1e6,
+    'allow_upgrades': True,
+    'transports': ['polling', 'websocket']
+}
+
+# Add Redis message queue only if available
+if redis_available:
+    socketio_config.update({
+        'message_queue': redis_url,
+        'channel': 'crm_updates'
+    })
+    print("🚀 Multi-worker scaling enabled with Redis")
+else:
+    print("🔧 Single-worker mode (add REDIS_URL for scaling)")
+
+socketio = SocketIO(app, **socketio_config)
 
 # CORS configuration for external submission endpoints
 ALLOWED_CORS_ORIGINS = {
@@ -1221,15 +1248,7 @@ def track_cre_call_attempt(uid, cre_name, call_no, lead_status, call_was_recorde
         
         # Send WebSocket notification for real-time updates
         if websocket_manager:
-            websocket_manager.broadcast_lead_update(uid, {
-                'call_attempt': {
-                    'call_no': call_no,
-                    'attempt': next_attempt,
-                    'status': lead_status,
-                    'cre_name': cre_name,
-                    'timestamp': datetime.now().isoformat()
-                }
-            })
+            websocket_manager.notify_call_attempt(uid, call_no, lead_status, 'cre', cre_name)
 
         # --- TAT Calculation and Update ---
         if call_no == 'first' and next_attempt == 1:
@@ -1326,15 +1345,7 @@ def track_ps_call_attempt(uid, ps_name, call_no, lead_status, call_was_recorded=
         
         # Send WebSocket notification for real-time updates
         if websocket_manager:
-            websocket_manager.broadcast_lead_update(uid, {
-                'ps_call_attempt': {
-                    'call_no': call_no,
-                    'attempt': next_attempt,
-                    'status': lead_status,
-                    'ps_name': ps_name,
-                    'timestamp': datetime.now().isoformat()
-                }
-            })
+            websocket_manager.notify_call_attempt(uid, call_no, lead_status, 'ps', ps_name)
     except Exception as e:
         print(f"Error tracking PS call attempt: {e}")
 
@@ -19065,14 +19076,7 @@ def submit_external_lead():
             
             # Send WebSocket notification (same as CRE)
             if websocket_manager:
-                websocket_manager.broadcast_lead_update(uid, {
-                    'new_lead': {
-                        'uid': uid,
-                        'name': data['customer_name'],
-                        'source': data['source'],
-                        'timestamp': datetime.now().isoformat()
-                    }
-                })
+                websocket_manager.notify_lead_status_update(uid, 'New Lead', 'System', f"New lead from {data['source']}")
                 print(f"🔔 WebSocket notification sent for new lead: {uid}")
             
             return jsonify({
@@ -19594,6 +19598,75 @@ def api_ps_performance_analytics():
         return jsonify({
             'success': False,
             'message': f'Error: {str(e)}'
+        }), 500
+
+
+@app.route('/api/websocket_health')
+@require_auth
+def websocket_health():
+    """WebSocket health monitoring endpoint."""
+    try:
+        if websocket_manager:
+            active_users = websocket_manager.get_active_users()
+            
+            # Basic health metrics
+            health_data = {
+                'status': 'healthy',
+                'total_connections': active_users.get('total_connections', 0),
+                'authenticated_users': active_users.get('authenticated_users', 0),
+                'users_by_type': active_users.get('users_by_type', {}),
+                'room_counts': active_users.get('room_counts', {}),
+                'max_connections': getattr(websocket_manager, 'max_connections', 1000),
+                'redis_connected': redis_available,
+                'scaling_mode': 'multi-worker' if redis_available else 'single-worker',
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            # Health status based on connection count
+            connection_ratio = health_data['total_connections'] / health_data['max_connections']
+            if connection_ratio > 0.9:
+                health_data['status'] = 'critical'
+            elif connection_ratio > 0.7:
+                health_data['status'] = 'warning'
+            
+            return jsonify(health_data)
+        else:
+            return jsonify({
+                'status': 'disabled',
+                'message': 'WebSocket manager not initialized',
+                'timestamp': datetime.now().isoformat()
+            })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'Health check failed: {str(e)}',
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+
+@app.route('/api/websocket_stats')
+@require_admin
+def websocket_stats():
+    """Detailed WebSocket statistics for admin monitoring."""
+    try:
+        if websocket_manager:
+            stats = {
+                'active_users': websocket_manager.get_active_users(),
+                'connection_history': {
+                    'current_connections': websocket_manager.connection_count,
+                    'max_connections': websocket_manager.max_connections
+                },
+                'room_details': websocket_manager._get_room_counts(),
+                'timestamp': datetime.now().isoformat()
+            }
+            return jsonify(stats)
+        else:
+            return jsonify({
+                'error': 'WebSocket manager not initialized'
+            }), 503
+    except Exception as e:
+        return jsonify({
+            'error': f'Failed to get WebSocket stats: {str(e)}'
         }), 500
 
 
