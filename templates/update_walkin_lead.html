@@ -49,10 +49,10 @@
   .form-label {
     font-weight: 600;
     color: #2c3e50;
-    margin-bottom: 0.75rem;
-    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.8rem;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
     display: flex;
     align-items: center;
   }
@@ -64,12 +64,13 @@
   
   .form-control, .form-select {
     border: 2px solid #e9ecef;
-    border-radius: 12px;
-    padding: 0.875rem 1.25rem;
+    border-radius: 8px;
+    padding: 0.6rem 0.8rem;
     transition: all 0.3s ease;
     background: #ffffff;
     font-weight: 500;
     color: #2c3e50;
+    font-size: 0.85rem;
   }
   
   .form-control:focus, .form-select:focus {
@@ -82,14 +83,15 @@
   .btn-submit {
     background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
     border: none;
-    border-radius: 30px;
-    padding: 1rem 2.5rem;
+    border-radius: 25px;
+    padding: 0.8rem 2rem;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 0.8px;
     transition: all 0.3s ease;
     box-shadow: 0 6px 20px rgba(220, 53, 69, 0.4);
     color: white;
+    font-size: 0.9rem;
   }
   
   .btn-submit:hover {
@@ -100,13 +102,14 @@
   
   .btn-outline-secondary {
     border: 2px solid #6c757d;
-    border-radius: 30px;
-    padding: 1rem 2.5rem;
+    border-radius: 25px;
+    padding: 0.8rem 2rem;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 0.8px;
     transition: all 0.3s ease;
     color: #6c757d;
+    font-size: 0.9rem;
   }
   
   .btn-outline-secondary:hover {
@@ -293,22 +296,79 @@
     transform: translateY(-2px);
   }
   
-  .call-history .text-warning {
-    color: #ffc107 !important;
-    font-weight: 600;
-  }
+   .call-history .text-warning {
+     color: #ffc107 !important;
+     font-weight: 600;
+   }
+   
+   /* Lead Status Dropdown Specific Styles */
+   select[name="lead_status"] {
+     font-size: 0.68rem !important;
+     min-height: 4rem !important;
+     padding: 0.7rem !important;
+     line-height: 1.2 !important;
+     white-space: normal !important;
+     word-wrap: break-word !important;
+     overflow-wrap: break-word !important;
+     hyphens: auto !important;
+     height: auto !important;
+   }
+   
+   select[name="lead_status"] option {
+     white-space: normal !important;
+     word-wrap: break-word !important;
+     padding: 0.4rem !important;
+     line-height: 1.2 !important;
+     font-size: 0.68rem !important;
+     height: auto !important;
+   }
+   
+   /* Samsung Galaxy S8+ Specific Optimizations */
+   @media screen and (max-width: 414px) and (max-height: 896px) {
+     .lead-info {
+       padding: 0.8rem !important;
+       margin-bottom: 1.2rem !important;
+     }
+     
+     .lead-info h5 {
+       font-size: 0.9rem !important;
+       margin-bottom: 0.8rem !important;
+     }
+     
+     .info-item {
+       padding: 0.5rem !important;
+       margin-bottom: 0.5rem !important;
+     }
+     
+     .info-item p {
+       font-size: 0.75rem !important;
+     }
+     
+     .info-item strong {
+       font-size: 0.7rem !important;
+     }
+     
+     .badge {
+       font-size: 0.6rem !important;
+       padding: 0.2rem 0.4rem !important;
+     }
+     
+     select[name="lead_status"] {
+       font-size: 0.65rem !important;
+       min-height: 4.5rem !important;
+       padding: 0.6rem !important;
+     }
+   }
 </style>
 
-<div class="container mt-4">
-  <div class="row justify-content-center">
-    <div class="col-lg-10">
-      <div class="card update-card">
-        <div class="card-header">
-          <h3 class="mb-0">
-            <i class="fas fa-edit me-2"></i>Update Walk-in Lead
-          </h3>
-        </div>
-        <div class="card-body p-4">
+<div class="container-fluid px-0">
+  <div class="card update-card" style="border-radius: 0; margin: 0;">
+    <div class="card-header" style="border-radius: 0;">
+      <h3 class="mb-0" style="font-size: 1.4rem;">
+        <i class="fas fa-edit me-2"></i>Update Walk-in Lead
+      </h3>
+    </div>
+    <div class="card-body px-2 py-3">
           {% if test_drive_state.locked %}
           <div class="alert alert-warning alert-dismissible fade show" role="alert">
             <i class="fas fa-lock me-2"></i>
@@ -322,35 +382,33 @@
           {% endif %}
           
           <!-- Lead Information -->
-          <div class="lead-info">
-            <h5><i class="fas fa-user-circle me-2"></i>Customer Information</h5>
-                        <div class="row">
-              <div class="col-md-6">
-                <div class="info-item">
-                  <p><strong><i class="fas fa-id-card me-2"></i>UID:</strong> {{ walkin_lead.uid }}</p>
-                </div>
-                <div class="info-item">
-                  <p><strong><i class="fas fa-user me-2"></i>Name:</strong> {{ walkin_lead.customer_name }}</p>
-                </div>
-                <div class="info-item">
-                  <p><strong><i class="fas fa-phone me-2"></i>Mobile:</strong> {{ walkin_lead.mobile_number }}</p>
-                </div>
-              </div>
-              <div class="col-md-6">
-                <div class="info-item">
-                  <p><strong><i class="fas fa-flag me-2"></i>Status:</strong> 
-                    <span class="badge {% if walkin_lead.status == 'Won' %}bg-success{% elif walkin_lead.status == 'Lost' %}bg-danger{% else %}bg-warning{% endif %}">
-                      {{ walkin_lead.status }}
-                    </span>
-                  </p>
-                </div>
-                <div class="info-item">
-                  <p><strong><i class="fas fa-info-circle me-2"></i>Lead Status:</strong> 
-                    <span class="badge bg-info">
-                      {{ walkin_lead.lead_status or 'Not Set' }}
-                    </span>
-                  </p>
-                </div>
+          <div class="lead-info" style="padding: 1rem; margin-bottom: 1.5rem;">
+            <h5 style="font-size: 1rem; margin-bottom: 1rem;"><i class="fas fa-user-circle me-2"></i>Customer Information</h5>
+            <div class="row">
+              <div class="col-12">
+                 <div class="info-item" style="padding: 0.6rem; margin-bottom: 0.6rem;">
+                   <p style="font-size: 0.8rem; margin-bottom: 0;"><strong style="font-size: 0.75rem;"><i class="fas fa-id-card me-1"></i>UID:</strong> {{ walkin_lead.uid }}</p>
+                 </div>
+                 <div class="info-item" style="padding: 0.6rem; margin-bottom: 0.6rem;">
+                   <p style="font-size: 0.8rem; margin-bottom: 0;"><strong style="font-size: 0.75rem;"><i class="fas fa-user me-1"></i>Name:</strong> {{ walkin_lead.customer_name }}</p>
+                 </div>
+                 <div class="info-item" style="padding: 0.6rem; margin-bottom: 0.6rem;">
+                   <p style="font-size: 0.8rem; margin-bottom: 0;"><strong style="font-size: 0.75rem;"><i class="fas fa-phone me-1"></i>Mobile:</strong> {{ walkin_lead.mobile_number }}</p>
+                 </div>
+                 <div class="info-item" style="padding: 0.6rem; margin-bottom: 0.6rem;">
+                   <p style="font-size: 0.8rem; margin-bottom: 0;"><strong style="font-size: 0.75rem;"><i class="fas fa-flag me-1"></i>Status:</strong> 
+                     <span class="badge {% if walkin_lead.status == 'Won' %}bg-success{% elif walkin_lead.status == 'Lost' %}bg-danger{% else %}bg-warning{% endif %}" style="font-size: 0.65rem; padding: 0.25rem 0.5rem;">
+                       {{ walkin_lead.status }}
+                     </span>
+                   </p>
+                 </div>
+                 <div class="info-item" style="padding: 0.6rem; margin-bottom: 0;">
+                   <p style="font-size: 0.8rem; margin-bottom: 0;"><strong style="font-size: 0.75rem;"><i class="fas fa-info-circle me-1"></i>Lead Status:</strong> 
+                     <span class="badge bg-info" style="font-size: 0.65rem; padding: 0.25rem 0.5rem; word-wrap: break-word; white-space: normal; max-width: 100%; display: inline-block;">
+                       {{ walkin_lead.lead_status or 'Not Set' }}
+                     </span>
+                   </p>
+                 </div>
               </div>
             </div>
           </div>
@@ -358,8 +416,8 @@
           <!-- Update Form -->
           <form method="POST">
             <div class="row">
-              <div class="col-md-6">
-                <div class="mb-3">
+              <div class="col-12">
+                <div class="mb-2">
                   <label class="form-label">
                     <i class="fas fa-phone me-2"></i>Follow-up Number
                   </label>
@@ -370,14 +428,16 @@
                       </option>
                     {% endfor %}
                   </select>
-                  <small class="text-muted">
+                  <small class="text-muted" style="font-size: 0.7rem;">
                     <i class="fas fa-info-circle me-1"></i>
                     Only the next available call can be recorded. Previous calls are locked.
                   </small>
                 </div>
               </div>
-              <div class="col-md-6">
-                <div class="mb-3">
+            </div>
+            <div class="row">
+              <div class="col-12">
+                <div class="mb-2">
                   <label class="form-label">
                     <i class="fas fa-calendar me-2"></i>Call Date
                   </label>
@@ -386,16 +446,16 @@
               </div>
             </div>
 
-            <div class="mb-3">
+            <div class="mb-2">
               <label class="form-label">
                 <i class="fas fa-comment me-2"></i>Call Remarks
               </label>
-              <textarea class="form-control" name="call_remark" rows="3" placeholder="Enter call remarks..." required></textarea>
+              <textarea class="form-control" name="call_remark" rows="2" placeholder="Enter call remarks..." required style="font-size: 0.85rem;"></textarea>
             </div>
 
             <div class="row">
-              <div class="col-md-3">
-                <div class="mb-3">
+              <div class="col-6">
+                <div class="mb-2">
                   <label class="form-label">
                     <i class="fas fa-flag me-2"></i>Status
                   </label>
@@ -406,8 +466,8 @@
                   </select>
                 </div>
               </div>
-              <div class="col-md-3">
-                <div class="mb-3">
+              <div class="col-6">
+                <div class="mb-2">
                   <label class="form-label">
                     <i class="fas fa-fire me-2"></i>Lead Category
                   </label>
@@ -418,32 +478,34 @@
                   </select>
                 </div>
               </div>
-              <div class="col-md-3">
-                <div class="mb-3">
+            </div>
+            <div class="row">
+              <div class="col-12">
+                <div class="mb-2">
                   <label class="form-label">
                     <i class="fas fa-car-side me-2"></i>Test Drive Done?
                     {% if not test_drive_state.locked %}<span class="text-danger">*</span>{% endif %}
                   </label>
                   {% if test_drive_state.locked %}
                     {% if test_drive_state.value %}
-                      <div class="d-flex align-items-center">
-                        <span class="badge bg-success me-2">
+                      <div class="d-flex align-items-center flex-wrap">
+                        <span class="badge bg-success me-2" style="font-size: 0.7rem;">
                           <i class="fas fa-lock me-1"></i>Test Drive Done - Locked
                         </span>
-                        <small class="text-muted">Updated by: {{ test_drive_state.updated_by }}</small>
+                        <small class="text-muted" style="font-size: 0.7rem;">Updated by: {{ test_drive_state.updated_by }}</small>
                       </div>
-                      <div class="mt-2">
-                        <small class="text-info">
+                      <div class="mt-1">
+                        <small class="text-info" style="font-size: 0.7rem;">
                           <i class="fas fa-info-circle me-1"></i>
                           Test drive completed! Consider updating lead status to "Interested", "Booked", or "Retailed".
                         </small>
                       </div>
                     {% else %}
-                      <div class="d-flex align-items-center">
-                        <span class="badge bg-warning me-2">
+                      <div class="d-flex align-items-center flex-wrap">
+                        <span class="badge bg-warning me-2" style="font-size: 0.7rem;">
                           <i class="fas fa-lock me-1"></i>Test Drive Not Done - Locked
                         </span>
-                        <small class="text-muted">Updated by: {{ test_drive_state.updated_by }}</small>
+                        <small class="text-muted" style="font-size: 0.7rem;">Updated by: {{ test_drive_state.updated_by }}</small>
                       </div>
                     {% endif %}
                     <!-- Hidden input to maintain form structure when locked -->
@@ -460,8 +522,8 @@
             </div>
 
             <div class="row">
-              <div class="col-md-6">
-                <div class="mb-3">
+              <div class="col-12">
+                <div class="mb-2">
                   <label class="form-label">
                     <i class="fas fa-car me-2"></i>Model Interested
                   </label>
@@ -472,37 +534,39 @@
                   </select>
                 </div>
               </div>
-              <div class="col-md-6">
-                <div class="mb-3">
+            </div>
+            <div class="row">
+              <div class="col-12">
+                <div class="mb-2">
                   <label class="form-label">
                     <i class="fas fa-info-circle me-2"></i>Lead Status
                   </label>
-                  <select class="form-select" name="lead_status" required>
-                    <option value="" disabled {% if not walkin_lead.lead_status %}selected{% endif %}>Select Lead Status</option>
-                    <option value="Call not Connected" {% if walkin_lead.lead_status == 'Call not Connected' %}selected{% endif %}>Call not Connected</option>
-                    <option value="Retailed" {% if walkin_lead.lead_status == 'Retailed' %}selected{% endif %}>Retailed</option>
-                    <option value="Discount Issue" {% if walkin_lead.lead_status == 'Discount Issue' %}selected{% endif %}>Discount Issue</option>
-                    <option value="Delayed" {% if walkin_lead.lead_status == 'Delayed' %}selected{% endif %}>Delayed</option>
-                    <option value="Booked" {% if walkin_lead.lead_status == 'Booked' %}selected{% endif %}>Booked</option>
-                    <option value="Test Drive" {% if walkin_lead.lead_status == 'Test Drive' %}selected{% endif %}>Test Drive</option>
-                    <option value="Planning in Next Month" {% if walkin_lead.lead_status == 'Planning in Next Month' %}selected{% endif %}>Planning in Next Month</option>
-                    <option value="Interested" {% if walkin_lead.lead_status == 'Interested' %}selected{% endif %}>Interested</option>
-                    <option value="Lost to Competition" {% if walkin_lead.lead_status == 'Lost to Competition' %}selected{% endif %}>Lost to Competition</option>
-                    <option value="Finance Rejected" {% if walkin_lead.lead_status == 'Finance Rejected' %}selected{% endif %}>Finance Rejected</option>
-                    <option value="Dropped" {% if walkin_lead.lead_status == 'Dropped' %}selected{% endif %}>Dropped</option>
-                    <option value="Lost to codealer" {% if walkin_lead.lead_status == 'Lost to codealer' %}selected{% endif %}>Lost to codealer</option>
-                    <option value="Busy on another call" {% if walkin_lead.lead_status == 'Busy on another call' %}selected{% endif %}>Busy on another call</option>
-                    <option value="RNR" {% if walkin_lead.lead_status == 'RNR' %}selected{% endif %}>RNR</option>
-                    <option value="Call me Back" {% if walkin_lead.lead_status == 'Call me Back' %}selected{% endif %}>Call me Back</option>
-                    <option value="Not Interested" {% if walkin_lead.lead_status == 'Not Interested' %}selected{% endif %}>Not Interested</option>
-                    <option value="Call Disconnected" {% if walkin_lead.lead_status == 'Call Disconnected' %}selected{% endif %}>Call Disconnected</option>
-                  </select>
+                   <select class="form-select" name="lead_status" required style="font-size: 0.68rem; min-height: 4rem; padding: 0.7rem; line-height: 1.2; white-space: normal; word-wrap: break-word; height: auto;">
+                     <option value="" disabled {% if not walkin_lead.lead_status %}selected{% endif %}>Select Lead Status</option>
+                     <option value="Call not Connected" {% if walkin_lead.lead_status == 'Call not Connected' %}selected{% endif %}>Call not Connected</option>
+                     <option value="Retailed" {% if walkin_lead.lead_status == 'Retailed' %}selected{% endif %}>Retailed</option>
+                     <option value="Discount Issue" {% if walkin_lead.lead_status == 'Discount Issue' %}selected{% endif %}>Discount Issue</option>
+                     <option value="Delayed" {% if walkin_lead.lead_status == 'Delayed' %}selected{% endif %}>Delayed</option>
+                     <option value="Booked" {% if walkin_lead.lead_status == 'Booked' %}selected{% endif %}>Booked</option>
+                     <option value="Test Drive" {% if walkin_lead.lead_status == 'Test Drive' %}selected{% endif %}>Test Drive</option>
+                     <option value="Planning in Next Month" {% if walkin_lead.lead_status == 'Planning in Next Month' %}selected{% endif %}>Planning in Next Month</option>
+                     <option value="Interested" {% if walkin_lead.lead_status == 'Interested' %}selected{% endif %}>Interested</option>
+                     <option value="Lost to Competition" {% if walkin_lead.lead_status == 'Lost to Competition' %}selected{% endif %}>Lost to Competition</option>
+                     <option value="Finance Rejected" {% if walkin_lead.lead_status == 'Finance Rejected' %}selected{% endif %}>Finance Rejected</option>
+                     <option value="Dropped" {% if walkin_lead.lead_status == 'Dropped' %}selected{% endif %}>Dropped</option>
+                     <option value="Lost to codealer" {% if walkin_lead.lead_status == 'Lost to codealer' %}selected{% endif %}>Lost to codealer</option>
+                     <option value="Busy on another call" {% if walkin_lead.lead_status == 'Busy on another call' %}selected{% endif %}>Busy on another call</option>
+                     <option value="RNR" {% if walkin_lead.lead_status == 'RNR' %}selected{% endif %}>RNR</option>
+                     <option value="Call me Back" {% if walkin_lead.lead_status == 'Call me Back' %}selected{% endif %}>Call me Back</option>
+                     <option value="Not Interested" {% if walkin_lead.lead_status == 'Not Interested' %}selected{% endif %}>Not Interested</option>
+                     <option value="Call Disconnected" {% if walkin_lead.lead_status == 'Call Disconnected' %}selected{% endif %}>Call Disconnected</option>
+                   </select>
                 </div>
               </div>
             </div>
 
             <div class="row">
-              <div class="col-md-4">
+              <div class="col-12">
                 <div class="mb-3">
                   <label class="form-label">
                     <i class="fas fa-calendar-plus me-2"></i>Next Follow-up Date
@@ -510,53 +574,52 @@
                   </label>
                   <input type="datetime-local" class="form-control" name="next_followup_date" 
                          placeholder="Required unless status is Won/Lost" required>
-                  <small class="text-muted">
+                  <small class="text-muted" style="font-size: 0.7rem;">
                     <i class="fas fa-info-circle me-1"></i>
                     <span id="followup-date-hint">Required for Pending status. Not needed for Won/Lost status.</span>
                   </small>
                 </div>
               </div>
-              <!-- Removed call progress display -->
             </div>
 
-            <div class="text-center mt-4">
-              <button type="submit" class="btn btn-submit btn-lg">
+            <div class="text-center mt-3">
+              <button type="submit" class="btn btn-submit" style="width: 100%; margin-bottom: 0.5rem;">
                 <i class="fas fa-save me-2"></i>Update Walk-in Lead
               </button>
-              <a href="{{ url_for('ps_dashboard') }}" class="btn btn-outline-secondary btn-lg ms-2">
+              <a href="{{ url_for('ps_dashboard') }}" class="btn btn-outline-secondary" style="width: 100%;">
                 <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
               </a>
             </div>
           </form>
 
           <!-- Call History (moved below form) -->
-          <div class="call-history mt-4" style="background: linear-gradient(135deg, #e0eafc 0%, #cfdef3 100%); border: 2px solid #4facfe; box-shadow: 0 2px 8px rgba(79,172,254,0.08);">
-            <h6><i class="fas fa-history me-2"></i>Call History</h6>
+          <div class="call-history mt-3" style="background: linear-gradient(135deg, #e0eafc 0%, #cfdef3 100%); border: 2px solid #4facfe; box-shadow: 0 2px 8px rgba(79,172,254,0.08); padding: 1rem; border-radius: 12px;">
+            <h6 style="font-size: 0.9rem; margin-bottom: 0.8rem;"><i class="fas fa-history me-2"></i>Call History</h6>
             <div class="row">
               {% for i in range(1, 8) %}
                 {% set call_num = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh'][i-1] %}
                 {% set call_date = walkin_lead.get(call_num + '_call_date') %}
                 {% set call_remark = walkin_lead.get(call_num + '_call_remark') %}
-                <div class="col-md-6 mb-2">
-                  <small class="text-muted">
+                <div class="col-6 mb-2">
+                  <small class="text-muted" style="font-size: 0.7rem;">
                     {{ i }}{% if i == 1 %}st{% elif i == 2 %}nd{% elif i == 3 %}rd{% else %}th{% endif %} Call:
                     {% if call_date %}
-                      <span class="badge bg-success">✓ Completed</span>
+                      <span class="badge bg-success" style="font-size: 0.6rem; padding: 0.2rem 0.4rem;">✓ Completed</span>
                     {% elif next_call == call_num %}
-                      <span class="badge bg-warning">⏳ Next</span>
+                      <span class="badge bg-warning" style="font-size: 0.6rem; padding: 0.2rem 0.4rem;">⏳ Next</span>
                     {% else %}
-                      <span class="badge bg-secondary">🔒 Locked</span>
+                      <span class="badge bg-secondary" style="font-size: 0.6rem; padding: 0.2rem 0.4rem;">🔒 Locked</span>
                     {% endif %}
                   </small>
                   {% if call_date %}
-                    <div class="text-success">{{ call_date }}</div>
+                    <div class="text-success" style="font-size: 0.7rem;">{{ call_date }}</div>
                     {% if call_remark %}
-                      <div class="text-muted small">{{ call_remark }}</div>
+                      <div class="text-muted" style="font-size: 0.65rem;">{{ call_remark }}</div>
                     {% endif %}
                   {% elif next_call == call_num %}
-                    <div class="text-warning">Ready to record</div>
+                    <div class="text-warning" style="font-size: 0.7rem;">Ready to record</div>
                   {% else %}
-                    <div class="text-muted">Not available yet</div>
+                    <div class="text-muted" style="font-size: 0.7rem;">Not available yet</div>
                   {% endif %}
                 </div>
               {% endfor %}
@@ -564,8 +627,6 @@
           </div>
         </div>
       </div>
-    </div>
-  </div>
 </div>
 
 <script>

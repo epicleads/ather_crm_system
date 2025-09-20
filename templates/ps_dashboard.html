@@ -107,12 +107,14 @@
     </div>
     <div class="col-6 col-md-2 h-100">
         <div class="stats-card bg-warning text-dark p-3 rounded h-100">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h4 class="mb-1 text-white">{{ todays_followups|length }}</h4>
-                    <small class="text-white">Today's Follow-ups</small>
+            <div class="d-flex flex-column h-100">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h4 class="mb-1 text-white">{{ todays_followups|length }}</h4>
+                        <small class="text-white">Today's Follow-ups</small>
+                    </div>
+                    <i class="fas fa-calendar-check fa-2x text-white"></i>
                 </div>
-                <i class="fas fa-calendar-check fa-2x text-white"></i>
             </div>
         </div>
     </div>
@@ -911,10 +913,8 @@
                                 <th>Status</th>
                                 <th>Customer Name</th>
                                 <th>Mobile</th>
-                                <th>Lead Source</th>
                                 <th>Category</th>
                                 <th>Model Interested</th>
-                                <th>Branch</th>
                                 <th>UID</th>
                                 <th>Assigned At</th>
                                 <th>Call History</th>
@@ -939,10 +939,18 @@
                                 </td>
                                 <td>{{ lead.customer_name }}</td>
                                 <td>{{ lead.mobile_number }}</td>
-                                <td>{{ lead.lead_source or 'N/A' }}</td>
-                                <td>{{ lead.lead_category or 'N/A' }}</td>
+                                <td>
+                                    {% if lead.lead_category == 'Hot' %}
+                                        <span class="badge bg-danger">Hot</span>
+                                    {% elif lead.lead_category == 'Warm' %}
+                                        <span class="badge bg-warning text-dark">Warm</span>
+                                    {% elif lead.lead_category == 'Cold' %}
+                                        <span class="badge bg-info">Cold</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ lead.lead_category or 'N/A' }}</span>
+                                    {% endif %}
+                                </td>
                                 <td>{{ lead.model_interested or 'N/A' }}</td>
-                                <td>{{ lead.branch }}</td>
                                 <td><span class="badge bg-primary">{{ lead.lead_uid }}</span></td>
                                 <td>{{ (lead.ps_assigned_at[:10] if lead.ps_assigned_at else lead.created_at[:10] if lead.created_at else 'N/A') }}</td>
                                 <td>
@@ -1359,13 +1367,23 @@ input:checked + .slider:before {
     #walkinLeadsTable tbody tr,
     #wonLostLeadsTable tbody tr {
         display: block;
-        padding: 2rem 0.75rem 0.75rem 0.75rem; /* extra top space for pinned actions/badges */
-        margin-bottom: 0.75rem;
-        background: #fff;
-        border: 1px solid #e9ecef;
-        border-radius: 10px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        padding: 0.5rem 0.5rem 0.5rem 0.5rem; /* reduced padding */
+        margin-bottom: 0.5rem; /* reduced margin */
+        background: #fff !important;
+        background-color: #fff !important;
+        background-image: none !important;
+        border: 2px solid #dee2e6 !important;
+        border-radius: 12px; /* more rounded corners for floating tab effect */
+        box-shadow: 0 4px 8px rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.08);
         position: relative;
+        overflow: hidden; /* prevent content overflow */
+        box-sizing: border-box; /* include border in size calculation */
+    }
+    
+    /* Increase spacing between follow-up lead cards slightly */
+    #followUpLeadsTable tbody tr,
+    #followupTable tbody tr {
+        margin-bottom: 0.75rem !important; /* slightly increased margin for better spacing */
     }
 
     /* Reduce padding inside cells and stack neatly */
@@ -1378,8 +1396,112 @@ input:checked + .slider:before {
     #walkinLeadsTable td,
     #wonLostLeadsTable td {
         display: block;
-        padding: 4px 0 !important;
+        padding: 2px 0 !important; /* reduced padding */
         border: none !important;
+        background: transparent !important;
+        background-color: transparent !important;
+        background-image: none !important;
+        margin: 0 !important; /* remove any margins */
+        outline: none !important; /* remove any outlines */
+    }
+
+    /* Ensure uniform white background for all mobile lead cards */
+    #untouchedLeadsTable tbody tr:nth-child(odd),
+    #calledLeadsTable tbody tr:nth-child(odd),
+    #followUpLeadsTable tbody tr:nth-child(odd),
+    #followupTable tbody tr:nth-child(odd),
+    #pendingLeadsTable tbody tr:nth-child(odd),
+    #eventLeadsTable tbody tr:nth-child(odd),
+    #walkinLeadsTable tbody tr:nth-child(odd),
+    #wonLostLeadsTable tbody tr:nth-child(odd),
+    #untouchedLeadsTable tbody tr:nth-child(even),
+    #calledLeadsTable tbody tr:nth-child(even),
+    #followUpLeadsTable tbody tr:nth-child(even),
+    #followupTable tbody tr:nth-child(even),
+    #pendingLeadsTable tbody tr:nth-child(even),
+    #eventLeadsTable tbody tr:nth-child(even),
+    #walkinLeadsTable tbody tr:nth-child(even),
+    #wonLostLeadsTable tbody tr:nth-child(even) {
+        background: #fff !important;
+        background-color: #fff !important;
+        border: 2px solid #dee2e6 !important;
+        box-sizing: border-box !important; /* ensure border is included in size calculation */
+    }
+
+    /* Force uniform background fill and remove any gaps or lines */
+    #untouchedLeadsTable tbody tr *,
+    #calledLeadsTable tbody tr *,
+    #followUpLeadsTable tbody tr *,
+    #followupTable tbody tr *,
+    #pendingLeadsTable tbody tr *,
+    #eventLeadsTable tbody tr *,
+    #walkinLeadsTable tbody tr *,
+    #wonLostLeadsTable tbody tr * {
+        background-color: inherit !important;
+        background: inherit !important;
+        border: none !important;
+        outline: none !important;
+        box-shadow: none !important;
+    }
+
+    /* Remove table striping and ensure uniform background */
+    #untouchedLeadsTable.table-striped tbody tr:nth-of-type(odd),
+    #calledLeadsTable.table-striped tbody tr:nth-of-type(odd),
+    #followUpLeadsTable.table-striped tbody tr:nth-of-type(odd),
+    #followupTable.table-striped tbody tr:nth-of-type(odd),
+    #pendingLeadsTable.table-striped tbody tr:nth-of-type(odd),
+    #eventLeadsTable.table-striped tbody tr:nth-of-type(odd),
+    #walkinLeadsTable.table-striped tbody tr:nth-of-type(odd),
+    #wonLostLeadsTable.table-striped tbody tr:nth-of-type(odd),
+    #untouchedLeadsTable.table-striped tbody tr:nth-of-type(even),
+    #calledLeadsTable.table-striped tbody tr:nth-of-type(even),
+    #followUpLeadsTable.table-striped tbody tr:nth-of-type(even),
+    #followupTable.table-striped tbody tr:nth-of-type(even),
+    #pendingLeadsTable.table-striped tbody tr:nth-of-type(even),
+    #eventLeadsTable.table-striped tbody tr:nth-of-type(even),
+    #walkinLeadsTable.table-striped tbody tr:nth-of-type(even),
+    #wonLostLeadsTable.table-striped tbody tr:nth-of-type(even) {
+        background-color: #fff !important;
+    }
+
+    /* Override any hover effects that might cause color patches */
+    #untouchedLeadsTable tbody tr:hover,
+    #calledLeadsTable tbody tr:hover,
+    #followUpLeadsTable tbody tr:hover,
+    #followupTable tbody tr:hover,
+    #pendingLeadsTable tbody tr:hover,
+    #eventLeadsTable tbody tr:hover,
+    #walkinLeadsTable tbody tr:hover,
+    #wonLostLeadsTable tbody tr:hover {
+        background-color: #fff !important;
+        background: #fff !important;
+    }
+
+    /* Ensure all table elements have uniform white background */
+    #untouchedLeadsTable,
+    #calledLeadsTable,
+    #followUpLeadsTable,
+    #followupTable,
+    #pendingLeadsTable,
+    #eventLeadsTable,
+    #walkinLeadsTable,
+    #wonLostLeadsTable {
+        background-color: #fff !important;
+    }
+
+    /* Override Bootstrap table classes that might cause color patches */
+    .table-striped > tbody > tr:nth-of-type(odd) > td,
+    .table-striped > tbody > tr:nth-of-type(odd) > th,
+    .table-striped > tbody > tr:nth-of-type(even) > td,
+    .table-striped > tbody > tr:nth-of-type(even) > th {
+        background-color: #fff !important;
+    }
+
+    /* Ensure table cells have uniform background */
+    .table td,
+    .table th {
+        background-color: #fff !important;
+        border-color: transparent !important;
     }
 
     /* Emphasize key fields: Customer Name and Mobile */
@@ -1391,8 +1513,13 @@ input:checked + .slider:before {
     #walkinLeadsTable td:nth-child(3),
     #wonLostLeadsTable td:nth-child(3) {
         font-weight: 700;
-        font-size: 0.95rem;
+        font-size: 0.85rem; /* reduced font size */
         color: #1f2d3d;
+        margin-top: 4px; /* reduced margin */
+        margin-right: 120px; /* space for status badge */
+        padding-right: 8px; /* reduced padding */
+        word-wrap: break-word;
+        line-height: 1.2; /* tighter line height */
     }
     #untouchedLeadsTable td:nth-child(4),
     #calledLeadsTable td:nth-child(4),
@@ -1402,25 +1529,99 @@ input:checked + .slider:before {
     #walkinLeadsTable td:nth-child(4),
     #wonLostLeadsTable td:nth-child(4) {
         color: #6c757d;
-        font-size: 0.9rem;
-        margin-top: -2px;
+        font-size: 0.8rem; /* reduced font size */
+        margin-top: -1px; /* reduced margin */
     }
 
-    /* Hide less relevant columns on mobile (keep Status and Date visible) */
-    #untouchedLeadsTable td:nth-child(6),
-    #untouchedLeadsTable td:nth-child(10) { display: none; }
+    /* Show ALL important lead data in mobile view - only hide Action column */
+    #untouchedLeadsTable td:nth-child(1) { display: none; } /* Hide Action column only */
+    #calledLeadsTable td:nth-child(1) { display: none; } /* Hide Action column only */
+    #followUpLeadsTable td:nth-child(1) { display: none; } /* Hide Action column only */
+    #followupTable td:nth-child(1) { display: none; } /* Hide Action column only */
+    #pendingLeadsTable td:nth-child(1) { display: none; } /* Hide Action column only */
+    #eventLeadsTable td:nth-child(1) { display: none; } /* Hide Action column only */
+    #walkinLeadsTable td:nth-child(1) { display: none; } /* Hide Action column only */
+    #wonLostLeadsTable td:nth-child(1) { display: none; } /* Hide Action column only */
 
+    /* Show all other columns - Lead Status, Customer Name, Mobile, Source, Category, Model, Date, UID */
+    
+    /* Force visibility of all important lead data columns with different colors for distinction */
+    #untouchedLeadsTable td:nth-child(2), /* Lead Status */
+    #untouchedLeadsTable td:nth-child(3), /* Customer Name */
+    #untouchedLeadsTable td:nth-child(4), /* Mobile */
+    #untouchedLeadsTable td:nth-child(5), /* Source */
+    #untouchedLeadsTable td:nth-child(6), /* CRE Name */
+    #untouchedLeadsTable td:nth-child(7), /* Category */
+    #untouchedLeadsTable td:nth-child(8), /* Model Interested */
+    #untouchedLeadsTable td:nth-child(9), /* Created Date */
+    #untouchedLeadsTable td:nth-child(10), /* UID */
+    #calledLeadsTable td:nth-child(2),
+    #calledLeadsTable td:nth-child(3),
+    #calledLeadsTable td:nth-child(4),
+    #calledLeadsTable td:nth-child(5),
     #calledLeadsTable td:nth-child(6),
-    #calledLeadsTable td:nth-child(10) { display: none; }
-
+    #calledLeadsTable td:nth-child(7),
+    #calledLeadsTable td:nth-child(8),
+    #calledLeadsTable td:nth-child(9),
+    #calledLeadsTable td:nth-child(10),
+    #followUpLeadsTable td:nth-child(2),
+    #followUpLeadsTable td:nth-child(3),
+    #followUpLeadsTable td:nth-child(4),
+    #followUpLeadsTable td:nth-child(5),
     #followUpLeadsTable td:nth-child(6),
-    #followUpLeadsTable td:nth-child(10) { display: none; }
+    #followUpLeadsTable td:nth-child(7),
+    #followUpLeadsTable td:nth-child(8),
+    #followUpLeadsTable td:nth-child(9),
+    #followUpLeadsTable td:nth-child(10) {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
 
-    /* today's followups table keeps status and follow-up date (9) */
-    #followupTable td:nth-child(5) { display: none; }
-
-    #pendingLeadsTable td:nth-child(9),
-    #pendingLeadsTable td:nth-child(10) { display: none; }
+    /* Force visibility for other tables too */
+    #followupTable td:nth-child(2), /* Lead Status */
+    #followupTable td:nth-child(3), /* Customer Name */
+    #followupTable td:nth-child(4), /* Mobile */
+    #followupTable td:nth-child(6), /* Category */
+    #followupTable td:nth-child(7), /* Model Interested */
+    #followupTable td:nth-child(8), /* UID */
+    #followupTable td:nth-child(9), /* Follow-up Date */
+    #pendingLeadsTable td:nth-child(2), /* Lead Status */
+    #pendingLeadsTable td:nth-child(3), /* Customer Name */
+    #pendingLeadsTable td:nth-child(4), /* Mobile */
+    #pendingLeadsTable td:nth-child(5), /* Source */
+    #pendingLeadsTable td:nth-child(6), /* Category */
+    #pendingLeadsTable td:nth-child(7), /* Model Interested */
+    #pendingLeadsTable td:nth-child(8), /* Created Date */
+    #pendingLeadsTable td:nth-child(9), /* UID */
+    #pendingLeadsTable td:nth-child(10), /* Call History */
+    #eventLeadsTable td:nth-child(2), /* Action */
+    #eventLeadsTable td:nth-child(3), /* UID */
+    #eventLeadsTable td:nth-child(4), /* Activity Name */
+    #eventLeadsTable td:nth-child(7), /* Customer Name */
+    #eventLeadsTable td:nth-child(8), /* Mobile */
+    #eventLeadsTable td:nth-child(9), /* Customer Location */
+    #eventLeadsTable td:nth-child(10), /* Profession */
+    #eventLeadsTable td:nth-child(17), /* Call History */
+    #walkinLeadsTable td:nth-child(2), /* Status */
+    #walkinLeadsTable td:nth-child(3), /* Customer Name */
+    #walkinLeadsTable td:nth-child(4), /* Mobile */
+    #walkinLeadsTable td:nth-child(5), /* Category */
+    #walkinLeadsTable td:nth-child(6), /* Model Interested */
+    #walkinLeadsTable td:nth-child(9), /* Call History */
+    #wonLostLeadsTable td:nth-child(2), /* Lead Status */
+    #wonLostLeadsTable td:nth-child(3), /* Customer Name */
+    #wonLostLeadsTable td:nth-child(4), /* Mobile */
+    #wonLostLeadsTable td:nth-child(5), /* Source */
+    #wonLostLeadsTable td:nth-child(6), /* Category */
+    #wonLostLeadsTable td:nth-child(7), /* Model Interested */
+    #wonLostLeadsTable td:nth-child(8), /* Final Status */
+    #wonLostLeadsTable td:nth-child(9), /* Created Date */
+    #wonLostLeadsTable td:nth-child(10) { /* UID */
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
 
     /* Event/WalKin tables: hide heavy columns */
     #eventLeadsTable td:nth-child(5),
@@ -1432,9 +1633,8 @@ input:checked + .slider:before {
     #eventLeadsTable td:nth-child(15),
     #eventLeadsTable td:nth-child(16) { display: none; }
 
-    #walkinLeadsTable td:nth-child(8),
-    #walkinLeadsTable td:nth-child(9),
-    #walkinLeadsTable td:nth-child(10) { display: none; }
+    #walkinLeadsTable td:nth-child(7),
+    #walkinLeadsTable td:nth-child(8) { display: none; }
 
     /* Lead status badge placement */
     #untouchedLeadsTable td:nth-child(2),
@@ -1444,9 +1644,50 @@ input:checked + .slider:before {
     #pendingLeadsTable td:nth-child(2),
     #wonLostLeadsTable td:nth-child(2) {
         position: absolute;
-        top: 10px;
-        right: 48px;
-        font-size: 0.75rem;
+        top: 6px; /* reduced top position */
+        right: 6px; /* reduced right position */
+        font-size: 0.7rem !important; /* increased font size for better readability */
+        max-width: 140px; /* reduced max width */
+        min-width: 70px; /* reduced min width */
+        word-wrap: break-word;
+        word-break: break-word;
+        white-space: normal;
+        line-height: 1.0; /* tighter line height */
+        text-align: center;
+        padding: 6px 8px; /* reduced padding */
+        height: auto;
+        min-height: 32px; /* reduced min height */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px; /* reduced border radius */
+        overflow: visible;
+        hyphens: auto;
+    }
+
+    /* Specific styling for long status text like "Planning in Next Month" */
+    .badge {
+        font-size: 0.65rem;
+    }
+
+    /* Reduce font size for badges with long text (more than 15 characters) */
+    .badge[style*="width"] {
+        font-size: 0.5rem !important;
+        line-height: 1.0 !important;
+        padding: 8px 10px !important;
+    }
+
+    /* Specific targeting for mobile lead status badges with long text */
+    #untouchedLeadsTable td:nth-child(2) .badge,
+    #calledLeadsTable td:nth-child(2) .badge,
+    #followUpLeadsTable td:nth-child(2) .badge,
+    #followupTable td:nth-child(2) .badge,
+    #pendingLeadsTable td:nth-child(2) .badge,
+    #wonLostLeadsTable td:nth-child(2) .badge {
+        font-size: 0.45rem !important; /* further reduced font size */
+        line-height: 0.9 !important; /* tighter line height */
+        padding: 4px 6px !important; /* reduced padding */
+        max-width: 120px !important; /* reduced max width */
     }
 
     /* Created/Follow-up date small text at bottom */
@@ -1455,8 +1696,110 @@ input:checked + .slider:before {
     #followUpLeadsTable td:nth-child(9),
     #followupTable td:nth-child(9) {
         color: #6c757d;
-        font-size: 0.75rem;
+        font-size: 0.65rem; /* reduced font size */
+        margin-top: 2px; /* reduced margin */
+    }
+
+    /* UID styling for all lead sections */
+    #untouchedLeadsTable td:nth-child(10),
+    #calledLeadsTable td:nth-child(10),
+    #followUpLeadsTable td:nth-child(10) {
+        color: #6c757d;
+        font-size: 0.6rem;
         margin-top: 4px;
+        margin-bottom: 2px;
+    }
+
+    /* Source styling for all lead sections */
+    #untouchedLeadsTable td:nth-child(5),
+    #calledLeadsTable td:nth-child(5),
+    #followUpLeadsTable td:nth-child(5),
+    #followupTable td:nth-child(5),
+    #pendingLeadsTable td:nth-child(5) {
+        color: #6c757d;
+        font-size: 0.6rem;
+        margin-top: 2px;
+        margin-bottom: 2px;
+        font-style: italic;
+    }
+
+    /* Category styling for all lead sections */
+    #untouchedLeadsTable td:nth-child(7),
+    #calledLeadsTable td:nth-child(7),
+    #followUpLeadsTable td:nth-child(7),
+    #followupTable td:nth-child(6),
+    #pendingLeadsTable td:nth-child(6) {
+        color: #6c757d;
+        font-size: 0.6rem;
+        margin-top: 2px;
+        margin-bottom: 2px;
+        font-weight: 500;
+    }
+
+    /* Model Interested styling for all lead sections */
+    #untouchedLeadsTable td:nth-child(8),
+    #calledLeadsTable td:nth-child(8),
+    #followUpLeadsTable td:nth-child(8),
+    #followupTable td:nth-child(7),
+    #pendingLeadsTable td:nth-child(7) {
+        color: #1f2d3d;
+        font-size: 0.75rem;
+        font-weight: 500;
+        margin-top: 2px;
+        margin-bottom: 2px;
+        line-height: 1.3;
+    }
+
+    /* Pending leads specific mobile styling for additional data */
+    #pendingLeadsTable td:nth-child(2) { /* Lead Status */
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        font-size: 0.45rem !important;
+        max-width: 100px;
+        min-width: 50px;
+        padding: 4px 6px !important;
+        min-height: 24px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        line-height: 0.9;
+        word-wrap: break-word;
+    }
+
+    #pendingLeadsTable td:nth-child(5) { /* Source */
+        color: #6c757d;
+        font-size: 0.6rem;
+        margin-top: 2px;
+        margin-bottom: 2px;
+    }
+
+    #pendingLeadsTable td:nth-child(6) { /* Category */
+        color: #6c757d;
+        font-size: 0.6rem;
+        margin-top: 2px;
+        margin-bottom: 2px;
+    }
+
+    #pendingLeadsTable td:nth-child(9) { /* UID */
+        color: #6c757d;
+        font-size: 0.6rem;
+        margin-top: 4px;
+        margin-bottom: 2px;
+    }
+
+    #pendingLeadsTable td:nth-child(10) { /* Call History Button */
+        margin-top: 4px;
+        margin-bottom: 2px;
+    }
+
+    #pendingLeadsTable td:nth-child(10) .btn {
+        font-size: 0.5rem;
+        padding: 2px 4px;
+        min-height: 20px;
+        line-height: 1;
     }
 
     /* Hide update button column on mobile - entire card will be clickable */
@@ -1515,8 +1858,1492 @@ input:checked + .slider:before {
         background-color: #fff5f5 !important;
     }
     #followupTable tbody tr.table-danger .badge { background-color: #dc3545 !important; }
+
+    /* Dynamic adjustments for very long lead status text */
+    @media (max-width: 480px) {
+        /* Smaller screens: adjust badge for better text wrapping */
+        #untouchedLeadsTable td:nth-child(2),
+        #calledLeadsTable td:nth-child(2),
+        #followUpLeadsTable td:nth-child(2),
+        #followupTable td:nth-child(2),
+        #pendingLeadsTable td:nth-child(2),
+        #wonLostLeadsTable td:nth-child(2) {
+            max-width: 120px; /* reduced max width */
+            min-width: 60px; /* reduced min width */
+            font-size: 0.45rem; /* reduced font size */
+            top: 4px; /* reduced top position */
+            right: 4px; /* reduced right position */
+            padding: 4px 6px; /* reduced padding */
+            min-height: 28px; /* reduced min height */
+            border-radius: 6px; /* reduced border radius */
+        }
+        
+        /* Adjust customer name spacing for smaller screens */
+        #untouchedLeadsTable td:nth-child(3),
+        #calledLeadsTable td:nth-child(3),
+        #followUpLeadsTable td:nth-child(3),
+        #followupTable td:nth-child(3),
+        #pendingLeadsTable td:nth-child(3),
+        #walkinLeadsTable td:nth-child(3),
+        #wonLostLeadsTable td:nth-child(3) {
+            margin-right: 130px; /* reduced margin */
+            font-size: 0.8rem; /* reduced font size */
+        }
+    }
+
+    /* Extra small screens: further adjustments */
+    @media (max-width: 360px) {
+        #untouchedLeadsTable td:nth-child(2),
+        #calledLeadsTable td:nth-child(2),
+        #followUpLeadsTable td:nth-child(2),
+        #followupTable td:nth-child(2),
+        #pendingLeadsTable td:nth-child(2),
+        #wonLostLeadsTable td:nth-child(2) {
+            max-width: 100px; /* further reduced max width */
+            min-width: 50px; /* further reduced min width */
+            font-size: 0.4rem; /* further reduced font size */
+            padding: 3px 5px; /* further reduced padding */
+            min-height: 24px; /* further reduced min height */
+            border-radius: 6px; /* reduced border radius */
+        }
+        
+        #untouchedLeadsTable td:nth-child(3),
+        #calledLeadsTable td:nth-child(3),
+        #followUpLeadsTable td:nth-child(3),
+        #followupTable td:nth-child(3),
+        #pendingLeadsTable td:nth-child(3),
+        #walkinLeadsTable td:nth-child(3),
+        #wonLostLeadsTable td:nth-child(3) {
+            margin-right: 110px; /* further reduced margin */
+            font-size: 0.75rem; /* further reduced font size */
+        }
+    }
     /* Ensure badges and small metadata look tidy */
     .badge { font-size: 0.75rem; }
+
+    /* Final comprehensive fix for uniform color fill in mobile cards */
+    #untouchedLeadsTable tbody tr,
+    #calledLeadsTable tbody tr,
+    #followUpLeadsTable tbody tr,
+    #followupTable tbody tr,
+    #pendingLeadsTable tbody tr,
+    #eventLeadsTable tbody tr,
+    #walkinLeadsTable tbody tr,
+    #wonLostLeadsTable tbody tr {
+        background: #fff !important;
+        background-color: #fff !important;
+        background-image: none !important;
+        background-clip: padding-box !important;
+        background-origin: padding-box !important;
+        background-size: auto !important;
+        background-repeat: no-repeat !important;
+        background-attachment: scroll !important;
+        background-position: 0% 0% !important;
+    }
+
+    /* Ensure all child elements inherit the solid background */
+    #untouchedLeadsTable tbody tr *,
+    #calledLeadsTable tbody tr *,
+    #followUpLeadsTable tbody tr *,
+    #followupTable tbody tr *,
+    #pendingLeadsTable tbody tr *,
+    #eventLeadsTable tbody tr *,
+    #walkinLeadsTable tbody tr *,
+    #wonLostLeadsTable tbody tr * {
+        background: transparent !important;
+        background-color: transparent !important;
+        background-image: none !important;
+    }
+
+    /* Mobile card data layout - ensure proper order and spacing */
+    #untouchedLeadsTable tbody tr,
+    #calledLeadsTable tbody tr,
+    #followUpLeadsTable tbody tr,
+    #followupTable tbody tr,
+    #pendingLeadsTable tbody tr,
+    #eventLeadsTable tbody tr,
+    #walkinLeadsTable tbody tr,
+    #wonLostLeadsTable tbody tr {
+        display: block;
+        position: relative;
+    }
+
+    /* Ensure all data columns are visible in mobile view */
+    #untouchedLeadsTable td:nth-child(2), /* Lead Status */
+    #untouchedLeadsTable td:nth-child(3), /* Customer Name */
+    #untouchedLeadsTable td:nth-child(4), /* Mobile */
+    #untouchedLeadsTable td:nth-child(5), /* Source */
+    #untouchedLeadsTable td:nth-child(7), /* Category */
+    #untouchedLeadsTable td:nth-child(8), /* Model Interested */
+    #untouchedLeadsTable td:nth-child(9), /* Created Date */
+    #untouchedLeadsTable td:nth-child(10), /* UID */
+    #calledLeadsTable td:nth-child(2),
+    #calledLeadsTable td:nth-child(3),
+    #calledLeadsTable td:nth-child(4),
+    #calledLeadsTable td:nth-child(5),
+    #calledLeadsTable td:nth-child(7),
+    #calledLeadsTable td:nth-child(8),
+    #calledLeadsTable td:nth-child(9),
+    #calledLeadsTable td:nth-child(10),
+    #followUpLeadsTable td:nth-child(2),
+    #followUpLeadsTable td:nth-child(3),
+    #followUpLeadsTable td:nth-child(4),
+    #followUpLeadsTable td:nth-child(5),
+    #followUpLeadsTable td:nth-child(7),
+    #followUpLeadsTable td:nth-child(8),
+    #followUpLeadsTable td:nth-child(9),
+    #followUpLeadsTable td:nth-child(10) {
+        display: block !important;
+    }
+
+    /* Lead Status badge - positioned in top right */
+    #untouchedLeadsTable td:nth-child(2),
+    #calledLeadsTable td:nth-child(2),
+    #followUpLeadsTable td:nth-child(2),
+    #followupTable td:nth-child(2),
+    #pendingLeadsTable td:nth-child(2),
+    #wonLostLeadsTable td:nth-child(2) {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        z-index: 10;
+    }
+
+    /* Customer Name - most prominent, top of card */
+    #untouchedLeadsTable td:nth-child(3),
+    #calledLeadsTable td:nth-child(3),
+    #followUpLeadsTable td:nth-child(3),
+    #followupTable td:nth-child(3),
+    #pendingLeadsTable td:nth-child(3),
+    #walkinLeadsTable td:nth-child(3),
+    #wonLostLeadsTable td:nth-child(3) {
+        margin-top: 0;
+        margin-right: 120px; /* space for status badge */
+    }
+
+    /* Phone Number - below name */
+    #untouchedLeadsTable td:nth-child(4),
+    #calledLeadsTable td:nth-child(4),
+    #followUpLeadsTable td:nth-child(4),
+    #followupTable td:nth-child(4),
+    #pendingLeadsTable td:nth-child(4),
+    #walkinLeadsTable td:nth-child(4),
+    #wonLostLeadsTable td:nth-child(4) {
+        margin-top: -1px;
+    }
+
+    /* Model Interested (Product/Service) - prominent, below phone */
+    #untouchedLeadsTable td:nth-child(8),
+    #calledLeadsTable td:nth-child(8),
+    #followUpLeadsTable td:nth-child(8),
+    #pendingLeadsTable td:nth-child(7),
+    #followupTable td:nth-child(6) {
+        margin-top: 2px;
+        color: #1f2d3d;
+        font-size: 0.75rem;
+        font-weight: 500;
+        line-height: 1.3;
+        display: block !important;
+    }
+
+    /* Source - small gray text */
+    #untouchedLeadsTable td:nth-child(5),
+    #calledLeadsTable td:nth-child(5),
+    #followUpLeadsTable td:nth-child(5),
+    #pendingLeadsTable td:nth-child(5) {
+        margin-top: 1px;
+        color: #6c757d;
+        font-size: 0.6rem;
+        font-style: italic;
+        display: block !important;
+    }
+
+    /* CRE Name - small gray text (only for fresh leads tables) */
+    #untouchedLeadsTable td:nth-child(6),
+    #calledLeadsTable td:nth-child(6),
+    #followUpLeadsTable td:nth-child(6) {
+        margin-top: 1px;
+        color: #6c757d;
+        font-size: 0.6rem;
+        font-weight: 500;
+    }
+
+    /* Category - small gray text */
+    #untouchedLeadsTable td:nth-child(7),
+    #calledLeadsTable td:nth-child(7),
+    #followUpLeadsTable td:nth-child(7),
+    #pendingLeadsTable td:nth-child(6) {
+        margin-top: 1px;
+        color: #6c757d;
+        font-size: 0.6rem;
+        font-weight: 500;
+        display: block !important;
+    }
+
+    /* Created Date - small gray text */
+    #untouchedLeadsTable td:nth-child(9),
+    #calledLeadsTable td:nth-child(9),
+    #followUpLeadsTable td:nth-child(9),
+    #pendingLeadsTable td:nth-child(8),
+    #followupTable td:nth-child(9) {
+        margin-top: 2px;
+        color: #6c757d;
+        font-size: 0.65rem;
+    }
+
+    /* UID - small gray text */
+    #untouchedLeadsTable td:nth-child(10),
+    #calledLeadsTable td:nth-child(10),
+    #followUpLeadsTable td:nth-child(10),
+    #pendingLeadsTable td:nth-child(9),
+    #followupTable td:nth-child(8) {
+        margin-top: 1px;
+        color: #6c757d;
+        font-size: 0.6rem;
+        font-family: monospace;
+        display: block !important;
+    }
+
+    /* Call History button - at bottom (only for pending leads) */
+    #pendingLeadsTable td:nth-child(10) {
+        margin-top: 4px;
+        text-align: left;
+    }
+
+    #pendingLeadsTable td:nth-child(10) .btn {
+        font-size: 0.5rem;
+        padding: 2px 6px;
+        border-radius: 4px;
+    }
+
+    /* Force visibility of all important lead data in mobile cards */
+    #untouchedLeadsTable tbody tr td:nth-child(2),
+    #untouchedLeadsTable tbody tr td:nth-child(3),
+    #untouchedLeadsTable tbody tr td:nth-child(4),
+    #untouchedLeadsTable tbody tr td:nth-child(5),
+    #untouchedLeadsTable tbody tr td:nth-child(7),
+    #untouchedLeadsTable tbody tr td:nth-child(8),
+    #untouchedLeadsTable tbody tr td:nth-child(9),
+    #untouchedLeadsTable tbody tr td:nth-child(10),
+    #calledLeadsTable tbody tr td:nth-child(2),
+    #calledLeadsTable tbody tr td:nth-child(3),
+    #calledLeadsTable tbody tr td:nth-child(4),
+    #calledLeadsTable tbody tr td:nth-child(5),
+    #calledLeadsTable tbody tr td:nth-child(7),
+    #calledLeadsTable tbody tr td:nth-child(8),
+    #calledLeadsTable tbody tr td:nth-child(9),
+    #calledLeadsTable tbody tr td:nth-child(10),
+    #followUpLeadsTable tbody tr td:nth-child(2),
+    #followUpLeadsTable tbody tr td:nth-child(3),
+    #followUpLeadsTable tbody tr td:nth-child(4),
+    #followUpLeadsTable tbody tr td:nth-child(5),
+    #followUpLeadsTable tbody tr td:nth-child(7),
+    #followUpLeadsTable tbody tr td:nth-child(8),
+    #followUpLeadsTable tbody tr td:nth-child(9),
+    #followUpLeadsTable tbody tr td:nth-child(10) {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+
+    /* Mobile-specific lead data styling - ensure all data is visible and properly styled */
+    #untouchedLeadsTable tbody tr td,
+    #calledLeadsTable tbody tr td,
+    #followUpLeadsTable tbody tr td,
+    #followupTable tbody tr td,
+    #pendingLeadsTable tbody tr td,
+    #eventLeadsTable tbody tr td,
+    #walkinLeadsTable tbody tr td,
+    #wonLostLeadsTable tbody tr td {
+        display: block !important;
+        padding: 2px 0 !important;
+        border: none !important;
+        background: transparent !important;
+        margin: 0 !important;
+        outline: none !important;
+    }
+
+    /* Color-coded lead data fields for better distinction */
+    
+    /* Lead Status Badge - Blue background, white text */
+    #untouchedLeadsTable tbody tr td:nth-child(2) .badge,
+    #calledLeadsTable tbody tr td:nth-child(2) .badge,
+    #followUpLeadsTable tbody tr td:nth-child(2) .badge,
+    #followupTable tbody tr td:nth-child(2) .badge,
+    #pendingLeadsTable tbody tr td:nth-child(2) .badge,
+    #wonLostLeadsTable tbody tr td:nth-child(2) .badge {
+        background-color: #007bff !important;
+        color: white !important;
+        font-size: 0.5rem !important;
+        padding: 3px 6px !important;
+        border-radius: 4px !important;
+    }
+
+    /* Customer Name - Dark blue, bold */
+    #untouchedLeadsTable tbody tr td:nth-child(3),
+    #calledLeadsTable tbody tr td:nth-child(3),
+    #followUpLeadsTable tbody tr td:nth-child(3),
+    #followupTable tbody tr td:nth-child(3),
+    #pendingLeadsTable tbody tr td:nth-child(3),
+    #walkinLeadsTable tbody tr td:nth-child(3),
+    #wonLostLeadsTable tbody tr td:nth-child(3) {
+        color: #1e3a8a !important;
+        font-weight: 700 !important;
+        font-size: 0.9rem !important;
+    }
+
+    /* Phone Number - Green */
+    #untouchedLeadsTable tbody tr td:nth-child(4),
+    #calledLeadsTable tbody tr td:nth-child(4),
+    #followUpLeadsTable tbody tr td:nth-child(4),
+    #followupTable tbody tr td:nth-child(4),
+    #pendingLeadsTable tbody tr td:nth-child(4),
+    #walkinLeadsTable tbody tr td:nth-child(4),
+    #wonLostLeadsTable tbody tr td:nth-child(4) {
+        color: #059669 !important;
+        font-weight: 600 !important;
+        font-size: 0.8rem !important;
+    }
+
+    /* Source - Orange */
+    #untouchedLeadsTable tbody tr td:nth-child(5),
+    #calledLeadsTable tbody tr td:nth-child(5),
+    #followUpLeadsTable tbody tr td:nth-child(5),
+    #pendingLeadsTable tbody tr td:nth-child(5) {
+        color: #ea580c !important;
+        font-style: italic !important;
+        font-size: 0.65rem !important;
+        font-weight: 500 !important;
+    }
+
+    /* CRE Name - Purple */
+    #untouchedLeadsTable tbody tr td:nth-child(6),
+    #calledLeadsTable tbody tr td:nth-child(6),
+    #followUpLeadsTable tbody tr td:nth-child(6) {
+        color: #7c3aed !important;
+        font-size: 0.6rem !important;
+        font-weight: 500 !important;
+    }
+
+    /* Category - Red/Pink */
+    #untouchedLeadsTable tbody tr td:nth-child(7),
+    #calledLeadsTable tbody tr td:nth-child(7),
+    #followUpLeadsTable tbody tr td:nth-child(7),
+    #pendingLeadsTable tbody tr td:nth-child(6),
+    #followupTable tbody tr td:nth-child(6) {
+        color: #dc2626 !important;
+        font-size: 0.65rem !important;
+        font-weight: 600 !important;
+    }
+
+    /* Model Interested - Dark Gray, Bold */
+    #untouchedLeadsTable tbody tr td:nth-child(8),
+    #calledLeadsTable tbody tr td:nth-child(8),
+    #followUpLeadsTable tbody tr td:nth-child(8),
+    #pendingLeadsTable tbody tr td:nth-child(7),
+    #followupTable tbody tr td:nth-child(7) {
+        color: #374151 !important;
+        font-size: 0.75rem !important;
+        font-weight: 700 !important;
+    }
+
+    /* Created Date - Teal */
+    #untouchedLeadsTable tbody tr td:nth-child(9),
+    #calledLeadsTable tbody tr td:nth-child(9),
+    #followUpLeadsTable tbody tr td:nth-child(9),
+    #pendingLeadsTable tbody tr td:nth-child(8),
+    #followupTable tbody tr td:nth-child(9) {
+        color: #0d9488 !important;
+        font-size: 0.6rem !important;
+        font-weight: 500 !important;
+    }
+
+    /* UID - Indigo, Monospace */
+    #untouchedLeadsTable tbody tr td:nth-child(10),
+    #calledLeadsTable tbody tr td:nth-child(10),
+    #followUpLeadsTable tbody tr td:nth-child(10),
+    #pendingLeadsTable tbody tr td:nth-child(9),
+    #followupTable tbody tr td:nth-child(8) {
+        color: #4f46e5 !important;
+        font-family: 'Courier New', monospace !important;
+        font-size: 0.55rem !important;
+        font-weight: 600 !important;
+    }
+
+    /* Call History Button - Cyan */
+    #pendingLeadsTable tbody tr td:nth-child(10) .btn {
+        background-color: #06b6d4 !important;
+        color: white !important;
+        border: none !important;
+        font-size: 0.5rem !important;
+        padding: 2px 6px !important;
+        border-radius: 4px !important;
+    }
+
+    /* Force all important columns to be visible in mobile with proper display */
+    #untouchedLeadsTable tbody tr td:nth-child(2), /* Lead Status */
+    #untouchedLeadsTable tbody tr td:nth-child(3), /* Customer Name */
+    #untouchedLeadsTable tbody tr td:nth-child(4), /* Mobile */
+    #untouchedLeadsTable tbody tr td:nth-child(5), /* Source */
+    #untouchedLeadsTable tbody tr td:nth-child(6), /* CRE Name */
+    #untouchedLeadsTable tbody tr td:nth-child(7), /* Category */
+    #untouchedLeadsTable tbody tr td:nth-child(8), /* Model Interested */
+    #untouchedLeadsTable tbody tr td:nth-child(9), /* Created Date */
+    #untouchedLeadsTable tbody tr td:nth-child(10), /* UID */
+    #calledLeadsTable tbody tr td:nth-child(2),
+    #calledLeadsTable tbody tr td:nth-child(3),
+    #calledLeadsTable tbody tr td:nth-child(4),
+    #calledLeadsTable tbody tr td:nth-child(5),
+    #calledLeadsTable tbody tr td:nth-child(6),
+    #calledLeadsTable tbody tr td:nth-child(7),
+    #calledLeadsTable tbody tr td:nth-child(8),
+    #calledLeadsTable tbody tr td:nth-child(9),
+    #calledLeadsTable tbody tr td:nth-child(10),
+    #followUpLeadsTable tbody tr td:nth-child(2),
+    #followUpLeadsTable tbody tr td:nth-child(3),
+    #followUpLeadsTable tbody tr td:nth-child(4),
+    #followUpLeadsTable tbody tr td:nth-child(5),
+    #followUpLeadsTable tbody tr td:nth-child(6),
+    #followUpLeadsTable tbody tr td:nth-child(7),
+    #followUpLeadsTable tbody tr td:nth-child(8),
+    #followUpLeadsTable tbody tr td:nth-child(9),
+    #followUpLeadsTable tbody tr td:nth-child(10),
+    #followupTable tbody tr td:nth-child(2),
+    #followupTable tbody tr td:nth-child(3),
+    #followupTable tbody tr td:nth-child(4),
+    #followupTable tbody tr td:nth-child(6),
+    #followupTable tbody tr td:nth-child(7),
+    #followupTable tbody tr td:nth-child(8),
+    #followupTable tbody tr td:nth-child(9),
+    #pendingLeadsTable tbody tr td:nth-child(2),
+    #pendingLeadsTable tbody tr td:nth-child(3),
+    #pendingLeadsTable tbody tr td:nth-child(4),
+    #pendingLeadsTable tbody tr td:nth-child(5),
+    #pendingLeadsTable tbody tr td:nth-child(6),
+    #pendingLeadsTable tbody tr td:nth-child(7),
+    #pendingLeadsTable tbody tr td:nth-child(8),
+    #pendingLeadsTable tbody tr td:nth-child(9),
+    #pendingLeadsTable tbody tr td:nth-child(10) {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        margin-bottom: 2px !important;
+    }
+
+    /* Lead Status badge - positioned in top right */
+    #untouchedLeadsTable tbody tr td:nth-child(2),
+    #calledLeadsTable tbody tr td:nth-child(2),
+    #followUpLeadsTable tbody tr td:nth-child(2),
+    #followupTable tbody tr td:nth-child(2),
+    #pendingLeadsTable tbody tr td:nth-child(2),
+    #wonLostLeadsTable tbody tr td:nth-child(2) {
+        position: absolute !important;
+        top: 8px !important;
+        right: 8px !important;
+        z-index: 10 !important;
+        display: block !important;
+        max-width: 120px !important;
+        min-width: 60px !important;
+        font-size: 0.5rem !important;
+        padding: 4px 6px !important;
+        border-radius: 6px !important;
+        text-align: center !important;
+        line-height: 1.0 !important;
+        word-wrap: break-word !important;
+    }
+
+    /* Customer Name - most prominent, top of card */
+    #untouchedLeadsTable tbody tr td:nth-child(3),
+    #calledLeadsTable tbody tr td:nth-child(3),
+    #followUpLeadsTable tbody tr td:nth-child(3),
+    #followupTable tbody tr td:nth-child(3),
+    #pendingLeadsTable tbody tr td:nth-child(3),
+    #walkinLeadsTable tbody tr td:nth-child(3),
+    #wonLostLeadsTable tbody tr td:nth-child(3) {
+        display: block !important;
+        font-weight: 700 !important;
+        font-size: 0.9rem !important;
+        color: #1f2d3d !important;
+        margin-top: 0 !important;
+        margin-right: 130px !important;
+        margin-bottom: 4px !important;
+        line-height: 1.2 !important;
+    }
+
+    /* Phone Number - below name */
+    #untouchedLeadsTable tbody tr td:nth-child(4),
+    #calledLeadsTable tbody tr td:nth-child(4),
+    #followUpLeadsTable tbody tr td:nth-child(4),
+    #followupTable tbody tr td:nth-child(4),
+    #pendingLeadsTable tbody tr td:nth-child(4),
+    #walkinLeadsTable tbody tr td:nth-child(4),
+    #wonLostLeadsTable tbody tr td:nth-child(4) {
+        display: block !important;
+        color: #6c757d !important;
+        font-size: 0.8rem !important;
+        margin-bottom: 4px !important;
+    }
+
+    /* Source - small gray text */
+    #untouchedLeadsTable tbody tr td:nth-child(5),
+    #calledLeadsTable tbody tr td:nth-child(5),
+    #followUpLeadsTable tbody tr td:nth-child(5),
+    #followupTable tbody tr td:nth-child(4),
+    #pendingLeadsTable tbody tr td:nth-child(5) {
+        display: block !important;
+        color: #6c757d !important;
+        font-size: 0.6rem !important;
+        font-style: italic !important;
+        margin-bottom: 2px !important;
+    }
+
+    /* Category - small gray text */
+    #untouchedLeadsTable tbody tr td:nth-child(7),
+    #calledLeadsTable tbody tr td:nth-child(7),
+    #followUpLeadsTable tbody tr td:nth-child(7),
+    #followupTable tbody tr td:nth-child(5),
+    #pendingLeadsTable tbody tr td:nth-child(6) {
+        display: block !important;
+        color: #6c757d !important;
+        font-size: 0.6rem !important;
+        font-weight: 500 !important;
+        margin-bottom: 2px !important;
+    }
+
+    /* Model Interested (Product/Service) - prominent, below phone */
+    #untouchedLeadsTable tbody tr td:nth-child(8),
+    #calledLeadsTable tbody tr td:nth-child(8),
+    #followUpLeadsTable tbody tr td:nth-child(8),
+    #pendingLeadsTable tbody tr td:nth-child(7),
+    #followupTable tbody tr td:nth-child(6) {
+        display: block !important;
+        color: #1f2d3d !important;
+        font-size: 0.75rem !important;
+        font-weight: 500 !important;
+        margin-bottom: 4px !important;
+        line-height: 1.3 !important;
+    }
+
+    /* Created Date - small gray text */
+    #untouchedLeadsTable tbody tr td:nth-child(9),
+    #calledLeadsTable tbody tr td:nth-child(9),
+    #followUpLeadsTable tbody tr td:nth-child(9),
+    #pendingLeadsTable tbody tr td:nth-child(8),
+    #followupTable tbody tr td:nth-child(9) {
+        display: block !important;
+        color: #6c757d !important;
+        font-size: 0.65rem !important;
+        margin-bottom: 2px !important;
+    }
+
+    /* UID - small gray text */
+    #untouchedLeadsTable tbody tr td:nth-child(10),
+    #calledLeadsTable tbody tr td:nth-child(10),
+    #followUpLeadsTable tbody tr td:nth-child(10),
+    #pendingLeadsTable tbody tr td:nth-child(9),
+    #followupTable tbody tr td:nth-child(8) {
+        display: block !important;
+        color: #6c757d !important;
+        font-size: 0.6rem !important;
+        font-family: monospace !important;
+        margin-bottom: 2px !important;
+    }
+
+    /* Call History button - at bottom (only for pending leads) */
+    #pendingLeadsTable tbody tr td:nth-child(10) {
+        display: block !important;
+        margin-top: 4px !important;
+        text-align: left !important;
+    }
+
+    #pendingLeadsTable tbody tr td:nth-child(10) .btn {
+        font-size: 0.5rem !important;
+        padding: 2px 6px !important;
+        border-radius: 4px !important;
+    }
+
+    /* Comprehensive mobile card layout - ensure proper data hierarchy */
+    #untouchedLeadsTable tbody tr,
+    #calledLeadsTable tbody tr,
+    #followUpLeadsTable tbody tr,
+    #followupTable tbody tr,
+    #pendingLeadsTable tbody tr,
+    #eventLeadsTable tbody tr,
+    #walkinLeadsTable tbody tr,
+    #wonLostLeadsTable tbody tr {
+        position: relative !important;
+        padding: 0.75rem !important;
+        margin-bottom: 0.75rem !important;
+        background: #fff !important;
+        border: 2px solid #dee2e6 !important;
+        border-radius: 8px !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+    }
+
+    /* Lead Status Badge - Top Right Corner */
+    #untouchedLeadsTable tbody tr td:nth-child(2),
+    #calledLeadsTable tbody tr td:nth-child(2),
+    #followUpLeadsTable tbody tr td:nth-child(2),
+    #followupTable tbody tr td:nth-child(2),
+    #pendingLeadsTable tbody tr td:nth-child(2),
+    #wonLostLeadsTable tbody tr td:nth-child(2) {
+        position: absolute !important;
+        top: 8px !important;
+        right: 8px !important;
+        z-index: 10 !important;
+        max-width: 100px !important;
+        min-width: 60px !important;
+        font-size: 0.5rem !important;
+        padding: 4px 6px !important;
+        border-radius: 6px !important;
+        text-align: center !important;
+        line-height: 1.0 !important;
+        word-wrap: break-word !important;
+    }
+
+    /* Customer Name - Most Prominent */
+    #untouchedLeadsTable tbody tr td:nth-child(3),
+    #calledLeadsTable tbody tr td:nth-child(3),
+    #followUpLeadsTable tbody tr td:nth-child(3),
+    #followupTable tbody tr td:nth-child(3),
+    #pendingLeadsTable tbody tr td:nth-child(3),
+    #walkinLeadsTable tbody tr td:nth-child(3),
+    #wonLostLeadsTable tbody tr td:nth-child(3) {
+        font-weight: 700 !important;
+        font-size: 0.9rem !important;
+        color: #1f2d3d !important;
+        margin-top: 0 !important;
+        margin-right: 110px !important;
+        margin-bottom: 4px !important;
+        line-height: 1.2 !important;
+    }
+
+    /* Phone Number */
+    #untouchedLeadsTable tbody tr td:nth-child(4),
+    #calledLeadsTable tbody tr td:nth-child(4),
+    #followUpLeadsTable tbody tr td:nth-child(4),
+    #followupTable tbody tr td:nth-child(4),
+    #pendingLeadsTable tbody tr td:nth-child(4),
+    #walkinLeadsTable tbody tr td:nth-child(4),
+    #wonLostLeadsTable tbody tr td:nth-child(4) {
+        color: #6c757d !important;
+        font-size: 0.8rem !important;
+        margin-bottom: 4px !important;
+    }
+
+    /* Source - Italic Gray Text */
+    #untouchedLeadsTable tbody tr td:nth-child(5),
+    #calledLeadsTable tbody tr td:nth-child(5),
+    #followUpLeadsTable tbody tr td:nth-child(5),
+    #followupTable tbody tr td:nth-child(4),
+    #pendingLeadsTable tbody tr td:nth-child(5) {
+        color: #6c757d !important;
+        font-size: 0.6rem !important;
+        font-style: italic !important;
+        margin-bottom: 2px !important;
+    }
+
+    /* Category - Small Gray Text */
+    #untouchedLeadsTable tbody tr td:nth-child(7),
+    #calledLeadsTable tbody tr td:nth-child(7),
+    #followUpLeadsTable tbody tr td:nth-child(7),
+    #followupTable tbody tr td:nth-child(5),
+    #pendingLeadsTable tbody tr td:nth-child(6) {
+        color: #6c757d !important;
+        font-size: 0.6rem !important;
+        font-weight: 500 !important;
+        margin-bottom: 2px !important;
+    }
+
+    /* Model Interested - Prominent Product Info */
+    #untouchedLeadsTable tbody tr td:nth-child(8),
+    #calledLeadsTable tbody tr td:nth-child(8),
+    #followUpLeadsTable tbody tr td:nth-child(8),
+    #pendingLeadsTable tbody tr td:nth-child(7),
+    #followupTable tbody tr td:nth-child(6) {
+        color: #1f2d3d !important;
+        font-size: 0.75rem !important;
+        font-weight: 500 !important;
+        margin-bottom: 4px !important;
+        line-height: 1.3 !important;
+    }
+
+    /* Created Date */
+    #untouchedLeadsTable tbody tr td:nth-child(9),
+    #calledLeadsTable tbody tr td:nth-child(9),
+    #followUpLeadsTable tbody tr td:nth-child(9),
+    #pendingLeadsTable tbody tr td:nth-child(8),
+    #followupTable tbody tr td:nth-child(9) {
+        color: #6c757d !important;
+        font-size: 0.65rem !important;
+        margin-bottom: 2px !important;
+    }
+
+    /* UID - Monospace at Bottom */
+    #untouchedLeadsTable tbody tr td:nth-child(10),
+    #calledLeadsTable tbody tr td:nth-child(10),
+    #followUpLeadsTable tbody tr td:nth-child(10),
+    #pendingLeadsTable tbody tr td:nth-child(9),
+    #followupTable tbody tr td:nth-child(8) {
+        color: #6c757d !important;
+        font-size: 0.6rem !important;
+        font-family: monospace !important;
+        margin-bottom: 2px !important;
+    }
+
+    /* FINAL COMPREHENSIVE MOBILE LEAD DATA DISPLAY */
+    /* Override all previous rules and ensure ALL lead data is visible with distinct colors */
+    
+    /* Lead Status Badge - Blue with white text, positioned top-right */
+    #untouchedLeadsTable tbody tr td:nth-child(2) .badge,
+    #calledLeadsTable tbody tr td:nth-child(2) .badge,
+    #followUpLeadsTable tbody tr td:nth-child(2) .badge,
+    #followupTable tbody tr td:nth-child(2) .badge,
+    #pendingLeadsTable tbody tr td:nth-child(2) .badge,
+    #wonLostLeadsTable tbody tr td:nth-child(2) .badge {
+        background-color: #007bff !important;
+        color: white !important;
+        font-size: 0.5rem !important;
+        padding: 3px 6px !important;
+        border-radius: 4px !important;
+        display: inline-block !important;
+    }
+
+    /* Lead Status Badge - Force visibility and positioning */
+    #untouchedLeadsTable tbody tr td:nth-child(2),
+    #calledLeadsTable tbody tr td:nth-child(2),
+    #followUpLeadsTable tbody tr td:nth-child(2),
+    #followupTable tbody tr td:nth-child(2),
+    #pendingLeadsTable tbody tr td:nth-child(2),
+    #wonLostLeadsTable tbody tr td:nth-child(2) {
+        position: absolute !important;
+        top: 6px !important;
+        right: 6px !important;
+        z-index: 10 !important;
+        display: block !important;
+        max-width: 120px !important;
+        min-width: 60px !important;
+        font-size: 0.5rem !important;
+        padding: 4px 6px !important;
+        border-radius: 6px !important;
+        text-align: center !important;
+        line-height: 1.0 !important;
+        word-wrap: break-word !important;
+        background-color: transparent !important;
+        color: #000000 !important;
+    }
+
+    /* Customer Name - Dark Blue, Bold, Most Prominent */
+    #untouchedLeadsTable tbody tr td:nth-child(3),
+    #calledLeadsTable tbody tr td:nth-child(3),
+    #followUpLeadsTable tbody tr td:nth-child(3),
+    #followupTable tbody tr td:nth-child(3),
+    #pendingLeadsTable tbody tr td:nth-child(3),
+    #walkinLeadsTable tbody tr td:nth-child(3),
+    #wonLostLeadsTable tbody tr td:nth-child(3) {
+        color: #1e3a8a !important;
+        font-weight: 700 !important;
+        font-size: 0.9rem !important;
+        display: block !important;
+        margin-right: 130px !important;
+        margin-bottom: 4px !important;
+    }
+
+    /* Phone Number - Green, Medium Weight */
+    #untouchedLeadsTable tbody tr td:nth-child(4),
+    #calledLeadsTable tbody tr td:nth-child(4),
+    #followUpLeadsTable tbody tr td:nth-child(4),
+    #followupTable tbody tr td:nth-child(4),
+    #pendingLeadsTable tbody tr td:nth-child(4),
+    #walkinLeadsTable tbody tr td:nth-child(4),
+    #wonLostLeadsTable tbody tr td:nth-child(4) {
+        color: #059669 !important;
+        font-weight: 600 !important;
+        font-size: 0.8rem !important;
+        display: block !important;
+        margin-bottom: 4px !important;
+    }
+
+    /* Source - Orange, Italic - FORCE VISIBILITY */
+    #untouchedLeadsTable tbody tr td:nth-child(5),
+    #calledLeadsTable tbody tr td:nth-child(5),
+    #followUpLeadsTable tbody tr td:nth-child(5),
+    #pendingLeadsTable tbody tr td:nth-child(5) {
+        color: #ea580c !important;
+        font-style: italic !important;
+        font-size: 0.65rem !important;
+        font-weight: 500 !important;
+        display: block !important;
+        margin-bottom: 2px !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+
+    /* Lead Source Badge - Orange background */
+    #untouchedLeadsTable tbody tr td:nth-child(5) .badge,
+    #calledLeadsTable tbody tr td:nth-child(5) .badge,
+    #followUpLeadsTable tbody tr td:nth-child(5) .badge,
+    #pendingLeadsTable tbody tr td:nth-child(5) .badge {
+        background-color: #ea580c !important;
+        color: white !important;
+        font-size: 0.55rem !important;
+        padding: 2px 4px !important;
+        border-radius: 3px !important;
+        display: inline-block !important;
+    }
+
+    /* CRE Name - Purple */
+    #untouchedLeadsTable tbody tr td:nth-child(6),
+    #calledLeadsTable tbody tr td:nth-child(6),
+    #followUpLeadsTable tbody tr td:nth-child(6) {
+        color: #7c3aed !important;
+        font-size: 0.6rem !important;
+        font-weight: 500 !important;
+        display: block !important;
+        margin-bottom: 2px !important;
+    }
+
+    /* Category - Hot/Cold/Warm with distinct colors - FORCE VISIBILITY */
+    #untouchedLeadsTable tbody tr td:nth-child(7),
+    #calledLeadsTable tbody tr td:nth-child(7),
+    #followUpLeadsTable tbody tr td:nth-child(7),
+    #pendingLeadsTable tbody tr td:nth-child(6),
+    #followupTable tbody tr td:nth-child(5) { /* Followup table has category in column 5 */
+        display: block !important;
+        margin-bottom: 2px !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+
+    /* Hot Category - Red Badge */
+    #untouchedLeadsTable tbody tr td:nth-child(7) .badge.bg-danger,
+    #calledLeadsTable tbody tr td:nth-child(7) .badge.bg-danger,
+    #followUpLeadsTable tbody tr td:nth-child(7) .badge.bg-danger,
+    #pendingLeadsTable tbody tr td:nth-child(6) .badge.bg-danger,
+    #followupTable tbody tr td:nth-child(5) .badge.bg-danger { /* Followup table has category in column 5 */
+        background-color: #dc2626 !important;
+        color: white !important;
+        font-size: 0.55rem !important;
+        padding: 3px 6px !important;
+        border-radius: 4px !important;
+        font-weight: 600 !important;
+    }
+
+    /* Warm Category - Yellow/Orange Badge */
+    #untouchedLeadsTable tbody tr td:nth-child(7) .badge.bg-warning,
+    #calledLeadsTable tbody tr td:nth-child(7) .badge.bg-warning,
+    #followUpLeadsTable tbody tr td:nth-child(7) .badge.bg-warning,
+    #pendingLeadsTable tbody tr td:nth-child(6) .badge.bg-warning,
+    #followupTable tbody tr td:nth-child(5) .badge.bg-warning { /* Followup table has category in column 5 */
+        background-color: #f59e0b !important;
+        color: white !important;
+        font-size: 0.55rem !important;
+        padding: 3px 6px !important;
+        border-radius: 4px !important;
+        font-weight: 600 !important;
+    }
+
+    /* Cold Category - Blue Badge - Only for category columns, not lead status */
+    /* These rules target category columns specifically, avoiding column 2 (lead status) */
+    #untouchedLeadsTable tbody tr td:nth-child(7) .badge.bg-info,
+    #calledLeadsTable tbody tr td:nth-child(7) .badge.bg-info,
+    #followUpLeadsTable tbody tr td:nth-child(7) .badge.bg-info,
+    #pendingLeadsTable tbody tr td:nth-child(6) .badge.bg-info,
+    #followupTable tbody tr td:nth-child(5) .badge.bg-info {
+        background-color: #3b82f6 !important;
+        color: white !important;
+        font-size: 0.55rem !important;
+        padding: 3px 6px !important;
+        border-radius: 4px !important;
+        font-weight: 600 !important;
+    }
+
+    /* Default Category - Dark Badge */
+    #untouchedLeadsTable tbody tr td:nth-child(7) .badge.bg-dark,
+    #calledLeadsTable tbody tr td:nth-child(7) .badge.bg-dark,
+    #followUpLeadsTable tbody tr td:nth-child(7) .badge.bg-dark,
+    #pendingLeadsTable tbody tr td:nth-child(6) .badge.bg-dark,
+    #followupTable tbody tr td:nth-child(5) .badge.bg-dark { /* Followup table has category in column 5 */
+        background-color: #374151 !important;
+        color: white !important;
+        font-size: 0.55rem !important;
+        padding: 3px 6px !important;
+        border-radius: 4px !important;
+        font-weight: 600 !important;
+    }
+
+    /* Model Interested - Dark Gray, Bold */
+    #untouchedLeadsTable tbody tr td:nth-child(8),
+    #calledLeadsTable tbody tr td:nth-child(8),
+    #followUpLeadsTable tbody tr td:nth-child(8),
+    #pendingLeadsTable tbody tr td:nth-child(7),
+    #followupTable tbody tr td:nth-child(6) { /* Followup table has model in column 6 */
+        color: #374151 !important;
+        font-size: 0.75rem !important;
+        font-weight: 700 !important;
+        display: block !important;
+        margin-bottom: 4px !important;
+    }
+
+    /* Created Date - Teal */
+    #untouchedLeadsTable tbody tr td:nth-child(9),
+    #calledLeadsTable tbody tr td:nth-child(9),
+    #followUpLeadsTable tbody tr td:nth-child(9),
+    #pendingLeadsTable tbody tr td:nth-child(8),
+    #followupTable tbody tr td:nth-child(9) {
+        color: #0d9488 !important;
+        font-size: 0.6rem !important;
+        font-weight: 500 !important;
+        display: block !important;
+        margin-bottom: 2px !important;
+    }
+
+    /* UID - Indigo, Monospace - FORCE VISIBILITY */
+    #untouchedLeadsTable tbody tr td:nth-child(10),
+    #calledLeadsTable tbody tr td:nth-child(10),
+    #followUpLeadsTable tbody tr td:nth-child(10),
+    #pendingLeadsTable tbody tr td:nth-child(9),
+    #followupTable tbody tr td:nth-child(8) { /* Followup table has UID in column 8 */
+        color: #4f46e5 !important;
+        font-family: 'Courier New', monospace !important;
+        font-size: 0.55rem !important;
+        font-weight: 600 !important;
+        display: block !important;
+        margin-bottom: 2px !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+
+    /* UID Badge - Indigo background */
+    #untouchedLeadsTable tbody tr td:nth-child(10) .badge,
+    #calledLeadsTable tbody tr td:nth-child(10) .badge,
+    #followUpLeadsTable tbody tr td:nth-child(10) .badge,
+    #pendingLeadsTable tbody tr td:nth-child(9) .badge,
+    #followupTable tbody tr td:nth-child(8) .badge { /* Followup table has UID in column 8 */
+        background-color: #4f46e5 !important;
+        color: white !important;
+        font-size: 0.5rem !important;
+        padding: 2px 4px !important;
+        border-radius: 3px !important;
+        font-family: 'Courier New', monospace !important;
+        font-weight: 600 !important;
+    }
+
+    /* Call History Button - Cyan */
+    #pendingLeadsTable tbody tr td:nth-child(10) .btn {
+        background-color: #06b6d4 !important;
+        color: white !important;
+        border: none !important;
+        font-size: 0.5rem !important;
+        padding: 2px 6px !important;
+        border-radius: 4px !important;
+        display: inline-block !important;
+    }
+
+    /* WALKIN LEADS SPECIFIC STYLING - Lead Category with Hot/Cold/Warm colors */
+    #walkinLeadsTable tbody tr td:nth-child(5) { /* Category column for walkin leads */
+        display: block !important;
+        margin-bottom: 2px !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+
+    /* Walkin Hot Category - Red Badge */
+    #walkinLeadsTable tbody tr td:nth-child(5) .badge.bg-danger {
+        background-color: #dc2626 !important;
+        color: white !important;
+        font-size: 0.55rem !important;
+        padding: 3px 6px !important;
+        border-radius: 4px !important;
+        font-weight: 600 !important;
+    }
+
+    /* Walkin Warm Category - Yellow/Orange Badge */
+    #walkinLeadsTable tbody tr td:nth-child(5) .badge.bg-warning {
+        background-color: #f59e0b !important;
+        color: white !important;
+        font-size: 0.55rem !important;
+        padding: 3px 6px !important;
+        border-radius: 4px !important;
+        font-weight: 600 !important;
+    }
+
+    /* Walkin Cold Category - Blue Badge - REMOVED TO PREVENT CONFLICT WITH LEAD STATUS */
+
+    /* Walkin Default Category - Gray Badge for not set */
+    #walkinLeadsTable tbody tr td:nth-child(5) .badge.bg-secondary {
+        background-color: #6b7280 !important;
+        color: white !important;
+        font-size: 0.55rem !important;
+        padding: 3px 6px !important;
+        border-radius: 4px !important;
+        font-weight: 600 !important;
+    }
+
+
+    /* Walkin UID - Indigo, Monospace */
+    #walkinLeadsTable tbody tr td:nth-child(7) {
+        color: #4f46e5 !important;
+        font-family: 'Courier New', monospace !important;
+        font-size: 0.55rem !important;
+        font-weight: 600 !important;
+        display: block !important;
+        margin-bottom: 2px !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+
+    /* Walkin UID Badge - Transparent background with black text */
+    #walkinLeadsTable tbody tr td:nth-child(7) .badge {
+        background-color: transparent !important;
+        color: #000000 !important;
+        font-size: 0.65rem !important;
+        padding: 2px 4px !important;
+        border-radius: 4px !important;
+        font-family: 'Courier New', monospace !important;
+        font-weight: 700 !important;
+        border: 1px solid #dee2e6 !important;
+    }
+
+    /* LEAD STATUS AND ID STYLING IMPROVEMENTS - REMOVED GLOBAL RULES TO PREVENT CONFLICTS */
+    
+    /* Lead ID Badge - Transparent background with larger font and black text */
+    .badge.bg-primary {
+        background-color: transparent !important;
+        color: #000000 !important;
+        font-size: 0.65rem !important;
+        padding: 2px 4px !important;
+        border-radius: 4px !important;
+        font-weight: 700 !important;
+        font-family: 'Courier New', monospace !important;
+        border: 1px solid #dee2e6 !important;
+    }
+    
+    /* Lead Status Badges in Mobile Cards - Override for positioned elements */
+    #untouchedLeadsTable td:nth-child(2) .badge.bg-info,
+    #calledLeadsTable td:nth-child(2) .badge.bg-info,
+    #followUpLeadsTable td:nth-child(2) .badge.bg-info,
+    #followupTable td:nth-child(2) .badge.bg-info,
+    #pendingLeadsTable td:nth-child(2) .badge.bg-info,
+    #wonLostLeadsTable td:nth-child(2) .badge.bg-info {
+        background-color: #28a745 !important; /* Green background */
+        color: white !important;
+        font-size: 0.7rem !important;
+        padding: 4px 8px !important;
+        border-radius: 4px !important;
+        font-weight: 600 !important;
+        border: none !important;
+        box-shadow: none !important;
+        display: inline-block !important;
+    }
+    
+    /* Keep "Not Set" status gray in mobile cards - Force override */
+    #untouchedLeadsTable td:nth-child(2) .badge.bg-secondary,
+    #calledLeadsTable td:nth-child(2) .badge.bg-secondary,
+    #followUpLeadsTable td:nth-child(2) .badge.bg-secondary,
+    #followupTable td:nth-child(2) .badge.bg-secondary,
+    #pendingLeadsTable td:nth-child(2) .badge.bg-secondary,
+    #wonLostLeadsTable td:nth-child(2) .badge.bg-secondary {
+        background-color: #6c757d !important; /* Gray background for Not Set */
+        color: white !important;
+        font-size: 0.7rem !important;
+        padding: 4px 8px !important;
+        border-radius: 4px !important;
+        font-weight: 600 !important;
+        border: none !important;
+        box-shadow: none !important;
+        display: inline-block !important;
+    }
+    
+    /* ULTIMATE OVERRIDE - Force all lead status badges to look like badges, not buttons */
+    /* Target the positioned status cells specifically */
+    #untouchedLeadsTable td:nth-child(2) span,
+    #calledLeadsTable td:nth-child(2) span,
+    #followUpLeadsTable td:nth-child(2) span,
+    #followupTable td:nth-child(2) span,
+    #pendingLeadsTable td:nth-child(2) span,
+    #wonLostLeadsTable td:nth-child(2) span {
+        background-color: #6c757d !important; /* Default to gray */
+        color: white !important;
+        font-size: 0.7rem !important;
+        padding: 4px 8px !important;
+        border-radius: 4px !important;
+        font-weight: 600 !important;
+        border: none !important;
+        box-shadow: none !important;
+        display: inline-block !important;
+        text-decoration: none !important;
+        cursor: default !important;
+    }
+    
+    /* Override for active statuses (green) */
+    #untouchedLeadsTable td:nth-child(2) .bg-info,
+    #calledLeadsTable td:nth-child(2) .bg-info,
+    #followUpLeadsTable td:nth-child(2) .bg-info,
+    #followupTable td:nth-child(2) .bg-info,
+    #pendingLeadsTable td:nth-child(2) .bg-info,
+    #wonLostLeadsTable td:nth-child(2) .bg-info {
+        background-color: #28a745 !important; /* Green for active statuses */
+    }
+    
+    /* FINAL OVERRIDE - Remove any button-like appearance from status badges */
+    /* This targets any element that might be styled as a button in the status position */
+    #untouchedLeadsTable td:nth-child(2) *,
+    #calledLeadsTable td:nth-child(2) *,
+    #followUpLeadsTable td:nth-child(2) *,
+    #followupTable td:nth-child(2) *,
+    #pendingLeadsTable td:nth-child(2) *,
+    #wonLostLeadsTable td:nth-child(2) * {
+        background-color: #6c757d !important; /* Default gray */
+        color: white !important;
+        font-size: 0.7rem !important;
+        padding: 4px 8px !important;
+        border-radius: 4px !important;
+        font-weight: 600 !important;
+        border: none !important;
+        box-shadow: none !important;
+        display: inline-block !important;
+        text-decoration: none !important;
+        cursor: default !important;
+        font-family: inherit !important;
+    }
+    
+    /* Override for elements with bg-info class (active statuses) */
+    #untouchedLeadsTable td:nth-child(2) .bg-info,
+    #calledLeadsTable td:nth-child(2) .bg-info,
+    #followUpLeadsTable td:nth-child(2) .bg-info,
+    #followupTable td:nth-child(2) .bg-info,
+    #pendingLeadsTable td:nth-child(2) .bg-info,
+    #wonLostLeadsTable td:nth-child(2) .bg-info,
+    #untouchedLeadsTable td:nth-child(2) .bg-info *,
+    #calledLeadsTable td:nth-child(2) .bg-info *,
+    #followUpLeadsTable td:nth-child(2) .bg-info *,
+    #followupTable td:nth-child(2) .bg-info *,
+    #pendingLeadsTable td:nth-child(2) .bg-info *,
+    #wonLostLeadsTable td:nth-child(2) .bg-info * {
+        background-color: #28a745 !important; /* Green for active statuses */
+        color: white !important;
+    }
+    
+    /* Lead UID Badges in Mobile Cards - Transparent background */
+    #untouchedLeadsTable td:nth-child(10) .badge.bg-primary,
+    #calledLeadsTable td:nth-child(10) .badge.bg-primary,
+    #followUpLeadsTable td:nth-child(8) .badge.bg-primary,
+    #followupTable td:nth-child(8) .badge.bg-primary,
+    #pendingLeadsTable td:nth-child(9) .badge.bg-primary,
+    #wonLostLeadsTable td:nth-child(10) .badge.bg-primary {
+        background-color: transparent !important;
+        color: #000000 !important;
+        font-size: 0.65rem !important;
+        padding: 2px 4px !important;
+        border-radius: 4px !important;
+        font-weight: 700 !important;
+        font-family: 'Courier New', monospace !important;
+        border: 1px solid #dee2e6 !important;
+    }
+
+    /* Walkin Lead Status - Blue Badge */
+    #walkinLeadsTable tbody tr td:nth-child(2) {
+        position: absolute !important;
+        top: 6px !important;
+        right: 6px !important;
+        z-index: 10 !important;
+        display: block !important;
+        max-width: 120px !important;
+        min-width: 60px !important;
+        font-size: 0.7rem !important;
+        padding: 4px 6px !important;
+        border-radius: 6px !important;
+        text-align: center !important;
+        line-height: 1.0 !important;
+        word-wrap: break-word !important;
+        background-color: transparent !important;
+        color: #000000 !important;
+    }
+
+    /* Walkin Lead Status Badge - Color coded by status */
+    /* Won - Green */
+    #walkinLeadsTable tbody tr td:nth-child(2) .badge.bg-success {
+        background-color: #28a745 !important;
+        color: white !important;
+        font-size: 0.7rem !important;
+        padding: 4px 8px !important;
+        border-radius: 4px !important;
+        font-weight: 600 !important;
+    }
+    
+    /* Pending - Yellow */
+    #walkinLeadsTable tbody tr td:nth-child(2) .badge.bg-warning {
+        background-color: #ffc107 !important;
+        color: #000000 !important;
+        font-size: 0.7rem !important;
+        padding: 4px 8px !important;
+        border-radius: 4px !important;
+        font-weight: 600 !important;
+    }
+    
+    /* Lost - Red */
+    #walkinLeadsTable tbody tr td:nth-child(2) .badge.bg-danger {
+        background-color: #dc3545 !important;
+        color: white !important;
+        font-size: 0.7rem !important;
+        padding: 4px 8px !important;
+        border-radius: 4px !important;
+        font-weight: 600 !important;
+    }
+    
+    /* Default styling for other statuses */
+    #walkinLeadsTable tbody tr td:nth-child(2) .badge {
+        background-color: #6c757d !important;
+        color: white !important;
+        font-size: 0.7rem !important;
+        padding: 4px 8px !important;
+        border-radius: 4px !important;
+        font-weight: 600 !important;
+        display: inline-block !important;
+    }
+
+    /* PENDING LEADS SPECIFIC - Reduce card size to eliminate scrollbars */
+    #pendingLeadsTable tbody tr {
+        padding: 4px 6px !important; /* Reduced from 8px */
+        margin-bottom: 4px !important; /* Reduced from 8px */
+        min-height: auto !important; /* Remove fixed height */
+    }
+
+    /* Pending leads - Reduce font sizes and spacing */
+    #pendingLeadsTable tbody tr td:nth-child(3) { /* Customer Name */
+        font-size: 0.8rem !important; /* Reduced from 0.9rem */
+        margin-bottom: 2px !important; /* Reduced from 4px */
+        line-height: 1.1 !important; /* Tighter line height */
+    }
+
+    #pendingLeadsTable tbody tr td:nth-child(4) { /* Phone */
+        font-size: 0.7rem !important; /* Reduced from 0.8rem */
+        margin-bottom: 2px !important; /* Reduced from 4px */
+    }
+
+    #pendingLeadsTable tbody tr td:nth-child(5) { /* Source */
+        font-size: 0.55rem !important; /* Reduced from 0.65rem */
+        margin-bottom: 1px !important; /* Reduced from 2px */
+    }
+
+    #pendingLeadsTable tbody tr td:nth-child(6) { /* Category */
+        font-size: 0.55rem !important; /* Reduced from 0.65rem */
+        margin-bottom: 1px !important; /* Reduced from 2px */
+    }
+
+    #pendingLeadsTable tbody tr td:nth-child(7) { /* Model */
+        font-size: 0.65rem !important; /* Reduced from 0.75rem */
+        margin-bottom: 2px !important; /* Reduced from 4px */
+        line-height: 1.2 !important; /* Tighter line height */
+    }
+
+    #pendingLeadsTable tbody tr td:nth-child(8) { /* Date */
+        font-size: 0.55rem !important; /* Reduced from 0.6rem */
+        margin-bottom: 1px !important; /* Reduced from 2px */
+    }
+
+    #pendingLeadsTable tbody tr td:nth-child(9) { /* UID */
+        font-size: 0.5rem !important; /* Reduced from 0.55rem */
+        margin-bottom: 1px !important; /* Reduced from 2px */
+    }
+
+    #pendingLeadsTable tbody tr td:nth-child(10) { /* Call History */
+        margin-top: 2px !important; /* Reduced from 4px */
+    }
+
+    #pendingLeadsTable tbody tr td:nth-child(10) .btn {
+        font-size: 0.45rem !important; /* Reduced from 0.5rem */
+        padding: 1px 4px !important; /* Reduced from 2px 6px */
+        min-height: 18px !important; /* Reduced height */
+    }
+
+    /* Pending leads - Reduce badge sizes */
+    #pendingLeadsTable tbody tr td:nth-child(2) .badge { /* Lead Status */
+        font-size: 0.45rem !important; /* Reduced from 0.5rem */
+        padding: 2px 4px !important; /* Reduced from 3px 6px */
+        max-width: 100px !important; /* Reduced from 120px */
+        min-width: 50px !important; /* Reduced from 60px */
+    }
+
+    #pendingLeadsTable tbody tr td:nth-child(6) .badge { /* Category */
+        font-size: 0.5rem !important; /* Reduced from 0.55rem */
+        padding: 2px 4px !important; /* Reduced from 3px 6px */
+    }
+
+    #pendingLeadsTable tbody tr td:nth-child(9) .badge { /* UID */
+        font-size: 0.45rem !important; /* Reduced from 0.5rem */
+        padding: 1px 3px !important; /* Reduced from 2px 4px */
+    }
+
+    /* TODAY'S FOLLOW-UPS SPECIFIC - Add scrollbar and reduce font sizes */
+    #followupTable {
+        max-height: 400px !important; /* Set max height for scrollbar */
+        overflow-y: auto !important; /* Enable vertical scrollbar */
+    }
+
+    #followupTable tbody tr {
+        padding: 3px 5px !important; /* Reduced padding */
+        margin-bottom: 3px !important; /* Reduced margin */
+        min-height: auto !important; /* Remove fixed height */
+    }
+
+    /* Followup leads - Reduce font sizes and spacing */
+    #followupTable tbody tr td:nth-child(3) { /* Customer Name */
+        font-size: 0.75rem !important; /* Reduced from 0.9rem */
+        margin-bottom: 1px !important; /* Reduced from 4px */
+        line-height: 1.0 !important; /* Tighter line height */
+    }
+
+    #followupTable tbody tr td:nth-child(4) { /* Phone */
+        font-size: 0.65rem !important; /* Reduced from 0.8rem */
+        margin-bottom: 1px !important; /* Reduced from 4px */
+    }
+
+    #followupTable tbody tr td:nth-child(5) { /* Category */
+        font-size: 0.5rem !important; /* Reduced from 0.65rem */
+        margin-bottom: 1px !important; /* Reduced from 2px */
+    }
+
+    #followupTable tbody tr td:nth-child(6) { /* Model */
+        font-size: 0.6rem !important; /* Reduced from 0.75rem */
+        margin-bottom: 1px !important; /* Reduced from 4px */
+        line-height: 1.1 !important; /* Tighter line height */
+    }
+
+    #followupTable tbody tr td:nth-child(7) { /* Date */
+        font-size: 0.5rem !important; /* Reduced from 0.6rem */
+        margin-bottom: 1px !important; /* Reduced from 2px */
+    }
+
+    #followupTable tbody tr td:nth-child(8) { /* UID */
+        font-size: 0.45rem !important; /* Reduced from 0.55rem */
+        margin-bottom: 1px !important; /* Reduced from 2px */
+    }
+
+    /* Followup leads - Reduce badge sizes */
+    #followupTable tbody tr td:nth-child(2) .badge { /* Lead Status */
+        font-size: 0.4rem !important; /* Reduced from 0.5rem */
+        padding: 1px 3px !important; /* Reduced from 3px 6px */
+        max-width: 90px !important; /* Reduced width */
+        min-width: 45px !important; /* Reduced min width */
+    }
+
+    #followupTable tbody tr td:nth-child(5) .badge { /* Category */
+        font-size: 0.45rem !important; /* Reduced from 0.55rem */
+        padding: 1px 3px !important; /* Reduced from 3px 6px */
+    }
+
+    #followupTable tbody tr td:nth-child(8) .badge { /* UID */
+        font-size: 0.4rem !important; /* Reduced from 0.5rem */
+        padding: 1px 2px !important; /* Reduced from 2px 4px */
+    }
+
+    /* EVENT LEADS SPECIFIC - Display only specific fields with proper colors */
+    /* Hide all columns except the required ones */
+    #eventLeadsTable td:nth-child(1), /* Action */
+    #eventLeadsTable td:nth-child(3), /* Activity Name */
+    #eventLeadsTable td:nth-child(4), /* Activity Location */
+    #eventLeadsTable td:nth-child(5), /* PS Name */
+    #eventLeadsTable td:nth-child(6), /* Branch */
+    #eventLeadsTable td:nth-child(9), /* Customer Location */
+    #eventLeadsTable td:nth-child(11), /* Gender */
+    #eventLeadsTable td:nth-child(12), /* Interested Model */
+    #eventLeadsTable td:nth-child(13), /* Remarks */
+    #eventLeadsTable td:nth-child(15), /* Month */
+    #eventLeadsTable td:nth-child(17) { /* Call History */
+        display: none !important;
+    }
+
+    /* Show only required columns with proper colors */
+    #eventLeadsTable td:nth-child(2), /* UID/Lead ID */
+    #eventLeadsTable td:nth-child(7), /* Customer Name */
+    #eventLeadsTable td:nth-child(8), /* Phone Number */
+    #eventLeadsTable td:nth-child(10), /* Profession */
+    #eventLeadsTable td:nth-child(14), /* Lead Status */
+    #eventLeadsTable td:nth-child(16) { /* Created At/Date */
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        margin-bottom: 2px !important;
+    }
+
+    /* Event Leads - Customer Name (Dark Blue, Bold) */
+    #eventLeadsTable tbody tr td:nth-child(7) {
+        color: #1e3a8a !important;
+        font-weight: 700 !important;
+        font-size: 0.9rem !important;
+        margin-bottom: 4px !important;
+    }
+
+    /* Event Leads - Phone Number (Green) */
+    #eventLeadsTable tbody tr td:nth-child(8) {
+        color: #059669 !important;
+        font-weight: 600 !important;
+        font-size: 0.8rem !important;
+        margin-bottom: 4px !important;
+    }
+
+    /* Event Leads - Profession (Purple) */
+    #eventLeadsTable tbody tr td:nth-child(10) {
+        color: #7c3aed !important;
+        font-weight: 500 !important;
+        font-size: 0.7rem !important;
+        font-style: italic !important;
+        margin-bottom: 4px !important;
+    }
+
+    /* Event Leads - Lead Status (Blue Badge) */
+    #eventLeadsTable tbody tr td:nth-child(14) {
+        margin-bottom: 4px !important;
+    }
+
+    #eventLeadsTable tbody tr td:nth-child(14) .badge {
+        background-color: #007bff !important;
+        color: white !important;
+        font-size: 0.55rem !important;
+        padding: 3px 6px !important;
+        border-radius: 4px !important;
+        font-weight: 600 !important;
+    }
+
+    /* Event Leads - Created At/Date (Teal) */
+    #eventLeadsTable tbody tr td:nth-child(16) {
+        color: #0d9488 !important;
+        font-size: 0.6rem !important;
+        font-weight: 500 !important;
+        margin-bottom: 4px !important;
+    }
+
+    /* Event Leads - UID/Lead ID (Indigo, Monospace) */
+    #eventLeadsTable tbody tr td:nth-child(2) {
+        color: #4f46e5 !important;
+        font-family: 'Courier New', monospace !important;
+        font-size: 0.55rem !important;
+        font-weight: 600 !important;
+        margin-bottom: 4px !important;
+    }
+
+    #eventLeadsTable tbody tr td:nth-child(2) .badge {
+        background-color: transparent !important;
+        color: #000000 !important;
+        font-size: 0.65rem !important;
+        padding: 2px 4px !important;
+        border-radius: 4px !important;
+        font-family: 'Courier New', monospace !important;
+        font-weight: 700 !important;
+        border: 1px solid #dee2e6 !important;
+    }
+    
+    /* Event Leads Button Font Size for Mobile */
+    #event-leads .btn {
+        font-size: 0.75rem !important;
+    }
+    
+    #event-leads .btn-sm {
+        font-size: 0.7rem !important;
+        padding: 0.375rem 0.75rem !important;
+    }
 }
 
 /* iPad and Tablet Specific Optimizations (768px - 991px) */
